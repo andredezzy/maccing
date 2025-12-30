@@ -1,0 +1,22 @@
+{
+  "name": "maccing",
+  "owner": {
+    "name": "Andre Dezzy",
+    "email": "andredezzy@users.noreply.github.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "plugins": [
+    {
+      "name": "maccing-code-reviewer",
+      "source": "./plugins/maccing-code-reviewer",
+      "description": "Multi-agent code review using ULTRATHINK methodology",
+      "version": "1.0.0",
+      "author": {
+        "name": "Andre Dezzy",
+        "url": "https://github.com/andredezzy"
+      },
+      "keywords": ["code-review", "quality", "security", "multi-agent"],
+      "license": "MIT"
+    }
+  ]
+}
