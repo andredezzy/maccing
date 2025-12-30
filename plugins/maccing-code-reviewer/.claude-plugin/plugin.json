@@ -1,0 +1,16 @@
+{
+  "name": "maccing-code-reviewer",
+  "version": "1.0.0",
+  "description": "Multi-agent code review using ULTRATHINK methodology. 6 specialized agents analyze code in parallel for naming, style, clean code, architecture, security, and i18n issues.",
+  "author": {
+    "name": "Andre Dezzy",
+    "email": "andredezzy@users.noreply.github.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "homepage": "https://github.com/andredezzy/maccing",
+  "repository": "https://github.com/andredezzy/maccing",
+  "license": "MIT",
+  "keywords": ["code-review", "quality", "security", "multi-agent", "ultrathink"],
+  "skills": "./skills/",
+  "commands": ["./commands/"]
+}
