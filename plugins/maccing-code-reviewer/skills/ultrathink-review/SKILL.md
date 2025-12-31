@@ -10,7 +10,7 @@ description: |
 <first_action>
 Your response MUST start with this exact text (with backticks for colored output):
 
-`★ maccing-code-reviewer v2.0.0 ═════════════════════════`
+`★ maccing-code-reviewer v1.1.0 ═════════════════════════`
 
 Then immediately call AskUserQuestion with EXACTLY this JSON (do not modify labels or descriptions):
 
