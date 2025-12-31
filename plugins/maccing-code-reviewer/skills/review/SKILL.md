@@ -1,6 +1,6 @@
 ---
 name: review
-description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, or analyzing code quality.
+description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, analyzing code quality, or reviewing entire codebase/project/app.
 ---
 
 # Code Review Skill
@@ -118,9 +118,49 @@ Proceeding with code review...
 
 **CRITICAL: Do NOT proceed to Step 2 until this verification succeeds.**
 
-## Step 2: Get Changed Files
+## Step 2: Determine Review Scope and Collect Files
 
-Identify all files to review:
+**CRITICAL: Determine the review mode based on user request or flags.**
+
+### 2.1 Detect Review Mode
+
+Check for these triggers (in priority order):
+
+| Mode | Trigger | Action |
+|------|---------|--------|
+| **Full Codebase** | `--all` flag OR user says "entire codebase", "entire project", "whole app", "full review", "all files" | Scan all source files |
+| **Specific Path** | `--scope <path>` flag OR user specifies a folder/path | Scan files in that path |
+| **Git Changes** | Default (no flags, no triggers) | Use git diff |
+
+### 2.2 Collect Files Based on Mode
+
+**Mode: Full Codebase (`--all`)**
+
+Find all source files, excluding common non-source directories:
+
+```bash
+find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.rb" -o -name "*.php" \) \
+  -not -path "*/node_modules/*" \
+  -not -path "*/.git/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/build/*" \
+  -not -path "*/.next/*" \
+  -not -path "*/vendor/*" \
+  -not -path "*/__pycache__/*" \
+  -not -path "*/target/*"
+```
+
+**Mode: Specific Path (`--scope <path>`)**
+
+Find all source files within the specified path:
+
+```bash
+find <path> -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.rb" -o -name "*.php" \) \
+  -not -path "*/node_modules/*" \
+  -not -path "*/.git/*"
+```
+
+**Mode: Git Changes (default)**
 
 ```bash
 git diff --name-only HEAD
@@ -130,6 +170,28 @@ If no changes, check staged files:
 
 ```bash
 git diff --cached --name-only
+```
+
+### 2.3 Display Scope
+
+```
+★ Review Scope ═════════════════════════════════════════
+
+Mode:  Full Codebase
+Files: 142 source files found
+
+════════════════════════════════════════════════════════
+```
+
+Or for git changes:
+
+```
+★ Review Scope ═════════════════════════════════════════
+
+Mode:  Git Changes
+Files: 12 changed files
+
+════════════════════════════════════════════════════════
 ```
 
 ## Step 3: Read ALL Rule Files and Extract Rules Per Category
@@ -678,8 +740,8 @@ Display the initial review info with full context:
 Review Started
 
 Config:   `.claude/plugins/maccing/code-reviewer.json`
-Scope:    Git changes
-Files:    12 files to review
+Scope:    Full Codebase | Specific Path (src/api/) | Git Changes
+Files:    142 files to review
 
 Rules Source:
 - naming: discovered (4 patterns adopted)
