@@ -36,7 +36,13 @@ Claude Code plugins built for developers who care about code quality.
 - `/maccing-code-reviewer:review --only security` — targeted review
 - `/maccing-code-reviewer:review --skip i18n` — skip agents
 
-**Documentation:** [plugins/maccing-code-reviewer](plugins/maccing-code-reviewer/)
+---
+
+## Documentation
+
+| Plugin | README | Configuration | Defaults |
+|--------|--------|---------------|----------|
+| **maccing-code-reviewer** | [README](plugins/maccing-code-reviewer/README.md) | `.claude/plugins/maccing/code-reviewer.json` | [View defaults](plugins/maccing-code-reviewer/defaults/) |
 
 ---
 
