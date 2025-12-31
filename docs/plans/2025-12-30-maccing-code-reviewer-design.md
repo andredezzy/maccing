@@ -51,7 +51,7 @@ maccing/
 | Structure | Marketplace with namespaced plugins |
 | Plugin naming | `maccing-code-reviewer` |
 | Rule discovery | Interactive first-run setup |
-| Config storage | `.claude-reviewer.json` in project |
+| Config storage | `.claude/plugins/maccing/code-reviewer.json` |
 | Agent selection | Per-review flags (`--skip`, `--only`) |
 | No rules fallback | Built-in defaults + offer to create custom |
 | ULTRATHINK visibility | Visible phases during execution |
@@ -125,7 +125,7 @@ Review Agents
 
 ### Step 4: Save configuration
 
-Creates `.claude-reviewer.json` in project root.
+Creates `.claude/plugins/maccing/code-reviewer.json`.
 
 ---
 
@@ -180,7 +180,7 @@ Creates `.claude-reviewer.json` in project root.
 
 ## Custom Agent Extensibility
 
-Users can define custom agents in `.claude-reviewer.json`:
+Users can define custom agents in `.claude/plugins/maccing/code-reviewer.json`:
 
 ```json
 {

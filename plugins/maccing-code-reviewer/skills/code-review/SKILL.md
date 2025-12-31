@@ -11,10 +11,10 @@ You are performing a comprehensive code review using the **multi-agent loop meth
 
 ## Step 1: Check Configuration
 
-First, check if `.claude-reviewer.json` exists in the project root:
+First, check if `.claude/plugins/maccing/code-reviewer.json` exists:
 
 ```bash
-cat .claude-reviewer.json 2>/dev/null || echo "NO_CONFIG"
+cat .claude/plugins/maccing/code-reviewer.json 2>/dev/null || echo "NO_CONFIG"
 ```
 
 ### If NO_CONFIG: Run First-Time Setup
@@ -65,7 +65,13 @@ Review Agents
 > Select (comma-separated, or 'all'):
 ```
 
-Save the configuration to `.claude-reviewer.json`:
+Create the directory and save the configuration:
+
+```bash
+mkdir -p .claude/plugins/maccing
+```
+
+Save to `.claude/plugins/maccing/code-reviewer.json`:
 
 ```json
 {
@@ -91,7 +97,7 @@ git diff --cached --name-only
 
 ## Step 3: Read the Rules
 
-Read all rule files specified in `.claude-reviewer.json`. If no config exists, use the built-in defaults from the plugin's `defaults/` folder:
+Read all rule files specified in `.claude/plugins/maccing/code-reviewer.json`. If no config exists, use the built-in defaults from the plugin's `defaults/` folder:
 
 - `defaults/NAMING.md`
 - `defaults/CLEAN_CODE.md`
@@ -440,7 +446,7 @@ Where `<scope>` is:
 
 ## Step 9: Handle Custom Agents
 
-If `.claude-reviewer.json` contains `customAgents`, spawn those in parallel with the built-in agents.
+If `.claude/plugins/maccing/code-reviewer.json` contains `customAgents`, spawn those in parallel with the built-in agents.
 
 For each custom agent:
 
