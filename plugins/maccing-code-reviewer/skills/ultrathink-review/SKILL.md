@@ -284,7 +284,31 @@ Discovered from codebase analysis.
   - Description of pattern
 ```
 
-3. Output confirmation:
+3. Add references to CLAUDE.md (create if doesn't exist):
+
+Check if CLAUDE.md exists:
+```bash
+cat CLAUDE.md 2>/dev/null || echo "NO_CLAUDE_MD"
+```
+
+If CLAUDE.md exists, append rule references using Edit tool.
+If CLAUDE.md doesn't exist, create it using Write tool.
+
+Add this section to CLAUDE.md:
+```markdown
+
+## Code Review Rules
+
+The following rule files were discovered from this codebase:
+
+- [Naming Rules](rules/NAMING.md)
+- [Code Style Rules](rules/CODE_STYLE.md)
+- [Clean Code Rules](rules/CLEAN_CODE.md)
+- [Architecture Rules](rules/ARCHITECTURE.md)
+- [Security Rules](rules/SECURITY.md)
+```
+
+4. Output confirmation:
 
 `✓ maccing-code-reviewer: Rules Created ═════════════════`
 
@@ -292,6 +316,8 @@ Created rule files:
 - rules/NAMING.md
 - rules/CODE_STYLE.md
 - [etc.]
+
+References added to CLAUDE.md
 
 `════════════════════════════════════════════════════════`
 </pattern_discovery>
