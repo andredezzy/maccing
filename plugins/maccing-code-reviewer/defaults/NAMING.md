@@ -8,11 +8,13 @@ Default naming rules for the maccing-code-reviewer.
 
 Boolean variables must use one of these prefixes:
 
-- `is` - State check (isActive, isLoading, isValid)
-- `has` - Possession check (hasPermission, hasError, hasChildren)
-- `should` - Recommendation (shouldUpdate, shouldRender, shouldFetch)
-- `can` - Capability (canEdit, canDelete, canSubmit)
-- `will` - Future action (willChange, willUpdate, willRedirect)
+| Prefix | Usage | Examples |
+|--------|-------|----------|
+| `is` | State check | isActive, isLoading, isValid |
+| `has` | Possession check | hasPermission, hasError, hasChildren |
+| `should` | Recommendation | shouldUpdate, shouldRender, shouldFetch |
+| `can` | Capability | canEdit, canDelete, canSubmit |
+| `will` | Future action | willChange, willUpdate, willRedirect |
 
 **Bad:**
 ```typescript
