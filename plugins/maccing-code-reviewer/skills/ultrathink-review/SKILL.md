@@ -14,7 +14,7 @@ Your response MUST start with this exact text (with backticks for colored output
 
 Then immediately call AskUserQuestion:
 
-{"questions":[{"question":"What would you like to review?","header":"Scope","multiSelect":false,"options":[{"label":"Git Changes","description":"Review files changed in git"},{"label":"Full Codebase","description":"Review all source files"},{"label":"Specific Path","description":"Review a specific folder"}]}]}
+{"questions":[{"question":"What would you like to review?","header":"Scope","multiSelect":false,"options":[{"label":"Git Changes","description":"Review only files changed in git"},{"label":"Full Codebase","description":"Review all source files in the project"},{"label":"Specific Path","description":"Review files in a specific folder"}]}]}
 
 EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/api/" or "review entire codebase").
 </first_action>
