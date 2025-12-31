@@ -295,7 +295,7 @@ Return a structured list of all i18n issues found.
 Display the initial review info with full context:
 
 ```
-`★ maccing-code-reviewer ═══════════════════════════`
+★ maccing-code-reviewer ════════════════════════════
 
 Review Started
 
@@ -320,13 +320,13 @@ Active Agents:
 Skipped Agents:
 - i18n-agent (no locale files detected)
 
-`═══════════════════════════════════════════════════`
+════════════════════════════════════════════════════
 ```
 
 After all agents complete, show consolidated progress:
 
 ```
-`★ maccing-code-reviewer ═══════════════════════════`
+★ maccing-code-reviewer ════════════════════════════
 
 Agent Progress:
 
@@ -363,7 +363,7 @@ Results:
 - security-agent: 1 CRITICAL issue
 - i18n-agent: skipped (no locale files)
 
-`═══════════════════════════════════════════════════`
+════════════════════════════════════════════════════
 ```
 
 ## Step 6: Aggregate Results
@@ -379,7 +379,7 @@ After all agents complete, aggregate their findings:
 Output the final review in a single consolidated ASCII block:
 
 ```
-`★ Code Review Report ═══════════════════════════════`
+★ Code Review Report ═══════════════════════════════
 
 Date:     YYYY-MM-DD
 Branch:   feature/example
@@ -427,7 +427,7 @@ Recommendations:
 2. Add ESLint rules for boolean naming
 3. Enforce ternary pattern in component library
 
-`═══════════════════════════════════════════════════`
+═════════════════════════════════════════════════════
 ```
 
 For each issue, also show the code fix:
