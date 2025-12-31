@@ -10,6 +10,25 @@ Claude Code plugins built for developers who care about code quality.
 
 ---
 
+## Updating Plugins
+
+**Manual update:**
+
+    /plugin marketplace update maccing
+
+**Enable auto-update:**
+
+1. Run `/plugin`
+2. Select **Marketplaces** tab
+3. Select `maccing`
+4. Select **Enable auto-update**
+
+**Reinstall to get latest:**
+
+    /plugin install maccing-code-reviewer@maccing
+
+---
+
 ## Available Plugins
 
 ### maccing-code-reviewer
