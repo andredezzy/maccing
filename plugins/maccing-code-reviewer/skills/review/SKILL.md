@@ -1,6 +1,6 @@
 ---
-name: code-review
-description: Reviews code for quality, security, and conventions using multi-agent ULTRATHINK methodology. Use when reviewing changes, checking PRs, or analyzing code quality.
+name: review
+description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, or analyzing code quality.
 ---
 
 # Code Review Skill
