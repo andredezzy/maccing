@@ -24,7 +24,7 @@ EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/
 <after_scope_selected>
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer ════════════════════════════════`
+`★ maccing-code-reviewer: Scope Selected ════════════════`
 
 Scope: [user's selection]
 
@@ -57,9 +57,7 @@ mkdir -p .claude/plugins/maccing
 
 2. Output (with backticks for colored output):
 
-`★ maccing-code-reviewer ════════════════════════════════`
-
-First-time setup
+`★ maccing-code-reviewer: First-time Setup ══════════════`
 
 Scanning for project rules...
 
@@ -87,9 +85,7 @@ IMPORTANT: Use the exact JSON above. Do not rephrase or reorder options.
 
 7. Output confirmation (with backticks for colored output):
 
-`★ maccing-code-reviewer ════════════════════════════════`
-
-Setup Complete
+`★ maccing-code-reviewer: Setup Complete ════════════════`
 
 Config: .claude/plugins/maccing/code-reviewer.json
 Rules:  [selected files]
@@ -123,7 +119,7 @@ find [path] -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*
 
 Output (with backticks for colored output):
 
-`★ Review Scope ═════════════════════════════════════════`
+`★ maccing-code-reviewer: Review Scope ══════════════════`
 
 Mode:  [scope]
 Files: [count] files
@@ -149,7 +145,7 @@ Read all files in `ruleFiles` from config. For each file, extract rules by categ
 
 Output (with backticks for colored output):
 
-`★ Rules Loaded ═════════════════════════════════════════`
+`★ maccing-code-reviewer: Rules Loaded ══════════════════`
 
 Files: [count]
 - naming: [count] rules
@@ -170,7 +166,7 @@ For each GAP category, spawn a pattern-discovery-agent using Task tool.
 
 Output first (with backticks for colored output):
 
-`★ Pattern Discovery ════════════════════════════════════`
+`★ maccing-code-reviewer: Pattern Discovery ═════════════`
 
 Scanning codebase for implicit conventions...
 
@@ -349,7 +345,7 @@ Return structured list of issues.
 <report_format>
 Output (with backticks for colored output):
 
-`★ Code Review Report ═══════════════════════════════════`
+`★ maccing-code-reviewer: Code Review Report ════════════`
 
 Date:     YYYY-MM-DD HH:mm
 Branch:   [branch]
@@ -378,7 +374,7 @@ Agent: naming-agent
 Issue: [description]
 Pattern: [rule]
 
-`═══════════════════════════════════════════════════════`
+`════════════════════════════════════════════════════════`
 </report_format>
 
 ---
