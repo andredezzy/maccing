@@ -9,6 +9,55 @@ You are performing a comprehensive code review using the **multi-agent loop meth
 
 **CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think", every analysis must be rigorous.
 
+---
+
+## IMMEDIATE: Display Initial Banner
+
+**FIRST ACTION: Before ANY tool calls, display this banner with the detected scope.**
+
+Determine scope from user request or flags:
+- `--all` or "entire codebase/project/app" → `Full Codebase`
+- `--scope <path>` or specific folder mentioned → `Path: <path>`
+- Default → `Git Changes`
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: <detected scope>
+
+════════════════════════════════════════════════════════
+```
+
+**Examples:**
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: Full Codebase
+
+════════════════════════════════════════════════════════
+```
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: Git Changes
+
+════════════════════════════════════════════════════════
+```
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: Path (src/api/)
+
+════════════════════════════════════════════════════════
+```
+
+**CRITICAL: This banner MUST be the first output. Do not say "Starting review..." or any other generic text first.**
+
+---
+
 ## Step 1: Check Configuration
 
 First, check if `.claude/plugins/maccing/code-reviewer.json` exists:
