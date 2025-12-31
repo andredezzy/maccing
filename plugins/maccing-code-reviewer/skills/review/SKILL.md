@@ -3,63 +3,37 @@ name: review
 description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, analyzing code quality, or reviewing entire codebase/project/app.
 ---
 
-# STOP - READ THIS FIRST
+<first_action>
+Your response MUST start with this exact text (copy it verbatim):
 
-## YOUR FIRST ACTION (NON-NEGOTIABLE)
-
-**Before you do ANYTHING else - before ANY tool calls, before ANY text like "Let me check..." or "I'll start by..." - you MUST:**
-
-1. **Output this banner:**
-```
-★ maccing-code-reviewer ════════════════════════════════
-```
-
-2. **Then use AskUserQuestion to ask for scope:**
-
-```json
-{
-  "questions": [{
-    "question": "What would you like to review?",
-    "header": "Scope",
-    "multiSelect": false,
-    "options": [
-      { "label": "Git Changes", "description": "Review only files changed in git (staged and unstaged)" },
-      { "label": "Full Codebase", "description": "Review all source files in the project" },
-      { "label": "Specific Path", "description": "Review files in a specific folder" }
-    ]
-  }]
-}
-```
-
-3. **Wait for user response.**
-
-4. **Then show complete banner with scope:**
-```
 ★ maccing-code-reviewer ════════════════════════════════
 
-Scope: <user's selection>
+Then immediately call AskUserQuestion with these exact parameters:
+
+{"questions":[{"question":"What would you like to review?","header":"Scope","multiSelect":false,"options":[{"label":"Git Changes","description":"Review files changed in git"},{"label":"Full Codebase","description":"Review all source files"},{"label":"Specific Path","description":"Review a specific folder"}]}]}
+
+Do not write any other text before the banner. Do not make any other tool calls before AskUserQuestion.
+
+EXCEPTION: Skip AskUserQuestion only if user already specified scope after the command (e.g., "review src/api/" or "review entire codebase").
+</first_action>
+
+<after_scope_selected>
+After user selects scope, output:
+
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: [user's selection]
 
 ════════════════════════════════════════════════════════
-```
 
-**ONLY THEN proceed to Step 1.**
-
-### SKIP the question ONLY IF user already specified scope:
-
-| User Input | Skip Question | Scope |
-|------------|---------------|-------|
-| `/maccing-code-reviewer:review` | NO - ask | - |
-| `/maccing-code-reviewer:review src/api/` | YES | Path: src/api/ |
-| `/maccing-code-reviewer:review entire codebase` | YES | Full Codebase |
-| `/maccing-code-reviewer:review the auth module` | YES | Path: auth |
+Then proceed to Step 1.
+</after_scope_selected>
 
 ---
 
 # Code Review Skill
 
-You are performing a comprehensive code review using the **multi-agent loop methodology** with **ULTRATHINK** level analysis.
-
-**CRITICAL: Use "ultrathink" for all analysis phases.**
+Multi-agent code review with ULTRATHINK methodology.
 
 ---
 
