@@ -31,8 +31,10 @@ Multi-agent code review with automatic pattern discovery using ULTRATHINK method
 
 ## Installation
 
-    /plugin marketplace add andredezzy/maccing
-    /plugin install maccing-code-reviewer@maccing
+```
+/plugin marketplace add andredezzy/maccing
+/plugin install maccing-code-reviewer@maccing
+```
 
 ---
 
@@ -40,33 +42,47 @@ Multi-agent code review with automatic pattern discovery using ULTRATHINK method
 
 ### Basic Review
 
-    /maccing-code-reviewer:review
+```
+/maccing-code-reviewer:review
+```
 
 Asks which scope to review (Git Changes, Full Codebase, or Specific Path).
 
 ### Review Entire Codebase
 
-    /maccing-code-reviewer:review entire codebase
+```
+/maccing-code-reviewer:review entire codebase
+```
 
 ### Review Specific Path
 
-    /maccing-code-reviewer:review src/api/
+```
+/maccing-code-reviewer:review src/api/
+```
 
-### Targeted Review
+### Review by Module Name
 
-    /maccing-code-reviewer:review --only security,architecture
+```
+/maccing-code-reviewer:review the authentication module
+```
 
-Run only specific agents.
+### Targeted Review (specific agents)
+
+```
+/maccing-code-reviewer:review --only security,architecture
+```
 
 ### Skip Agents
 
-    /maccing-code-reviewer:review --skip i18n,naming
+```
+/maccing-code-reviewer:review --skip i18n,naming
+```
 
 ### Console-Only Output
 
-    /maccing-code-reviewer:review --no-save
-
-Output report to console without saving to file.
+```
+/maccing-code-reviewer:review --no-save
+```
 
 ---
 
@@ -170,7 +186,7 @@ Output report to console without saving to file.
 |                        |                                              |
 |                        v                                              |
 |  +-----------------------------------------------------------+        |
-|  | PROMPT: SELECT RULE FILES                                 |        |
+|  | PROMPT: SELECT RULE FILES (AskUserQuestion tool)          |        |
 |  |                                                           |        |
 |  |   Which rule files should I use for reviews?              |        |
 |  |                                                           |        |
@@ -182,21 +198,17 @@ Output report to console without saving to file.
 |                        |                                              |
 |                        v                                              |
 |  +-----------------------------------------------------------+        |
-|  | PROMPT: SELECT AGENTS                                     |        |
+|  | PROMPT: SELECT AGENTS (AskUserQuestion tool)              |        |
 |  |                                                           |        |
 |  |   Which agents should run during reviews?                 |        |
 |  |                                                           |        |
-|  |   [1] naming-agent       Naming conventions               |        |
-|  |   [2] code-style-agent   Formatting and patterns          |        |
-|  |   [3] clean-code-agent   Code quality                     |        |
-|  |   [4] architecture-agent Layer boundaries                 |        |
-|  |   [5] security-agent     Security vulnerabilities         |        |
-|  |   [6] i18n-agent         Internationalization             |        |
+|  |   [1] All agents (Recommended)                            |        |
+|  |   [2] Select specific agents                              |        |
 |  +-----------------------------------------------------------+        |
 |                        |                                              |
 |                        v                                              |
 |  +-----------------------------------------------------------+        |
-|  | SAVE CONFIGURATION                                        |        |
+|  | SAVE CONFIGURATION (Write tool)                           |        |
 |  |                                                           |        |
 |  |   mkdir -p .claude/plugins/maccing                        |        |
 |  |                                                           |        |
@@ -273,37 +285,7 @@ Output report to console without saving to file.
 |  - clean-code:   4 rules  (CODE_STYLE.md)                             |
 |  - architecture: 3 rules  (CONVENTIONS.md)                            |
 |  - security:     2 rules  (CLAUDE.md)                                 |
-|  - i18n:         0 rules  -> GAP                                      |
-|                                                                       |
-+-----------------------------------------------------------------------+
-```
-
----
-
-### Gap Detection Flow
-
-```
-+-----------------------------------------------------------------------+
-|                        GAP DETECTION FLOW                             |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  A category is a GAP if:                                              |
-|  - NO rules were found for it across ALL rule files                   |
-|  - The agent is enabled in configuration                              |
-|                                                                       |
-|  +------------------+--------------+-----------------------------+    |
-|  | Agent            | Rules Found  | Status                      |    |
-|  +------------------+--------------+-----------------------------+    |
-|  | naming-agent     | 12 rules     | covered                     |    |
-|  | code-style-agent | 11 rules     | covered                     |    |
-|  | clean-code-agent | 4 rules      | covered                     |    |
-|  | architecture     | 3 rules      | covered                     |    |
-|  | security-agent   | 2 rules      | covered                     |    |
-|  | i18n-agent       | 0 rules      | GAP -> Pattern Discovery    |    |
-|  +------------------+--------------+-----------------------------+    |
-|                                                                       |
-|  GAPS DETECTED: 1 (i18n)                                              |
-|  -> Proceed to Pattern Discovery for i18n category                    |
+|  - i18n:         0 rules  -> GAP (Pattern Discovery)                  |
 |                                                                       |
 +-----------------------------------------------------------------------+
 ```
@@ -386,9 +368,7 @@ Output report to console without saving to file.
 |                       AGENT EXECUTION FLOW                            |
 +-----------------------------------------------------------------------+
 |                                                                       |
-|  PARALLEL AGENT SPAWNING                                              |
-|                                                                       |
-|  Task tool spawns ALL agents in a SINGLE message (parallel):          |
+|  PARALLEL AGENT SPAWNING (Task tool, single message)                  |
 |                                                                       |
 |  +--------+  +--------+  +--------+  +--------+  +--------+           |
 |  | naming |  | style  |  | clean  |  | arch   |  |security|           |
@@ -402,35 +382,12 @@ Output report to console without saving to file.
 |  |     |-- If explicit rules exist -> Read rule file     |            |
 |  |     +-- If gap -> Read discovered-patterns.json       |            |
 |  |                                                       |            |
-|  |  2. FOR EACH CHANGED FILE:                            |            |
+|  |  2. FOR EACH FILE:                                    |            |
 |  |     +-- Execute ULTRATHINK Loop                       |            |
 |  |                                                       |            |
 |  |  3. RETURN RESULTS                                    |            |
 |  |     +-- Structured list of issues found               |            |
 |  +-------------------------------------------------------+            |
-|                                                                       |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  AGENT PER-FILE EXECUTION                                             |
-|                                                                       |
-|  Changed files: [src/auth.ts, src/utils.ts, src/components/Button.tsx]|
-|                                                                       |
-|  File 1: src/auth.ts                                                  |
-|  READ -> RULES -> ULTRATHINK -> CHECK -> ULTRATHINK -> RESULT         |
-|  Issues found: 2                                                      |
-|  - Line 42: tenantId from input (CRITICAL)                            |
-|  - Line 15: active -> should be isActive                              |
-|                        |                                              |
-|                        v                                              |
-|  File 2: src/utils.ts                                                 |
-|  READ -> RULES -> ULTRATHINK -> CHECK -> ULTRATHINK -> RESULT         |
-|  Issues found: 1                                                      |
-|  - Line 8: unused import 'lodash'                                     |
-|                        |                                              |
-|                        v                                              |
-|  File 3: src/components/Button.tsx                                    |
-|  READ -> RULES -> ULTRATHINK -> CHECK -> ULTRATHINK -> RESULT         |
-|  Issues found: 0                                                      |
 |                                                                       |
 +-----------------------------------------------------------------------+
 ```
@@ -458,8 +415,7 @@ Output report to console without saving to file.
 |         v                                                             |
 |   +---------------+                                                   |
 |   |  ULTRATHINK   |  Phase 1: Deep Analysis                           |
-|   |   (Phase 1)   |                                                   |
-|   |               |  - What patterns apply to this file?              |
+|   |   (Phase 1)   |  - What patterns apply to this file?              |
 |   |               |  - What could go wrong?                           |
 |   |               |  - What are ALL elements to check?                |
 |   +-------+-------+                                                   |
@@ -472,8 +428,7 @@ Output report to console without saving to file.
 |         v                                                             |
 |   +---------------+                                                   |
 |   |  ULTRATHINK   |  Phase 2: Validation                              |
-|   |   (Phase 2)   |                                                   |
-|   |               |  - Is this REALLY a violation?                    |
+|   |   (Phase 2)   |  - Is this REALLY a violation?                    |
 |   |               |  - Could it be intentional?                       |
 |   |               |  - Did I miss anything?                           |
 |   +-------+-------+                                                   |
@@ -483,10 +438,7 @@ Output report to console without saving to file.
 |     | RESULT |  Document findings: file:line, issue, severity         |
 |     +---+----+                                                        |
 |         |                                                             |
-|         v                                                             |
-|     +--------+                                                        |
-|     |  NEXT  |-----> (next file, loop back to READ)                   |
-|     +--------+                                                        |
+|         +-----> (next file, loop back to READ)                        |
 |                                                                       |
 +-----------------------------------------------------------------------+
 |                                                                       |
@@ -496,106 +448,6 @@ Output report to console without saving to file.
 |  think hard   -> Deeper analysis               NOT ENOUGH             |
 |  think harder -> Extended analysis             STILL NOT ENOUGH       |
 |  ultrathink   -> Maximum depth analysis        USE THIS               |
-|                                                                       |
-+-----------------------------------------------------------------------+
-```
-
----
-
-### Result Aggregation Flow
-
-```
-+-----------------------------------------------------------------------+
-|                     RESULT AGGREGATION FLOW                           |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  COLLECT AGENT RESULTS                                                |
-|                                                                       |
-|  naming-agent:       3 issues                                         |
-|  code-style-agent:   2 issues                                         |
-|  clean-code-agent:   1 issue                                          |
-|  architecture-agent: 0 issues                                         |
-|  security-agent:     1 issue (CRITICAL)                               |
-|  i18n-agent:         4 issues                                         |
-|                                                                       |
-|  Total raw: 11 issues                                                 |
-|                        |                                              |
-|                        v                                              |
-|  1. DEDUPLICATE                                                       |
-|                                                                       |
-|  Remove duplicate issues reported by multiple agents:                 |
-|                                                                       |
-|  Example: src/auth.ts:42                                              |
-|  - security-agent: "tenantId from input"                              |
-|  - clean-code-agent: "untrusted input"                                |
-|  -> Merge into single issue, keep security-agent as primary           |
-|                                                                       |
-|  After dedup: 10 unique issues                                        |
-|                        |                                              |
-|                        v                                              |
-|  2. SORT BY SEVERITY                                                  |
-|                                                                       |
-|  Priority order:                                                      |
-|  CRITICAL -> First                                                    |
-|  HIGH     -> Second                                                   |
-|  MEDIUM   -> Third                                                    |
-|  LOW      -> Last                                                     |
-|                        |                                              |
-|                        v                                              |
-|  3. GROUP BY FILE                                                     |
-|                                                                       |
-|  src/auth.ts                                                          |
-|  |-- Line 42: CRITICAL - tenantId from input                          |
-|  +-- Line 15: HIGH - Boolean missing prefix                           |
-|                                                                       |
-|  src/utils.ts                                                         |
-|  +-- Line 8: MEDIUM - Unused import                                   |
-|                                                                       |
-|  src/components/Form.tsx                                              |
-|  |-- Line 22: MEDIUM - Ternary nesting                                |
-|  +-- Line 45: LOW - Missing translation key                           |
-|                                                                       |
-+-----------------------------------------------------------------------+
-```
-
----
-
-### Report Generation Flow
-
-```
-+-----------------------------------------------------------------------+
-|                     REPORT GENERATION FLOW                            |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  1. DETERMINE VERDICT                                                 |
-|                                                                       |
-|  CRITICAL issues > 0?  -> VERDICT: REQUEST CHANGES                    |
-|  HIGH issues > 0?      -> VERDICT: REQUEST CHANGES                    |
-|  MEDIUM issues > 3?    -> VERDICT: NEEDS REVIEW                       |
-|  Only LOW issues?      -> VERDICT: APPROVED                           |
-|  No issues?            -> VERDICT: APPROVED                           |
-|                        |                                              |
-|                        v                                              |
-|  2. GENERATE FILE NAME                                                |
-|                                                                       |
-|  Get branch name:                                                     |
-|  $ git branch --show-current                                          |
-|  -> feature/auth                                                      |
-|                                                                       |
-|  Sanitize:                                                            |
-|  - Replace / with -                                                   |
-|  - Lowercase                                                          |
-|  -> feature-auth                                                      |
-|                                                                       |
-|  Generate filename:                                                   |
-|  -> docs/code-reviews/2025-12-31-1430-feature-auth.md                 |
-|                        |                                              |
-|                        v                                              |
-|  3. SAVE REPORT                                                       |
-|                                                                       |
-|  $ mkdir -p docs/code-reviews                                         |
-|  Write file using Write tool                                          |
-|  -> Report saved                                                      |
 |                                                                       |
 +-----------------------------------------------------------------------+
 ```
@@ -664,42 +516,100 @@ Add custom agents for your stack:
 
 ## Visual Output Examples
 
+### Initial Banner (with scope)
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: Full Codebase
+
+════════════════════════════════════════════════════════
+```
+
+### First-Time Setup Output
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+First-time setup
+
+Scanning for project rules...
+```
+
+### Setup Complete Confirmation
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Setup Complete
+
+Config saved to: .claude/plugins/maccing/code-reviewer.json
+
+Rule files: CLAUDE.md
+Agents:     naming, code-style, clean-code, architecture, security, i18n
+
+════════════════════════════════════════════════════════
+
+Proceeding with code review...
+```
+
+### Rules Loaded Output
+
+```
+★ Rules Loaded ═════════════════════════════════════════
+
+Files read: 3
+- CLAUDE.md
+- rules/CODE_STYLE.md
+- rules/CONVENTIONS.md
+
+Rules extracted per category:
+- naming:       12 rules found
+- code-style:   8 rules found
+- clean-code:   5 rules found
+- architecture: 0 rules found → Pattern Discovery
+- security:     3 rules found
+- i18n:         0 rules found → Pattern Discovery
+
+════════════════════════════════════════════════════════
+```
+
 ### Pattern Discovery Output
 
 ```
-Pattern Discovery
+★ Pattern Discovery ════════════════════════════════════
 
 Scanning codebase for implicit conventions...
 
 Files Analyzed: 142
 Categories:     3 gaps detected (naming, architecture, clean-code)
 
-----------------------------------------------------------------
+────────────────────────────────────────────────────────
 
 naming patterns discovered:
 
   Boolean Prefixes
-  |-- is*     -> 73% (89/122 booleans)
-  |-- has*    -> 18% (22/122 booleans)
-  +-- can*    ->  5% (6/122 booleans)
-  Adopted: Booleans should use is/has/can prefixes
+  ├─ is*     → 73% (89/122 booleans)
+  ├─ has*    → 18% (22/122 booleans)
+  └─ can*    →  5% (6/122 booleans)
+  ✓ Adopted: Booleans should use is/has/can prefixes
 
   Function Naming
-  |-- verb-first  -> 91% (handle*, get*, set*, fetch*)
-  +-- noun-first  ->  9%
-  Adopted: Functions should start with verb
+  ├─ verb-first  → 91% (handle*, get*, set*, fetch*)
+  └─ noun-first  →  9%
+  ✓ Adopted: Functions should start with verb
 
-----------------------------------------------------------------
+────────────────────────────────────────────────────────
 
 architecture patterns discovered:
 
   Import Boundaries
-  |-- components/ never imports from pages/  -> 100%
-  |-- utils/ never imports from components/  -> 94%
-  +-- hooks/ imports from utils/             -> 88%
-  Adopted: Layer boundaries enforced
+  ├─ components/ never imports from pages/  → 100%
+  ├─ utils/ never imports from components/  → 94%
+  └─ hooks/ imports from utils/             → 88%
+  ✓ Adopted: Layer boundaries enforced
 
-----------------------------------------------------------------
+════════════════════════════════════════════════════════
 
 Patterns saved to: .claude/plugins/maccing/discovered-patterns.json
 
@@ -709,7 +619,7 @@ Proceeding with code review...
 ### Review Progress Output
 
 ```
-maccing-code-reviewer
+★ maccing-code-reviewer ════════════════════════════════
 
 Review Started
 
@@ -733,12 +643,42 @@ Active Agents:
 
 Skipped Agents:
 - i18n-agent (no locale files detected)
+
+════════════════════════════════════════════════════════
+```
+
+### Agent Progress Output
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Agent Progress:
+
+naming-agent — Phase 1: done, Phase 2: done — 3 issues found
+
+code-style-agent — Phase 1: done, Phase 2: done — 2 issues found
+
+clean-code-agent — Phase 1: done, Phase 2: done — 1 issue found
+
+architecture-agent — Phase 1: done, Phase 2: done — 0 issues found
+
+security-agent — Phase 1: done, Phase 2: done — 1 CRITICAL issue found
+
+Results:
+- naming-agent: 3 issues
+- code-style-agent: 2 issues
+- clean-code-agent: 1 issue
+- architecture-agent: 0 issues
+- security-agent: 1 CRITICAL issue
+- i18n-agent: skipped (no locale files)
+
+════════════════════════════════════════════════════════
 ```
 
 ### Final Report Output
 
 ```
-Code Review Report
+★ Code Review Report ═══════════════════════════════════
 
 Date:     2025-12-31 14:30
 Branch:   feature/auth
@@ -760,21 +700,21 @@ Summary:
 Verdict: REQUEST CHANGES
 Critical and high priority issues must be addressed.
 
-----------------------------------------------------------------
+─────────────────────────────────────────────────────────
 
 Issues:
 
-CRITICAL - src/auth.ts:42
+✖ CRITICAL — src/auth.ts:42
 Agent: security-agent
 Issue: Tenant ID accepted from request body
 Pattern: Never accept tenantId from frontend
 
-HIGH - src/utils/helpers.ts:15
+▲ HIGH — src/utils/helpers.ts:15
 Agent: naming-agent
 Issue: Boolean variable missing prefix
 Pattern: Discovered: 96% of booleans use is/has/can prefix
 
-----------------------------------------------------------------
+─────────────────────────────────────────────────────────
 
 Agent Summary:
 - security-agent: 1 issue (tenant isolation vulnerability)
@@ -788,6 +728,8 @@ Recommendations:
 1. Review tenant context patterns in auth layer
 2. Add ESLint rules for boolean naming
 3. Enforce ternary pattern in component library
+
+═══════════════════════════════════════════════════════
 ```
 
 ---
@@ -818,18 +760,18 @@ i18n patterns discovered:
   Skipping i18n checks for this review.
 ```
 
-### No Changed Files
+### No Scope Specified
 
-If there are no files to review:
+If user runs `/maccing-code-reviewer:review` without scope:
 
 ```
-maccing-code-reviewer
-
-No changes detected.
-
-Specify a scope to review, e.g.:
-/maccing-code-reviewer:review src/api/
+★ maccing-code-reviewer ════════════════════════════════
 ```
+
+Then the AskUserQuestion tool is invoked with options:
+1. Git Changes - Review only files changed in git
+2. Full Codebase - Review all source files in the project
+3. Specific Path - Review files in a specific folder
 
 ---
 
