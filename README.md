@@ -69,7 +69,7 @@ Multi-agent code review with automatic pattern discovery.
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "2.0.0"`
+Expected: `"version": "1.1.0"`
 
 ### Plugin not updating
 
