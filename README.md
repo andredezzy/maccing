@@ -63,17 +63,19 @@ Claude Code plugins built for developers who care about code quality.
 
 ---
 
-## Contributing
+## Philosophy
 
-Contributions are welcome. Please open an issue first to discuss what you would like to change.
+- **Thorough over fast** — Deep multi-pass analysis catches what quick scans miss
+- **Evidence over claims** — Every issue includes file:line and correct pattern
+- **Systematic over ad-hoc** — Structured methodology beats random checks
+- **Project-aware** — Your rules, your standards, not generic advice
+- **Transparent** — See what agents are doing, not just the results
 
 ---
 
-## Author
+## Contributing
 
-**Andre Dezzy**
-
-- GitHub: [@andredezzy](https://github.com/andredezzy)
+Contributions are welcome. Please open an issue first to discuss what you would like to change.
 
 ---
 
