@@ -4,7 +4,30 @@ Multi-agent code review with automatic pattern discovery using ULTRATHINK method
 
 ---
 
-## What it does
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Workflows](#workflows)
+  - [Complete Review Flow](#complete-review-flow)
+  - [First-Time Setup Flow](#first-time-setup-flow)
+  - [Rule Resolution Flow](#rule-resolution-flow)
+  - [Gap Detection Flow](#gap-detection-flow)
+  - [Pattern Discovery Flow](#pattern-discovery-flow)
+  - [Agent Execution Flow](#agent-execution-flow)
+  - [ULTRATHINK Loop](#ultrathink-loop)
+  - [Result Aggregation Flow](#result-aggregation-flow)
+  - [Report Generation Flow](#report-generation-flow)
+- [Agents](#agents)
+- [Configuration](#configuration)
+- [Visual Output Examples](#visual-output-examples)
+- [Edge Cases](#edge-cases)
+- [Philosophy](#philosophy)
+
+---
+
+## What It Does
 
 - **Automatic pattern discovery** learns conventions from YOUR codebase
 - **6 specialized agents** analyze code in parallel
@@ -12,116 +35,6 @@ Multi-agent code review with automatic pattern discovery using ULTRATHINK method
 - **Project-aware** respects your explicit rules when provided
 - **Extensible** define custom agents for your stack
 - **Persistent reports** saved to docs/code-reviews/
-
----
-
-## How It Works
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Code Review Flow                      │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  1. Load Configuration                                  │
-│     └─ Check for .claude/plugins/maccing/code-reviewer.json
-│                                                          │
-│  2. Identify Rule Sources                               │
-│     ├─ Explicit rules → Use directly                    │
-│     └─ No rules → Pattern Discovery                     │
-│                                                          │
-│  3. Pattern Discovery (for gaps only)                   │
-│     ├─ Scan entire codebase                             │
-│     ├─ Extract conventions per category                 │
-│     ├─ Calculate consistency percentages                │
-│     └─ Adopt patterns with >60% consistency             │
-│                                                          │
-│  4. Spawn Review Agents (parallel)                      │
-│     ├─ Each agent uses explicit OR discovered rules     │
-│     └─ ULTRATHINK double-pass verification              │
-│                                                          │
-│  5. Aggregate & Report                                  │
-│     ├─ Deduplicate issues                               │
-│     ├─ Sort by severity                                 │
-│     └─ Save to docs/code-reviews/                       │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Pattern Discovery
-
-When no explicit rules exist for a category, the reviewer **discovers patterns from your codebase**.
-
-### Discovery Flow
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              Pattern Discovery Agent                     │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  1. SCAN    Find all relevant files                     │
-│  2. READ    Read every file (exhaustive)                │
-│  3. EXTRACT Identify patterns for the category          │
-│  4. COUNT   Build statistics per pattern                │
-│  5. ANALYZE Calculate consistency percentages            │
-│  6. ADOPT   Patterns with >60% become rules             │
-│  7. SAVE    Store to discovered-patterns.json           │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Example Discovery Output
-
-```
-★ Pattern Discovery ════════════════════════════════════
-
-Scanning codebase for implicit conventions...
-
-Files Analyzed: 142
-Categories:     3 gaps detected (naming, architecture, clean-code)
-
-────────────────────────────────────────────────────────
-
-naming patterns discovered:
-
-  Boolean Prefixes
-  ├─ is*     → 73% (89/122 booleans)
-  ├─ has*    → 18% (22/122 booleans)
-  └─ can*    →  5% (6/122 booleans)
-  ✓ Adopted: Booleans should use is/has/can prefixes
-
-  Function Naming
-  ├─ verb-first  → 91% (handle*, get*, set*, fetch*)
-  └─ noun-first  →  9%
-  ✓ Adopted: Functions should start with verb
-
-────────────────────────────────────────────────────────
-
-architecture patterns discovered:
-
-  Import Boundaries
-  ├─ components/ never imports from pages/  → 100%
-  ├─ utils/ never imports from components/  → 94%
-  └─ hooks/ imports from utils/             → 88%
-  ✓ Adopted: Layer boundaries enforced
-
-════════════════════════════════════════════════════════
-
-Patterns saved to: .claude/plugins/maccing/discovered-patterns.json
-
-Proceeding with code review...
-```
-
-### What Gets Discovered
-
-| Category | Patterns Discovered |
-|----------|---------------------|
-| Naming | Boolean prefixes, function verb patterns, constant casing, component naming |
-| Code Style | Import ordering, spacing conventions, ternary vs if/else, destructuring |
-| Architecture | Folder structure, import boundaries, dependency direction, colocation |
-| Clean Code | Type safety (any vs unknown), error handling, comment style |
-| Security | Auth patterns, input validation locations, secret handling |
 
 ---
 
@@ -166,44 +79,794 @@ Output report to console without saving to file.
 
 ---
 
-## Agents
+## Workflows
 
-| Agent | Focus |
-|-------|-------|
-| `naming` | Boolean prefixes, interface suffixes, enum casing |
-| `code-style` | Formatting, spacing, ternaries, composition |
-| `clean-code` | Unused code, comments, types, error handling |
-| `architecture` | Layer boundaries, separation of concerns |
-| `security` | Injection, auth, secrets, vulnerabilities |
-| `i18n` | Translation keys, locale coverage |
+### Complete Review Flow
+
+The end-to-end flow from command invocation to final report:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           COMPLETE REVIEW FLOW                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐                                                           │
+│  │ User invokes │                                                           │
+│  │   /review    │                                                           │
+│  └──────┬───────┘                                                           │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────────┐    NO     ┌───────────────────┐                       │
+│  │  Config exists?  │──────────▶│ First-Time Setup  │                       │
+│  └────────┬─────────┘           └─────────┬─────────┘                       │
+│           │ YES                           │                                  │
+│           ▼                               ▼                                  │
+│  ┌──────────────────┐           ┌───────────────────┐                       │
+│  │  Load Config     │◀──────────│  Save Config      │                       │
+│  └────────┬─────────┘           └───────────────────┘                       │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌──────────────────┐                                                       │
+│  │ Get Changed Files│                                                       │
+│  │  (git diff)      │                                                       │
+│  └────────┬─────────┘                                                       │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌──────────────────┐                                                       │
+│  │ Read Explicit    │                                                       │
+│  │ Rules (if any)   │                                                       │
+│  └────────┬─────────┘                                                       │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌──────────────────┐                                                       │
+│  │ Detect Gaps      │──────────▶ Which categories have no explicit rules?   │
+│  └────────┬─────────┘                                                       │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌──────────────────┐    GAPS    ┌───────────────────┐                      │
+│  │  Gaps detected?  │───────────▶│ Pattern Discovery │                      │
+│  └────────┬─────────┘            │   (per category)  │                      │
+│           │ NO GAPS              └─────────┬─────────┘                      │
+│           │                                │                                 │
+│           ▼                                ▼                                 │
+│  ┌──────────────────────────────────────────────────────┐                   │
+│  │                 SPAWN AGENTS (PARALLEL)               │                   │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐     │                   │
+│  │  │ naming  │ │  style  │ │  clean  │ │  arch   │ ... │                   │
+│  │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘     │                   │
+│  │       │           │           │           │           │                   │
+│  │       └───────────┴───────────┴───────────┘           │                   │
+│  │                       │                               │                   │
+│  └───────────────────────┼───────────────────────────────┘                   │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌──────────────────────────────────────────────────────┐                   │
+│  │              AGGREGATE RESULTS                        │                   │
+│  │  • Deduplicate issues                                │                   │
+│  │  • Sort by severity (CRITICAL > HIGH > MEDIUM > LOW) │                   │
+│  │  • Group by file                                     │                   │
+│  └───────────────────────┬──────────────────────────────┘                   │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌──────────────────────────────────────────────────────┐                   │
+│  │              GENERATE REPORT                          │                   │
+│  │  • Display to console                                │                   │
+│  │  • Save to docs/code-reviews/                        │                   │
+│  └──────────────────────────────────────────────────────┘                   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Rule Resolution
+### First-Time Setup Flow
+
+When no configuration exists, the plugin guides the user through setup:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   Rule Resolution                        │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  For each agent category:                               │
-│                                                          │
-│    1. Check: Does explicit rule file exist?             │
-│       └─ YES → Use explicit rules                       │
-│       └─ NO  → Run pattern discovery                    │
-│                                                          │
-│    2. Pattern discovery produces:                       │
-│       └─ Discovered patterns (>60% consistency)         │
-│       └─ Saved to discovered-patterns.json              │
-│                                                          │
-│    3. Agent uses discovered patterns as rules           │
-│                                                          │
-│  Every rule is either:                                  │
-│    - Explicitly defined by you                          │
-│    - Discovered from your actual codebase               │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FIRST-TIME SETUP FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │ Check: .claude/plugins/maccing/code-reviewer.json │                      │
+│  └───────────────────────┬───────────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│              ┌───────────────────────┐                                      │
+│              │   Config not found    │                                      │
+│              └───────────┬───────────┘                                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │              SCAN FOR RULE FILES                   │                      │
+│  │                                                    │                      │
+│  │   ls -la CLAUDE.md rules/*.md .claude/*.md        │                      │
+│  │                                                    │                      │
+│  │   Found:                                          │                      │
+│  │   • CLAUDE.md                                     │                      │
+│  │   • rules/CODE_STYLE.md                           │                      │
+│  │   • rules/SECURITY.md                             │                      │
+│  └───────────────────────┬───────────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │           PROMPT: SELECT RULE FILES                │                      │
+│  │                                                    │                      │
+│  │   Which rule files should I use for reviews?      │                      │
+│  │                                                    │                      │
+│  │   [1] CLAUDE.md (detected)                        │                      │
+│  │   [2] rules/CODE_STYLE.md (detected)              │                      │
+│  │   [3] rules/SECURITY.md (detected)                │                      │
+│  │   [4] Add custom path...                          │                      │
+│  │   [5] Skip (discover patterns from codebase)      │                      │
+│  │                                                    │                      │
+│  │   > Select (comma-separated): 1,2                 │                      │
+│  └───────────────────────┬───────────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │           PROMPT: SELECT AGENTS                    │                      │
+│  │                                                    │                      │
+│  │   Which agents should run during reviews?         │                      │
+│  │                                                    │                      │
+│  │   [1] naming-agent       Naming conventions       │                      │
+│  │   [2] code-style-agent   Formatting and patterns  │                      │
+│  │   [3] clean-code-agent   Code quality             │                      │
+│  │   [4] architecture-agent Layer boundaries         │                      │
+│  │   [5] security-agent     Security vulnerabilities │                      │
+│  │   [6] i18n-agent         Internationalization     │                      │
+│  │                                                    │                      │
+│  │   > Select (comma-separated, or 'all'): all       │                      │
+│  └───────────────────────┬───────────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │              CREATE CONFIG DIRECTORY               │                      │
+│  │                                                    │                      │
+│  │   mkdir -p .claude/plugins/maccing                │                      │
+│  └───────────────────────┬───────────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────┐                      │
+│  │              SAVE CONFIGURATION                    │                      │
+│  │                                                    │                      │
+│  │   {                                               │                      │
+│  │     "ruleFiles": ["CLAUDE.md", "rules/..."],      │                      │
+│  │     "agents": ["naming", "code-style", ...],      │                      │
+│  │     "customAgents": []                            │                      │
+│  │   }                                               │                      │
+│  └───────────────────────────────────────────────────┘                      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+### Rule Resolution Flow
+
+How the plugin decides which rules to use for each agent:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         RULE RESOLUTION FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   For EACH agent category:                                                  │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                         naming-agent                                 │   │
+│   │                                                                      │   │
+│   │   ┌──────────────────────┐                                          │   │
+│   │   │ Check: NAMING.md     │                                          │   │
+│   │   │ exists in ruleFiles? │                                          │   │
+│   │   └──────────┬───────────┘                                          │   │
+│   │              │                                                       │   │
+│   │      ┌───────┴───────┐                                              │   │
+│   │      │               │                                              │   │
+│   │     YES              NO                                              │   │
+│   │      │               │                                              │   │
+│   │      ▼               ▼                                              │   │
+│   │   ┌──────────┐   ┌──────────────────────────────┐                   │   │
+│   │   │   Use    │   │ Check: naming section        │                   │   │
+│   │   │ explicit │   │ exists in CLAUDE.md?         │                   │   │
+│   │   │  rules   │   └──────────────┬───────────────┘                   │   │
+│   │   └──────────┘          ┌───────┴───────┐                           │   │
+│   │                         │               │                            │   │
+│   │                        YES              NO                           │   │
+│   │                         │               │                            │   │
+│   │                         ▼               ▼                            │   │
+│   │                   ┌──────────┐   ┌──────────────┐                   │   │
+│   │                   │   Use    │   │    MARK AS   │                   │   │
+│   │                   │  section │   │     GAP      │                   │   │
+│   │                   └──────────┘   │              │                   │   │
+│   │                                  │  → Pattern   │                   │   │
+│   │                                  │   Discovery  │                   │   │
+│   │                                  └──────────────┘                   │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                       code-style-agent                               │   │
+│   │                            (same flow)                               │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                       architecture-agent                             │   │
+│   │                            (same flow)                               │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   ... (repeat for all agents)                                               │
+│                                                                              │
+│   ═══════════════════════════════════════════════════════════════════════   │
+│                                                                              │
+│   RESULT: Each agent is tagged with:                                        │
+│                                                                              │
+│   • naming:       explicit (NAMING.md)                                      │
+│   • code-style:   explicit (CLAUDE.md section)                              │
+│   • clean-code:   GAP → discovery                                           │
+│   • architecture: GAP → discovery                                           │
+│   • security:     explicit (SECURITY.md)                                    │
+│   • i18n:         skipped (no locale files)                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Gap Detection Flow
+
+How the plugin identifies which categories need pattern discovery:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          GAP DETECTION FLOW                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     GAP DETECTION MATRIX                               │  │
+│  │                                                                        │  │
+│  │   Agent             │ Has Explicit Rules If...                        │  │
+│  │   ──────────────────┼────────────────────────────────────────────────│  │
+│  │   naming-agent      │ NAMING.md exists OR naming section in CLAUDE.md│  │
+│  │   code-style-agent  │ CODE_STYLE.md exists OR style section          │  │
+│  │   clean-code-agent  │ CLEAN_CODE.md exists OR clean code section     │  │
+│  │   architecture-agent│ ARCHITECTURE.md exists OR architecture section │  │
+│  │   security-agent    │ SECURITY.md exists OR security section         │  │
+│  │   i18n-agent        │ i18n rules exist OR no locale files in project │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│                                   │                                          │
+│                                   ▼                                          │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        SCAN RULE FILES                                 │  │
+│  │                                                                        │  │
+│  │   ruleFiles: ["CLAUDE.md", "rules/CODE_STYLE.md"]                     │  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ CLAUDE.md sections found:                                       │ │  │
+│  │   │   • ## Naming Conventions     ✓ → naming-agent covered          │ │  │
+│  │   │   • ## Code Style             ✗ (not found)                     │ │  │
+│  │   │   • ## Clean Code             ✗ (not found)                     │ │  │
+│  │   │   • ## Architecture           ✗ (not found)                     │ │  │
+│  │   │   • ## Security               ✓ → security-agent covered        │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ rules/CODE_STYLE.md:                                            │ │  │
+│  │   │   ✓ → code-style-agent covered                                  │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│                                   │                                          │
+│                                   ▼                                          │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        GAP DETECTION RESULT                            │  │
+│  │                                                                        │  │
+│  │   ┌──────────────────┬──────────────┬─────────────────────────────┐  │  │
+│  │   │ Agent            │ Status       │ Source                      │  │  │
+│  │   ├──────────────────┼──────────────┼─────────────────────────────┤  │  │
+│  │   │ naming-agent     │ ✓ covered    │ CLAUDE.md section           │  │  │
+│  │   │ code-style-agent │ ✓ covered    │ rules/CODE_STYLE.md         │  │  │
+│  │   │ clean-code-agent │ ✗ GAP        │ → Pattern Discovery         │  │  │
+│  │   │ architecture-agen│ ✗ GAP        │ → Pattern Discovery         │  │  │
+│  │   │ security-agent   │ ✓ covered    │ CLAUDE.md section           │  │  │
+│  │   │ i18n-agent       │ ○ skipped    │ No locale files detected    │  │  │
+│  │   └──────────────────┴──────────────┴─────────────────────────────┘  │  │
+│  │                                                                        │  │
+│  │   GAPS DETECTED: 2 (clean-code, architecture)                         │  │
+│  │   → Proceed to Pattern Discovery for these categories                 │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Pattern Discovery Flow
+
+How the plugin discovers patterns from the codebase for categories without explicit rules:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        PATTERN DISCOVERY FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  For EACH gap category, spawn a pattern-discovery-agent:                    │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    PATTERN DISCOVERY AGENT                             │  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 1. SCAN                                                         │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    find . -type f \( -name "*.ts" -o -name "*.tsx" \)           │ │  │
+│  │   │           -not -path "*/node_modules/*"                         │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Result: 142 files found                                      │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 2. READ                                                         │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Read EVERY file exhaustively                                 │ │  │
+│  │   │    (No sampling, no shortcuts)                                  │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 3. EXTRACT                                                      │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    For naming category:                                         │ │  │
+│  │   │    • Boolean variables: what prefixes? (is, has, can, none)    │ │  │
+│  │   │    • Functions: verb-first or noun-first?                      │ │  │
+│  │   │    • Constants: UPPER_SNAKE or camelCase?                      │ │  │
+│  │   │    • Components: descriptive or generic?                       │ │  │
+│  │   │    • Types/Interfaces: what suffixes?                          │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 4. COUNT                                                        │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Build statistics:                                            │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Boolean Prefixes:                                            │ │  │
+│  │   │    ├─ is*     → 89 occurrences                                  │ │  │
+│  │   │    ├─ has*    → 22 occurrences                                  │ │  │
+│  │   │    ├─ can*    → 6 occurrences                                   │ │  │
+│  │   │    ├─ should* → 3 occurrences                                   │ │  │
+│  │   │    └─ none    → 2 occurrences                                   │ │  │
+│  │   │    Total: 122 booleans                                          │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 5. ANALYZE                                                      │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Calculate consistency percentages:                           │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Boolean prefixes used: (89+22+6+3) / 122 = 98.4%            │ │  │
+│  │   │    ├─ is*     → 73% of all booleans                             │ │  │
+│  │   │    ├─ has*    → 18% of all booleans                             │ │  │
+│  │   │    └─ can*    → 5% of all booleans                              │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 6. THRESHOLD                                                    │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Apply 60% consistency threshold:                             │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    ┌────────────────────────────────────────────────────────┐  │ │  │
+│  │   │    │ Pattern                     │ Consistency │ Adopted?  │  │ │  │
+│  │   │    ├─────────────────────────────┼─────────────┼───────────┤  │ │  │
+│  │   │    │ Boolean prefixes (is/has/ca)│ 98.4%       │ ✓ YES     │  │ │  │
+│  │   │    │ Functions verb-first        │ 91%         │ ✓ YES     │  │ │  │
+│  │   │    │ Constants UPPER_SNAKE       │ 64%         │ ✓ YES     │  │ │  │
+│  │   │    │ Enum values uppercase       │ 55%         │ ✗ NO      │  │ │  │
+│  │   │    └────────────────────────────────────────────────────────┘  │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ 7. SAVE                                                         │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    Store to .claude/plugins/maccing/discovered-patterns.json:  │ │  │
+│  │   │                                                                  │ │  │
+│  │   │    {                                                            │ │  │
+│  │   │      "discoveredAt": "2025-12-31T12:45:00Z",                   │ │  │
+│  │   │      "filesAnalyzed": 142,                                     │ │  │
+│  │   │      "categories": {                                           │ │  │
+│  │   │        "naming": {                                             │ │  │
+│  │   │          "hasExplicitRules": false,                            │ │  │
+│  │   │          "patterns": [                                         │ │  │
+│  │   │            {                                                   │ │  │
+│  │   │              "name": "Boolean Prefixes",                       │ │  │
+│  │   │              "rule": "Use is/has/can prefixes",                │ │  │
+│  │   │              "consistency": 0.984,                             │ │  │
+│  │   │              "adopted": true                                   │ │  │
+│  │   │            }                                                   │ │  │
+│  │   │          ]                                                     │ │  │
+│  │   │        }                                                       │ │  │
+│  │   │      }                                                         │ │  │
+│  │   │    }                                                           │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Agent Execution Flow
+
+How each review agent processes files:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         AGENT EXECUTION FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    PARALLEL AGENT SPAWNING                             │  │
+│  │                                                                        │  │
+│  │   Task tool spawns ALL agents in a SINGLE message (parallel):         │  │
+│  │                                                                        │  │
+│  │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐    │  │
+│  │   │ naming  │  │  style  │  │  clean  │  │  arch   │  │security │    │  │
+│  │   │  agent  │  │  agent  │  │  agent  │  │  agent  │  │  agent  │    │  │
+│  │   └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘    │  │
+│  │        │            │            │            │            │          │  │
+│  │        ▼            ▼            ▼            ▼            ▼          │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐│  │
+│  │   │                 EACH AGENT EXECUTES:                            ││  │
+│  │   │                                                                  ││  │
+│  │   │  1. LOAD RULES                                                  ││  │
+│  │   │     ├─ If explicit rules exist → Read rule file                 ││  │
+│  │   │     └─ If gap → Read discovered-patterns.json                   ││  │
+│  │   │                                                                  ││  │
+│  │   │  2. FOR EACH CHANGED FILE:                                      ││  │
+│  │   │     └─ Execute ULTRATHINK Loop (see below)                      ││  │
+│  │   │                                                                  ││  │
+│  │   │  3. RETURN RESULTS                                              ││  │
+│  │   │     └─ Structured list of issues found                          ││  │
+│  │   └─────────────────────────────────────────────────────────────────┘│  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    AGENT PER-FILE EXECUTION                            │  │
+│  │                                                                        │  │
+│  │   Changed files: [src/auth.ts, src/utils.ts, src/components/Button.tsx]│  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ File 1: src/auth.ts                                             │ │  │
+│  │   │                                                                  │ │  │
+│  │   │   READ ──▶ RULES ──▶ ULTRATHINK ──▶ CHECK ──▶ ULTRATHINK ──▶ RESULT│ │
+│  │   │                                                                  │ │  │
+│  │   │   Issues found: 2                                               │ │  │
+│  │   │   • Line 42: tenantId from input (CRITICAL)                     │ │  │
+│  │   │   • Line 15: active → should be isActive                        │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ File 2: src/utils.ts                                            │ │  │
+│  │   │                                                                  │ │  │
+│  │   │   READ ──▶ RULES ──▶ ULTRATHINK ──▶ CHECK ──▶ ULTRATHINK ──▶ RESULT│ │
+│  │   │                                                                  │ │  │
+│  │   │   Issues found: 1                                               │ │  │
+│  │   │   • Line 8: unused import 'lodash'                              │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ File 3: src/components/Button.tsx                               │ │  │
+│  │   │                                                                  │ │  │
+│  │   │   READ ──▶ RULES ──▶ ULTRATHINK ──▶ CHECK ──▶ ULTRATHINK ──▶ RESULT│ │
+│  │   │                                                                  │ │  │
+│  │   │   Issues found: 0                                               │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  │                              │                                        │  │
+│  │                              ▼                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ AGENT COMPLETE                                                  │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Return: {                                                       │ │  │
+│  │   │   "agent": "naming-agent",                                      │ │  │
+│  │   │   "filesReviewed": 3,                                           │ │  │
+│  │   │   "issuesFound": 3,                                             │ │  │
+│  │   │   "issues": [...]                                               │ │  │
+│  │   │ }                                                               │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### ULTRATHINK Loop
+
+The core verification methodology used by each agent:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ULTRATHINK LOOP                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   For EACH file, execute this loop:                                         │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                                                                      │   │
+│   │     ┌────────┐                                                      │   │
+│   │     │  READ  │  Read file content completely                        │   │
+│   │     └───┬────┘                                                      │   │
+│   │         │                                                            │   │
+│   │         ▼                                                            │   │
+│   │     ┌────────┐                                                      │   │
+│   │     │ RULES  │  Reference rules (explicit or discovered)           │   │
+│   │     └───┬────┘                                                      │   │
+│   │         │                                                            │   │
+│   │         ▼                                                            │   │
+│   │   ┌───────────────┐                                                 │   │
+│   │   │  ULTRATHINK   │  Phase 1: Deep Analysis                        │   │
+│   │   │   (Phase 1)   │                                                 │   │
+│   │   │               │  • What patterns apply to this file?           │   │
+│   │   │               │  • What could go wrong?                        │   │
+│   │   │               │  • What are ALL elements to check?             │   │
+│   │   │               │  • Consider every variable, function, import   │   │
+│   │   └───────┬───────┘                                                 │   │
+│   │           │                                                          │   │
+│   │           ▼                                                          │   │
+│   │     ┌────────┐                                                      │   │
+│   │     │ CHECK  │  Verify each pattern meticulously                   │   │
+│   │     │        │  • Boolean prefixes                                 │   │
+│   │     │        │  • Function naming                                  │   │
+│   │     │        │  • Import boundaries                                │   │
+│   │     │        │  • Security vulnerabilities                         │   │
+│   │     │        │  • etc.                                             │   │
+│   │     └───┬────┘                                                      │   │
+│   │         │                                                            │   │
+│   │         ▼                                                            │   │
+│   │   ┌───────────────┐                                                 │   │
+│   │   │  ULTRATHINK   │  Phase 2: Validation                           │   │
+│   │   │   (Phase 2)   │                                                 │   │
+│   │   │               │  • Is this REALLY a violation?                 │   │
+│   │   │               │  • Could it be intentional?                    │   │
+│   │   │               │  • Did I miss anything?                        │   │
+│   │   │               │  • Are there edge cases?                       │   │
+│   │   │               │  • Re-scan the entire file                     │   │
+│   │   └───────┬───────┘                                                 │   │
+│   │           │                                                          │   │
+│   │           ▼                                                          │   │
+│   │     ┌────────┐                                                      │   │
+│   │     │ RESULT │  Document findings:                                 │   │
+│   │     │        │  • file:line                                        │   │
+│   │     │        │  • issue description                                │   │
+│   │     │        │  • correct pattern                                  │   │
+│   │     │        │  • severity                                         │   │
+│   │     └───┬────┘                                                      │   │
+│   │         │                                                            │   │
+│   │         ▼                                                            │   │
+│   │     ┌────────┐                                                      │   │
+│   │     │  NEXT  │──────────────────────────────────┐                  │   │
+│   │     └────────┘                                   │                  │   │
+│   │         ▲                                        │                  │   │
+│   │         │                                        │                  │   │
+│   │         └────────── (next file) ─────────────────┘                  │   │
+│   │                                                                      │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   ═══════════════════════════════════════════════════════════════════════   │
+│                                                                              │
+│   THINKING DEPTH HIERARCHY:                                                 │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                                                                      │   │
+│   │   think        → Basic consideration           ✗ NOT ENOUGH         │   │
+│   │   think hard   → Deeper analysis               ✗ NOT ENOUGH         │   │
+│   │   think harder → Extended analysis             ✗ STILL NOT ENOUGH   │   │
+│   │   ultrathink   → Maximum depth analysis        ✓ USE THIS           │   │
+│   │                                                                      │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Result Aggregation Flow
+
+How results from all agents are combined:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       RESULT AGGREGATION FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     COLLECT AGENT RESULTS                              │  │
+│  │                                                                        │  │
+│  │   naming-agent:       3 issues                                        │  │
+│  │   code-style-agent:   2 issues                                        │  │
+│  │   clean-code-agent:   1 issue                                         │  │
+│  │   architecture-agent: 0 issues                                        │  │
+│  │   security-agent:     1 issue (CRITICAL)                              │  │
+│  │   i18n-agent:         4 issues                                        │  │
+│  │                                                                        │  │
+│  │   Total raw: 11 issues                                                │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                        1. DEDUPLICATE                                  │  │
+│  │                                                                        │  │
+│  │   Remove duplicate issues reported by multiple agents:                │  │
+│  │                                                                        │  │
+│  │   Example: src/auth.ts:42                                             │  │
+│  │   • security-agent: "tenantId from input"                             │  │
+│  │   • clean-code-agent: "untrusted input"                               │  │
+│  │   → Merge into single issue, keep security-agent as primary          │  │
+│  │                                                                        │  │
+│  │   After dedup: 10 unique issues                                       │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     2. SORT BY SEVERITY                                │  │
+│  │                                                                        │  │
+│  │   Priority order:                                                     │  │
+│  │                                                                        │  │
+│  │   CRITICAL ────────────────────────────────────────────────▶ First   │  │
+│  │   HIGH ─────────────────────────────────────────────────────▶ Second  │  │
+│  │   MEDIUM ───────────────────────────────────────────────────▶ Third   │  │
+│  │   LOW ──────────────────────────────────────────────────────▶ Last    │  │
+│  │                                                                        │  │
+│  │   Result:                                                             │  │
+│  │   1. CRITICAL: src/auth.ts:42 (security)                              │  │
+│  │   2. HIGH: src/utils.ts:15 (naming)                                   │  │
+│  │   3. HIGH: src/api/index.ts:8 (architecture)                          │  │
+│  │   4. MEDIUM: src/components/Form.tsx:22 (code-style)                  │  │
+│  │   5. MEDIUM: ...                                                      │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                      3. GROUP BY FILE                                  │  │
+│  │                                                                        │  │
+│  │   Organize for readability:                                           │  │
+│  │                                                                        │  │
+│  │   src/auth.ts                                                         │  │
+│  │   ├─ Line 42: CRITICAL - tenantId from input                          │  │
+│  │   └─ Line 15: HIGH - Boolean missing prefix                           │  │
+│  │                                                                        │  │
+│  │   src/utils.ts                                                        │  │
+│  │   └─ Line 8: MEDIUM - Unused import                                   │  │
+│  │                                                                        │  │
+│  │   src/components/Form.tsx                                             │  │
+│  │   ├─ Line 22: MEDIUM - Ternary nesting                                │  │
+│  │   └─ Line 45: LOW - Missing translation key                           │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Report Generation Flow
+
+How the final report is created and saved:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       REPORT GENERATION FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                      1. DETERMINE VERDICT                              │  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ CRITICAL issues > 0?  ───────────▶  VERDICT: REQUEST CHANGES   │ │  │
+│  │   │ HIGH issues > 0?      ───────────▶  VERDICT: REQUEST CHANGES   │ │  │
+│  │   │ MEDIUM issues > 3?    ───────────▶  VERDICT: NEEDS REVIEW      │ │  │
+│  │   │ Only LOW issues?      ───────────▶  VERDICT: APPROVED          │ │  │
+│  │   │ No issues?            ───────────▶  VERDICT: APPROVED          │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     2. GENERATE REPORT CONTENT                         │  │
+│  │                                                                        │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │   │ ★ Code Review Report ═══════════════════════════════════════   │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Date:     2025-12-31 14:30                                      │ │  │
+│  │   │ Branch:   feature/auth                                          │ │  │
+│  │   │ Reviewer: Claude (multi-agent)                                  │ │  │
+│  │   │ Files:    12                                                    │ │  │
+│  │   │ Issues:   10                                                    │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Rules Used:                                                     │ │  │
+│  │   │ - naming: discovered (4 patterns, 96% avg consistency)         │ │  │
+│  │   │ - code-style: explicit (CLAUDE.md)                             │ │  │
+│  │   │ - architecture: discovered (3 patterns, 88% avg)               │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Summary:                                                        │ │  │
+│  │   │ - CRITICAL: 1 (must fix)                                        │ │  │
+│  │   │ - HIGH: 3 (should fix)                                          │ │  │
+│  │   │ - MEDIUM: 4 (consider)                                          │ │  │
+│  │   │ - LOW: 2 (optional)                                             │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Verdict: REQUEST CHANGES                                        │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ ─────────────────────────────────────────────────────────────   │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ Issues:                                                         │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ ✖ CRITICAL — src/auth.ts:42                                     │ │  │
+│  │   │ Agent: security-agent                                           │ │  │
+│  │   │ Issue: Tenant ID accepted from request body                     │ │  │
+│  │   │ Pattern: Never accept tenantId from frontend                    │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ // Bad                                                          │ │  │
+│  │   │ const tenantId = input.tenantId;                                │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ // Good                                                         │ │  │
+│  │   │ const tenantId = ctx.tenant.id;                                 │ │  │
+│  │   │                                                                  │ │  │
+│  │   │ ...                                                             │ │  │
+│  │   └─────────────────────────────────────────────────────────────────┘ │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    3. DETERMINE FILE NAME                              │  │
+│  │                                                                        │  │
+│  │   Get branch name:                                                    │  │
+│  │   $ git branch --show-current                                         │  │
+│  │   → feature/auth                                                      │  │
+│  │                                                                        │  │
+│  │   Sanitize:                                                           │  │
+│  │   • Replace / with -                                                  │  │
+│  │   • Lowercase                                                         │  │
+│  │   • Keep alphanumeric and hyphens                                     │  │
+│  │   → feature-auth                                                      │  │
+│  │                                                                        │  │
+│  │   Generate filename:                                                  │  │
+│  │   → docs/code-reviews/2025-12-31-1430-feature-auth.md                │  │
+│  └───────────────────────┬───────────────────────────────────────────────┘  │
+│                          │                                                   │
+│                          ▼                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                       4. SAVE REPORT                                   │  │
+│  │                                                                        │  │
+│  │   $ mkdir -p docs/code-reviews                                        │  │
+│  │                                                                        │  │
+│  │   Write file using Write tool:                                        │  │
+│  │   → docs/code-reviews/2025-12-31-1430-feature-auth.md                │  │
+│  │                                                                        │  │
+│  │   ✓ Report saved                                                      │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Agents
+
+| Agent | Focus | What It Checks |
+|-------|-------|----------------|
+| `naming` | Naming conventions | Boolean prefixes (`is`, `has`, `should`), interface suffixes, enum casing, component names, constants, function naming |
+| `code-style` | Formatting patterns | Import ordering, spacing, blank lines, ternary operators, composition patterns, React keys |
+| `clean-code` | Code quality | Unused code, commented code, obvious comments, `any` types, nested ternaries, error handling |
+| `architecture` | Layer boundaries | Separation of concerns, dependency direction, circular dependencies, file colocation, one component per file |
+| `security` | Vulnerabilities | SQL injection, XSS, command injection, secrets in code, auth checks, sensitive data in logs, input validation |
+| `i18n` | Internationalization | Translation keys, hardcoded strings, locale coverage, pluralization |
 
 ---
 
@@ -221,7 +884,7 @@ On first run, the plugin creates `.claude/plugins/maccing/code-reviewer.json`:
 
 ### Explicit Rules
 
-If you want to override discovered patterns, create explicit rule files:
+Override discovered patterns with explicit rule files:
 
 ```json
 {
@@ -254,21 +917,99 @@ Add custom agents for your stack:
 
 ---
 
-## Reports
+## Visual Output Examples
 
-Reports are saved to:
+### Pattern Discovery Output
 
-    docs/code-reviews/YYYY-MM-DD-HHmm-<branch-name>.md
+```
+★ Pattern Discovery ════════════════════════════════════
 
-Example: `docs/code-reviews/2025-12-31-1430-feature-auth.md`
+Scanning codebase for implicit conventions...
 
-### Report Structure
+Files Analyzed: 142
+Categories:     3 gaps detected (naming, architecture, clean-code)
+
+────────────────────────────────────────────────────────
+
+naming patterns discovered:
+
+  Boolean Prefixes
+  ├─ is*     → 73% (89/122 booleans)
+  ├─ has*    → 18% (22/122 booleans)
+  └─ can*    →  5% (6/122 booleans)
+  ✓ Adopted: Booleans should use is/has/can prefixes
+
+  Function Naming
+  ├─ verb-first  → 91% (handle*, get*, set*, fetch*)
+  └─ noun-first  →  9%
+  ✓ Adopted: Functions should start with verb
+
+  Constants
+  ├─ UPPER_SNAKE  → 64%
+  └─ camelCase    → 36%
+  ✓ Adopted: Constants should use UPPER_SNAKE_CASE
+
+────────────────────────────────────────────────────────
+
+architecture patterns discovered:
+
+  Import Boundaries
+  ├─ components/ never imports from pages/  → 100%
+  ├─ utils/ never imports from components/  → 94%
+  └─ hooks/ imports from utils/             → 88%
+  ✓ Adopted: Layer boundaries enforced
+
+  File Colocation
+  ├─ *.test.ts next to source  → 72%
+  └─ *.types.ts next to source → 81%
+  ✓ Adopted: Tests and types colocated with source
+
+════════════════════════════════════════════════════════
+
+Patterns saved to: .claude/plugins/maccing/discovered-patterns.json
+
+Proceeding with code review...
+```
+
+### Review Progress Output
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Review Started
+
+Config:   .claude/plugins/maccing/code-reviewer.json
+Scope:    Git changes
+Files:    12 files to review
+
+Rules Source:
+- naming: discovered (4 patterns adopted)
+- code-style: explicit (CLAUDE.md)
+- clean-code: discovered (2 patterns adopted)
+- architecture: discovered (3 patterns adopted)
+- security: explicit (rules/SECURITY.md)
+
+Active Agents:
+- naming-agent
+- code-style-agent
+- clean-code-agent
+- architecture-agent
+- security-agent
+
+Skipped Agents:
+- i18n-agent (no locale files detected)
+
+════════════════════════════════════════════════════════
+```
+
+### Final Report Output
 
 ```
 ★ Code Review Report ═══════════════════════════════════
 
 Date:     2025-12-31 14:30
 Branch:   feature/auth
+Reviewer: Claude (multi-agent)
 Files:    12
 Issues:   11
 
@@ -284,28 +1025,39 @@ Summary:
 - LOW: 2 (optional)
 
 Verdict: REQUEST CHANGES
+Critical and high priority issues must be addressed.
+
+─────────────────────────────────────────────────────────
+
+Issues:
+
+✖ CRITICAL — src/auth.ts:42
+Agent: security-agent
+Issue: Tenant ID accepted from request body
+Pattern: Never accept tenantId from frontend
+
+▲ HIGH — src/utils/helpers.ts:15
+Agent: naming-agent
+Issue: Boolean variable missing prefix
+Pattern: Discovered: 96% of booleans use is/has/can prefix
+
+─────────────────────────────────────────────────────────
+
+Agent Summary:
+- security-agent: 1 issue (tenant isolation vulnerability)
+- naming-agent: 3 issues (boolean prefixes missing)
+- code-style-agent: 2 issues (conditional rendering patterns)
+- clean-code-agent: 1 issue (unused import)
+- architecture-agent: 0 issues (no violations)
+- i18n-agent: 4 issues (missing translation keys)
+
+Recommendations:
+1. Review tenant context patterns in auth layer
+2. Add ESLint rules for boolean naming
+3. Enforce ternary pattern in component library
+
+═══════════════════════════════════════════════════════
 ```
-
----
-
-## ULTRATHINK Methodology
-
-Each agent executes a rigorous loop for every file:
-
-```
-READ -> RULES -> ULTRATHINK -> CHECK -> ULTRATHINK -> RESULT -> NEXT
-        ^                                              |
-        +-------------- (next file) -------------------+
-```
-
-### Two-Phase Verification
-
-| Phase | Purpose |
-|-------|---------|
-| **ULTRATHINK 1** | Deep analysis of patterns, potential issues, all elements to check |
-| **ULTRATHINK 2** | Validation pass, verify findings, catch edge cases, re-scan everything |
-
-This methodology ensures thorough, accurate reviews with minimal false positives.
 
 ---
 
@@ -335,15 +1087,29 @@ i18n patterns discovered:
   Skipping i18n checks for this review.
 ```
 
+### No Changed Files
+
+If there are no files to review:
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+No changes detected.
+
+Run with --scope <path> to review specific files.
+
+════════════════════════════════════════════════════════
+```
+
 ---
 
 ## Philosophy
 
-- **Discovery-first** Learn from YOUR codebase, not generic rules
-- **Thorough over fast** Exhaustive analysis, no shortcuts
-- **Evidence over claims** Percentages and counts for transparency
-- **Project-aware** Respect established patterns
-- **Transparent** Show what was discovered and why
+- **Discovery-first** — Learn from YOUR codebase, not generic rules
+- **Thorough over fast** — Exhaustive analysis, no shortcuts
+- **Evidence over claims** — Percentages and counts for transparency
+- **Project-aware** — Respect established patterns
+- **Transparent** — Show what was discovered and why
 
 ---
 
