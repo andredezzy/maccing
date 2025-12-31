@@ -46,7 +46,7 @@ The scope is detected from the context following the command:
 
 ## Execution
 
-Invoke the `review` skill with the parsed configuration.
+Invoke the `ultrathink-review` skill with the parsed configuration.
 
 **Review Mode:**
 - Scope is detected from the context after the command

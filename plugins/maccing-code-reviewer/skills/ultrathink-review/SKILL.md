@@ -1,6 +1,10 @@
 ---
-name: review
-description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, analyzing code quality, or reviewing entire codebase/project/app.
+name: ultrathink-review
+description: |
+  maccing-code-reviewer ULTRATHINK multi-agent analysis.
+  ONLY use when user explicitly invokes /maccing-code-reviewer:review command.
+  Do NOT use for generic "code review" or "review code" requests.
+  This skill uses 6 parallel agents with pattern discovery.
 ---
 
 <first_action>
