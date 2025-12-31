@@ -49,13 +49,25 @@ Output this banner first:
 ★ maccing-code-reviewer ════════════════════════════════
 ```
 
-Then IMMEDIATELY use the **AskUserQuestion** tool:
+**MANDATORY: Use the AskUserQuestion tool NOW.**
 
-**Question:** What would you like to review?
-**Options:**
-1. **Git Changes** - Review only files changed in git (staged and unstaged)
-2. **Full Codebase** - Review all source files in the project
-3. **Specific Path** - Review files in a specific folder
+```
+AskUserQuestion tool parameters:
+{
+  "questions": [{
+    "question": "What would you like to review?",
+    "header": "Scope",
+    "multiSelect": false,
+    "options": [
+      { "label": "Git Changes", "description": "Review only files changed in git (staged and unstaged)" },
+      { "label": "Full Codebase", "description": "Review all source files in the project" },
+      { "label": "Specific Path", "description": "Review files in a specific folder" }
+    ]
+  }]
+}
+```
+
+**Wait for user response before proceeding.**
 
 After user responds, display the complete banner with their selection:
 ```
