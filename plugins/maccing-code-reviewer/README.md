@@ -70,7 +70,7 @@ Output report to console without saving to file.
 
 ## Configuration
 
-On first run, the plugin creates `.claude-reviewer.json` in your project:
+On first run, the plugin creates `.claude/plugins/maccing/code-reviewer.json`:
 
 ```json
 {
@@ -82,7 +82,7 @@ On first run, the plugin creates `.claude-reviewer.json` in your project:
 
 ### Custom Agents
 
-Add custom agents for your stack:
+Add custom agents for your stack in `.claude/plugins/maccing/code-reviewer.json`:
 
 ```json
 {
