@@ -8,9 +8,16 @@ description: Run comprehensive code review with multi-agent ULTRATHINK analysis.
 <MANDATORY_FIRST_OUTPUT>
 **STOP. OUTPUT THIS BANNER IMMEDIATELY. NO TOOL CALLS FIRST. NO INTRODUCTION TEXT.**
 
-Your VERY FIRST response text (before any tool calls) MUST be this banner:
+### Detect Scope from User Request
 
-If user said "entire codebase", "entire project", "whole app", "all files", or used `--all`:
+Check if scope was explicitly specified:
+- `--all` or "entire codebase", "entire project", "whole app", "all files" → **Full Codebase**
+- `--scope <path>` or user mentioned a specific folder/path → **Path**
+- No scope specified → **ASK USER**
+
+### If Scope is Explicit: Show Banner
+
+**Full Codebase:**
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
@@ -19,7 +26,7 @@ Scope: Full Codebase
 ════════════════════════════════════════════════════════
 ```
 
-If user specified a path or used `--scope <path>`:
+**Specific Path:**
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
@@ -28,11 +35,26 @@ Scope: Path (<the-path>)
 ════════════════════════════════════════════════════════
 ```
 
-Otherwise (default):
+### If No Scope Specified: Ask User
+
+Output this banner first:
+```
+★ maccing-code-reviewer ════════════════════════════════
+```
+
+Then IMMEDIATELY use the **AskUserQuestion** tool:
+
+**Question:** What would you like to review?
+**Options:**
+1. **Git Changes** - Review only files changed in git (staged and unstaged)
+2. **Full Codebase** - Review all source files in the project
+3. **Specific Path** - Review files in a specific folder
+
+After user responds, display the complete banner with their selection:
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
-Scope: Git Changes
+Scope: <user's selection>
 
 ════════════════════════════════════════════════════════
 ```
@@ -41,11 +63,12 @@ Scope: Git Changes
 - Say "I'll run a comprehensive code review..."
 - Say "Let me start by checking..."
 - Say "[maccing-code-reviewer] Starting review..."
-- Make ANY tool calls before outputting the banner
+- Assume Git Changes as default without asking
 
 **DO:**
-- Output the banner FIRST
-- THEN make tool calls
+- Output the banner header FIRST
+- Ask for scope if not specified
+- THEN proceed with tool calls
 </MANDATORY_FIRST_OUTPUT>
 
 ---
@@ -165,21 +188,11 @@ Proceeding with code review...
 
 **CRITICAL: Do NOT proceed to Step 2 until this verification succeeds.**
 
-## Step 2: Determine Review Scope and Collect Files
+## Step 2: Collect Files Based on Selected Scope
 
-**CRITICAL: Determine the review mode based on user request or flags.**
+**The scope was already determined in the MANDATORY_FIRST_OUTPUT section (either explicitly by user or by asking them).**
 
-### 2.1 Detect Review Mode
-
-Check for these triggers (in priority order):
-
-| Mode | Trigger | Action |
-|------|---------|--------|
-| **Full Codebase** | `--all` flag OR user says "entire codebase", "entire project", "whole app", "full review", "all files" | Scan all source files |
-| **Specific Path** | `--scope <path>` flag OR user specifies a folder/path | Scan files in that path |
-| **Git Changes** | Default (no flags, no triggers) | Use git diff |
-
-### 2.2 Collect Files Based on Mode
+### 2.1 Collect Files Based on Scope
 
 **Mode: Full Codebase (`--all`)**
 
@@ -207,7 +220,7 @@ find <path> -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*
   -not -path "*/.git/*"
 ```
 
-**Mode: Git Changes (default)**
+**Mode: Git Changes**
 
 ```bash
 git diff --name-only HEAD
