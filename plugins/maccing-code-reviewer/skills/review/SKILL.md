@@ -3,56 +3,20 @@ name: review
 description: Run comprehensive code review with multi-agent ULTRATHINK analysis. Use when reviewing changes, checking PRs, analyzing code quality, or reviewing entire codebase/project/app.
 ---
 
-# Code Review Skill
+# STOP - READ THIS FIRST
 
-<MANDATORY_FIRST_OUTPUT>
-**STOP. OUTPUT THIS BANNER IMMEDIATELY. NO TOOL CALLS FIRST. NO INTRODUCTION TEXT.**
+## YOUR FIRST ACTION (NON-NEGOTIABLE)
 
-### Detect Scope from User Request
+**Before you do ANYTHING else - before ANY tool calls, before ANY text like "Let me check..." or "I'll start by..." - you MUST:**
 
-Parse the context following the command. Examples:
-- `/maccing-code-reviewer:review src/api/` → Path: src/api/
-- `/maccing-code-reviewer:review the auth module` → Path: (find auth-related folder)
-- `/maccing-code-reviewer:review entire codebase` → Full Codebase
-- `/maccing-code-reviewer:review all files` → Full Codebase
-- `/maccing-code-reviewer:review` (nothing after) → ASK USER
-
-**Scope Detection Rules:**
-- Path/folder mentioned (e.g., `src/`, `components/auth`, `the api folder`) → **Path**
-- Keywords: "entire", "whole", "full", "all", "codebase", "project", "app" → **Full Codebase**
-- Nothing specified after command → **ASK USER**
-
-### If Scope is Explicit: Show Banner
-
-**Full Codebase:**
-```
-★ maccing-code-reviewer ════════════════════════════════
-
-Scope: Full Codebase
-
-════════════════════════════════════════════════════════
-```
-
-**Specific Path:**
-```
-★ maccing-code-reviewer ════════════════════════════════
-
-Scope: Path (<the-path>)
-
-════════════════════════════════════════════════════════
-```
-
-### If No Scope Specified: Ask User
-
-Output this banner first:
+1. **Output this banner:**
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 ```
 
-**MANDATORY: Use the AskUserQuestion tool NOW.**
+2. **Then use AskUserQuestion to ask for scope:**
 
-```
-AskUserQuestion tool parameters:
+```json
 {
   "questions": [{
     "question": "What would you like to review?",
@@ -67,9 +31,9 @@ AskUserQuestion tool parameters:
 }
 ```
 
-**Wait for user response before proceeding.**
+3. **Wait for user response.**
 
-After user responds, display the complete banner with their selection:
+4. **Then show complete banner with scope:**
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
@@ -78,23 +42,24 @@ Scope: <user's selection>
 ════════════════════════════════════════════════════════
 ```
 
-**DO NOT:**
-- Say "I'll run a comprehensive code review..."
-- Say "Let me start by checking..."
-- Say "[maccing-code-reviewer] Starting review..."
-- Assume Git Changes as default without asking
+**ONLY THEN proceed to Step 1.**
 
-**DO:**
-- Output the banner header FIRST
-- Ask for scope if not specified
-- THEN proceed with tool calls
-</MANDATORY_FIRST_OUTPUT>
+### SKIP the question ONLY IF user already specified scope:
+
+| User Input | Skip Question | Scope |
+|------------|---------------|-------|
+| `/maccing-code-reviewer:review` | NO - ask | - |
+| `/maccing-code-reviewer:review src/api/` | YES | Path: src/api/ |
+| `/maccing-code-reviewer:review entire codebase` | YES | Full Codebase |
+| `/maccing-code-reviewer:review the auth module` | YES | Path: auth |
 
 ---
 
+# Code Review Skill
+
 You are performing a comprehensive code review using the **multi-agent loop methodology** with **ULTRATHINK** level analysis.
 
-**CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think", every analysis must be rigorous.
+**CRITICAL: Use "ultrathink" for all analysis phases.**
 
 ---
 
