@@ -313,6 +313,90 @@ How the plugin decides which rules to use for each agent:
 
 ---
 
+### Rule Extraction Flow
+
+How the plugin reads ALL rule files and extracts rules for each category:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         RULE EXTRACTION FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    READ ALL RULE FILES                                 │  │
+│  │                                                                        │  │
+│  │   ruleFiles: ["CLAUDE.md", "rules/CODE_STYLE.md", "rules/CONVENTIONS.md"]│
+│  │                                                                        │  │
+│  │   For EACH file:                                                      │  │
+│  │     1. Read entire file content                                       │  │
+│  │     2. Scan for rules related to ALL categories                       │  │
+│  │     3. Extract and aggregate rules                                    │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│                                   │                                          │
+│                                   ▼                                          │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    CATEGORY KEYWORD MATCHING                           │  │
+│  │                                                                        │  │
+│  │   ┌──────────────┬─────────────────────────────────────────────────┐  │  │
+│  │   │ Category     │ Keywords to Look For                            │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ naming       │ naming, variables, functions, constants,        │  │  │
+│  │   │              │ boolean, prefix, suffix, conventions            │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ code-style   │ style, formatting, spacing, imports,            │  │  │
+│  │   │              │ ternary, composition, patterns                  │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ clean-code   │ clean, unused, comments, types, any,            │  │  │
+│  │   │              │ error handling, dead code                       │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ architecture │ architecture, layers, boundaries, imports,      │  │  │
+│  │   │              │ dependencies, separation, structure             │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ security     │ security, auth, validation, injection,          │  │  │
+│  │   │              │ secrets, vulnerabilities, sanitization          │  │  │
+│  │   ├──────────────┼─────────────────────────────────────────────────┤  │  │
+│  │   │ i18n         │ i18n, internationalization, translation,        │  │  │
+│  │   │              │ locale, localization                            │  │  │
+│  │   └──────────────┴─────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│                                   │                                          │
+│                                   ▼                                          │
+│                                                                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    AGGREGATE RULES PER CATEGORY                        │  │
+│  │                                                                        │  │
+│  │   CLAUDE.md:                                                          │  │
+│  │   ├─ naming:       5 rules extracted                                  │  │
+│  │   ├─ code-style:   3 rules extracted                                  │  │
+│  │   └─ security:     2 rules extracted                                  │  │
+│  │                                                                        │  │
+│  │   rules/CODE_STYLE.md:                                                │  │
+│  │   ├─ code-style:   8 rules extracted                                  │  │
+│  │   └─ clean-code:   4 rules extracted                                  │  │
+│  │                                                                        │  │
+│  │   rules/CONVENTIONS.md:                                               │  │
+│  │   ├─ naming:       7 rules extracted                                  │  │
+│  │   └─ architecture: 3 rules extracted                                  │  │
+│  │                                                                        │  │
+│  │   ─────────────────────────────────────────────────────────────────   │  │
+│  │                                                                        │  │
+│  │   AGGREGATED TOTALS:                                                  │  │
+│  │   • naming:       12 rules (CLAUDE.md + CONVENTIONS.md)               │  │
+│  │   • code-style:   11 rules (CLAUDE.md + CODE_STYLE.md)                │  │
+│  │   • clean-code:   4 rules  (CODE_STYLE.md)                            │  │
+│  │   • architecture: 3 rules  (CONVENTIONS.md)                           │  │
+│  │   • security:     2 rules  (CLAUDE.md)                                │  │
+│  │   • i18n:         0 rules  → GAP                                      │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ### Gap Detection Flow
 
 How the plugin identifies which categories need pattern discovery:
@@ -322,61 +406,28 @@ How the plugin identifies which categories need pattern discovery:
 │                          GAP DETECTION FLOW                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                     GAP DETECTION MATRIX                               │  │
-│  │                                                                        │  │
-│  │   Agent             │ Has Explicit Rules If...                        │  │
-│  │   ──────────────────┼────────────────────────────────────────────────│  │
-│  │   naming-agent      │ NAMING.md exists OR naming section in CLAUDE.md│  │
-│  │   code-style-agent  │ CODE_STYLE.md exists OR style section          │  │
-│  │   clean-code-agent  │ CLEAN_CODE.md exists OR clean code section     │  │
-│  │   architecture-agent│ ARCHITECTURE.md exists OR architecture section │  │
-│  │   security-agent    │ SECURITY.md exists OR security section         │  │
-│  │   i18n-agent        │ i18n rules exist OR no locale files in project │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│                                   │                                          │
-│                                   ▼                                          │
-│                                                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                        SCAN RULE FILES                                 │  │
-│  │                                                                        │  │
-│  │   ruleFiles: ["CLAUDE.md", "rules/CODE_STYLE.md"]                     │  │
-│  │                                                                        │  │
-│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
-│  │   │ CLAUDE.md sections found:                                       │ │  │
-│  │   │   • ## Naming Conventions     ✓ → naming-agent covered          │ │  │
-│  │   │   • ## Code Style             ✗ (not found)                     │ │  │
-│  │   │   • ## Clean Code             ✗ (not found)                     │ │  │
-│  │   │   • ## Architecture           ✗ (not found)                     │ │  │
-│  │   │   • ## Security               ✓ → security-agent covered        │ │  │
-│  │   └─────────────────────────────────────────────────────────────────┘ │  │
-│  │                                                                        │  │
-│  │   ┌─────────────────────────────────────────────────────────────────┐ │  │
-│  │   │ rules/CODE_STYLE.md:                                            │ │  │
-│  │   │   ✓ → code-style-agent covered                                  │ │  │
-│  │   └─────────────────────────────────────────────────────────────────┘ │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│                                   │                                          │
-│                                   ▼                                          │
+│  After reading ALL rule files and aggregating rules:                        │
 │                                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                        GAP DETECTION RESULT                            │  │
 │  │                                                                        │  │
+│  │   A category is a GAP if:                                             │  │
+│  │   • NO rules were found for it across ALL rule files                  │  │
+│  │   • The agent is enabled in configuration                             │  │
+│  │                                                                        │  │
 │  │   ┌──────────────────┬──────────────┬─────────────────────────────┐  │  │
-│  │   │ Agent            │ Status       │ Source                      │  │  │
+│  │   │ Agent            │ Rules Found  │ Status                      │  │  │
 │  │   ├──────────────────┼──────────────┼─────────────────────────────┤  │  │
-│  │   │ naming-agent     │ ✓ covered    │ CLAUDE.md section           │  │  │
-│  │   │ code-style-agent │ ✓ covered    │ rules/CODE_STYLE.md         │  │  │
-│  │   │ clean-code-agent │ ✗ GAP        │ → Pattern Discovery         │  │  │
-│  │   │ architecture-agen│ ✗ GAP        │ → Pattern Discovery         │  │  │
-│  │   │ security-agent   │ ✓ covered    │ CLAUDE.md section           │  │  │
-│  │   │ i18n-agent       │ ○ skipped    │ No locale files detected    │  │  │
+│  │   │ naming-agent     │ 12 rules     │ ✓ covered                   │  │  │
+│  │   │ code-style-agent │ 11 rules     │ ✓ covered                   │  │  │
+│  │   │ clean-code-agent │ 4 rules      │ ✓ covered                   │  │  │
+│  │   │ architecture-agen│ 3 rules      │ ✓ covered                   │  │  │
+│  │   │ security-agent   │ 2 rules      │ ✓ covered                   │  │  │
+│  │   │ i18n-agent       │ 0 rules      │ ✗ GAP → Pattern Discovery   │  │  │
 │  │   └──────────────────┴──────────────┴─────────────────────────────┘  │  │
 │  │                                                                        │  │
-│  │   GAPS DETECTED: 2 (clean-code, architecture)                         │  │
-│  │   → Proceed to Pattern Discovery for these categories                 │  │
+│  │   GAPS DETECTED: 1 (i18n)                                             │  │
+│  │   → Proceed to Pattern Discovery for i18n category                   │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘

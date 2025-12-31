@@ -97,24 +97,77 @@ If no changes, check staged files:
 git diff --cached --name-only
 ```
 
-## Step 3: Read Explicit Rules and Identify Gaps
+## Step 3: Read ALL Rule Files and Extract Rules Per Category
 
-Read all rule files specified in `.claude/plugins/maccing/code-reviewer.json`.
+**CRITICAL: Read EVERY rule file specified in the configuration and extract ALL relevant rules.**
 
-**IMPORTANT: No built-in defaults.** If a category has no explicit rules, pattern discovery will be used.
+### 3.1 Read All Rule Files
 
-For each enabled agent, check if explicit rules exist:
+Read ALL files in `ruleFiles` from `.claude/plugins/maccing/code-reviewer.json`:
 
-| Agent | Has Explicit Rules If... |
-|-------|--------------------------|
-| naming-agent | `NAMING.md` exists OR naming section in `CLAUDE.md` |
-| code-style-agent | `CODE_STYLE.md` exists OR style section in rules |
-| architecture-agent | `ARCHITECTURE.md` exists OR architecture section |
-| clean-code-agent | `CLEAN_CODE.md` exists OR clean code section |
-| security-agent | `SECURITY.md` exists OR security section |
-| i18n-agent | i18n rules exist OR no locale files in project |
+```
+For each file in ruleFiles:
+  1. Read the entire file content
+  2. Parse and extract rules for EVERY category found
+  3. Aggregate rules by category
+```
 
-Track which categories have gaps (no explicit rules).
+### 3.2 Rule Extraction
+
+For EACH rule file, scan for rules related to ALL categories:
+
+| Category | Look For Keywords/Sections |
+|----------|---------------------------|
+| naming | naming, variables, functions, constants, boolean, prefix, suffix, conventions |
+| code-style | style, formatting, spacing, imports, ternary, composition, patterns |
+| clean-code | clean, unused, comments, types, any, error handling, dead code |
+| architecture | architecture, layers, boundaries, imports, dependencies, separation, structure |
+| security | security, auth, validation, injection, secrets, vulnerabilities, sanitization |
+| i18n | i18n, internationalization, translation, locale, localization |
+
+### 3.3 Build Aggregated Rules Per Category
+
+After reading ALL files, build a consolidated rule set:
+
+```
+aggregatedRules = {
+  naming: [rules from CLAUDE.md] + [rules from rules/CODE.md] + [rules from any other file],
+  codeStyle: [rules from all files],
+  cleanCode: [rules from all files],
+  architecture: [rules from all files],
+  security: [rules from all files],
+  i18n: [rules from all files]
+}
+```
+
+### 3.4 Display Rules Loaded
+
+```
+★ Rules Loaded ═════════════════════════════════════════
+
+Files read: 3
+- CLAUDE.md
+- rules/CODE_STYLE.md
+- rules/CONVENTIONS.md
+
+Rules extracted per category:
+- naming:       12 rules found
+- code-style:   8 rules found
+- clean-code:   5 rules found
+- architecture: 0 rules found → Pattern Discovery
+- security:     3 rules found
+- i18n:         0 rules found → Pattern Discovery
+
+════════════════════════════════════════════════════════
+```
+
+### 3.5 Identify Gaps
+
+A category has a **gap** (needs pattern discovery) ONLY if:
+- NO rules were found for that category across ALL rule files
+- The agent is enabled in configuration
+
+**IMPORTANT: No built-in defaults.** If a category has no rules in any file, pattern discovery will be used.
 
 ## Step 4: Pattern Discovery Phase
 
