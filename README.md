@@ -61,6 +61,42 @@ Multi-agent code review with automatic pattern discovery.
 
 ---
 
+## Troubleshooting
+
+### Plugin not updating
+
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+/plugin install maccing-code-reviewer@maccing
+```
+
+### Conflicting with other plugins
+
+Check for conflicting code review plugins:
+
+```bash
+find ~/.claude/plugins -type d -name "code-review" 2>/dev/null
+```
+
+Uninstall conflicting plugins:
+
+```
+/plugin uninstall code-review@claude-code-plugins
+/plugin uninstall code-review@claude-plugins-official
+```
+
+### Verify installation
+
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/README.md | grep "Discovery-first"
+```
+
+Expected: `- **Discovery-first**: Learn from` (with colon)
+
+[Full troubleshooting guide](plugins/maccing-code-reviewer/README.md#troubleshooting)
+
+---
+
 ## License
 
 MIT
