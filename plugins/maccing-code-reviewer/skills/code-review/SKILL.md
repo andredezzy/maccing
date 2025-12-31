@@ -294,12 +294,11 @@ Return a structured list of all i18n issues found.
 
 Display the initial review info with full context:
 
-```
-★ maccing-code-reviewer ════════════════════════════
+`★ maccing-code-reviewer ════════════════════════════`
 
 Review Started
 
-Config:   .claude/plugins/maccing/code-reviewer.json
+Config:   `.claude/plugins/maccing/code-reviewer.json`
 Status:   Using built-in defaults (no config found)
 Scope:    Git changes (last 5 commits)
 Files:    12 files to review
@@ -320,40 +319,23 @@ Active Agents:
 Skipped Agents:
 - i18n-agent (no locale files detected)
 
-════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════`
 
 After all agents complete, show consolidated progress:
 
-```
-★ maccing-code-reviewer ════════════════════════════
+`★ maccing-code-reviewer ════════════════════════════`
 
 Agent Progress:
 
-naming-agent ────────────────────────────────────────
-Phase 1: Deep analysis... done
-Phase 2: Validation... done
-Result: 3 issues found
+`naming-agent` — Phase 1: done, Phase 2: done — 3 issues found
 
-code-style-agent ────────────────────────────────────
-Phase 1: Deep analysis... done
-Phase 2: Validation... done
-Result: 2 issues found
+`code-style-agent` — Phase 1: done, Phase 2: done — 2 issues found
 
-clean-code-agent ────────────────────────────────────
-Phase 1: Deep analysis... done
-Phase 2: Validation... done
-Result: 1 issue found
+`clean-code-agent` — Phase 1: done, Phase 2: done — 1 issue found
 
-architecture-agent ──────────────────────────────────
-Phase 1: Deep analysis... done
-Phase 2: Validation... done
-Result: 0 issues found
+`architecture-agent` — Phase 1: done, Phase 2: done — 0 issues found
 
-security-agent ──────────────────────────────────────
-Phase 1: Deep analysis... done
-Phase 2: Validation... done
-Result: 1 CRITICAL issue found
+`security-agent` — Phase 1: done, Phase 2: done — 1 CRITICAL issue found
 
 Results:
 - naming-agent: 3 issues
@@ -363,8 +345,7 @@ Results:
 - security-agent: 1 CRITICAL issue
 - i18n-agent: skipped (no locale files)
 
-════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════`
 
 ## Step 6: Aggregate Results
 
@@ -376,13 +357,12 @@ After all agents complete, aggregate their findings:
 
 ## Step 7: Generate Report
 
-Output the final review in a single consolidated ASCII block:
+Output the final review using inline backticks for colored headers:
 
-```
-★ Code Review Report ═══════════════════════════════
+`★ Code Review Report ═══════════════════════════════`
 
 Date:     YYYY-MM-DD
-Branch:   feature/example
+Branch:   `feature/example`
 Reviewer: Claude (multi-agent)
 Files:    12
 Issues:   11
@@ -393,26 +373,24 @@ Summary:
 - MEDIUM: 5 (consider)
 - LOW: 2 (optional)
 
-Verdict: REQUEST CHANGES
+`Verdict: REQUEST CHANGES`
 Critical and high priority issues must be addressed.
 
-─────────────────────────────────────────────────────
+`─────────────────────────────────────────────────────`
 
 Issues:
 
-✖ CRITICAL ──────────────────────────────────────────
-File:    src/auth.ts:42
-Agent:   security-agent
-Issue:   Tenant ID accepted from request body
+`✖ CRITICAL` — `src/auth.ts:42`
+Agent: security-agent
+Issue: Tenant ID accepted from request body
 Pattern: Never accept tenantId from frontend
 
-▲ HIGH ──────────────────────────────────────────────
-File:    src/utils/helpers.ts:15
-Agent:   naming-agent
-Issue:   Boolean variable missing prefix
+`▲ HIGH` — `src/utils/helpers.ts:15`
+Agent: naming-agent
+Issue: Boolean variable missing prefix
 Pattern: Use is, has, should, can, will prefixes
 
-─────────────────────────────────────────────────────
+`─────────────────────────────────────────────────────`
 
 Agent Summary:
 - security-agent: 1 issue (tenant isolation vulnerability)
@@ -427,8 +405,7 @@ Recommendations:
 2. Add ESLint rules for boolean naming
 3. Enforce ternary pattern in component library
 
-═════════════════════════════════════════════════════
-```
+`═══════════════════════════════════════════════════`
 
 For each issue, also show the code fix:
 
