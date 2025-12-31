@@ -297,15 +297,15 @@ If CLAUDE.md doesn't exist, create it using Write tool.
 Add this section to CLAUDE.md:
 ```markdown
 
-## Code Review Rules
+## Coding Rules
 
-The following rule files were discovered from this codebase:
+The following rules were discovered from this codebase and should be followed when writing or reviewing code:
 
-- [Naming Rules](rules/NAMING.md)
-- [Code Style Rules](rules/CODE_STYLE.md)
-- [Clean Code Rules](rules/CLEAN_CODE.md)
-- [Architecture Rules](rules/ARCHITECTURE.md)
-- [Security Rules](rules/SECURITY.md)
+- [Naming Conventions](rules/NAMING.md)
+- [Code Style](rules/CODE_STYLE.md)
+- [Clean Code](rules/CLEAN_CODE.md)
+- [Architecture](rules/ARCHITECTURE.md)
+- [Security](rules/SECURITY.md)
 ```
 
 4. Output confirmation:
