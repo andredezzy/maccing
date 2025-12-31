@@ -520,7 +520,7 @@ Add custom agents for your stack:
 ### Initial Banner (with scope)
 
 ```
-★ maccing-code-reviewer: Scope Selected ════════════════
+★ maccing-code-reviewer v2.0.0 ═════════════════════════
 
 Scope: Full Codebase
 
@@ -768,6 +768,14 @@ Then the AskUserQuestion tool is invoked with EXACTLY these options:
 
 ## Troubleshooting
 
+### Check installed version
+
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
+```
+
+Expected: `"version": "2.0.0"`
+
 ### Plugin not updating
 
 If changes don't appear after update:
@@ -782,10 +790,10 @@ rm -rf ~/.claude/plugins/marketplaces/maccing
 
 **Verify update:**
 ```bash
-grep "maccing-code-reviewer:" ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/skills/ultrathink-review/SKILL.md | head -1
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `★ maccing-code-reviewer: First-time Setup`
+Expected: `"version": "2.0.0"`
 
 ### Output not colored
 

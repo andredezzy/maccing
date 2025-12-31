@@ -63,6 +63,14 @@ Multi-agent code review with automatic pattern discovery.
 
 ## Troubleshooting
 
+### Check installed version
+
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
+```
+
+Expected: `"version": "2.0.0"`
+
 ### Plugin not updating
 
 ```bash
@@ -84,14 +92,6 @@ Uninstall conflicting plugins:
 /plugin uninstall code-review@claude-code-plugins
 /plugin uninstall code-review@claude-plugins-official
 ```
-
-### Verify installation
-
-```bash
-grep "maccing-code-reviewer:" ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/skills/ultrathink-review/SKILL.md | head -1
-```
-
-Expected: `★ maccing-code-reviewer: First-time Setup`
 
 [Full troubleshooting guide](plugins/maccing-code-reviewer/README.md#troubleshooting)
 
