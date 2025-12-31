@@ -24,7 +24,7 @@ Output (with backticks for colored output):
 
 Scope: [user's selection]
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 
 Then proceed to Step 1.
 </after_scope_selected>
@@ -53,7 +53,7 @@ mkdir -p .claude/plugins/maccing
 
 2. Output (with backticks for colored output):
 
-`◆ maccing-code-reviewer: First-time Setup ══════════════`
+`◆ maccing-code-reviewer: First-time Setup ──────────────`
 
 Scanning for project rules...
 
@@ -97,13 +97,13 @@ IMPORTANT: Use the exact JSON above. Do not rephrase or reorder options.
 
 8. Output confirmation (with backticks for colored output):
 
-`✓ maccing-code-reviewer: Setup Complete ════════════════`
+`✓ maccing-code-reviewer: Setup Complete ────────────────`
 
 Config: .claude/plugins/maccing/code-reviewer.json
 Rules:  [selected files]
 Agents: [selected agents]
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 </if_no_config>
 
 ---
@@ -131,12 +131,12 @@ find [path] -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*
 
 Output (with backticks for colored output):
 
-`▶ maccing-code-reviewer: Review Scope ══════════════════`
+`▶ maccing-code-reviewer: Review Scope ──────────────────`
 
 Mode:  [scope]
 Files: [count] files
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 </collect_files>
 
 ---
@@ -157,14 +157,14 @@ Read all files in `ruleFiles` from config. For each file, extract rules by categ
 
 Output (with backticks for colored output):
 
-`◈ maccing-code-reviewer: Rules Loaded ══════════════════`
+`◈ maccing-code-reviewer: Rules Loaded ──────────────────`
 
 Files: [count]
 - naming: [count] rules
 - code-style: [count] rules
 - architecture: 0 rules → Pattern Discovery
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 
 A category with 0 rules = GAP (needs pattern discovery).
 </load_rules>
@@ -180,7 +180,7 @@ IMPORTANT: Output ONE block only. Do NOT output multiple headers.
 
 Output at START of pattern discovery (with backticks for colored output):
 
-`◎ maccing-code-reviewer: Pattern Discovery ═════════════`
+`◎ maccing-code-reviewer: Pattern Discovery ─────────────`
 
 Scanning codebase for implicit conventions...
 
@@ -257,7 +257,7 @@ naming patterns discovered:
 
 Output at END (close the block):
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 
 Then ask user if they want to save patterns as rule files:
 
@@ -314,7 +314,7 @@ Always follow these rules when creating, modifying, or reviewing code in this pr
 
 4. Output confirmation:
 
-`✓ maccing-code-reviewer: Rules Created ═════════════════`
+`✓ maccing-code-reviewer: Rules Created ─────────────────`
 
 Created rule files:
 - rules/NAMING.md
@@ -323,7 +323,7 @@ Created rule files:
 
 References added to CLAUDE.md
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 </pattern_discovery>
 
 ---
@@ -431,7 +431,7 @@ Return structured list of issues.
 <report_format>
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer: Code Review Report ════════════`
+`★ maccing-code-reviewer: Code Review Report ────────────`
 
 Date:     YYYY-MM-DD HH:mm
 Branch:   [branch]
@@ -460,7 +460,7 @@ Agent: naming-agent
 Issue: [description]
 Pattern: [rule]
 
-`════════════════════════════════════════════════════════`
+`────────────────────────────────────────────────────────`
 </report_format>
 
 ---
