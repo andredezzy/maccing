@@ -38,7 +38,7 @@ Parse the following flags from $ARGUMENTS:
 
 ## Execution
 
-Invoke the `code-review` skill with the parsed configuration.
+Invoke the `review` skill with the parsed configuration.
 
 If `--skip` is provided, exclude those agents from the review.
 If `--only` is provided, only run those agents.
