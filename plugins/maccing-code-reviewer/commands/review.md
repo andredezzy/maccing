@@ -10,14 +10,20 @@ Run a thorough code review using the ULTRATHINK methodology with 6 specialized a
 
 $ARGUMENTS
 
-## Supported Flags
+## Scope Detection
 
-Parse the following flags from $ARGUMENTS:
+The scope is detected from the context following the command:
 
-- `--all` Review entire codebase (all source files, not just git changes)
+| User Input | Detected Scope |
+|------------|----------------|
+| `/review` | Ask user |
+| `/review src/api/` | Path: src/api/ |
+| `/review the auth module` | Path: auth-related folder |
+| `/review entire codebase` | Full Codebase |
+| `/review all files` | Full Codebase |
+| `/review whole project` | Full Codebase |
 
-- `--scope <path>` Review specific path/folder instead of git changes
-  Example: `--scope src/auth/`
+## Optional Flags
 
 - `--skip <agents>` Skip specific agents (comma-separated)
   Example: `--skip i18n,naming`
@@ -42,10 +48,9 @@ Parse the following flags from $ARGUMENTS:
 
 Invoke the `review` skill with the parsed configuration.
 
-**Review Mode (mutually exclusive, first match wins):**
-- If `--all` is provided, review all source files in the codebase.
-- If `--scope` is provided, review files in that path.
-- If no flag provided, ask user which scope they want.
+**Review Mode:**
+- Scope is detected from the context after the command
+- If no scope can be determined, ask user which scope they want
 
 **Agent Selection:**
 - If `--skip` is provided, exclude those agents from the review.
@@ -57,20 +62,23 @@ Invoke the `review` skill with the parsed configuration.
 ## Examples
 
 ```bash
-# Review git changes (default)
+# Ask for scope
 /maccing-code-reviewer:review
 
 # Review entire codebase
-/maccing-code-reviewer:review --all
+/maccing-code-reviewer:review entire codebase
 
 # Review specific directory
-/maccing-code-reviewer:review --scope src/api/
+/maccing-code-reviewer:review src/api/
 
-# Security-focused review of entire codebase
-/maccing-code-reviewer:review --all --only security,architecture
+# Review a module by name
+/maccing-code-reviewer:review the authentication module
+
+# Security-focused review
+/maccing-code-reviewer:review entire codebase --only security,architecture
 
 # Skip i18n for non-user-facing code
-/maccing-code-reviewer:review --skip i18n
+/maccing-code-reviewer:review src/utils/ --skip i18n
 
 # Quick console-only review
 /maccing-code-reviewer:review --no-save --only security

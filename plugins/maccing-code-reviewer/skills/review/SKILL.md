@@ -10,10 +10,17 @@ description: Run comprehensive code review with multi-agent ULTRATHINK analysis.
 
 ### Detect Scope from User Request
 
-Check if scope was explicitly specified:
-- `--all` or "entire codebase", "entire project", "whole app", "all files" → **Full Codebase**
-- `--scope <path>` or user mentioned a specific folder/path → **Path**
-- No scope specified → **ASK USER**
+Parse the context following the command. Examples:
+- `/review src/api/` → Path: src/api/
+- `/review the auth module` → Path: (find auth-related folder)
+- `/review entire codebase` → Full Codebase
+- `/review all files` → Full Codebase
+- `/review` (nothing after) → ASK USER
+
+**Scope Detection Rules:**
+- Path/folder mentioned (e.g., `src/`, `components/auth`, `the api folder`) → **Path**
+- Keywords: "entire", "whole", "full", "all", "codebase", "project", "app" → **Full Codebase**
+- Nothing specified after command → **ASK USER**
 
 ### If Scope is Explicit: Show Banner
 
