@@ -20,7 +20,7 @@ EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/
 <after_scope_selected>
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer v1.1.0 ═════════════════════════`
+`⚠ maccing-code-reviewer v1.1.0`
 
 Scope: [user's selection]
 
