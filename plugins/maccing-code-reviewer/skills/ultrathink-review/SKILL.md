@@ -8,11 +8,7 @@ description: |
 ---
 
 <first_action>
-Your response MUST start with this exact text (with backticks for colored output):
-
-`★ maccing-code-reviewer v1.1.0 ═════════════════════════`
-
-Then immediately call AskUserQuestion with EXACTLY this JSON (do not modify labels or descriptions):
+Immediately call AskUserQuestion with EXACTLY this JSON (do not modify labels or descriptions):
 
 {"questions":[{"question":"What would you like to review?","header":"Scope","multiSelect":false,"options":[{"label":"Git Changes","description":"Review only files changed in git"},{"label":"Full Codebase","description":"Review all source files in the project"},{"label":"Specific Path","description":"Review files in a specific folder"}]}]}
 
@@ -24,7 +20,7 @@ EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/
 <after_scope_selected>
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer: Scope Selected ════════════════`
+`★ maccing-code-reviewer v1.1.0 ═════════════════════════`
 
 Scope: [user's selection]
 
@@ -57,7 +53,7 @@ mkdir -p .claude/plugins/maccing
 
 2. Output (with backticks for colored output):
 
-`★ maccing-code-reviewer: First-time Setup ══════════════`
+`◆ maccing-code-reviewer: First-time Setup ══════════════`
 
 Scanning for project rules...
 
@@ -101,7 +97,7 @@ IMPORTANT: Use the exact JSON above. Do not rephrase or reorder options.
 
 8. Output confirmation (with backticks for colored output):
 
-`★ maccing-code-reviewer: Setup Complete ════════════════`
+`✓ maccing-code-reviewer: Setup Complete ════════════════`
 
 Config: .claude/plugins/maccing/code-reviewer.json
 Rules:  [selected files]
@@ -135,7 +131,7 @@ find [path] -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*
 
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer: Review Scope ══════════════════`
+`▶ maccing-code-reviewer: Review Scope ══════════════════`
 
 Mode:  [scope]
 Files: [count] files
@@ -161,7 +157,7 @@ Read all files in `ruleFiles` from config. For each file, extract rules by categ
 
 Output (with backticks for colored output):
 
-`★ maccing-code-reviewer: Rules Loaded ══════════════════`
+`◈ maccing-code-reviewer: Rules Loaded ══════════════════`
 
 Files: [count]
 - naming: [count] rules
@@ -184,7 +180,7 @@ IMPORTANT: Output ONE block only. Do NOT output multiple headers.
 
 Output at START of pattern discovery (with backticks for colored output):
 
-`★ maccing-code-reviewer: Pattern Discovery ═════════════`
+`◎ maccing-code-reviewer: Pattern Discovery ═════════════`
 
 Scanning codebase for implicit conventions...
 
