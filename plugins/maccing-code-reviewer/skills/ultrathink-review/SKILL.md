@@ -164,11 +164,15 @@ A category with 0 rules = GAP (needs pattern discovery).
 <pattern_discovery>
 For each GAP category, spawn a pattern-discovery-agent using Task tool.
 
-Output first (with backticks for colored output):
+IMPORTANT: Output ONE block only. Do NOT output multiple headers.
+
+Output at START of pattern discovery (with backticks for colored output):
 
 `★ maccing-code-reviewer: Pattern Discovery ═════════════`
 
 Scanning codebase for implicit conventions...
+
+[Run agents here - do NOT output another header]
 
 <agent_prompt category="naming">
 You are pattern-discovery-agent for NAMING. Scan entire codebase:
@@ -227,7 +231,7 @@ You are pattern-discovery-agent for SECURITY. Scan entire codebase:
 
 Save discovered patterns to `.claude/plugins/maccing/discovered-patterns.json`.
 
-Output results (with backticks for colored output):
+Output results WITHIN THE SAME BLOCK (no new header, just continue):
 
 naming patterns discovered:
 
@@ -236,6 +240,10 @@ naming patterns discovered:
   ├─ has* → 18%
   └─ can* →  5%
   ✓ Adopted
+
+[Show all category results here]
+
+Output at END (close the block):
 
 `════════════════════════════════════════════════════════`
 </pattern_discovery>
