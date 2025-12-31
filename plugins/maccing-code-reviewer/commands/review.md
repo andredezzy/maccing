@@ -44,8 +44,8 @@ Invoke the `review` skill with the parsed configuration.
 
 **Review Mode (mutually exclusive, first match wins):**
 - If `--all` is provided, review all source files in the codebase.
-- If `--scope` is provided, review files in that path instead of git changes.
-- Otherwise, default to reviewing git changes only.
+- If `--scope` is provided, review files in that path.
+- If no flag provided, ask user which scope they want.
 
 **Agent Selection:**
 - If `--skip` is provided, exclude those agents from the review.
