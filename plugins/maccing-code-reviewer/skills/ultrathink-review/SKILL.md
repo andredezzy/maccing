@@ -12,9 +12,11 @@ Your response MUST start with this exact text (with backticks for colored output
 
 `★ maccing-code-reviewer ════════════════════════════════`
 
-Then immediately call AskUserQuestion:
+Then immediately call AskUserQuestion with EXACTLY this JSON (do not modify labels or descriptions):
 
 {"questions":[{"question":"What would you like to review?","header":"Scope","multiSelect":false,"options":[{"label":"Git Changes","description":"Review only files changed in git"},{"label":"Full Codebase","description":"Review all source files in the project"},{"label":"Specific Path","description":"Review files in a specific folder"}]}]}
+
+IMPORTANT: Use the exact JSON above. Do not rephrase, reorder, or modify the options.
 
 EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/api/" or "review entire codebase").
 </first_action>
@@ -66,13 +68,17 @@ Scanning for project rules...
 ls -la CLAUDE.md rules/*.md .claude/*.md 2>/dev/null || echo "NO_RULES_FOUND"
 ```
 
-4. Call AskUserQuestion for rule files (build options from detected files):
+4. Call AskUserQuestion for rule files with EXACTLY this JSON (add detected files as additional options):
 
 {"questions":[{"question":"Which rule files should I use for code reviews?","header":"Rules","multiSelect":true,"options":[{"label":"CLAUDE.md","description":"Project instructions"},{"label":"Skip all","description":"Discover patterns from codebase"}]}]}
 
-5. Call AskUserQuestion for agents:
+IMPORTANT: Add any detected rule files (from step 3) as additional options before "Skip all".
 
-{"questions":[{"question":"Which review agents should be enabled?","header":"Agents","multiSelect":true,"options":[{"label":"All agents","description":"naming, code-style, clean-code, architecture, security, i18n"},{"label":"naming","description":"Naming conventions"},{"label":"code-style","description":"Formatting patterns"},{"label":"clean-code","description":"Code quality"},{"label":"architecture","description":"Layer boundaries"},{"label":"security","description":"Security vulnerabilities"},{"label":"i18n","description":"Internationalization"}]}]}
+5. Call AskUserQuestion for agents with EXACTLY this JSON (do not modify):
+
+{"questions":[{"question":"Which review agents should be enabled?","header":"Agents","multiSelect":true,"options":[{"label":"All agents (Recommended)","description":"naming, code-style, clean-code, architecture, security, i18n"},{"label":"naming","description":"Naming conventions"},{"label":"code-style","description":"Formatting patterns"},{"label":"clean-code","description":"Code quality"},{"label":"architecture","description":"Layer boundaries"},{"label":"security","description":"Security vulnerabilities"},{"label":"i18n","description":"Internationalization"}]}]}
+
+IMPORTANT: Use the exact JSON above. Do not rephrase or reorder options.
 
 6. Create config file using Write tool at `.claude/plugins/maccing/code-reviewer.json`:
 ```json
