@@ -299,13 +299,17 @@ Add this section to CLAUDE.md:
 
 ## Coding Rules
 
-The following rules were discovered from this codebase and should be followed when writing or reviewing code:
+**IMPORTANT: Read all rule files in the `rules/` folder before writing or reviewing code.**
+
+The following rules were discovered from this codebase:
 
 - [Naming Conventions](rules/NAMING.md)
 - [Code Style](rules/CODE_STYLE.md)
 - [Clean Code](rules/CLEAN_CODE.md)
 - [Architecture](rules/ARCHITECTURE.md)
 - [Security](rules/SECURITY.md)
+
+Always follow these rules when creating, modifying, or reviewing code in this project.
 ```
 
 4. Output confirmation:
