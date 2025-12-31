@@ -67,12 +67,12 @@ Multi-agent code review with automatic pattern discovery.
 
 ```bash
 rm -rf ~/.claude/plugins/cache/maccing
+rm -rf ~/.claude/plugins/marketplaces/maccing
+/plugin marketplace add andredezzy/maccing
 /plugin install maccing-code-reviewer@maccing
 ```
 
 ### Conflicting with other plugins
-
-Check for conflicting code review plugins:
 
 ```bash
 find ~/.claude/plugins -type d -name "code-review" 2>/dev/null
@@ -88,10 +88,10 @@ Uninstall conflicting plugins:
 ### Verify installation
 
 ```bash
-cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/README.md | grep "Discovery-first"
+grep "maccing-code-reviewer:" ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/skills/ultrathink-review/SKILL.md | head -1
 ```
 
-Expected: `- **Discovery-first**: Learn from` (with colon)
+Expected: `★ maccing-code-reviewer: First-time Setup`
 
 [Full troubleshooting guide](plugins/maccing-code-reviewer/README.md#troubleshooting)
 

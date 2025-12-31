@@ -520,7 +520,7 @@ Add custom agents for your stack:
 ### Initial Banner (with scope)
 
 ```
-★ maccing-code-reviewer ════════════════════════════════
+★ maccing-code-reviewer: Scope Selected ════════════════
 
 Scope: Full Codebase
 
@@ -530,9 +530,7 @@ Scope: Full Codebase
 ### First-Time Setup Output
 
 ```
-★ maccing-code-reviewer ════════════════════════════════
-
-First-time setup
+★ maccing-code-reviewer: First-time Setup ══════════════
 
 Scanning for project rules...
 ```
@@ -540,37 +538,32 @@ Scanning for project rules...
 ### Setup Complete Confirmation
 
 ```
-★ maccing-code-reviewer ════════════════════════════════
+★ maccing-code-reviewer: Setup Complete ════════════════
 
-Setup Complete
-
-Config saved to: .claude/plugins/maccing/code-reviewer.json
-
-Rule files: CLAUDE.md
-Agents:     naming, code-style, clean-code, architecture, security, i18n
+Config: .claude/plugins/maccing/code-reviewer.json
+Rules:  CLAUDE.md
+Agents: naming, code-style, clean-code, architecture, security, i18n
 
 ════════════════════════════════════════════════════════
-
-Proceeding with code review...
 ```
 
 ### Rules Loaded Output
 
 ```
-★ Rules Loaded ═════════════════════════════════════════
+★ maccing-code-reviewer: Rules Loaded ══════════════════
 
-Files read: 3
+Files: 3
 - CLAUDE.md
 - rules/CODE_STYLE.md
 - rules/CONVENTIONS.md
 
-Rules extracted per category:
-- naming:       12 rules found
-- code-style:   8 rules found
-- clean-code:   5 rules found
-- architecture: 0 rules found → Pattern Discovery
-- security:     3 rules found
-- i18n:         0 rules found → Pattern Discovery
+Rules per category:
+- naming:       12 rules
+- code-style:   8 rules
+- clean-code:   5 rules
+- architecture: 0 rules → Pattern Discovery
+- security:     3 rules
+- i18n:         0 rules → Pattern Discovery
 
 ════════════════════════════════════════════════════════
 ```
@@ -578,7 +571,7 @@ Rules extracted per category:
 ### Pattern Discovery Output
 
 ```
-★ Pattern Discovery ════════════════════════════════════
+★ maccing-code-reviewer: Pattern Discovery ═════════════
 
 Scanning codebase for implicit conventions...
 
@@ -613,20 +606,16 @@ architecture patterns discovered:
 ════════════════════════════════════════════════════════
 
 Patterns saved to: .claude/plugins/maccing/discovered-patterns.json
-
-Proceeding with code review...
 ```
 
 ### Review Progress Output
 
 ```
-★ maccing-code-reviewer ════════════════════════════════
+★ maccing-code-reviewer: Review Scope ══════════════════
 
-Review Started
-
-Config:   .claude/plugins/maccing/code-reviewer.json
-Scope:    Git Changes
-Files:    12 files to review
+Mode:   Git Changes
+Files:  12 files to review
+Config: .claude/plugins/maccing/code-reviewer.json
 
 Rules Source:
 - naming: discovered (4 patterns adopted)
@@ -651,9 +640,7 @@ Skipped Agents:
 ### Agent Progress Output
 
 ```
-★ maccing-code-reviewer ════════════════════════════════
-
-Agent Progress:
+★ maccing-code-reviewer: Agent Progress ════════════════
 
 naming-agent: Phase 1 done, Phase 2 done, 3 issues found
 
@@ -679,11 +666,10 @@ Results:
 ### Final Report Output
 
 ```
-★ Code Review Report ═══════════════════════════════════
+★ maccing-code-reviewer: Code Review Report ════════════
 
 Date:     2025-12-31 14:30
 Branch:   feature/auth
-Reviewer: Claude (multi-agent)
 Files:    12
 Issues:   11
 
@@ -693,13 +679,12 @@ Rules Used:
 - architecture: discovered (3 patterns, 88% avg consistency)
 
 Summary:
-- CRITICAL: 1 (must fix)
-- HIGH: 3 (should fix)
-- MEDIUM: 5 (consider)
-- LOW: 2 (optional)
+- CRITICAL: 1
+- HIGH: 3
+- MEDIUM: 5
+- LOW: 2
 
 Verdict: REQUEST CHANGES
-Critical and high priority issues must be addressed.
 
 ─────────────────────────────────────────────────────────
 
@@ -718,19 +703,14 @@ Pattern: Discovered: 96% of booleans use is/has/can prefix
 ─────────────────────────────────────────────────────────
 
 Agent Summary:
-- security-agent: 1 issue (tenant isolation vulnerability)
-- naming-agent: 3 issues (boolean prefixes missing)
-- code-style-agent: 2 issues (conditional rendering patterns)
-- clean-code-agent: 1 issue (unused import)
-- architecture-agent: 0 issues (no violations)
-- i18n-agent: 4 issues (missing translation keys)
+- security-agent: 1 issue
+- naming-agent: 3 issues
+- code-style-agent: 2 issues
+- clean-code-agent: 1 issue
+- architecture-agent: 0 issues
+- i18n-agent: 4 issues
 
-Recommendations:
-1. Review tenant context patterns in auth layer
-2. Add ESLint rules for boolean naming
-3. Enforce ternary pattern in component library
-
-═══════════════════════════════════════════════════════
+════════════════════════════════════════════════════════
 ```
 
 ---
@@ -769,10 +749,10 @@ If user runs `/maccing-code-reviewer:review` without scope:
 ★ maccing-code-reviewer ════════════════════════════════
 ```
 
-Then the AskUserQuestion tool is invoked with options:
-1. Git Changes: Review only files changed in git
-2. Full Codebase: Review all source files in the project
-3. Specific Path: Review files in a specific folder
+Then the AskUserQuestion tool is invoked with EXACTLY these options:
+1. **Git Changes**: Review only files changed in git
+2. **Full Codebase**: Review all source files in the project
+3. **Specific Path**: Review files in a specific folder
 
 ---
 
@@ -788,6 +768,39 @@ Then the AskUserQuestion tool is invoked with options:
 
 ## Troubleshooting
 
+### Plugin not updating
+
+If changes don't appear after update:
+
+**Fix:** Clear both cache and marketplace, then reinstall:
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+rm -rf ~/.claude/plugins/marketplaces/maccing
+/plugin marketplace add andredezzy/maccing
+/plugin install maccing-code-reviewer@maccing
+```
+
+**Verify update:**
+```bash
+grep "maccing-code-reviewer:" ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/skills/ultrathink-review/SKILL.md | head -1
+```
+
+Expected: `★ maccing-code-reviewer: First-time Setup`
+
+### Output not colored
+
+If the `★ maccing-code-reviewer` headers appear but aren't colored:
+
+**Cause:** Old cached version without backticks for colored rendering.
+
+**Fix:** Full reinstall:
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+rm -rf ~/.claude/plugins/marketplaces/maccing
+/plugin marketplace add andredezzy/maccing
+/plugin install maccing-code-reviewer@maccing
+```
+
 ### Wrong command name (code-review instead of review)
 
 If you see `/maccing-code-reviewer:code-review` instead of `/maccing-code-reviewer:review`:
@@ -796,10 +809,7 @@ If you see `/maccing-code-reviewer:code-review` instead of `/maccing-code-review
 
 **Fix:**
 ```bash
-# Clear the plugin cache
 rm -rf ~/.claude/plugins/cache/maccing
-
-# Reinstall the plugin
 /plugin install maccing-code-reviewer@maccing
 ```
 
@@ -820,24 +830,6 @@ find ~/.claude/plugins -type d -name "code-review" 2>/dev/null
 /plugin uninstall code-review@claude-plugins-official
 ```
 
-### Plugin not updating
-
-If changes don't appear after update:
-
-**Fix:**
-```bash
-# Clear cache and reinstall
-rm -rf ~/.claude/plugins/cache/maccing
-/plugin install maccing-code-reviewer@maccing
-```
-
-**Verify update:**
-```bash
-cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/README.md | grep "Discovery-first"
-```
-
-Expected: `- **Discovery-first**: Learn from` (with colon)
-
 ### First-time setup not triggering
 
 If the plugin skips setup questions:
@@ -846,17 +838,16 @@ If the plugin skips setup questions:
 
 **Fix:** Delete the config to trigger setup again:
 ```bash
-rm ~/.claude/plugins/maccing/code-reviewer.json
 rm -rf .claude/plugins/maccing/
 ```
 
-### Banner not showing before questions
+### Inconsistent scope options
 
-If the `★ maccing-code-reviewer` banner doesn't appear:
+If the scope question shows different options each time:
 
-**Cause:** Claude may skip the banner in some contexts.
+**Cause:** Old cached version without explicit JSON instructions.
 
-**Note:** This is a known limitation of skill prompting. The banner should appear in most cases but may be omitted occasionally.
+**Fix:** Full reinstall (see "Plugin not updating" above).
 
 ---
 
