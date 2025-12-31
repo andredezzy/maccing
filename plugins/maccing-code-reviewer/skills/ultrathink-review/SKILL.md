@@ -72,18 +72,34 @@ ls -la CLAUDE.md rules/*.md .claude/*.md 2>/dev/null || echo "NO_RULES_FOUND"
 
 IMPORTANT: Add any detected rule files (from step 3) as additional options before "Skip all".
 
-5. Call AskUserQuestion for agents with EXACTLY this JSON (do not modify):
+5. Detect if project uses i18n:
+```bash
+ls -la locales/ messages/ translations/ i18n/ 2>/dev/null || grep -r "next-intl\|react-i18next\|i18next\|formatMessage" package.json 2>/dev/null || echo "NO_I18N"
+```
 
+6. Call AskUserQuestion for agents:
+
+**If i18n detected:**
 {"questions":[{"question":"Which review agents should be enabled?","header":"Agents","multiSelect":true,"options":[{"label":"All agents (Recommended)","description":"naming, code-style, clean-code, architecture, security, i18n"},{"label":"naming","description":"Naming conventions"},{"label":"code-style","description":"Formatting patterns"},{"label":"clean-code","description":"Code quality"},{"label":"architecture","description":"Layer boundaries"},{"label":"security","description":"Security vulnerabilities"},{"label":"i18n","description":"Internationalization"}]}]}
+
+**If NO i18n detected (exclude i18n option):**
+{"questions":[{"question":"Which review agents should be enabled?","header":"Agents","multiSelect":true,"options":[{"label":"All agents (Recommended)","description":"naming, code-style, clean-code, architecture, security"},{"label":"naming","description":"Naming conventions"},{"label":"code-style","description":"Formatting patterns"},{"label":"clean-code","description":"Code quality"},{"label":"architecture","description":"Layer boundaries"},{"label":"security","description":"Security vulnerabilities"}]}]}
 
 IMPORTANT: Use the exact JSON above. Do not rephrase or reorder options.
 
-6. Create config file using Write tool at `.claude/plugins/maccing/code-reviewer.json`:
+7. Create config file using Write tool at `.claude/plugins/maccing/code-reviewer.json`:
+
+**If i18n detected:**
 ```json
 {"ruleFiles":["CLAUDE.md"],"agents":["naming","code-style","clean-code","architecture","security","i18n"],"customAgents":[]}
 ```
 
-7. Output confirmation (with backticks for colored output):
+**If NO i18n detected:**
+```json
+{"ruleFiles":["CLAUDE.md"],"agents":["naming","code-style","clean-code","architecture","security"],"customAgents":[]}
+```
+
+8. Output confirmation (with backticks for colored output):
 
 `★ maccing-code-reviewer: Setup Complete ════════════════`
 
