@@ -258,6 +258,42 @@ naming patterns discovered:
 Output at END (close the block):
 
 `════════════════════════════════════════════════════════`
+
+Then ask user if they want to save patterns as rule files:
+
+{"questions":[{"question":"Save discovered patterns as rule files?","header":"Rules","multiSelect":false,"options":[{"label":"Yes, create rule files","description":"Create .md files in rules/ folder"},{"label":"No, use patterns only this session","description":"Patterns saved to config but no rule files created"}]}]}
+
+If user selects "Yes, create rule files":
+1. Create rules/ directory: `mkdir -p rules`
+2. For each category with discovered patterns, create a file using Write tool:
+   - rules/NAMING.md
+   - rules/CODE_STYLE.md
+   - rules/CLEAN_CODE.md
+   - rules/ARCHITECTURE.md
+   - rules/SECURITY.md
+
+File format:
+```markdown
+# [Category] Rules
+
+Discovered from codebase analysis.
+
+## Patterns
+
+- [Pattern name]: [percentage]% consistency
+  - Description of pattern
+```
+
+3. Output confirmation:
+
+`✓ maccing-code-reviewer: Rules Created ═════════════════`
+
+Created rule files:
+- rules/NAMING.md
+- rules/CODE_STYLE.md
+- [etc.]
+
+`════════════════════════════════════════════════════════`
 </pattern_discovery>
 
 ---
