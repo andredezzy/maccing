@@ -14,6 +14,11 @@ $ARGUMENTS
 
 Parse the following flags from $ARGUMENTS:
 
+- `--all` Review entire codebase (all source files, not just git changes)
+
+- `--scope <path>` Review specific path/folder instead of git changes
+  Example: `--scope src/auth/`
+
 - `--skip <agents>` Skip specific agents (comma-separated)
   Example: `--skip i18n,naming`
 
@@ -21,9 +26,6 @@ Parse the following flags from $ARGUMENTS:
   Example: `--only security,architecture`
 
 - `--no-save` Output to console only, skip saving to docs/code-reviews/
-
-- `--scope <path>` Review specific path instead of git changes
-  Example: `--scope src/auth/`
 
 ## Available Agents
 
@@ -40,25 +42,35 @@ Parse the following flags from $ARGUMENTS:
 
 Invoke the `review` skill with the parsed configuration.
 
-If `--skip` is provided, exclude those agents from the review.
-If `--only` is provided, only run those agents.
-If `--scope` is provided, review files in that path instead of git changes.
-If `--no-save` is provided, output the report to console without saving to file.
+**Review Mode (mutually exclusive, first match wins):**
+- If `--all` is provided, review all source files in the codebase.
+- If `--scope` is provided, review files in that path instead of git changes.
+- Otherwise, default to reviewing git changes only.
+
+**Agent Selection:**
+- If `--skip` is provided, exclude those agents from the review.
+- If `--only` is provided, only run those agents.
+
+**Output:**
+- If `--no-save` is provided, output the report to console without saving to file.
 
 ## Examples
 
 ```bash
-# Full review of git changes
+# Review git changes (default)
 /maccing-code-reviewer:review
 
-# Security-focused review
-/maccing-code-reviewer:review --only security,architecture
-
-# Skip i18n for non-user-facing code
-/maccing-code-reviewer:review --skip i18n
+# Review entire codebase
+/maccing-code-reviewer:review --all
 
 # Review specific directory
 /maccing-code-reviewer:review --scope src/api/
+
+# Security-focused review of entire codebase
+/maccing-code-reviewer:review --all --only security,architecture
+
+# Skip i18n for non-user-facing code
+/maccing-code-reviewer:review --skip i18n
 
 # Quick console-only review
 /maccing-code-reviewer:review --no-save --only security
