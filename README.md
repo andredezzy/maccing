@@ -33,7 +33,7 @@ Claude Code plugins built for developers who care about code quality.
 
 ### maccing-code-reviewer
 
-**Description:** Multi-agent code review using ULTRATHINK methodology
+**Description:** Multi-agent code review with automatic pattern discovery
 
 **Categories:** code-review, quality, security
 
@@ -43,11 +43,37 @@ Claude Code plugins built for developers who care about code quality.
 
 **What you get:**
 
+- **Automatic pattern discovery** learns conventions from YOUR codebase
 - 6 specialized review agents running in parallel
-- Deep multi-pass analysis with visible progress
-- Project-aware rules (reads CLAUDE.md, rules/*.md)
+- Deep multi-pass analysis with ULTRATHINK methodology
+- Project-aware rules (uses your explicit rules OR discovers patterns)
 - Custom agent extensibility
 - Persistent reports in docs/code-reviews/
+
+**Pattern Discovery:**
+
+When no explicit rules exist, the reviewer scans your codebase to discover patterns:
+
+```
+★ Pattern Discovery ════════════════════════════════════
+
+naming patterns discovered:
+
+  Boolean Prefixes
+  ├─ is*     → 73% (89/122 booleans)
+  ├─ has*    → 18% (22/122 booleans)
+  └─ can*    →  5% (6/122 booleans)
+  ✓ Adopted: Booleans should use is/has/can prefixes
+
+architecture patterns discovered:
+
+  Import Boundaries
+  ├─ components/ never imports from pages/  → 100%
+  └─ utils/ never imports from components/  → 94%
+  ✓ Adopted: Layer boundaries enforced
+
+════════════════════════════════════════════════════════
+```
 
 **Review Agents:**
 
@@ -72,11 +98,43 @@ Claude Code plugins built for developers who care about code quality.
 
 ---
 
+## How Pattern Discovery Works
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Rule Resolution                        │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  For each agent category:                               │
+│                                                          │
+│    1. Check: Does explicit rule file exist?             │
+│       └─ YES → Use explicit rules                       │
+│       └─ NO  → Run pattern discovery                    │
+│                                                          │
+│    2. Pattern discovery:                                │
+│       ├─ Scan entire codebase                           │
+│       ├─ Extract conventions per category               │
+│       ├─ Calculate consistency percentages              │
+│       └─ Adopt patterns with >60% consistency           │
+│                                                          │
+│    3. Agent uses discovered patterns as rules           │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Every rule is either:**
+- Explicitly defined by you
+- Discovered from your actual codebase
+
+No generic defaults are imposed.
+
+---
+
 ## Documentation
 
-| Plugin | README | Configuration | Defaults |
+| Plugin | README | Configuration | Examples |
 |--------|--------|---------------|----------|
-| **maccing-code-reviewer** | [README](plugins/maccing-code-reviewer/README.md) | `.claude/plugins/maccing/code-reviewer.json` | [View defaults](plugins/maccing-code-reviewer/defaults/) |
+| **maccing-code-reviewer** | [README](plugins/maccing-code-reviewer/README.md) | `.claude/plugins/maccing/code-reviewer.json` | [View examples](plugins/maccing-code-reviewer/examples/) |
 
 ---
 
@@ -94,7 +152,8 @@ Claude Code plugins built for developers who care about code quality.
             │       └── SKILL.md
             ├── commands/
             │   └── review.md
-            ├── defaults/
+            ├── examples/
+            │   ├── README.md
             │   ├── NAMING.md
             │   ├── CLEAN_CODE.md
             │   ├── SECURITY.md
@@ -105,11 +164,12 @@ Claude Code plugins built for developers who care about code quality.
 
 ## Philosophy
 
+- **Discovery-first** — Learn from YOUR codebase, not generic rules
 - **Thorough over fast** — Deep multi-pass analysis catches what quick scans miss
 - **Evidence over claims** — Every issue includes file:line and correct pattern
 - **Systematic over ad-hoc** — Structured methodology beats random checks
-- **Project-aware** — Your rules, your standards, not generic advice
-- **Transparent** — See what agents are doing, not just the results
+- **Project-aware** — Respect your established patterns
+- **Transparent** — See what was discovered and why
 
 ---
 

@@ -21,7 +21,7 @@ plugins/<plugin-name>/
 │       └── SKILL.md          # Skill definition
 ├── commands/
 │   └── <command>.md          # Slash commands
-├── defaults/                 # Default configuration files
+├── examples/                 # Optional rule templates
 │   └── *.md                  # UPPERCASE filenames
 └── README.md                 # Plugin documentation
 ```
@@ -41,7 +41,7 @@ Every `plugin.json` must include:
 |---------|------------|---------|
 | Plugin name | `maccing-<name>` | `maccing-code-reviewer` |
 | Skill files | `SKILL.md` | `skills/code-review/SKILL.md` |
-| Default files | UPPERCASE | `defaults/NAMING.md` |
+| Example files | UPPERCASE | `examples/NAMING.md` |
 | Commands | lowercase | `commands/review.md` |
 
 ---
@@ -97,7 +97,7 @@ Before pushing changes:
 - [ ] Plugin loads without errors
 - [ ] Commands are accessible via `/plugin-name:command`
 - [ ] Skills trigger on natural language
-- [ ] Default files are readable
+- [ ] Example files are readable (if provided)
 - [ ] README is complete and accurate
 
 ---
@@ -136,7 +136,7 @@ refactor: restructure code
 
 1. Create directory `plugins/maccing-<name>/`
 2. Add `.claude-plugin/plugin.json` manifest
-3. Add skills, commands, defaults as needed
+3. Add skills, commands, examples as needed
 4. Create comprehensive README.md
 5. Add plugin entry to `.claude-plugin/marketplace.json`
 6. Test locally before pushing
@@ -271,11 +271,26 @@ Always include date and time in reports:
 
 All plugins should embody these principles:
 
+- **Discovery-first** - Learn from the codebase, not generic rules
 - **Thorough over fast** - Quality analysis over quick results
 - **Evidence over claims** - Concrete examples with file:line references
 - **Systematic over ad-hoc** - Structured methodology
 - **Project-aware** - Respect user's existing conventions
 - **Transparent** - Show what's happening, not just results
+
+### Pattern Discovery Approach
+
+Plugins should discover patterns from the user's codebase when explicit rules are not provided:
+
+1. **Scan** - Analyze all relevant files exhaustively
+2. **Extract** - Identify conventions per category
+3. **Measure** - Calculate consistency percentages
+4. **Adopt** - Use patterns with >60% consistency as rules
+5. **Report** - Show what was discovered with evidence
+
+No generic defaults should be imposed. Every rule is either:
+- Explicitly defined by the user
+- Discovered from the actual codebase
 
 ---
 
