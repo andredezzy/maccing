@@ -323,33 +323,47 @@ Skipped Agents:
 `═══════════════════════════════════════════════════`
 ```
 
-As each agent works, show progress:
+After all agents complete, show consolidated progress:
 
 ```
-`★ naming-agent ─────────────────────────────────────`
+`★ maccing-code-reviewer ═══════════════════════════`
+
+Agent Progress:
+
+naming-agent ────────────────────────────────────────
 Phase 1: Deep analysis... done
 Phase 2: Validation... done
 Result: 3 issues found
-`─────────────────────────────────────────────────────`
 
-`★ security-agent ───────────────────────────────────`
+code-style-agent ────────────────────────────────────
+Phase 1: Deep analysis... done
+Phase 2: Validation... done
+Result: 2 issues found
+
+clean-code-agent ────────────────────────────────────
+Phase 1: Deep analysis... done
+Phase 2: Validation... done
+Result: 1 issue found
+
+architecture-agent ──────────────────────────────────
+Phase 1: Deep analysis... done
+Phase 2: Validation... done
+Result: 0 issues found
+
+security-agent ──────────────────────────────────────
 Phase 1: Deep analysis... done
 Phase 2: Validation... done
 Result: 1 CRITICAL issue found
-`─────────────────────────────────────────────────────`
-```
 
-Summary after all agents complete:
-
-```
-`★ Agent Results ────────────────────────────────────`
+Results:
 - naming-agent: 3 issues
 - code-style-agent: 2 issues
 - clean-code-agent: 1 issue
 - architecture-agent: 0 issues
 - security-agent: 1 CRITICAL issue
-- i18n-agent: 4 issues
-`─────────────────────────────────────────────────────`
+- i18n-agent: skipped (no locale files)
+
+`═══════════════════════════════════════════════════`
 ```
 
 ## Step 6: Aggregate Results
@@ -362,45 +376,61 @@ After all agents complete, aggregate their findings:
 
 ## Step 7: Generate Report
 
-Output the final review using simple markdown with section markers:
+Output the final review in a single consolidated ASCII block:
 
 ```
 `★ Code Review Report ═══════════════════════════════`
+
 Date:     YYYY-MM-DD
 Branch:   feature/example
 Reviewer: Claude (multi-agent)
 Files:    12
 Issues:   11
-`═══════════════════════════════════════════════════`
-```
 
-### Summary
-
-```
-`★ Summary ──────────────────────────────────────────`
+Summary:
 - CRITICAL: 1 (must fix)
 - HIGH: 3 (should fix)
 - MEDIUM: 5 (consider)
 - LOW: 2 (optional)
-`─────────────────────────────────────────────────────`
-```
 
-```
-`★ Verdict: REQUEST CHANGES ─────────────────────────`
+Verdict: REQUEST CHANGES
 Critical and high priority issues must be addressed.
-`─────────────────────────────────────────────────────`
-```
 
-### Critical Issues
+─────────────────────────────────────────────────────
 
-```
-`✖ CRITICAL ─────────────────────────────────────────`
+Issues:
+
+✖ CRITICAL ──────────────────────────────────────────
 File:    src/auth.ts:42
 Agent:   security-agent
 Issue:   Tenant ID accepted from request body
 Pattern: Never accept tenantId from frontend
-`─────────────────────────────────────────────────────`
+
+▲ HIGH ──────────────────────────────────────────────
+File:    src/utils/helpers.ts:15
+Agent:   naming-agent
+Issue:   Boolean variable missing prefix
+Pattern: Use is, has, should, can, will prefixes
+
+─────────────────────────────────────────────────────
+
+Agent Summary:
+- security-agent: 1 issue (tenant isolation vulnerability)
+- naming-agent: 3 issues (boolean prefixes missing)
+- code-style-agent: 2 issues (conditional rendering patterns)
+- clean-code-agent: 1 issue (unused import)
+- architecture-agent: 0 issues (no violations)
+- i18n-agent: 4 issues (missing translation keys)
+
+Recommendations:
+1. Review tenant context patterns in auth layer
+2. Add ESLint rules for boolean naming
+3. Enforce ternary pattern in component library
+
+`═══════════════════════════════════════════════════`
 ```
+
+For each issue, also show the code fix:
 
 ```typescript
 // Bad
@@ -408,48 +438,6 @@ const tenantId = input.tenantId;
 
 // Good
 const tenantId = ctx.tenant.id;
-```
-
-### High Priority Issues
-
-```
-`▲ HIGH ──────────────────────────────────────────────`
-File:    src/utils/helpers.ts:15
-Agent:   naming-agent
-Issue:   Boolean variable missing prefix
-Pattern: Use is, has, should, can, will prefixes
-`─────────────────────────────────────────────────────`
-```
-
-```typescript
-// Bad
-const active = true;
-
-// Good
-const isActive = true;
-```
-
-### Agent Summary
-
-```
-`★ Agent Summary ────────────────────────────────────`
-- security-agent: 1 issue (tenant isolation vulnerability)
-- naming-agent: 3 issues (boolean prefixes missing)
-- code-style-agent: 2 issues (conditional rendering patterns)
-- clean-code-agent: 1 issue (unused import)
-- architecture-agent: 0 issues (no violations)
-- i18n-agent: 4 issues (missing translation keys)
-`─────────────────────────────────────────────────────`
-```
-
-### Recommendations
-
-```
-`★ Recommendations ──────────────────────────────────`
-1. Review tenant context patterns in auth layer
-2. Add ESLint rules for boolean naming
-3. Enforce ternary pattern in component library
-`─────────────────────────────────────────────────────`
 ```
 
 ## Step 8: Save Review to Documentation
