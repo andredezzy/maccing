@@ -5,31 +5,12 @@ description: Run comprehensive code review with multi-agent ULTRATHINK analysis.
 
 # Code Review Skill
 
-You are performing a comprehensive code review using the **multi-agent loop methodology** with **ULTRATHINK** level analysis.
+<MANDATORY_FIRST_OUTPUT>
+**STOP. OUTPUT THIS BANNER IMMEDIATELY. NO TOOL CALLS FIRST. NO INTRODUCTION TEXT.**
 
-**CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think", every analysis must be rigorous.
+Your VERY FIRST response text (before any tool calls) MUST be this banner:
 
----
-
-## IMMEDIATE: Display Initial Banner
-
-**FIRST ACTION: Before ANY tool calls, display this banner with the detected scope.**
-
-Determine scope from user request or flags:
-- `--all` or "entire codebase/project/app" → `Full Codebase`
-- `--scope <path>` or specific folder mentioned → `Path: <path>`
-- Default → `Git Changes`
-
-```
-★ maccing-code-reviewer ════════════════════════════════
-
-Scope: <detected scope>
-
-════════════════════════════════════════════════════════
-```
-
-**Examples:**
-
+If user said "entire codebase", "entire project", "whole app", "all files", or used `--all`:
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
@@ -38,6 +19,16 @@ Scope: Full Codebase
 ════════════════════════════════════════════════════════
 ```
 
+If user specified a path or used `--scope <path>`:
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Scope: Path (<the-path>)
+
+════════════════════════════════════════════════════════
+```
+
+Otherwise (default):
 ```
 ★ maccing-code-reviewer ════════════════════════════════
 
@@ -46,15 +37,22 @@ Scope: Git Changes
 ════════════════════════════════════════════════════════
 ```
 
-```
-★ maccing-code-reviewer ════════════════════════════════
+**DO NOT:**
+- Say "I'll run a comprehensive code review..."
+- Say "Let me start by checking..."
+- Say "[maccing-code-reviewer] Starting review..."
+- Make ANY tool calls before outputting the banner
 
-Scope: Path (src/api/)
+**DO:**
+- Output the banner FIRST
+- THEN make tool calls
+</MANDATORY_FIRST_OUTPUT>
 
-════════════════════════════════════════════════════════
-```
+---
 
-**CRITICAL: This banner MUST be the first output. Do not say "Starting review..." or any other generic text first.**
+You are performing a comprehensive code review using the **multi-agent loop methodology** with **ULTRATHINK** level analysis.
+
+**CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think", every analysis must be rigorous.
 
 ---
 
