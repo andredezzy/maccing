@@ -8,9 +8,9 @@ description: |
 ---
 
 <first_action>
-Your response MUST start with this exact text:
+Your response MUST start with this exact text (with backticks for colored output):
 
-★ maccing-code-reviewer ════════════════════════════════
+`★ maccing-code-reviewer ════════════════════════════════`
 
 Then immediately call AskUserQuestion:
 
@@ -20,13 +20,13 @@ EXCEPTION: Skip AskUserQuestion only if user specified scope (e.g., "review src/
 </first_action>
 
 <after_scope_selected>
-Output:
+Output (with backticks for colored output):
 
-★ maccing-code-reviewer ════════════════════════════════
+`★ maccing-code-reviewer ════════════════════════════════`
 
 Scope: [user's selection]
 
-════════════════════════════════════════════════════════
+`════════════════════════════════════════════════════════`
 
 Then proceed to Step 1.
 </after_scope_selected>
@@ -53,14 +53,13 @@ Run first-time setup:
 mkdir -p .claude/plugins/maccing
 ```
 
-2. Output:
-```
-★ maccing-code-reviewer ════════════════════════════════
+2. Output (with backticks for colored output):
+
+`★ maccing-code-reviewer ════════════════════════════════`
 
 First-time setup
 
 Scanning for project rules...
-```
 
 3. Scan for rule files:
 ```bash
@@ -80,9 +79,9 @@ ls -la CLAUDE.md rules/*.md .claude/*.md 2>/dev/null || echo "NO_RULES_FOUND"
 {"ruleFiles":["CLAUDE.md"],"agents":["naming","code-style","clean-code","architecture","security","i18n"],"customAgents":[]}
 ```
 
-7. Output confirmation:
-```
-★ maccing-code-reviewer ════════════════════════════════
+7. Output confirmation (with backticks for colored output):
+
+`★ maccing-code-reviewer ════════════════════════════════`
 
 Setup Complete
 
@@ -90,8 +89,7 @@ Config: .claude/plugins/maccing/code-reviewer.json
 Rules:  [selected files]
 Agents: [selected agents]
 
-════════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════════`
 </if_no_config>
 
 ---
@@ -117,15 +115,14 @@ find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx"
 find [path] -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \) -not -path "*/node_modules/*"
 ```
 
-Output:
-```
-★ Review Scope ═════════════════════════════════════════
+Output (with backticks for colored output):
+
+`★ Review Scope ═════════════════════════════════════════`
 
 Mode:  [scope]
 Files: [count] files
 
-════════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════════`
 </collect_files>
 
 ---
@@ -144,17 +141,16 @@ Read all files in `ruleFiles` from config. For each file, extract rules by categ
 | security | auth, validation, injection, secrets |
 | i18n | translation, locale, internationalization |
 
-Output:
-```
-★ Rules Loaded ═════════════════════════════════════════
+Output (with backticks for colored output):
+
+`★ Rules Loaded ═════════════════════════════════════════`
 
 Files: [count]
 - naming: [count] rules
 - code-style: [count] rules
 - architecture: 0 rules → Pattern Discovery
 
-════════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════════`
 
 A category with 0 rules = GAP (needs pattern discovery).
 </load_rules>
@@ -166,12 +162,11 @@ A category with 0 rules = GAP (needs pattern discovery).
 <pattern_discovery>
 For each GAP category, spawn a pattern-discovery-agent using Task tool.
 
-Output first:
-```
-★ Pattern Discovery ════════════════════════════════════
+Output first (with backticks for colored output):
+
+`★ Pattern Discovery ════════════════════════════════════`
 
 Scanning codebase for implicit conventions...
-```
 
 <agent_prompt category="naming">
 You are pattern-discovery-agent for NAMING. Scan entire codebase:
@@ -230,8 +225,8 @@ You are pattern-discovery-agent for SECURITY. Scan entire codebase:
 
 Save discovered patterns to `.claude/plugins/maccing/discovered-patterns.json`.
 
-Output results:
-```
+Output results (with backticks for colored output):
+
 naming patterns discovered:
 
   Boolean Prefixes
@@ -240,8 +235,7 @@ naming patterns discovered:
   └─ can* →  5%
   ✓ Adopted
 
-════════════════════════════════════════════════════════
-```
+`════════════════════════════════════════════════════════`
 </pattern_discovery>
 
 ---
@@ -347,10 +341,9 @@ Return structured list of issues.
 ## Step 7: Generate Report
 
 <report_format>
-Output:
+Output (with backticks for colored output):
 
-```
-★ Code Review Report ═══════════════════════════════════
+`★ Code Review Report ═══════════════════════════════════`
 
 Date:     YYYY-MM-DD HH:mm
 Branch:   [branch]
@@ -365,22 +358,21 @@ Summary:
 
 Verdict: [APPROVED | NEEDS REVIEW | REQUEST CHANGES]
 
-─────────────────────────────────────────────────────────
+`─────────────────────────────────────────────────────────`
 
 Issues:
 
-✖ CRITICAL: src/auth.ts:42
+`✖ CRITICAL`: src/auth.ts:42
 Agent: security-agent
 Issue: [description]
 Pattern: [rule]
 
-▲ HIGH: src/utils.ts:15
+`▲ HIGH`: src/utils.ts:15
 Agent: naming-agent
 Issue: [description]
 Pattern: [rule]
 
-═══════════════════════════════════════════════════════
-```
+`═══════════════════════════════════════════════════════`
 </report_format>
 
 ---
