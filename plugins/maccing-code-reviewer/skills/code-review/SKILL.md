@@ -305,20 +305,20 @@ Scope:    Git changes (last 5 commits)
 Files:    12 files to review
 
 Rules Loaded:
-  - defaults/NAMING.md
-  - defaults/CLEAN_CODE.md
-  - defaults/SECURITY.md
-  - defaults/ARCHITECTURE.md
+- defaults/NAMING.md
+- defaults/CLEAN_CODE.md
+- defaults/SECURITY.md
+- defaults/ARCHITECTURE.md
 
 Active Agents:
-  - naming-agent
-  - code-style-agent
-  - clean-code-agent
-  - architecture-agent
-  - security-agent
+- naming-agent
+- code-style-agent
+- clean-code-agent
+- architecture-agent
+- security-agent
 
 Skipped Agents:
-  - i18n-agent (no locale files detected)
+- i18n-agent (no locale files detected)
 
 `═══════════════════════════════════════════════════`
 ```
