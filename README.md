@@ -54,10 +54,10 @@ Multi-agent code review with automatic pattern discovery.
 
 ## Philosophy
 
-- **Discovery-first** — Learn from YOUR codebase, not generic rules
-- **Thorough over fast** — Deep multi-pass analysis
-- **Evidence over claims** — Every issue includes file:line reference
-- **Transparent** — See what was discovered and why
+- **Discovery-first**: Learn from YOUR codebase, not generic rules
+- **Thorough over fast**: Deep multi-pass analysis
+- **Evidence over claims**: Every issue includes file:line reference
+- **Transparent**: See what was discovered and why
 
 ---
 
