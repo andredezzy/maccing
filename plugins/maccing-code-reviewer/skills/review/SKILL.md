@@ -124,32 +124,55 @@ ls -la CLAUDE.md rules/*.md .claude/*.md 2>/dev/null || echo "NO_RULES_FOUND"
 
 #### 1.4 Ask User for Rule Files
 
-Use the AskUserQuestion tool to present options:
+**MANDATORY: Use the AskUserQuestion tool NOW.**
 
-**Question:** Which rule files should I use for reviews?
+Based on the files found in step 1.3, build the options dynamically:
 
-Options based on detected files:
-- Each detected file as an option (e.g., "CLAUDE.md (detected)")
-- "Add custom path..." option
-- "Skip (discover patterns from codebase)" option
+```
+AskUserQuestion tool parameters:
+{
+  "questions": [{
+    "question": "Which rule files should I use for code reviews?",
+    "header": "Rule Files",
+    "multiSelect": true,
+    "options": [
+      // Add each detected file as an option:
+      { "label": "CLAUDE.md", "description": "Project instructions (detected)" },
+      { "label": "rules/CODE_STYLE.md", "description": "Code style rules (detected)" },
+      // Always include these options:
+      { "label": "Skip all", "description": "Discover patterns from codebase instead" }
+    ]
+  }]
+}
+```
+
+**Wait for user response before proceeding.**
 
 #### 1.5 Ask User for Agents
 
-Use the AskUserQuestion tool:
+**MANDATORY: Use the AskUserQuestion tool NOW.**
 
-**Question:** Which review agents should be enabled?
+```
+AskUserQuestion tool parameters:
+{
+  "questions": [{
+    "question": "Which review agents should be enabled?",
+    "header": "Agents",
+    "multiSelect": true,
+    "options": [
+      { "label": "All agents (Recommended)", "description": "naming, code-style, clean-code, architecture, security, i18n" },
+      { "label": "naming", "description": "Naming conventions (booleans, functions, constants)" },
+      { "label": "code-style", "description": "Formatting and patterns (imports, spacing, ternaries)" },
+      { "label": "clean-code", "description": "Code quality (unused code, comments, types)" },
+      { "label": "architecture", "description": "Layer boundaries (dependencies, separation)" },
+      { "label": "security", "description": "Security vulnerabilities (injection, auth, secrets)" },
+      { "label": "i18n", "description": "Internationalization (translation keys, locales)" }
+    ]
+  }]
+}
+```
 
-Options:
-- All agents (Recommended)
-- Select specific agents
-
-If selecting specific:
-- naming-agent: Naming conventions
-- code-style-agent: Formatting and patterns
-- clean-code-agent: Code quality
-- architecture-agent: Layer boundaries
-- security-agent: Security vulnerabilities
-- i18n-agent: Internationalization
+**Wait for user response before proceeding.**
 
 #### 1.6 Create Configuration File
 
