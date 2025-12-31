@@ -172,7 +172,7 @@ Output at START of pattern discovery (with backticks for colored output):
 
 Scanning codebase for implicit conventions...
 
-[Run agents here - do NOT output another header]
+[Run agents here, do NOT output another header]
 
 <agent_prompt category="naming">
 You are pattern-discovery-agent for NAMING. Scan entire codebase:
