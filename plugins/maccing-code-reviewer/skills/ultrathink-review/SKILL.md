@@ -369,12 +369,12 @@ Verdict: [APPROVED | NEEDS REVIEW | REQUEST CHANGES]
 
 Issues:
 
-✖ CRITICAL — src/auth.ts:42
+✖ CRITICAL: src/auth.ts:42
 Agent: security-agent
 Issue: [description]
 Pattern: [rule]
 
-▲ HIGH — src/utils.ts:15
+▲ HIGH: src/utils.ts:15
 Agent: naming-agent
 Issue: [description]
 Pattern: [rule]

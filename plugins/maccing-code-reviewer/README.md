@@ -654,15 +654,15 @@ Skipped Agents:
 
 Agent Progress:
 
-naming-agent — Phase 1: done, Phase 2: done — 3 issues found
+naming-agent: Phase 1 done, Phase 2 done, 3 issues found
 
-code-style-agent — Phase 1: done, Phase 2: done — 2 issues found
+code-style-agent: Phase 1 done, Phase 2 done, 2 issues found
 
-clean-code-agent — Phase 1: done, Phase 2: done — 1 issue found
+clean-code-agent: Phase 1 done, Phase 2 done, 1 issue found
 
-architecture-agent — Phase 1: done, Phase 2: done — 0 issues found
+architecture-agent: Phase 1 done, Phase 2 done, 0 issues found
 
-security-agent — Phase 1: done, Phase 2: done — 1 CRITICAL issue found
+security-agent: Phase 1 done, Phase 2 done, 1 CRITICAL issue found
 
 Results:
 - naming-agent: 3 issues
@@ -704,12 +704,12 @@ Critical and high priority issues must be addressed.
 
 Issues:
 
-✖ CRITICAL — src/auth.ts:42
+✖ CRITICAL: src/auth.ts:42
 Agent: security-agent
 Issue: Tenant ID accepted from request body
 Pattern: Never accept tenantId from frontend
 
-▲ HIGH — src/utils/helpers.ts:15
+▲ HIGH: src/utils/helpers.ts:15
 Agent: naming-agent
 Issue: Boolean variable missing prefix
 Pattern: Discovered: 96% of booleans use is/has/can prefix
@@ -769,19 +769,19 @@ If user runs `/maccing-code-reviewer:review` without scope:
 ```
 
 Then the AskUserQuestion tool is invoked with options:
-1. Git Changes - Review only files changed in git
-2. Full Codebase - Review all source files in the project
-3. Specific Path - Review files in a specific folder
+1. Git Changes: Review only files changed in git
+2. Full Codebase: Review all source files in the project
+3. Specific Path: Review files in a specific folder
 
 ---
 
 ## Philosophy
 
-- **Discovery-first** - Learn from YOUR codebase, not generic rules
-- **Thorough over fast** - Exhaustive analysis, no shortcuts
-- **Evidence over claims** - Percentages and counts for transparency
-- **Project-aware** - Respect established patterns
-- **Transparent** - Show what was discovered and why
+- **Discovery-first**: Learn from YOUR codebase, not generic rules
+- **Thorough over fast**: Exhaustive analysis, no shortcuts
+- **Evidence over claims**: Percentages and counts for transparency
+- **Project-aware**: Respect established patterns
+- **Transparent**: Show what was discovered and why
 
 ---
 

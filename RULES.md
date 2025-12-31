@@ -29,11 +29,11 @@ plugins/<plugin-name>/
 ### Manifest Requirements
 
 Every `plugin.json` must include:
-- `name` - kebab-case, prefixed with `maccing-`
-- `version` - semantic versioning (MAJOR.MINOR.PATCH)
-- `description` - clear, concise explanation
-- `author` - name, email, url
-- `license` - MIT
+- `name`: kebab-case, prefixed with `maccing-`
+- `version`: semantic versioning (MAJOR.MINOR.PATCH)
+- `description`: clear, concise explanation
+- `author`: name, email, url
+- `license`: MIT
 
 ### Naming Conventions
 
@@ -50,9 +50,9 @@ Every `plugin.json` must include:
 
 ### Documentation Files
 
-- **Filenames MUST be UPPERCASE** - All `.md` files use UPPERCASE names (except README.md)
-- **No emojis in documentation** - Use ASCII characters and symbols only
-- **Use code blocks** - For commands, examples, and file structures
+- **Filenames MUST be UPPERCASE**: all `.md` files use UPPERCASE names (except README.md)
+- **No emojis in documentation**: use ASCII characters and symbols only
+- **Use code blocks**: for commands, examples, and file structures
 
 ### Markdown Style
 
@@ -65,16 +65,28 @@ Brief description.
 
 ## Section
 
-- **Bold labels** — with em dash separator
+- **Bold labels**, description follows with comma
 - Use code blocks for commands
 - Use tables for structured data
 ```
 
 ### Comments and Descriptions
 
-- **Explain "why", not "what"** - Comments should provide context
-- **Use commas, not hyphens** - As separators in comments
-- **Sentence case** - Capitalize first word only
+**CRITICAL: Use commas or colons instead of hyphens as separators.**
+
+NEVER use em dashes (—), en dashes (–), or hyphens (-) as separators in comments or descriptions. Use commas or colons instead.
+
+| Wrong | Correct |
+|-------|---------|
+| `**Label** — description` | `**Label**: description` or `**Label**, description` |
+| `**Label** - description` | `**Label**: description` or `**Label**, description` |
+| `value - meaning` | `value: meaning` or `value, meaning` |
+
+**Rationale:** Hyphens and dashes can be confused with code operators (subtraction, flags). Commas and colons create natural, readable sentence flow.
+
+Additional rules:
+- **Explain "why", not "what"**: Comments should provide context
+- **Sentence case**: Capitalize first word after separator
 
 ---
 
@@ -117,9 +129,9 @@ refactor: restructure code
 
 ### Branch Strategy
 
-- `main` - stable, release-ready
-- `feature/<name>` - new features
-- `fix/<name>` - bug fixes
+- `main`: stable, release-ready
+- `feature/<name>`: new features
+- `fix/<name>`: bug fixes
 
 ### Before Committing
 
@@ -184,10 +196,10 @@ Detailed instructions...
 
 ### Writing Effective Skills
 
-- **Clear triggers** - Description should explain when the skill activates
-- **Step-by-step instructions** - Break down complex processes
-- **Include examples** - Show expected inputs and outputs
-- **Handle edge cases** - Document what happens in error scenarios
+- **Clear triggers**: Description should explain when the skill activates
+- **Step-by-step instructions**: Break down complex processes
+- **Include examples**: Show expected inputs and outputs
+- **Handle edge cases**: Document what happens in error scenarios
 
 ---
 
@@ -210,8 +222,8 @@ $ARGUMENTS
 
 ## Supported Flags
 
-- `--flag` - Description
-- `--another` - Description
+- `--flag`, description
+- `--another`, description
 
 ## Examples
 
@@ -235,11 +247,11 @@ Use inline backticks for colored text rendering:
 - Labels: `` `label-name` `` for inline colored text
 
 **Symbols:**
-- `★` — Section headers
-- `═` — Major section borders (top/bottom)
-- `─` — Minor dividers
-- `✖` — Critical/error items
-- `▲` — Warning/high priority items
+- `★`: Section headers
+- `═`: Major section borders (top/bottom)
+- `─`: Minor dividers
+- `✖`: Critical/error items
+- `▲`: Warning/high priority items
 
 ### Output Structure
 
@@ -271,22 +283,22 @@ Always include date and time in reports:
 
 All plugins should embody these principles:
 
-- **Discovery-first** - Learn from the codebase, not generic rules
-- **Thorough over fast** - Quality analysis over quick results
-- **Evidence over claims** - Concrete examples with file:line references
-- **Systematic over ad-hoc** - Structured methodology
-- **Project-aware** - Respect user's existing conventions
-- **Transparent** - Show what's happening, not just results
+- **Discovery-first**: Learn from the codebase, not generic rules
+- **Thorough over fast**: Quality analysis over quick results
+- **Evidence over claims**: Concrete examples with file:line references
+- **Systematic over ad-hoc**: Structured methodology
+- **Project-aware**: Respect user's existing conventions
+- **Transparent**: Show what's happening, not just results
 
 ### Pattern Discovery Approach
 
 Plugins should discover patterns from the user's codebase when explicit rules are not provided:
 
-1. **Scan** - Analyze all relevant files exhaustively
-2. **Extract** - Identify conventions per category
-3. **Measure** - Calculate consistency percentages
-4. **Adopt** - Use patterns with >60% consistency as rules
-5. **Report** - Show what was discovered with evidence
+1. **Scan**: Analyze all relevant files exhaustively
+2. **Extract**: Identify conventions per category
+3. **Measure**: Calculate consistency percentages
+4. **Adopt**: Use patterns with >60% consistency as rules
+5. **Report**: Show what was discovered with evidence
 
 No generic defaults should be imposed. Every rule is either:
 - Explicitly defined by the user
