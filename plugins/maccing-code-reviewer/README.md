@@ -15,6 +15,7 @@ Multi-agent code review with automatic pattern discovery using ULTRATHINK method
 - [Visual Output Examples](#visual-output-examples)
 - [Edge Cases](#edge-cases)
 - [Philosophy](#philosophy)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -782,6 +783,80 @@ Then the AskUserQuestion tool is invoked with options:
 - **Evidence over claims**: Percentages and counts for transparency
 - **Project-aware**: Respect established patterns
 - **Transparent**: Show what was discovered and why
+
+---
+
+## Troubleshooting
+
+### Wrong command name (code-review instead of review)
+
+If you see `/maccing-code-reviewer:code-review` instead of `/maccing-code-reviewer:review`:
+
+**Cause:** Cached old version of the plugin.
+
+**Fix:**
+```bash
+# Clear the plugin cache
+rm -rf ~/.claude/plugins/cache/maccing
+
+# Reinstall the plugin
+/plugin install maccing-code-reviewer@maccing
+```
+
+### Conflicting with other code review plugins
+
+If another code review plugin is invoked instead of maccing:
+
+**Cause:** Other plugins with similar names or descriptions.
+
+**Check installed plugins:**
+```bash
+find ~/.claude/plugins -type d -name "code-review" 2>/dev/null
+```
+
+**Fix:** Uninstall conflicting plugins:
+```
+/plugin uninstall code-review@claude-code-plugins
+/plugin uninstall code-review@claude-plugins-official
+```
+
+### Plugin not updating
+
+If changes don't appear after update:
+
+**Fix:**
+```bash
+# Clear cache and reinstall
+rm -rf ~/.claude/plugins/cache/maccing
+/plugin install maccing-code-reviewer@maccing
+```
+
+**Verify update:**
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/README.md | grep "Discovery-first"
+```
+
+Expected: `- **Discovery-first**: Learn from` (with colon)
+
+### First-time setup not triggering
+
+If the plugin skips setup questions:
+
+**Cause:** Config file already exists from previous installation.
+
+**Fix:** Delete the config to trigger setup again:
+```bash
+rm ~/.claude/plugins/maccing/code-reviewer.json
+rm -rf .claude/plugins/maccing/
+```
+
+### Banner not showing before questions
+
+If the `★ maccing-code-reviewer` banner doesn't appear:
+
+**Cause:** Claude may skip the banner in some contexts.
+
+**Note:** This is a known limitation of skill prompting. The banner should appear in most cases but may be omitted occasionally.
 
 ---
 
