@@ -361,7 +361,7 @@ Output the final review using inline backticks for colored headers:
 
 `★ Code Review Report ═══════════════════════════════`
 
-Date:     YYYY-MM-DD
+Date:     YYYY-MM-DD HH:mm
 Branch:   `feature/example`
 Reviewer: Claude (multi-agent)
 Files:    12
@@ -424,7 +424,7 @@ const tenantId = ctx.tenant.id;
 ### File Naming Convention
 
 ```
-docs/code-reviews/YYYY-MM-DD-<scope>.md
+docs/code-reviews/YYYY-MM-DD-HHmm-<scope>.md
 ```
 
 Where `<scope>` is:
