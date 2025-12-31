@@ -520,7 +520,7 @@ Add custom agents for your stack:
 ### Initial Banner (with scope)
 
 ```
-★ maccing-code-reviewer v2.0.0 ═════════════════════════
+★ maccing-code-reviewer v1.1.0 ═════════════════════════
 
 Scope: Full Codebase
 
@@ -774,7 +774,7 @@ Then the AskUserQuestion tool is invoked with EXACTLY these options:
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "2.0.0"`
+Expected: `"version": "1.1.0"`
 
 ### Plugin not updating
 
@@ -793,7 +793,7 @@ rm -rf ~/.claude/plugins/marketplaces/maccing
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "2.0.0"`
+Expected: `"version": "1.1.0"`
 
 ### Output not colored
 
