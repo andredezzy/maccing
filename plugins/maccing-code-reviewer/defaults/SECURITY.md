@@ -96,7 +96,7 @@ Sanitize output and use proper encoding:
 
 **Bad:**
 ```typescript
-// React - dangerous
+// React (dangerous)
 <div dangerouslySetInnerHTML={{ __html: userInput }} />
 
 // Template literals
@@ -105,7 +105,7 @@ element.innerHTML = `<p>${userComment}</p>`;
 
 **Good:**
 ```typescript
-// React - safe by default
+// React (safe by default)
 <div>{userInput}</div>
 
 // If HTML is required, sanitize first
@@ -121,7 +121,7 @@ Never pass user input directly to shell commands:
 
 **Bad:**
 ```typescript
-// Using shell with string interpolation - DANGEROUS
+// Using shell with string interpolation (DANGEROUS)
 childProcess.execSync(`convert ${userFilename} output.png`);
 ```
 

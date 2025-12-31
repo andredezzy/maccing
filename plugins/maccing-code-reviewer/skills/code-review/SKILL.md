@@ -7,7 +7,7 @@ description: Reviews code for quality, security, and conventions using multi-age
 
 You are performing a comprehensive code review using the **multi-agent loop methodology** with **ULTRATHINK** level analysis.
 
-**CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think" - every analysis must be rigorous.
+**CRITICAL: Use "ultrathink" for all analysis phases.** This triggers extended thinking for deep, thorough verification. Do not use shallow "think", every analysis must be rigorous.
 
 ## Step 1: Check Configuration
 
@@ -44,7 +44,7 @@ Which rule files should I use for reviews?
   [1] CLAUDE.md (detected)
   [2] rules/CODE_STYLE.md (detected)
   [3] Add custom path...
-  [4] Skip - use built-in defaults only
+  [4] Skip (use built-in defaults only)
 
 > Select (comma-separated):
 ```
@@ -292,31 +292,44 @@ Return a structured list of all i18n issues found.
 
 ## Step 5: Show Progress
 
-As each agent works, display progress:
+As each agent works, display progress using rich markdown:
+
+```markdown
+# maccing-code-reviewer
+
+## Reading Project Rules
+
+| Rule File | Status |
+|-----------|--------|
+| `CLAUDE.md` | Loaded |
+| `rules/CODE_STYLE.md` | Loaded |
+
+---
+
+## Agent Progress
+
+| Agent | Phase 1 | Phase 2 | Issues |
+|-------|---------|---------|--------|
+| **naming-agent** | Complete | Complete | 3 |
+| **code-style-agent** | Complete | Complete | 2 |
+| **clean-code-agent** | Complete | Complete | 1 |
+| **architecture-agent** | Complete | Complete | 0 |
+| **security-agent** | Complete | Complete | 1 CRITICAL |
+| **i18n-agent** | Complete | Complete | 4 |
+
+---
+
+## Aggregating Results...
+```
+
+For real-time updates during execution, output progress incrementally:
 
 ```
-[maccing-code-reviewer] Starting review...
+### naming-agent
 
-[*] Reading project rules
-    -> CLAUDE.md
-    -> rules/CODE_STYLE.md
-
-[*] Spawning 6 agents in parallel
-
-    naming-agent
-    |-- [PHASE 1] Deep analysis pass............
-    |-- [PHASE 2] Validation pass...............
-    |-- [DONE] 3 issues found
-
-    security-agent
-    |-- [PHASE 1] Deep analysis pass............
-    |-- [PHASE 2] Validation pass...............
-    |-- [DONE] 1 critical issue found
-
-    ... (other agents)
-
-[*] Aggregating results
-[*] Generating report
+**Phase 1:** Deep analysis pass...
+**Phase 2:** Validation pass...
+**Result:** 3 issues found
 ```
 
 ## Step 6: Aggregate Results
@@ -329,86 +342,104 @@ After all agents complete, aggregate their findings:
 
 ## Step 7: Generate Report
 
-Output the final review in this format:
+Output the final review using rich markdown formatting:
 
 ```markdown
 # Code Review Report
 
-**Date:** YYYY-MM-DD
-**Branch:** <current-branch-name>
-**Reviewer:** Claude (multi-agent review)
+| | |
+|---|---|
+| **Date** | YYYY-MM-DD |
+| **Branch** | feature/example |
+| **Reviewer** | Claude (multi-agent) |
+| **Files** | 12 |
+| **Issues** | 11 |
+
+---
 
 ## Summary
 
-- **Files reviewed:** X
-- **Issues found:** Y
-- **Verdict:** APPROVE | REQUEST CHANGES | NEEDS DISCUSSION
+| Severity | Count | Status |
+|----------|-------|--------|
+| **CRITICAL** | 1 | Must fix |
+| **HIGH** | 3 | Should fix |
+| **MEDIUM** | 5 | Consider |
+| **LOW** | 2 | Optional |
 
-| Severity | Count |
-|----------|-------|
-| Critical | N     |
-| High     | N     |
-| Medium   | N     |
-| Low      | N     |
+### Verdict: REQUEST CHANGES
 
-## Files Reviewed
+> Critical and high priority issues must be addressed before merge.
 
-- `path/to/file1.tsx`
-- `path/to/file2.ts`
+---
 
 ## Critical Issues
 
-| File | Line | Issue | Agent |
-|------|------|-------|-------|
-| ... | ... | ... | ... |
+### `src/auth.ts:42`
+
+**Agent:** security-agent
+**Issue:** Tenant ID accepted from request body
+**Pattern:** Never accept tenantId from frontend, resolve from context
+
+```typescript
+// Bad
+const tenantId = input.tenantId;
+
+// Good
+const tenantId = ctx.tenant.id;
+```
+
+---
 
 ## High Priority Issues
 
-| File | Line | Issue | Agent |
-|------|------|-------|-------|
-| ... | ... | ... | ... |
+### `src/utils/helpers.ts:15`
 
-## Medium/Low Issues
+**Agent:** naming-agent
+**Issue:** Boolean variable missing prefix
+**Pattern:** Use `is`, `has`, `should`, `can`, `will` prefixes
 
-| File | Line | Issue | Agent |
-|------|------|-------|-------|
-| ... | ... | ... | ... |
+```typescript
+// Bad
+const active = true;
 
-## Agent Reports
+// Good
+const isActive = true;
+```
 
-### naming-agent
-- Issues found: N
-- Summary of findings...
+### `src/components/Table.tsx:88`
 
-### code-style-agent
-- Issues found: N
-- Summary of findings...
+**Agent:** code-style-agent
+**Issue:** Using && for conditional rendering
+**Pattern:** Use ternary for explicit null handling
 
-### clean-code-agent
-- Issues found: N
-- Summary of findings...
+```tsx
+// Bad
+{condition && <Component />}
 
-### architecture-agent
-- Issues found: N
-- Summary of findings...
+// Good
+{condition ? <Component /> : null}
+```
 
-### security-agent
-- Issues found: N
-- Summary of findings...
+---
 
-### i18n-agent
-- Issues found: N
-- Summary of findings...
+## Agent Summary
+
+| Agent | Issues | Key Findings |
+|-------|--------|--------------|
+| **security-agent** | 1 | Tenant isolation vulnerability |
+| **naming-agent** | 3 | Boolean prefixes missing |
+| **code-style-agent** | 2 | Conditional rendering patterns |
+| **clean-code-agent** | 1 | Unused import |
+| **architecture-agent** | 0 | No violations |
+| **i18n-agent** | 4 | Missing translation keys |
+
+---
 
 ## Recommendations
 
-Optional improvements and suggestions for future consideration.
-
-## Verdict
-
-- [ ] **APPROVE** - No critical/high issues, code meets project standards
-- [ ] **REQUEST CHANGES** - Critical or high issues found that must be addressed
-- [ ] **NEEDS DISCUSSION** - Architectural concerns or design decisions to discuss
+1. Review tenant context patterns in authentication layer
+2. Consider adding ESLint rules for boolean naming
+3. Update component library to enforce ternary pattern
 ```
 
 ## Step 8: Save Review to Documentation

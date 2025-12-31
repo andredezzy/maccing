@@ -62,7 +62,7 @@ for (const user of users) {
 // Compensate for zero-based indexing in display
 counter++;
 
-// Filter for billing purposes - inactive users shouldn't be charged
+// Filter for billing purposes, inactive users shouldn't be charged
 for (const user of users) {
   if (user.isActive) {
     activeUsers.push(user);

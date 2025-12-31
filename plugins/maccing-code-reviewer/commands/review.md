@@ -14,25 +14,27 @@ $ARGUMENTS
 
 Parse the following flags from $ARGUMENTS:
 
-- `--skip <agents>` - Skip specific agents (comma-separated)
+- `--skip <agents>` Skip specific agents (comma-separated)
   Example: `--skip i18n,naming`
 
-- `--only <agents>` - Run only specific agents (comma-separated)
+- `--only <agents>` Run only specific agents (comma-separated)
   Example: `--only security,architecture`
 
-- `--no-save` - Output to console only, skip saving to docs/code-reviews/
+- `--no-save` Output to console only, skip saving to docs/code-reviews/
 
-- `--scope <path>` - Review specific path instead of git changes
+- `--scope <path>` Review specific path instead of git changes
   Example: `--scope src/auth/`
 
 ## Available Agents
 
-- `naming` - Naming conventions (boolean prefixes, interface suffixes, etc.)
-- `code-style` - Formatting and patterns (spacing, ternaries, composition)
-- `clean-code` - Code quality (unused code, comments, types)
-- `architecture` - Layer boundaries (separation of concerns, dependencies)
-- `security` - Security vulnerabilities (injection, auth, secrets)
-- `i18n` - Internationalization (translation keys, locale coverage)
+| Agent | Focus |
+|-------|-------|
+| `naming` | Naming conventions (boolean prefixes, interface suffixes) |
+| `code-style` | Formatting and patterns (spacing, ternaries, composition) |
+| `clean-code` | Code quality (unused code, comments, types) |
+| `architecture` | Layer boundaries (separation of concerns, dependencies) |
+| `security` | Security vulnerabilities (injection, auth, secrets) |
+| `i18n` | Internationalization (translation keys, locale coverage) |
 
 ## Execution
 

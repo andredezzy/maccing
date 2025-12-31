@@ -257,7 +257,7 @@ export { UserProfile } from './UserProfile';
 export { UserAvatar } from './UserAvatar';
 export type { UserProps } from './UserProfile.types';
 
-// Internal utilities not exported - used only within the module
+// Internal utilities not exported, used only within the module
 ```
 
 ---
@@ -281,7 +281,7 @@ src/
 ```
 
 ```typescript
-// auth/index.ts - Public API
+// auth/index.ts (Public API)
 export { login, logout, getCurrentUser } from './internal/authService';
 export type { AuthState, User } from './internal/authTypes';
 

@@ -30,11 +30,26 @@ Claude Code plugins built for developers who care about code quality.
 - Custom agent extensibility
 - Persistent reports in docs/code-reviews/
 
+**Review Agents:**
+
+| Agent | Focus | What It Checks |
+|-------|-------|----------------|
+| **naming-agent** | Naming conventions | Boolean prefixes (`is`, `has`, `should`), interface suffixes, enum casing, component names, constants |
+| **code-style-agent** | Formatting patterns | Spacing, blank lines, ternary operators, composition patterns, React keys |
+| **clean-code-agent** | Code quality | Unused code, commented code, obvious comments, `any` types, nested ternaries, error handling |
+| **architecture-agent** | Layer boundaries | Separation of concerns, dependency direction, circular dependencies, file colocation |
+| **security-agent** | Vulnerabilities | SQL injection, XSS, command injection, secrets in code, auth checks, sensitive data in logs |
+| **i18n-agent** | Internationalization | Translation keys, hardcoded strings, locale coverage, pluralization |
+
 **Commands:**
 
-- `/maccing-code-reviewer:review` — run full review
-- `/maccing-code-reviewer:review --only security` — targeted review
-- `/maccing-code-reviewer:review --skip i18n` — skip agents
+| Command | Description |
+|---------|-------------|
+| `/maccing-code-reviewer:review` | Run full review with all agents |
+| `/maccing-code-reviewer:review --only security,architecture` | Run only specific agents |
+| `/maccing-code-reviewer:review --skip i18n,naming` | Skip specific agents |
+| `/maccing-code-reviewer:review --scope src/api/` | Review specific directory |
+| `/maccing-code-reviewer:review --no-save` | Output to console only |
 
 ---
 
