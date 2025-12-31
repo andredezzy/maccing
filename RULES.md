@@ -220,95 +220,50 @@ $ARGUMENTS
 
 ---
 
-## Code Review Rules
+## Plugin Output Styling
 
-### Naming Conventions
+### Colored Output in Claude Code
 
-**Boolean Variables** — Must use prefixes:
-- `is` — State check (isActive, isLoading, isValid)
-- `has` — Possession check (hasPermission, hasError)
-- `should` — Recommendation (shouldUpdate, shouldRender)
-- `can` — Capability (canEdit, canDelete)
-- `will` — Future action (willChange, willUpdate)
+Use inline backticks for colored text rendering:
 
-**Interfaces and Types** — Use appropriate suffixes:
-- `Request` / `Response` — API layer
-- `Input` / `Output` — Function parameters
-- `Props` — Component props
-- `Config` / `Options` — Configuration
+`★ Header with decorators ════════════════════════════`
 
-**Enums** — PascalCase names, UPPER_SNAKE_CASE values
+**Format patterns:**
+- Headers: `` `★ Plugin Name ════════════════════` ``
+- Separators: `` `════════════════════════════════` ``
+- Dividers: `` `────────────────────────────────` ``
+- Labels: `` `label-name` `` for inline colored text
 
-**Components** — PascalCase, descriptive (not generic like "DataTable")
+**Symbols:**
+- `★` — Section headers
+- `═` — Major section borders (top/bottom)
+- `─` — Minor dividers
+- `✖` — Critical/error items
+- `▲` — Warning/high priority items
 
-**Constants** — UPPER_SNAKE_CASE
+### Output Structure
 
-**Functions** — camelCase, verb-first (get, set, handle, validate, create, update, delete, fetch, parse, format)
+All plugin output should follow this pattern:
 
----
+`★ plugin-name ══════════════════════════════════════`
 
-### Clean Code
+Section Title
 
-**Unused Code** — Remove all unused variables, imports, functions, parameters, and commented-out code
+Key:   `value`
+Label: description
 
-**Comments** — Explain "why", not "what"
+List Items:
+- item one
+- item two
 
-**Type Safety** — No `any` type, use proper types or `unknown` with narrowing
+`════════════════════════════════════════════════════`
 
-**Linter Suppressions** — Never suppress without justification comment
+### Timestamp Format
 
-**Ternary Operators** — No nested ternaries, use if/else or early returns
-
-**Error Handling** — Throw errors with context, never silent failures
-
-**Function Length** — Under 20 lines, single responsibility
-
-**Magic Values** — Extract to named constants
-
----
-
-### Architecture
-
-**Separation of Concerns** — Keep UI, business logic, and data access separate
-
-**Dependency Direction** — Dependencies flow downward only:
-```
-UI Components → Business Logic → Data Access
-```
-
-**Circular Dependencies** — Never create circular import chains
-
-**One Component Per File** — Each file serves a single purpose
-
-**File Colocation** — Keep related files together (component, test, types, styles)
-
-**Layer Boundaries**:
-- UI Components: Can import services, hooks, utils, types
-- Services: Can import repositories, utils, types
-- Repositories: Can import database clients, utils, types
-- Utils: Only other utils and types
-
----
-
-### Security
-
-**Secrets** — Never commit to code (API keys, passwords, tokens, private keys)
-
-**Input Validation** — Validate all user input at system boundaries
-
-**SQL Injection** — Use parameterized queries, never string concatenation
-
-**XSS Prevention** — Sanitize output, use proper encoding
-
-**Command Injection** — Never pass user input directly to shell commands
-
-**Authentication** — Enforce on all protected endpoints
-
-**Sensitive Data** — Never log passwords, tokens, card numbers
-
-**HTTPS** — All external requests must use HTTPS
-
-**Rate Limiting** — Protect endpoints from abuse
+Always include date and time in reports:
+- Format: `YYYY-MM-DD HH:mm`
+- Example: `2025-12-31 14:30`
+- Filename: `YYYY-MM-DD-HHmm-<scope>.md`
 
 ---
 
