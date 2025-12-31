@@ -292,17 +292,38 @@ Return a structured list of all i18n issues found.
 
 ## Step 5: Show Progress
 
-As each agent works, display progress using the official plugin pattern:
+Display the initial review info with full context:
 
 ```
 `★ maccing-code-reviewer ═══════════════════════════`
-Loading Rules:
-  - CLAUDE.md
-  - rules/CODE_STYLE.md
+
+Review Started
+
+Config:   .claude/plugins/maccing/code-reviewer.json
+Status:   Using built-in defaults (no config found)
+Scope:    Git changes (last 5 commits)
+Files:    12 files to review
+
+Rules Loaded:
+  - defaults/NAMING.md
+  - defaults/CLEAN_CODE.md
+  - defaults/SECURITY.md
+  - defaults/ARCHITECTURE.md
+
+Active Agents:
+  - naming-agent
+  - code-style-agent
+  - clean-code-agent
+  - architecture-agent
+  - security-agent
+
+Skipped Agents:
+  - i18n-agent (no locale files detected)
+
 `═══════════════════════════════════════════════════`
 ```
 
-For each agent, show progress:
+As each agent works, show progress:
 
 ```
 `★ naming-agent ─────────────────────────────────────`
