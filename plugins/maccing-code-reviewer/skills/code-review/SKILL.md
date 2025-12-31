@@ -19,7 +19,17 @@ cat .claude/plugins/maccing/code-reviewer.json 2>/dev/null || echo "NO_CONFIG"
 
 ### If NO_CONFIG: Run First-Time Setup
 
-Display this prompt to the user:
+**CRITICAL: You MUST complete this entire setup before proceeding to Step 2.**
+
+#### 1.1 Create Directory Immediately
+
+**MANDATORY: Create the plugin directory first:**
+
+```bash
+mkdir -p .claude/plugins/maccing
+```
+
+#### 1.2 Display Setup Header
 
 ```
 ★ maccing-code-reviewer ════════════════════════════════
@@ -29,59 +39,84 @@ First-time setup
 Scanning for project rules...
 ```
 
-Then scan for common rule file locations:
+#### 1.3 Scan for Rule Files
 
 ```bash
 ls -la CLAUDE.md rules/*.md .claude/*.md 2>/dev/null || echo "NO_RULES_FOUND"
 ```
 
-Present found files and ask user to select which to use:
+#### 1.4 Ask User for Rule Files
 
-```
-Configure Code Reviewer
-------------------------
+Use the AskUserQuestion tool to present options:
 
-Which rule files should I use for reviews?
+**Question:** Which rule files should I use for reviews?
 
-  [1] CLAUDE.md (detected)
-  [2] rules/CODE_STYLE.md (detected)
-  [3] Add custom path...
-  [4] Skip (discover patterns from codebase)
+Options based on detected files:
+- Each detected file as an option (e.g., "CLAUDE.md (detected)")
+- "Add custom path..." option
+- "Skip (discover patterns from codebase)" option
 
-> Select (comma-separated):
-```
+#### 1.5 Ask User for Agents
 
-Then ask about agents:
+Use the AskUserQuestion tool:
 
-```
-Review Agents
--------------
+**Question:** Which review agents should be enabled?
 
-  [1] naming-agent       Naming conventions
-  [2] code-style-agent   Formatting and patterns
-  [3] clean-code-agent   Code quality
-  [4] architecture-agent Layer boundaries
-  [5] security-agent     Security vulnerabilities
-  [6] i18n-agent         Internationalization
+Options:
+- All agents (Recommended)
+- Select specific agents
 
-> Select (comma-separated, or 'all'):
-```
+If selecting specific:
+- naming-agent: Naming conventions
+- code-style-agent: Formatting and patterns
+- clean-code-agent: Code quality
+- architecture-agent: Layer boundaries
+- security-agent: Security vulnerabilities
+- i18n-agent: Internationalization
 
-Create the directory and save the configuration:
+#### 1.6 Create Configuration File
 
-```bash
-mkdir -p .claude/plugins/maccing
-```
+**MANDATORY: Use the Write tool to create the config file.**
 
-Save to `.claude/plugins/maccing/code-reviewer.json`:
+Write to `.claude/plugins/maccing/code-reviewer.json`:
 
 ```json
 {
-  "ruleFiles": ["CLAUDE.md", "rules/CODE_STYLE.md"],
+  "ruleFiles": ["CLAUDE.md"],
   "agents": ["naming", "code-style", "clean-code", "architecture", "security", "i18n"],
   "customAgents": []
 }
 ```
+
+Populate `ruleFiles` with the user's selections from step 1.4.
+Populate `agents` with the user's selections from step 1.5.
+
+#### 1.7 Verify Setup and Display Confirmation
+
+**MANDATORY: Verify the config file was created:**
+
+```bash
+cat .claude/plugins/maccing/code-reviewer.json
+```
+
+Display confirmation:
+
+```
+★ maccing-code-reviewer ════════════════════════════════
+
+Setup Complete
+
+Config saved to: .claude/plugins/maccing/code-reviewer.json
+
+Rule files: CLAUDE.md
+Agents:     naming, code-style, clean-code, architecture, security, i18n
+
+════════════════════════════════════════════════════════
+
+Proceeding with code review...
+```
+
+**CRITICAL: Do NOT proceed to Step 2 until this verification succeeds.**
 
 ## Step 2: Get Changed Files
 
