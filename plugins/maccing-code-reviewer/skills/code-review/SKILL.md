@@ -292,72 +292,70 @@ Return a structured list of all i18n issues found.
 
 ## Step 5: Show Progress
 
-As each agent works, display progress using rich markdown:
-
-```markdown
-# maccing-code-reviewer
-
-## Reading Project Rules
-
-| Rule File | Status |
-|-----------|--------|
-| `CLAUDE.md` | Loaded |
-| `rules/CODE_STYLE.md` | Loaded |
-
----
-
-## Agent Progress
-
-| Agent | Phase 1 | Phase 2 | Issues |
-|-------|---------|---------|--------|
-| **naming-agent** | Complete | Complete | 3 |
-| **code-style-agent** | Complete | Complete | 2 |
-| **clean-code-agent** | Complete | Complete | 1 |
-| **architecture-agent** | Complete | Complete | 0 |
-| **security-agent** | Complete | Complete | 1 CRITICAL |
-| **i18n-agent** | Complete | Complete | 4 |
-
----
-
-## Aggregating Results...
-```
-
-For real-time updates during execution, output progress incrementally:
+As each agent works, display progress using ASCII-styled blocks:
 
 ```
-### naming-agent
+`┌─ maccing-code-reviewer ─────────────────────────┐`
 
-**Phase 1:** Deep analysis pass...
-**Phase 2:** Validation pass...
-**Result:** 3 issues found
+`│ Loading Rules                                    │`
+  ✓ CLAUDE.md
+  ✓ rules/CODE_STYLE.md
+
+`└──────────────────────────────────────────────────┘`
 ```
+
+For each agent, show progress with visual indicators:
+
+```
+`★ naming-agent ────────────────────────────────────`
+  Phase 1: Deep analysis.......... ✓
+  Phase 2: Validation............. ✓
+  Result: 3 issues found
+`───────────────────────────────────────────────────`
+
+`★ security-agent ──────────────────────────────────`
+  Phase 1: Deep analysis.......... ✓
+  Phase 2: Validation............. ✓
+  Result: 1 CRITICAL issue found
+`───────────────────────────────────────────────────`
+```
+
+Summary table after all agents complete:
+
+| Agent | Issues |
+|-------|--------|
+| naming-agent | 3 |
+| code-style-agent | 2 |
+| clean-code-agent | 1 |
+| architecture-agent | 0 |
+| security-agent | 1 CRITICAL |
+| i18n-agent | 4 |
 
 ## Step 6: Aggregate Results
 
 After all agents complete, aggregate their findings:
 
-1. **Deduplicate** - Remove duplicate issues reported by multiple agents
-2. **Sort by severity** - CRITICAL > HIGH > MEDIUM > LOW
-3. **Group by file** - Organize issues by file path
+1. **Deduplicate** Remove duplicate issues reported by multiple agents
+2. **Sort by severity** CRITICAL > HIGH > MEDIUM > LOW
+3. **Group by file** Organize issues by file path
 
 ## Step 7: Generate Report
 
-Output the final review using rich markdown formatting:
+Output the final review using ASCII-styled markdown:
 
-```markdown
-# Code Review Report
+```
+`┌─ Code Review Report ────────────────────────────┐`
+`│                                                  │`
+`│  Date:     YYYY-MM-DD                           │`
+`│  Branch:   feature/example                      │`
+`│  Reviewer: Claude (multi-agent)                 │`
+`│  Files:    12                                   │`
+`│  Issues:   11                                   │`
+`│                                                  │`
+`└──────────────────────────────────────────────────┘`
+```
 
-| | |
-|---|---|
-| **Date** | YYYY-MM-DD |
-| **Branch** | feature/example |
-| **Reviewer** | Claude (multi-agent) |
-| **Files** | 12 |
-| **Issues** | 11 |
-
----
-
-## Summary
+### Summary
 
 | Severity | Count | Status |
 |----------|-------|--------|
@@ -366,19 +364,22 @@ Output the final review using rich markdown formatting:
 | **MEDIUM** | 5 | Consider |
 | **LOW** | 2 | Optional |
 
-### Verdict: REQUEST CHANGES
+```
+`▓ Verdict: REQUEST CHANGES ────────────────────────`
+  Critical and high priority issues must be addressed.
+`───────────────────────────────────────────────────`
+```
 
-> Critical and high priority issues must be addressed before merge.
+### Critical Issues
 
----
-
-## Critical Issues
-
-### `src/auth.ts:42`
-
-**Agent:** security-agent
-**Issue:** Tenant ID accepted from request body
-**Pattern:** Never accept tenantId from frontend, resolve from context
+```
+`✖ CRITICAL ────────────────────────────────────────`
+  File:    src/auth.ts:42
+  Agent:   security-agent
+  Issue:   Tenant ID accepted from request body
+  Pattern: Never accept tenantId from frontend
+`───────────────────────────────────────────────────`
+```
 
 ```typescript
 // Bad
@@ -388,15 +389,16 @@ const tenantId = input.tenantId;
 const tenantId = ctx.tenant.id;
 ```
 
----
+### High Priority Issues
 
-## High Priority Issues
-
-### `src/utils/helpers.ts:15`
-
-**Agent:** naming-agent
-**Issue:** Boolean variable missing prefix
-**Pattern:** Use `is`, `has`, `should`, `can`, `will` prefixes
+```
+`▲ HIGH ─────────────────────────────────────────────`
+  File:    src/utils/helpers.ts:15
+  Agent:   naming-agent
+  Issue:   Boolean variable missing prefix
+  Pattern: Use is, has, should, can, will prefixes
+`───────────────────────────────────────────────────`
+```
 
 ```typescript
 // Bad
@@ -406,40 +408,25 @@ const active = true;
 const isActive = true;
 ```
 
-### `src/components/Table.tsx:88`
-
-**Agent:** code-style-agent
-**Issue:** Using && for conditional rendering
-**Pattern:** Use ternary for explicit null handling
-
-```tsx
-// Bad
-{condition && <Component />}
-
-// Good
-{condition ? <Component /> : null}
-```
-
----
-
-## Agent Summary
+### Agent Summary
 
 | Agent | Issues | Key Findings |
 |-------|--------|--------------|
-| **security-agent** | 1 | Tenant isolation vulnerability |
-| **naming-agent** | 3 | Boolean prefixes missing |
-| **code-style-agent** | 2 | Conditional rendering patterns |
-| **clean-code-agent** | 1 | Unused import |
-| **architecture-agent** | 0 | No violations |
-| **i18n-agent** | 4 | Missing translation keys |
+| security-agent | 1 | Tenant isolation vulnerability |
+| naming-agent | 3 | Boolean prefixes missing |
+| code-style-agent | 2 | Conditional rendering patterns |
+| clean-code-agent | 1 | Unused import |
+| architecture-agent | 0 | No violations |
+| i18n-agent | 4 | Missing translation keys |
 
----
+### Recommendations
 
-## Recommendations
-
-1. Review tenant context patterns in authentication layer
-2. Consider adding ESLint rules for boolean naming
-3. Update component library to enforce ternary pattern
+```
+`★ Recommendations ─────────────────────────────────`
+  1. Review tenant context patterns in auth layer
+  2. Add ESLint rules for boolean naming
+  3. Enforce ternary pattern in component library
+`───────────────────────────────────────────────────`
 ```
 
 ## Step 8: Save Review to Documentation
