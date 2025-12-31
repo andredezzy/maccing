@@ -11,11 +11,11 @@ description: Run comprehensive code review with multi-agent ULTRATHINK analysis.
 ### Detect Scope from User Request
 
 Parse the context following the command. Examples:
-- `/review src/api/` → Path: src/api/
-- `/review the auth module` → Path: (find auth-related folder)
-- `/review entire codebase` → Full Codebase
-- `/review all files` → Full Codebase
-- `/review` (nothing after) → ASK USER
+- `/maccing-code-reviewer:review src/api/` → Path: src/api/
+- `/maccing-code-reviewer:review the auth module` → Path: (find auth-related folder)
+- `/maccing-code-reviewer:review entire codebase` → Full Codebase
+- `/maccing-code-reviewer:review all files` → Full Codebase
+- `/maccing-code-reviewer:review` (nothing after) → ASK USER
 
 **Scope Detection Rules:**
 - Path/folder mentioned (e.g., `src/`, `components/auth`, `the api folder`) → **Path**

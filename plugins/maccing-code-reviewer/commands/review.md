@@ -16,12 +16,12 @@ The scope is detected from the context following the command:
 
 | User Input | Detected Scope |
 |------------|----------------|
-| `/review` | Ask user |
-| `/review src/api/` | Path: src/api/ |
-| `/review the auth module` | Path: auth-related folder |
-| `/review entire codebase` | Full Codebase |
-| `/review all files` | Full Codebase |
-| `/review whole project` | Full Codebase |
+| `/maccing-code-reviewer:review` | Ask user |
+| `/maccing-code-reviewer:review src/api/` | Path: src/api/ |
+| `/maccing-code-reviewer:review the auth module` | Path: auth-related folder |
+| `/maccing-code-reviewer:review entire codebase` | Full Codebase |
+| `/maccing-code-reviewer:review all files` | Full Codebase |
+| `/maccing-code-reviewer:review whole project` | Full Codebase |
 
 ## Optional Flags
 
