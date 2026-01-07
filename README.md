@@ -82,37 +82,29 @@ Monorepo workflow assistance with auto-detection and smart reminders.
 
 ## Troubleshooting
 
-### Check installed version
-
-```bash
-cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-code-reviewer/.claude-plugin/plugin.json | grep version
-```
-
-Expected: `"version": "1.1.0"`
-
 ### Plugin not updating
+
+Clear cache and reinstall:
 
 ```bash
 rm -rf ~/.claude/plugins/cache/maccing
 rm -rf ~/.claude/plugins/marketplaces/maccing
 /plugin marketplace add andredezzy/maccing
-/plugin install maccing-code-reviewer@maccing
+/plugin install <plugin-name>@maccing
 ```
 
-### Conflicting with other plugins
+### Check installed version
 
 ```bash
-find ~/.claude/plugins -type d -name "code-review" 2>/dev/null
+cat ~/.claude/plugins/marketplaces/maccing/plugins/<plugin-name>/.claude-plugin/plugin.json | grep version
 ```
 
-Uninstall conflicting plugins:
+### Plugin-specific issues
 
-```
-/plugin uninstall code-review@claude-code-plugins
-/plugin uninstall code-review@claude-plugins-official
-```
+For detailed troubleshooting guides:
 
-[Full troubleshooting guide](plugins/maccing-code-reviewer/README.md#troubleshooting)
+- [maccing-code-reviewer troubleshooting](plugins/maccing-code-reviewer/README.md#troubleshooting)
+- [maccing-monorepo troubleshooting](plugins/maccing-monorepo/README.md#troubleshooting)
 
 ---
 
