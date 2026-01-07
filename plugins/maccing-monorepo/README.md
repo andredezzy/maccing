@@ -88,6 +88,76 @@ Trigger it by asking about monorepo workflows or when working on tasks involving
 - `jq` must be installed for JSON parsing
 - Claude Code with plugin support
 
+## Troubleshooting
+
+### Check installed version
+
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/.claude-plugin/plugin.json | grep version
+```
+
+Expected: `"version": "1.0.0"`
+
+### Plugin not updating
+
+If changes don't appear after update:
+
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+rm -rf ~/.claude/plugins/marketplaces/maccing
+/plugin marketplace add andredezzy/maccing
+/plugin install maccing-monorepo@maccing
+```
+
+### Monorepo not detected
+
+If the plugin doesn't detect your monorepo:
+
+1. **Check for config files** at your project root:
+   - Turborepo: `turbo.json`
+   - Nx: `nx.json`
+   - pnpm: `pnpm-workspace.yaml`
+   - npm/yarn: `package.json` with `"workspaces"` field
+
+2. **Verify jq is installed:**
+   ```bash
+   jq --version
+   ```
+
+3. **Test detection manually:**
+   ```bash
+   ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/scripts/detect-monorepo.sh $(pwd)
+   ```
+
+### Hooks not running
+
+If SessionStart or PostToolUse hooks aren't triggering:
+
+1. **Check plugin is installed:**
+   ```bash
+   ls ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/hooks/
+   ```
+
+2. **Verify scripts are executable:**
+   ```bash
+   ls -la ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/hooks/*.sh
+   ```
+
+3. **Reinstall plugin:**
+   ```bash
+   /plugin uninstall maccing-monorepo@maccing
+   /plugin install maccing-monorepo@maccing
+   ```
+
+### Commands not available
+
+If `/maccing-monorepo:info` or `/maccing-monorepo:run` don't work:
+
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+/plugin install maccing-monorepo@maccing
+```
+
 ## License
 
 MIT
