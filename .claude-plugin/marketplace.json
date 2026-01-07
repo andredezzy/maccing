@@ -17,6 +17,17 @@
       },
       "keywords": ["code-review", "quality", "security", "multi-agent"],
       "license": "MIT"
+    },
+    {
+      "name": "maccing-monorepo",
+      "source": "./plugins/maccing-monorepo",
+      "description": "Monorepo workflow assistance with auto-detection for Turborepo, Nx, pnpm, npm, and yarn workspaces.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Andre Dezzy"
+      },
+      "keywords": ["monorepo", "turborepo", "nx", "pnpm", "workspaces"],
+      "license": "MIT"
     }
   ]
 }
