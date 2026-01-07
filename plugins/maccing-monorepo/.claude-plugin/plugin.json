@@ -1,0 +1,17 @@
+{
+  "name": "maccing-monorepo",
+  "version": "1.0.0",
+  "description": "Monorepo workflow assistance with auto-detection, root-level script enforcement, and comprehensive guidance for Turborepo, Nx, pnpm, npm, and yarn workspaces.",
+  "author": {
+    "name": "Andre Dezzy",
+    "email": "andredezzy@users.noreply.github.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "homepage": "https://github.com/andredezzy/maccing",
+  "repository": "https://github.com/andredezzy/maccing",
+  "license": "MIT",
+  "keywords": ["monorepo", "turborepo", "nx", "pnpm", "workspaces"],
+  "hooks": "./hooks/hooks.json",
+  "skills": "./skills/",
+  "commands": ["./commands/"]
+}
