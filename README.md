@@ -50,6 +50,25 @@ Multi-agent code review with automatic pattern discovery.
 
 [View full documentation](plugins/maccing-code-reviewer/README.md)
 
+### maccing-monorepo
+
+Monorepo workflow assistance with auto-detection and smart reminders.
+
+    /plugin install maccing-monorepo@maccing
+
+**Features:**
+
+- Auto-detects Turborepo, Nx, pnpm, npm, yarn workspaces
+- Reminds to run scripts from root with filters
+- Comprehensive monorepo-workflows skill
+- Commands: `/maccing-monorepo:info`, `/maccing-monorepo:run`
+
+**Quick start:**
+
+    /maccing-monorepo:info
+
+[View full documentation](plugins/maccing-monorepo/README.md)
+
 ---
 
 ## Philosophy
