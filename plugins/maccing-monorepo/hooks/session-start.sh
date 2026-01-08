@@ -30,8 +30,11 @@ PACKAGES=$(echo "$DETECTION" | jq -r '.packages')
 # Format package list
 PACKAGE_LIST=$(echo "$PACKAGES" | jq -r '.[] | "  - \(.name) (\(.path)): \(.scripts)"' 2>/dev/null || echo "  (no packages found)")
 
+# Capitalize tool name (portable, works with Bash 3.x)
+TOOL_CAP=$(echo "$TOOL" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+
 # Build context message
-CONTEXT="This is a ${TOOL^} monorepo.
+CONTEXT="This is a ${TOOL_CAP} monorepo.
 Root: $ROOT
 Packages:
 $PACKAGE_LIST
