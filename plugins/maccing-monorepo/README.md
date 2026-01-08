@@ -55,10 +55,10 @@ Root:     /path/to/project
 
 Packages:
   apps/web (@repo/web)
-  ├─ dev, build, test
+  └─ dev, build, test
 
   packages/ui (@repo/ui)
-  ├─ dev, build
+  └─ dev, build
 
 Dependency Flow:
 

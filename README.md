@@ -86,16 +86,16 @@ Root:     /Users/dev/my-project
 Packages:
 
   apps/web (web)
-  ├─ dev, build, test, lint
+  └─ dev, build, test, lint
 
   apps/docs (docs)
-  ├─ dev, build
+  └─ dev, build
 
   packages/ui (@repo/ui)
-  ├─ build, test
+  └─ build, test
 
   packages/config (@repo/config)
-  ├─ lint
+  └─ lint
 
 Dependency Flow:
 

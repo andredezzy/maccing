@@ -36,10 +36,10 @@ Root:     [root path]
 Packages:
 
   [path] ([package name])
-  ├─ [comma-separated scripts]
+  └─ [comma-separated scripts]
 
   [path] ([package name])
-  ├─ [comma-separated scripts]
+  └─ [comma-separated scripts]
 
 Dependency Flow:
 
