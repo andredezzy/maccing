@@ -5,6 +5,7 @@ Monorepo workflow assistance for Claude Code. Auto-detects monorepo tools and he
 ## Features
 
 - **Auto-detection**: Supports Turborepo, Nx, pnpm, npm, and yarn workspaces
+- **Dependency flow diagram**: Visual ASCII diagram showing apps → packages relationships
 - **Smart reminders**: Nudges you to run scripts from root with filters
 - **Comprehensive skill**: Full guidance on monorepo patterns and best practices
 - **Utility commands**: Quick visibility into monorepo structure
@@ -96,7 +97,7 @@ Trigger it by asking about monorepo workflows or when working on tasks involving
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "1.1.0"`
+Expected: `"version": "1.2.0"`
 
 ### Plugin not updating
 
