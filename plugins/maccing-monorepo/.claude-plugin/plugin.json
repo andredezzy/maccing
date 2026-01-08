@@ -1,6 +1,6 @@
 {
   "name": "maccing-monorepo",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Monorepo workflow assistance with auto-detection, root-level script enforcement, and comprehensive guidance for Turborepo, Nx, pnpm, npm, and yarn workspaces.",
   "author": {
     "name": "Andre Dezzy",

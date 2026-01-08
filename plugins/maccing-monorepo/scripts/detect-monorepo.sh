@@ -70,9 +70,12 @@ discover_packages() {
                 local dir=$(dirname "$pkg")
                 local rel_path="${dir#$root/}"
                 local name=$(jq -r '.name // empty' "$pkg" 2>/dev/null)
+                local description=$(jq -r '.description // empty' "$pkg" 2>/dev/null)
                 local scripts=$(jq -r '.scripts | keys | join(",")' "$pkg" 2>/dev/null || echo "")
+                # Extract internal dependencies (workspace packages)
+                local deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys | .[]' "$pkg" 2>/dev/null | grep -E '^@' | tr '\n' ',' | sed 's/,$//' || echo "")
                 if [ -n "$name" ]; then
-                    echo "{\"name\":\"$name\",\"path\":\"$rel_path\",\"scripts\":\"$scripts\"}"
+                    echo "{\"name\":\"$name\",\"path\":\"$rel_path\",\"description\":\"$description\",\"scripts\":\"$scripts\",\"dependencies\":\"$deps\"}"
                 fi
             done | jq -s '.' 2>/dev/null || echo "[]")
             ;;
@@ -83,8 +86,13 @@ discover_packages() {
                 local rel_path="${dir#$root/}"
                 local name=$(jq -r '.name // empty' "$proj" 2>/dev/null)
                 local targets=$(jq -r '.targets | keys | join(",")' "$proj" 2>/dev/null || echo "")
+                # Check for package.json in same dir for description
+                local description=""
+                if [ -f "$dir/package.json" ]; then
+                    description=$(jq -r '.description // empty' "$dir/package.json" 2>/dev/null)
+                fi
                 if [ -n "$name" ]; then
-                    echo "{\"name\":\"$name\",\"path\":\"$rel_path\",\"scripts\":\"$targets\"}"
+                    echo "{\"name\":\"$name\",\"path\":\"$rel_path\",\"description\":\"$description\",\"scripts\":\"$targets\",\"dependencies\":\"\"}"
                 fi
             done | jq -s '.' 2>/dev/null || echo "[]")
             ;;
