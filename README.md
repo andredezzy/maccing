@@ -71,7 +71,7 @@ Monorepo workflow assistance with auto-detection and smart reminders.
 
 ---
 
-## Plugin Output Examples
+## Plugin Output
 
 ### maccing-monorepo
 
