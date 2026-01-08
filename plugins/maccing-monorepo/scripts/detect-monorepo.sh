@@ -72,8 +72,8 @@ discover_packages() {
                 local name=$(jq -r '.name // empty' "$pkg" 2>/dev/null)
                 local description=$(jq -r '.description // empty' "$pkg" 2>/dev/null)
                 local scripts=$(jq -r '.scripts | keys | join(",")' "$pkg" 2>/dev/null || echo "")
-                # Extract internal dependencies (workspace packages)
-                local deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys | .[]' "$pkg" 2>/dev/null | grep -E '^@' | tr '\n' ',' | sed 's/,$//' || echo "")
+                # Extract all scoped dependencies (will filter for internal later)
+                local deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys | map(select(startswith("@"))) | join(",")' "$pkg" 2>/dev/null || echo "")
                 if [ -n "$name" ]; then
                     echo "{\"name\":\"$name\",\"path\":\"$rel_path\",\"description\":\"$description\",\"scripts\":\"$scripts\",\"dependencies\":\"$deps\"}"
                 fi
