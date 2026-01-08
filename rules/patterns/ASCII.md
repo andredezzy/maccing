@@ -101,6 +101,54 @@ Arrows:      ← → ↑ ↓ ▲ ▼ ◄ ►
   Center the `│` and `▼` under the box
   </vertical>
 
+  <layered-dependency>
+  ## Layered Dependency Diagram
+
+  For monorepo dependency visualization with multiple layers:
+
+  ```
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                            APPLICATIONS                              │
+  ├──────────────────────────────────────────────────────────────────────┤
+  │                                                                      │
+  │  ┌─────────────────┐  ┌─────────────────┐                            │
+  │  │   @scope/app1   │  │   @scope/app2   │                            │
+  │  │  Description    │  │  Description    │                            │
+  │  └────────┬────────┘  └────────┬────────┘                            │
+  │           │                    │                                     │
+  └───────────┼────────────────────┼─────────────────────────────────────┘
+              │                    │
+              ▼                    ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                              PACKAGES                                │
+  ├──────────────────────────────────────────────────────────────────────┤
+  │                                                                      │
+  │  ┌─────────────────────────────────┐                      ← Layer 1  │
+  │  │          @scope/pkg1            │                                 │
+  │  │         Description             │                                 │
+  │  └────────────────┬────────────────┘                                 │
+  │                   │                                                  │
+  │                   ▼                                                  │
+  │  ┌─────────────────────────────────┐                      ← Layer 2  │
+  │  │          @scope/pkg2            │                                 │
+  │  │         Description             │                                 │
+  │  └─────────────────────────────────┘                                 │
+  │                                                                      │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  app1 → pkg1, pkg2
+  app2 → pkg1
+  ```
+
+  Rules:
+  - Fixed width: 72 characters
+  - Apps always in top section
+  - Packages sorted by dependency depth (foundation at bottom)
+  - Vertical connectors (│ ▼) link actual dependencies
+  - Layer labels on right margin
+  - Summary at bottom: `app → dep1, dep2`
+  </layered-dependency>
+
   <tree>
   ## Directory Tree
 
