@@ -45,6 +45,51 @@ Display detected monorepo structure:
 
 Shows tool, root directory, all packages with their available scripts, and the correct filter syntax.
 
+Example output:
+
+```
+★ monorepo ───────────────────────────────────────────
+
+Tool:     turborepo
+Root:     /path/to/project
+
+Packages:
+  apps/web (@repo/web)
+  ├─ dev, build, test
+
+  packages/ui (@repo/ui)
+  ├─ dev, build
+
+Dependency Flow:
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                            APPLICATIONS                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────┐                                 │
+│  │            @repo/web            │                                 │
+│  │         Web application         │                                 │
+│  └────────────────┬────────────────┘                                 │
+│                   │                                                  │
+└───────────────────┼──────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                              PACKAGES                                │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────┐                                 │
+│  │            @repo/ui             │                                 │
+│  │        UI component lib         │                                 │
+│  └─────────────────────────────────┘                                 │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+web → ui
+
+───────────────────────────────────────────────────────
+```
+
 ### `/maccing-monorepo:run <task> [package] [flags]`
 
 Construct filter commands:
