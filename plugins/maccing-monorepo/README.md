@@ -142,7 +142,7 @@ Trigger it by asking about monorepo workflows or when working on tasks involving
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "1.2.0"`
+Expected: `"version": "1.3.0"`
 
 ### Plugin not updating
 
