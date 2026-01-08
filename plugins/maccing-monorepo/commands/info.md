@@ -43,46 +43,137 @@ Packages:
 
 Dependency Flow:
 
-  ┌────────────────────────────────────────────────────────────────┐
-  │                        APPLICATIONS                            │
-  │                                                                │
-  │  ┌───────────────────────────┐  ┌───────────────────────────┐  │
-  │  │        [app path]         │  │        [app path]         │  │
-  │  │     [description]         │  │     [description]         │  │
-  │  │  [key deps from pkg.json] │  │  [key deps from pkg.json] │  │
-  │  └─────────────┬─────────────┘  └─────────────┬─────────────┘  │
-  │                │                              │                │
-  └────────────────┼──────────────────────────────┼────────────────┘
-                   │                              │
-                   ▼                              ▼
-  ┌────────────────────────────────────────────────────────────────┐
-  │                          PACKAGES                              │
-  │                                                                │
-  │  ┌───────────────────────────┐  ┌───────────────────────────┐  │
-  │  │       [pkg path]          │  │       [pkg path]          │  │
-  │  │     [description]         │  │     [description]         │  │
-  │  │  [key deps from pkg.json] │  │  [key deps from pkg.json] │  │
-  │  └───────────────────────────┘  └───────────────────────────┘  │
-  │                                                                │
-  └────────────────────────────────────────────────────────────────┘
+Generate a layered ASCII diagram following these steps:
 
-  [app1] → [internal deps]
-  [app2] → [internal deps]
+#### Diagram Generation Algorithm
+
+1. **Extract package scope**: Get the common scope from package names (e.g., `@gate/` from `@gate/core`)
+
+2. **Filter internal dependencies**: For each package, keep only dependencies matching the scope
+
+3. **Separate apps and packages**:
+   - Apps: packages with path starting with `apps/`
+   - Packages: everything else
+
+4. **Topological sort packages**:
+   - Layer N (foundation): packages with no internal dependencies
+   - Layer N-1: packages that only depend on Layer N
+   - Continue upward until all packages assigned
+   - Packages at same depth share a layer
+
+5. **Calculate box layout**:
+   - Total width: 70 characters
+   - Boxes per row: divide evenly, wrap if needed
+   - Each box: name on line 1, description on line 2 (truncate to fit)
+
+6. **Render APPLICATIONS section**:
+   - Outer box with title
+   - Inner boxes for each app with vertical connectors (│) at bottom
+   - Close outer box with vertical lines passing through
+
+7. **Render PACKAGES section**:
+   - Outer box with title
+   - For each layer (highest to lowest):
+     - Inner boxes with name and description
+     - Layer label on right (← Layer N)
+     - Vertical connectors (│ and ▼) between layers
+   - Close outer box
+
+8. **Add summary lines**:
+   - For each app: `appname → dep1, dep2, dep3`
+
+#### Box Drawing Characters
+
+Use these characters for consistent rendering:
+- Corners: `┌ ┐ └ ┘`
+- Lines: `─ │`
+- T-junctions: `├ ┤ ┬ ┴`
+- Arrows: `▼`
+
+#### Example Output (8 packages)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                            APPLICATIONS                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐       │
+│  │   @gate/mesh    │  │   @gate/tera    │  │   @gate/mcp     │       │
+│  │  Backend API    │  │    Frontend     │  │   MCP Server    │       │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘       │
+│           │                    │                    │                │
+└───────────┼────────────────────┼────────────────────┼────────────────┘
+            │                    │                    │
+            ▼                    ▼                    ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                              PACKAGES                                │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐             │
+│  │  @gate/tasks  │  │ @gate/ledger  │  │   @gate/ai    │  ← Layer 1  │
+│  │  Job queues   │  │  Accounting   │  │ AI artifacts  │             │
+│  └───────┬───────┘  └───────┬───────┘  └───────────────┘             │
+│          │                  │                                        │
+│          ▼                  ▼                                        │
+│  ┌─────────────────────────────────────┐                             │
+│  │           @gate/database            │              ← Layer 2      │
+│  │       Prisma + MongoDB layer        │                             │
+│  └──────────────────┬──────────────────┘                             │
+│                     │                                                │
+│                     ▼                                                │
+│  ┌─────────────────────────────────────┐                             │
+│  │             @gate/core              │              ← Layer 3      │
+│  │    Domain entities and schemas      │                             │
+│  └─────────────────────────────────────┘                             │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+mesh → tasks, ledger, database, core
+tera → ai, core
+mcp  → database, core
+```
+
+#### Example Output (2 packages, simple)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                            APPLICATIONS                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────┐                                 │
+│  │            @repo/web            │                                 │
+│  │         Web application         │                                 │
+│  └────────────────┬────────────────┘                                 │
+│                   │                                                  │
+└───────────────────┼──────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                              PACKAGES                                │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────┐                                 │
+│  │            @repo/ui             │                                 │
+│  │        UI component lib         │                                 │
+│  └─────────────────────────────────┘                                 │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+web → ui
+```
+
+#### Edge Cases
+
+- **No internal dependencies**: Show packages in single row, no arrows
+- **Circular dependencies**: Place in same layer, warn in output
+- **Long package names**: Truncate with `...` to fit box width
+- **Missing description**: Use package path as fallback
 
 Filter syntax:
   [filter syntax for detected tool]
 
 ───────────────────────────────────────────────────────
 ```
-
-### Diagram Rules
-
-1. **Separate apps and packages**: apps/ in APPLICATIONS box, packages/ in PACKAGES box
-2. **Show descriptions**: Use description from package.json, or infer from dependencies
-3. **Show key dependencies**: List 2-3 main dependencies (React, Next.js, etc.)
-4. **Show internal deps**: At bottom, list which internal packages each app depends on
-5. **Box drawing**: Use ┌ ┐ └ ┘ ─ │ ┬ ┴ ├ ┤ ▼ characters
-6. **Fixed width**: Keep lines under 70 characters for terminal compatibility
 
 ### Step 3: Handle No Monorepo
 
