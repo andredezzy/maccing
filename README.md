@@ -73,22 +73,71 @@ Monorepo workflow assistance with auto-detection and smart reminders.
 
 ## Plugin Output Examples
 
+### maccing-monorepo
+
+**Monorepo Info**
+
+```
+★ monorepo ───────────────────────────────────────────
+
+Tool:     Turborepo
+Root:     /Users/dev/my-project
+
+Packages:
+
+  apps/web (web)
+  ├─ dev, build, test, lint
+
+  apps/docs (docs)
+  ├─ dev, build
+
+  packages/ui (@repo/ui)
+  ├─ build, test
+
+Filter syntax:
+  turbo run <task> --filter=<package>
+
+───────────────────────────────────────────────────────
+```
+
+**Run Command**
+
+```
+★ monorepo:run ────────────────────────────────────────
+
+Task:    build
+Package: web
+Tool:    Turborepo
+
+Command:
+turbo run build --filter=web
+
+────────────────────────────────────────────────────────
+```
+
+**PostToolUse Reminder** (context injection, not visual banner)
+
+```
+You ran `npm run dev` from apps/web/. For better caching and
+consistency, run from monorepo root: `turbo run dev --filter=web`
+```
+
 ### maccing-code-reviewer
 
 **Initial Banner**
 
 ```
-`⚠ maccing-code-reviewer v1.1.0`
+⚠ maccing-code-reviewer v1.1.0
 
 Scope: Full Codebase
 
-`────────────────────────────────────────────────────────`
+────────────────────────────────────────────────────────
 ```
 
 **First-Time Setup**
 
 ```
-`◆ maccing-code-reviewer: First-time Setup ──────────────`
+◆ maccing-code-reviewer: First-time Setup ──────────────
 
 Scanning for project rules...
 ```
@@ -96,19 +145,19 @@ Scanning for project rules...
 **Setup Complete**
 
 ```
-`✓ maccing-code-reviewer: Setup Complete ────────────────`
+✓ maccing-code-reviewer: Setup Complete ────────────────
 
 Config: .claude/plugins/maccing/code-reviewer.json
 Rules:  CLAUDE.md
 Agents: naming, code-style, clean-code, architecture, security
 
-`────────────────────────────────────────────────────────`
+────────────────────────────────────────────────────────
 ```
 
 **Pattern Discovery**
 
 ```
-`◎ maccing-code-reviewer: Pattern Discovery ─────────────`
+◎ maccing-code-reviewer: Pattern Discovery ─────────────
 
 Scanning codebase for implicit conventions...
 
@@ -125,13 +174,13 @@ naming patterns discovered:
   └─ noun-first →  9%
   ✓ Adopted
 
-`────────────────────────────────────────────────────────`
+────────────────────────────────────────────────────────
 ```
 
 **Final Report**
 
 ```
-`★ maccing-code-reviewer: Code Review Report ────────────`
+★ maccing-code-reviewer: Code Review Report ────────────
 
 Date:     2025-12-31 14:30
 Branch:   feature/auth
@@ -146,70 +195,21 @@ Summary:
 
 Verdict: REQUEST CHANGES
 
-`─────────────────────────────────────────────────────────`
+─────────────────────────────────────────────────────────
 
 Issues:
 
-`✖ CRITICAL`: src/auth.ts:42
+✖ CRITICAL: src/auth.ts:42
 Agent: security-agent
 Issue: Tenant ID accepted from request body
 Pattern: Never accept tenantId from frontend
 
-`▲ HIGH`: src/utils/helpers.ts:15
+▲ HIGH: src/utils/helpers.ts:15
 Agent: naming-agent
 Issue: Boolean variable missing prefix
 Pattern: Discovered: 96% of booleans use is/has/can prefix
 
-`────────────────────────────────────────────────────────`
-```
-
-### maccing-monorepo
-
-**Monorepo Info**
-
-```
-`★ monorepo ───────────────────────────────────────────`
-
-Tool:     `Turborepo`
-Root:     `/Users/dev/my-project`
-
-Packages:
-
-  `apps/web` (web)
-  ├─ dev, build, test, lint
-
-  `apps/docs` (docs)
-  ├─ dev, build
-
-  `packages/ui` (@repo/ui)
-  ├─ build, test
-
-Filter syntax:
-  `turbo run <task> --filter=<package>`
-
-`───────────────────────────────────────────────────────`
-```
-
-**Run Command**
-
-```
-`★ monorepo:run ────────────────────────────────────────`
-
-Task:    `build`
-Package: `web`
-Tool:    `Turborepo`
-
-Command:
-turbo run build --filter=web
-
-`────────────────────────────────────────────────────────`
-```
-
-**PostToolUse Reminder** (context injection, not visual banner)
-
-```
-You ran `npm run dev` from apps/web/. For better caching and
-consistency, run from monorepo root: `turbo run dev --filter=web`
+────────────────────────────────────────────────────────
 ```
 
 ---
