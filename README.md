@@ -124,7 +124,7 @@ consistency, run from monorepo root: `turbo run dev --filter=web`
 
 ### maccing-code-reviewer
 
-**Initial Banner**
+**Initial**
 
 ```
 ⚠ maccing-code-reviewer v1.1.0
