@@ -96,7 +96,7 @@ Trigger it by asking about monorepo workflows or when working on tasks involving
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-monorepo/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "1.0.1"`
+Expected: `"version": "1.1.0"`
 
 ### Plugin not updating
 
