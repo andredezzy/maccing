@@ -138,7 +138,19 @@ refactor: restructure code
 1. Test plugin locally with `--plugin-dir`
 2. Verify all files follow naming conventions
 3. Update README if behavior changed
-4. Update version in plugin.json for releases
+
+### Version Updates (MANDATORY for releases)
+
+**Always bump version when publishing changes to a plugin.** Update ALL locations:
+
+1. `plugins/<plugin-name>/.claude-plugin/plugin.json`
+2. `.claude-plugin/marketplace.json` (version field for that plugin)
+3. `plugins/<plugin-name>/README.md` (expected version in troubleshooting)
+
+Use semantic versioning:
+- **PATCH** (x.x.1): Bug fixes, compatibility fixes
+- **MINOR** (x.1.0): New features, non-breaking changes
+- **MAJOR** (1.0.0): Breaking changes
 
 ---
 
