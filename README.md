@@ -69,6 +69,27 @@ Monorepo workflow assistance with auto-detection and smart reminders.
 
 [View full documentation](plugins/maccing-monorepo/README.md)
 
+### maccing-rules-enforcer
+
+Enforces project rules by injecting them at every prompt. Combats instruction decay.
+
+    /plugin install maccing-rules-enforcer@maccing
+
+**Features:**
+
+- Injects full rules at session start, every prompt, and before stopping
+- Survives context compression via PreCompact hook
+- Forces rule verification before task completion
+- Auto-detects rules/RULES.md, CLAUDE.md, or .claude/rules/*.md
+
+**Quick start:**
+
+Just install and place your rules file. Works automatically.
+
+    /maccing-rules-enforcer:rules
+
+[View full documentation](plugins/maccing-rules-enforcer/README.md)
+
 ---
 
 ## Plugin Output
@@ -247,6 +268,61 @@ Pattern: Discovered: 96% of booleans use is/has/can prefix
 
 ---
 
+### maccing-rules-enforcer
+
+**Rules Status** (via `/maccing-rules-enforcer:rules`)
+
+```
+★ rules-enforcer ─────────────────────────────────
+
+Status: ACTIVE
+
+Rules Source:
+  • rules/RULES.md (primary)
+  • .claude/rules/*.md (supplementary)
+
+Hooks Enabled:
+  ✓ SessionStart     (full rules at session start)
+  ✓ UserPromptSubmit (full rules every prompt)
+  ✓ PreCompact       (re-inject after compression)
+  ✓ Stop             (verification before stopping)
+
+Token Cost: ~800 tokens per injection
+
+─────────────────────────────────────────────────
+```
+
+**SessionStart Injection** (automatic, not visible in UI)
+
+```
+「PROJECT RULES ACTIVE」
+
+# Agent Rules
+<core>
+  ...your full rules content...
+</core>
+
+「YOU MUST follow ALL rules above throughout this session. No exceptions.」
+```
+
+**Stop Verification** (blocks until acknowledged)
+
+```
+「STOP BLOCKED: Rule Verification Required」
+
+Before stopping, verify your work against ALL project rules:
+...full rules...
+
+「VERIFICATION CHECKLIST」
+1. Review each rule section above
+2. Confirm no violations in your changes
+3. If any rule was violated, fix it now
+4. Run required quality checks (lint, typecheck, etc.)
+5. Only then may you complete the task
+```
+
+---
+
 ## Philosophy
 
 - **Discovery-first**: Learn from YOUR codebase, not generic rules
@@ -281,6 +357,7 @@ For detailed troubleshooting guides:
 
 - [maccing-code-reviewer troubleshooting](plugins/maccing-code-reviewer/README.md#troubleshooting)
 - [maccing-monorepo troubleshooting](plugins/maccing-monorepo/README.md#troubleshooting)
+- [maccing-rules-enforcer troubleshooting](plugins/maccing-rules-enforcer/README.md#troubleshooting)
 
 ---
 
