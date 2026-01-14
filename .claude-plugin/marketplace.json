@@ -28,6 +28,17 @@
       },
       "keywords": ["monorepo", "turborepo", "nx", "pnpm", "workspaces"],
       "license": "MIT"
+    },
+    {
+      "name": "maccing-rules-enforcer",
+      "source": "./plugins/maccing-rules-enforcer",
+      "description": "Enforces project rules by injecting them at every prompt. Combats instruction decay through multi-hook reinforcement.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Andre Dezzy"
+      },
+      "keywords": ["rules", "enforcement", "claude-md", "hooks", "instruction-following"],
+      "license": "MIT"
     }
   ]
 }
