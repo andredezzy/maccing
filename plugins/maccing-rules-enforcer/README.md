@@ -2,69 +2,97 @@
 
 Enforces project rules by injecting them at every prompt. Combats instruction decay through multi-hook reinforcement.
 
-## The Problem
+## Features
 
-Claude ignores CLAUDE.md instructions because:
-
-- Instructions at conversation start lose attention weight over time
-- Claude Code's system says rules "may or may not be relevant"
-- Long conversations cause instruction decay
-
-## The Solution
-
-Inject your rules at multiple points in the conversation lifecycle:
-
-| Hook | When | Purpose |
-|------|------|---------|
-| SessionStart | Session begins | Full rules at start |
-| UserPromptSubmit | Every prompt | Full rules in recent context |
-| PreCompact | Before compression | Preserve rules through summarization |
-| Stop | Before stopping | Force verification against all rules |
+- **Full injection**: Injects complete rules at session start and every prompt
+- **Compression survival**: Re-injects rules after context compaction
+- **Stop verification**: Blocks task completion until rules are verified
+- **Auto-detection**: Finds rules/RULES.md, CLAUDE.md, or .claude/rules/*.md
 
 ## Installation
 
-```
+```bash
+# Add marketplace
+/plugin marketplace add andredezzy/maccing
+
+# Install plugin
 /plugin install maccing-rules-enforcer@maccing
 ```
 
-## Setup
+## How It Works
 
-Place your rules in one of these locations (searched in order):
+### SessionStart Hook
 
-1. `rules/RULES.md` (recommended)
-2. `RULES.md`
-3. `.claude/RULES.md`
-4. `CLAUDE.md`
-5. `.claude/CLAUDE.md`
-6. `.claude/rules/*.md` (all files concatenated)
+When you start a Claude Code session, the plugin:
+1. Detects rules file location
+2. Reads the full rules content
+3. Injects it as additionalContext so Claude sees it immediately
 
-## Usage
+### UserPromptSubmit Hook
 
-Once installed, the plugin works automatically. No commands needed.
+Before every prompt you send, the plugin:
+1. Re-reads the rules file
+2. Outputs to stdout (which gets injected before your prompt)
+3. Creates "recency bias" keeping rules in recent context
 
-To check status:
+### PreCompact Hook
+
+Before context compression, the plugin:
+1. Preserves rules content
+2. Re-injects after summarization
+3. Ensures rules survive long conversations
+
+### Stop Hook
+
+When Claude tries to stop, the plugin:
+1. Blocks the stop action
+2. Presents full rules with verification checklist
+3. Requires acknowledgment before completion
+
+## Commands
+
+### `/maccing-rules-enforcer:rules`
+
+Display current enforcement status:
 
 ```
 /maccing-rules-enforcer:rules
 ```
 
-## How It Works
+Shows detected rules source, enabled hooks, and token cost.
+
+Example output:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Session Start                                                   │
-│   └─► Full rules injected via additionalContext                 │
-├─────────────────────────────────────────────────────────────────┤
-│ Every Prompt                                                    │
-│   └─► Full rules injected via stdout (before your prompt)       │
-├─────────────────────────────────────────────────────────────────┤
-│ Context Compression                                             │
-│   └─► Full rules re-injected (survives summarization)           │
-├─────────────────────────────────────────────────────────────────┤
-│ Before Stopping                                                 │
-│   └─► Claude blocked until rules verification acknowledged      │
-└─────────────────────────────────────────────────────────────────┘
+★ rules-enforcer ─────────────────────────────────
+
+Status: ACTIVE
+
+Rules Source:
+  • rules/RULES.md (primary)
+  • .claude/rules/*.md (supplementary)
+
+Hooks Enabled:
+  ✓ SessionStart     (full rules at session start)
+  ✓ UserPromptSubmit (full rules every prompt)
+  ✓ PreCompact       (re-inject after compression)
+  ✓ Stop             (verification before stopping)
+
+Token Cost: ~800 tokens per injection
+
+─────────────────────────────────────────────────
 ```
+
+## Supported Rules Locations
+
+| Priority | Path | Description |
+|----------|------|-------------|
+| 1 | `rules/RULES.md` | Recommended location |
+| 2 | `RULES.md` | Project root |
+| 3 | `.claude/RULES.md` | Claude config folder |
+| 4 | `CLAUDE.md` | Standard Claude instructions |
+| 5 | `.claude/CLAUDE.md` | Claude config folder |
+| 6 | `.claude/rules/*.md` | Multiple rule files (concatenated) |
 
 ## Token Cost
 
@@ -76,34 +104,76 @@ Each injection adds ~500-1000 tokens depending on your rules file size.
 | Medium (~200 lines) | ~700 tokens |
 | Large (~350 lines) | ~1000 tokens |
 
-This cost is offset by:
+This cost is offset by eliminated correction loops and fewer rule violations.
 
-- Eliminated correction loops
-- Fewer rule violations to fix
-- More consistent code quality
+## Requirements
+
+- `jq` must be installed for JSON parsing
+- Claude Code with plugin support
 
 ## Troubleshooting
 
-### Rules not being injected
+### Check installed version
 
-1. Check rules file exists:
+```bash
+cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/.claude-plugin/plugin.json | grep version
+```
+
+Expected: `"version": "1.0.0"`
+
+### Plugin not updating
+
+If changes don't appear after update:
+
+```bash
+rm -rf ~/.claude/plugins/cache/maccing
+rm -rf ~/.claude/plugins/marketplaces/maccing
+/plugin marketplace add andredezzy/maccing
+/plugin install maccing-rules-enforcer@maccing
+```
+
+### Rules not detected
+
+If the plugin doesn't detect your rules:
+
+1. **Check for rules file** at expected locations:
    ```bash
-   ls -la rules/RULES.md
+   ls -la rules/RULES.md RULES.md CLAUDE.md .claude/RULES.md .claude/rules/ 2>/dev/null
    ```
 
-2. Verify plugin is enabled:
-   ```
-   /plugin list
-   ```
-
-3. Test detection script:
+2. **Verify jq is installed:**
    ```bash
-   echo '{"cwd": "'$(pwd)'"}' | ~/.claude/plugins/cache/maccing/maccing-rules-enforcer/hooks/session-start.sh
+   jq --version
+   ```
+
+3. **Test detection manually:**
+   ```bash
+   ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/scripts/detect-rules.sh $(pwd)
+   ```
+
+### Hooks not running
+
+If SessionStart or other hooks aren't triggering:
+
+1. **Check plugin is installed:**
+   ```bash
+   ls ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/hooks/
+   ```
+
+2. **Verify scripts are executable:**
+   ```bash
+   ls -la ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/hooks/*.sh
+   ```
+
+3. **Reinstall plugin:**
+   ```bash
+   /plugin uninstall maccing-rules-enforcer@maccing
+   /plugin install maccing-rules-enforcer@maccing
    ```
 
 ### Stop hook too aggressive
 
-The Stop hook blocks Claude from stopping until rules are verified. If this is too strict, disable it with a local override:
+The Stop hook blocks Claude until rules are verified. If too strict, disable it:
 
 ```json
 // .claude/settings.local.json
@@ -116,7 +186,7 @@ The Stop hook blocks Claude from stopping until rules are verified. If this is t
 
 ### High token usage
 
-If token costs are too high, you can disable the UserPromptSubmit hook (most expensive) while keeping others:
+If token costs are too high, disable UserPromptSubmit (most expensive):
 
 ```json
 // .claude/settings.local.json
@@ -126,13 +196,6 @@ If token costs are too high, you can disable the UserPromptSubmit hook (most exp
   }
 }
 ```
-
-## Philosophy
-
-- **Recency over position**: Rules in recent context get more attention
-- **Repetition over trust**: Inject rules multiple times, don't trust once
-- **Full over partial**: Complete rules, not summaries
-- **Verification over assumption**: Force explicit rule checking before done
 
 ## License
 
