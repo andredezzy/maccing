@@ -46,9 +46,11 @@ Before context compression, the plugin:
 
 When Claude tries to stop, the plugin:
 1. Checks if verification was already requested this session
-2. If first time: blocks stop, presents rules with verification checklist
+2. If first time: blocks stop with a short reminder to verify rules
 3. If already verified: allows stop to proceed
 4. Marker is cleaned up on next session start
+
+Note: The stop hook uses a minimal message since rules are already in context from other hooks.
 
 ## Commands
 
@@ -120,7 +122,7 @@ This cost is offset by eliminated correction loops and fewer rule violations.
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "1.0.2"`
+Expected: `"version": "1.1.0"`
 
 ### Plugin not updating
 
@@ -172,16 +174,16 @@ If SessionStart or other hooks aren't triggering:
    /plugin install maccing-rules-enforcer@maccing
    ```
 
-### Stop hook infinite loop (fixed in v1.0.2)
+### Stop hook issues (fixed in v1.1.0)
 
-If you experience an infinite loop where the stop hook keeps blocking, update to v1.0.2+:
+If you experience issues with the stop hook, update to v1.1.0+:
 
 ```bash
 /plugin uninstall maccing-rules-enforcer@maccing
 /plugin install maccing-rules-enforcer@maccing
 ```
 
-v1.0.2 fixed macOS compatibility for the hash calculation. The stop hook now only blocks once per session. If still experiencing issues, disable it:
+v1.1.0 uses a minimal message instead of dumping all rules (since they're already in context from other hooks). If you still want to disable the stop hook:
 
 ```json
 // .claude/settings.local.json
