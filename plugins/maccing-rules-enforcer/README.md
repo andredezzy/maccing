@@ -120,7 +120,7 @@ This cost is offset by eliminated correction loops and fewer rule violations.
 cat ~/.claude/plugins/marketplaces/maccing/plugins/maccing-rules-enforcer/.claude-plugin/plugin.json | grep version
 ```
 
-Expected: `"version": "1.0.1"`
+Expected: `"version": "1.0.2"`
 
 ### Plugin not updating
 
@@ -172,16 +172,16 @@ If SessionStart or other hooks aren't triggering:
    /plugin install maccing-rules-enforcer@maccing
    ```
 
-### Stop hook infinite loop (fixed in v1.0.1)
+### Stop hook infinite loop (fixed in v1.0.2)
 
-If you experience an infinite loop where the stop hook keeps blocking, update to v1.0.1+:
+If you experience an infinite loop where the stop hook keeps blocking, update to v1.0.2+:
 
 ```bash
 /plugin uninstall maccing-rules-enforcer@maccing
 /plugin install maccing-rules-enforcer@maccing
 ```
 
-The stop hook now only blocks once per session. If still experiencing issues, disable it:
+v1.0.2 fixed macOS compatibility for the hash calculation. The stop hook now only blocks once per session. If still experiencing issues, disable it:
 
 ```json
 // .claude/settings.local.json
