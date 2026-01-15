@@ -33,7 +33,7 @@
       "name": "maccing-rules-enforcer",
       "source": "./plugins/maccing-rules-enforcer",
       "description": "Enforces project rules by injecting them at every prompt. Combats instruction decay through multi-hook reinforcement.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Andre Dezzy"
       },
