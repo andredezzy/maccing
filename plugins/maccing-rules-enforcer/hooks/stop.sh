@@ -16,7 +16,16 @@ fi
 
 # Use a marker file to track if verification was already requested this session
 # The marker includes the CWD hash to be unique per project
-CWD_HASH=$(echo "$CWD" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$CWD" | md5 2>/dev/null || echo "default")
+if command -v md5sum &>/dev/null; then
+    CWD_HASH=$(echo "$CWD" | md5sum | cut -d' ' -f1)
+elif command -v md5 &>/dev/null; then
+    CWD_HASH=$(echo "$CWD" | md5 -q)
+elif command -v shasum &>/dev/null; then
+    CWD_HASH=$(echo "$CWD" | shasum | cut -d' ' -f1)
+else
+    # Fallback: sanitize CWD to alphanumeric
+    CWD_HASH=$(echo "$CWD" | tr -cd '[:alnum:]' | head -c32)
+fi
 MARKER_FILE="/tmp/maccing-rules-enforcer-stop-$CWD_HASH"
 
 # If marker exists, verification was already requested: allow stop

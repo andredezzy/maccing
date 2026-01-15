@@ -1,6 +1,6 @@
 {
   "name": "maccing-rules-enforcer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Enforces project rules by injecting them at every prompt, session start, and before stopping. Combats instruction decay through multi-hook reinforcement.",
   "author": {
     "name": "Andre Dezzy",
