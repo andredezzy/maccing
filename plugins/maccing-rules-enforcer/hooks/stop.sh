@@ -1,5 +1,6 @@
 #!/bin/bash
-# Stop hook: Require verification against all rules before stopping (once per session)
+# Stop hook: Require verification against project rules before stopping (once per session)
+# Uses a short message since rules are already in context from other hooks
 
 set -e
 
@@ -35,59 +36,31 @@ if [ -f "$MARKER_FILE" ]; then
     exit 0
 fi
 
-# Detect rules
+# Detect rules to check if project has any
 DETECTION=$("$DETECT_SCRIPT" "$CWD")
 RULES_PATH=$(echo "$DETECTION" | jq -r '.rules_path // empty')
 RULES_DIR=$(echo "$DETECTION" | jq -r '.rules_dir // empty')
 
-# Build rules content
-RULES_CONTENT=""
-
-if [ -n "$RULES_PATH" ] && [ "$RULES_PATH" != "null" ] && [ -f "$RULES_PATH" ]; then
-    RULES_CONTENT=$(cat "$RULES_PATH")
+# If no rules found, allow stop
+if [ -z "$RULES_PATH" ] && [ -z "$RULES_DIR" ]; then
+    exit 0
 fi
 
-if [ -n "$RULES_DIR" ] && [ "$RULES_DIR" != "null" ] && [ -d "$RULES_DIR" ]; then
-    for rule_file in "$RULES_DIR"/*.md; do
-        if [ -f "$rule_file" ]; then
-            FILENAME=$(basename "$rule_file")
-            RULES_CONTENT="$RULES_CONTENT
-
-<!-- $FILENAME -->
-$(cat "$rule_file")"
-        fi
-    done
+if [ "$RULES_PATH" = "null" ] && [ "$RULES_DIR" = "null" ]; then
+    exit 0
 fi
 
-if [ -z "$RULES_CONTENT" ]; then
+if [ ! -f "$RULES_PATH" ] && [ ! -d "$RULES_DIR" ]; then
     exit 0
 fi
 
 # Create marker file to indicate verification was requested
 touch "$MARKER_FILE"
 
-# Build verification reason
-REASON="「STOP BLOCKED: Rule Verification Required」
-
-Before stopping, verify your work against ALL project rules:
-
-$RULES_CONTENT
-
-「VERIFICATION CHECKLIST」
-1. Review each rule section above
-2. Confirm no violations in your changes
-3. If any rule was violated, fix it now
-4. Run required quality checks (lint, typecheck, etc.)
-5. Only then may you complete the task
-
-If all rules pass, acknowledge with: \"All rules verified. Task complete.\""
-
-# Block stopping until verification
-jq -n \
-    --arg reason "$REASON" \
-    '{
-        "decision": "block",
-        "reason": $reason
-    }'
+# Block with a short message (rules are already in context from other hooks)
+jq -n '{
+    "decision": "block",
+    "reason": "Verify your work against project rules before completing. Run required quality checks (lint, typecheck, etc.) and confirm no rule violations. Acknowledge with: All rules verified."
+}'
 
 exit 0
