@@ -14,6 +14,10 @@ if [ -z "$CWD" ]; then
     exit 0
 fi
 
+# Clean up any stale stop-hook marker from previous sessions
+CWD_HASH=$(echo "$CWD" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$CWD" | md5 2>/dev/null || echo "default")
+rm -f "/tmp/maccing-rules-enforcer-stop-$CWD_HASH"
+
 # Detect rules
 DETECTION=$("$DETECT_SCRIPT" "$CWD")
 RULES_PATH=$(echo "$DETECTION" | jq -r '.rules_path // empty')

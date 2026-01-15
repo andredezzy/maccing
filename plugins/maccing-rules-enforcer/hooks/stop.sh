@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stop hook: Require verification against all rules before stopping
+# Stop hook: Require verification against all rules before stopping (once per session)
 
 set -e
 
@@ -11,6 +11,18 @@ INPUT=$(cat)
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
 if [ -z "$CWD" ]; then
+    exit 0
+fi
+
+# Use a marker file to track if verification was already requested this session
+# The marker includes the CWD hash to be unique per project
+CWD_HASH=$(echo "$CWD" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$CWD" | md5 2>/dev/null || echo "default")
+MARKER_FILE="/tmp/maccing-rules-enforcer-stop-$CWD_HASH"
+
+# If marker exists, verification was already requested: allow stop
+if [ -f "$MARKER_FILE" ]; then
+    # Clean up marker for next session
+    rm -f "$MARKER_FILE"
     exit 0
 fi
 
@@ -41,6 +53,9 @@ fi
 if [ -z "$RULES_CONTENT" ]; then
     exit 0
 fi
+
+# Create marker file to indicate verification was requested
+touch "$MARKER_FILE"
 
 # Build verification reason
 REASON="「STOP BLOCKED: Rule Verification Required」
