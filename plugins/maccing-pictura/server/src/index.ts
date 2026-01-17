@@ -118,6 +118,36 @@ const ValidateParamsSchema = z.object({
     .describe('Specific provider to test (only with mode=provider)'),
 });
 
+const SetupParamsSchema = z.object({
+  providers: z.object({
+    generation: z.object({
+      default: z.enum(['gemini', 'openai']).default('gemini'),
+      gemini: z.object({
+        apiKey: z.string(),
+        defaultModel: z.enum(['flash', 'pro']).optional().default('pro'),
+      }).optional(),
+      openai: z.object({
+        apiKey: z.string(),
+      }).optional(),
+    }),
+    upscale: z.object({
+      default: z.enum(['topaz', 'replicate']).default('topaz'),
+      topaz: z.object({
+        apiKey: z.string(),
+        defaultModel: z.string().optional().default('standard-max'),
+      }).optional(),
+      replicate: z.object({
+        apiKey: z.string(),
+      }).optional(),
+    }).optional(),
+  }),
+  defaults: z.object({
+    ratio: z.string().optional().default('16:9'),
+    quality: z.enum(['draft', 'pro']).optional().default('pro'),
+    size: z.enum(['1K', '2K', '4K']).optional().default('2K'),
+  }).optional(),
+});
+
 // ============================================================================
 // Tool: pictura_generate
 // ============================================================================
@@ -527,6 +557,83 @@ server.tool(
     } catch (error) {
       return {
         content: [{ type: 'text' as const, text: `Validation failed: ${error}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ============================================================================
+// Tool: pictura_setup
+// ============================================================================
+
+server.tool(
+  'pictura_setup',
+  'Create or update pictura configuration with API keys and preferences',
+  SetupParamsSchema.shape,
+  async (params) => {
+    try {
+      const parsed = SetupParamsSchema.parse(params);
+
+      // Build config object
+      const config = {
+        providers: parsed.providers,
+        defaultRatio: parsed.defaults?.ratio || '16:9',
+        defaultQuality: parsed.defaults?.quality || 'pro',
+        imageSize: parsed.defaults?.size || '2K',
+        retryAttempts: 3,
+        outputDir: '.claude/plugins/maccing/pictura/output',
+      };
+
+      // Create directory if needed
+      const configDir = path.dirname(configPath);
+      await fs.mkdir(configDir, { recursive: true });
+
+      // Write config file
+      await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+      // Set secure permissions (user-only read/write)
+      await fs.chmod(configPath, 0o600);
+
+      // Build summary of what was configured
+      const configured: string[] = [];
+      if (parsed.providers.generation?.gemini) {
+        configured.push('Gemini (generation)');
+      }
+      if (parsed.providers.generation?.openai) {
+        configured.push('OpenAI (generation)');
+      }
+      if (parsed.providers.upscale?.topaz) {
+        configured.push('Topaz Labs (upscale)');
+      }
+
+      const summary = [
+        '✓ Configuration saved successfully',
+        '',
+        `Location: ${configPath}`,
+        `Permissions: 600 (user-only)`,
+        '',
+        'Configured providers:',
+        ...configured.map(p => `  - ${p}`),
+        '',
+        'Defaults:',
+        `  - Ratio: ${config.defaultRatio}`,
+        `  - Quality: ${config.defaultQuality}`,
+        `  - Size: ${config.imageSize}`,
+        '',
+        'Next: Run /pictura:validate to verify configuration',
+      ];
+
+      return {
+        content: [{ type: 'text', text: summary.join('\n') }],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{
+          type: 'text',
+          text: `✖ Setup failed: ${message}\n\nPlease check:\n- Directory permissions\n- Valid JSON structure for API keys`,
+        }],
         isError: true,
       };
     }
