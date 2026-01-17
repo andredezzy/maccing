@@ -83,6 +83,9 @@ const GenerateParamsSchema = z.object({
   enhance: z.boolean().optional().describe('Enable automatic prompt enhancement'),
   enhanceStyle: z.enum(['photo', 'art', 'commercial', 'auto', 'minimal']).optional()
     .describe('Style for prompt enhancement'),
+  ref: z.string().optional().describe('Path to reference image for visual consistency'),
+  consistency: z.enum(['generate', 'reference', 'multiturn']).optional()
+    .describe('Consistency strategy: generate (use first image), reference (use provided ref), multiturn (Claude describes each)'),
 });
 
 const ListParamsSchema = z.object({
