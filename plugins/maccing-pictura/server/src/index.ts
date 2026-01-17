@@ -22,6 +22,7 @@ import { SUPPORTED_RATIOS, type SupportedRatio, type ImageSize } from './provide
 import { generateSlug, generateTimestamp } from './utils/slug.js';
 import { gemini } from './providers/gemini.js';
 import { openai } from './providers/openai.js';
+import { runValidation, formatReport } from './validation/index.js';
 
 // ============================================================================
 // Provider Registration
@@ -108,6 +109,13 @@ const UpscaleParamsSchema = z.object({
 const GalleryParamsSchema = z.object({
   filter: z.string().optional().describe('Filter batches by slug substring'),
   since: z.string().optional().describe('Only show batches since this timestamp (YYYY-MM-DD)'),
+});
+
+const ValidateParamsSchema = z.object({
+  mode: z.enum(['full', 'quick', 'provider']).optional().default('full')
+    .describe('Validation mode: full (all checks), quick (pre-flight only), provider (specific provider)'),
+  provider: z.enum(['gemini', 'openai', 'topaz']).optional()
+    .describe('Specific provider to test (only with mode=provider)'),
 });
 
 // ============================================================================
@@ -471,6 +479,57 @@ server.tool(
         },
       ],
     };
+  }
+);
+
+// ============================================================================
+// Tool: pictura_validate
+// ============================================================================
+
+server.tool(
+  'pictura_validate',
+  'Run comprehensive validation to verify pictura installation and configuration',
+  ValidateParamsSchema.shape,
+  async (params) => {
+    try {
+      const { mode } = params;
+      const modeValue = mode || 'full';
+
+      const options = {
+        skipProviders: modeValue === 'quick',
+        skipSmokeTests: modeValue === 'quick',
+      };
+
+      const report = await runValidation(configPath, options);
+
+      const summary = [
+        formatReport(report),
+        '',
+        '---',
+        '',
+        report.productionReady
+          ? '✓ **PRODUCTION READY**: All critical checks passed.'
+          : '✗ **NOT READY**: Please address the blockers above.',
+      ];
+
+      if (!report.productionReady && report.recommendations.length > 0) {
+        summary.push('');
+        summary.push('**Next Steps:**');
+        report.recommendations.forEach((rec, i) => {
+          summary.push(`${i + 1}. ${rec}`);
+        });
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: summary.join('\n') }],
+        isError: !report.productionReady,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text' as const, text: `Validation failed: ${error}` }],
+        isError: true,
+      };
+    }
   }
 );
 
