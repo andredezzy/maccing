@@ -15,7 +15,7 @@ describe('withRetry', () => {
       .mockRejectedValueOnce(new Error('fail 2'))
       .mockResolvedValue('success');
 
-    const result = await withRetry(fn, { maxAttempts: 3, baseDelayMs: 10 });
+    const result = await withRetry(fn, { maxAttempts: 3, baseDelayMs: 10, jitterMs: 0 });
     expect(result).toBe('success');
     expect(fn).toHaveBeenCalledTimes(3);
   });
@@ -24,7 +24,7 @@ describe('withRetry', () => {
     const fn = vi.fn().mockRejectedValue(new Error('always fail'));
 
     await expect(
-      withRetry(fn, { maxAttempts: 3, baseDelayMs: 10 })
+      withRetry(fn, { maxAttempts: 3, baseDelayMs: 10, jitterMs: 0 })
     ).rejects.toThrow(RetryError);
     expect(fn).toHaveBeenCalledTimes(3);
   });
