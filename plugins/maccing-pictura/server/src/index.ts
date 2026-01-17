@@ -169,6 +169,8 @@ server.tool(
       provider: inputProvider,
       enhance,
       enhanceStyle,
+      ref,
+      consistency,
     } = params;
 
     // Check if config exists (first-run detection)
@@ -277,6 +279,49 @@ server.tool(
 
     const modelId = model.modelId;
 
+    // Load reference image if provided
+    let referenceImage: Buffer | undefined;
+    if (ref) {
+      // Validate path to prevent traversal attacks
+      const normalizedPath = path.normalize(ref);
+      const resolvedPath = path.resolve(ref);
+      const cwd = process.cwd();
+
+      // Reject explicit path traversal sequences
+      if (normalizedPath.includes('..')) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Invalid reference path: path traversal not allowed',
+          }],
+          isError: true,
+        };
+      }
+
+      // Ensure resolved path is within the current working directory
+      if (!resolvedPath.startsWith(cwd + path.sep) && resolvedPath !== cwd) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Invalid reference path: must be within project directory',
+          }],
+          isError: true,
+        };
+      }
+
+      try {
+        referenceImage = await fs.readFile(resolvedPath);
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Failed to read reference image: ${ref}\nError: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    }
+
     try {
       // Generate images for all ratios
       const results = await generateImages({
@@ -285,6 +330,7 @@ server.tool(
         ratios,
         size: (size || config.imageSize) as ImageSize,
         config: providerConfig,
+        reference: referenceImage,
       });
 
       // Save images using OutputManager
@@ -311,6 +357,8 @@ server.tool(
               `Provider: ${providerName}`,
               `Model: ${modelId}`,
               enhance ? `Enhanced prompt: "${finalPrompt}"` : '',
+              ref ? `Reference image: ${ref}` : '',
+              consistency ? `Consistency mode: ${consistency}` : '',
               '',
               'Images:',
               ...summary.map((s) => `  - ${s.ratio}: ${s.path} (${s.width}x${s.height})`),
