@@ -4,9 +4,8 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import type { ValidationResult, ValidationContext } from './checks.js';
 import {
-  ValidationResult,
-  ValidationContext,
   checkConfigExists,
   checkConfigPermissions,
   checkOutputDirectory,
@@ -350,9 +349,8 @@ function getStatusIcon(status: ValidationResult['status']): string {
 // Exports
 // ============================================================================
 
+export type { ValidationResult, ValidationContext } from './checks.js';
 export {
-  ValidationResult,
-  ValidationContext,
   checkConfigExists,
   checkConfigPermissions,
   checkOutputDirectory,
@@ -365,3 +363,22 @@ export {
   smokeTestOutputManager,
   smokeTestConfigManager,
 } from './checks.js';
+
+// ============================================================================
+// CLI Entry Point
+// ============================================================================
+
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+
+if (isMainModule) {
+  const configPath = process.argv[2] || '.claude/plugins/maccing/pictura/config.json';
+  runValidation(configPath)
+    .then((report) => {
+      console.log(formatReport(report));
+      process.exit(report.productionReady ? 0 : 1);
+    })
+    .catch((error) => {
+      console.error('Validation failed:', error);
+      process.exit(1);
+    });
+}
