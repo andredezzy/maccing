@@ -39,6 +39,17 @@
       },
       "keywords": ["rules", "enforcement", "claude-md", "hooks", "instruction-following"],
       "license": "MIT"
+    },
+    {
+      "name": "maccing-pictura",
+      "source": "./plugins/maccing-pictura",
+      "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern",
+      "version": "1.0.0",
+      "author": {
+        "name": "Andre Dezzy"
+      },
+      "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio"],
+      "license": "MIT"
     }
   ]
 }
