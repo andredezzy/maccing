@@ -123,13 +123,6 @@ Config file: \`.claude/plugins/maccing/pictura/config.json\`
 See [design document](../../docs/plans/2026-01-17-pictura-design.md) for full details.
 ```
 
-**Step 4: Commit**
-
-```bash
-git add plugins/maccing-pictura/
-git commit -m "feat(pictura): scaffold plugin directory structure"
-```
-
 ---
 
 ### Task 2: Initialize MCP Server Package
@@ -224,13 +217,6 @@ coverage/
 .env
 ```
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/
-git commit -m "feat(pictura): initialize MCP server package"
-```
-
 ---
 
 ### Task 3: Install Dependencies
@@ -251,351 +237,11 @@ cd plugins/maccing-pictura/server && npx tsc --version
 
 Expected: `Version 5.x.x`
 
-**Step 3: Commit lockfile**
-
-```bash
-git add plugins/maccing-pictura/server/package-lock.json
-git commit -m "chore(pictura): add package-lock.json"
-```
-
 ---
 
 ## Phase 2: Provider Specification Core
 
-### Task 4: Define Core Types
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/types/image.ts`
-- Test: `plugins/maccing-pictura/server/src/types/image.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/types/image.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import {
-  ImageResultSchema,
-  SUPPORTED_RATIOS,
-  getDimensionsForRatio,
-  type ImageResult
-} from './image.js';
-
-describe('Image types', () => {
-  it('should validate a valid image result', () => {
-    const image: ImageResult = {
-      data: Buffer.from('test'),
-      ratio: '16:9',
-      width: 2048,
-      height: 1152,
-      provider: 'gemini',
-      model: 'gemini-3-pro-image',
-    };
-
-    const result = ImageResultSchema.safeParse(image);
-    expect(result.success).toBe(true);
-  });
-
-  it('should have all supported ratios', () => {
-    expect(SUPPORTED_RATIOS).toContain('16:9');
-    expect(SUPPORTED_RATIOS).toContain('1:1');
-    expect(SUPPORTED_RATIOS).toContain('9:16');
-    expect(SUPPORTED_RATIOS.length).toBe(10);
-  });
-
-  it('should calculate dimensions for ratio and size', () => {
-    const dims2K = getDimensionsForRatio('16:9', '2K');
-    expect(dims2K.width).toBe(2048);
-    expect(dims2K.height).toBe(1152);
-
-    const dims4K = getDimensionsForRatio('16:9', '4K');
-    expect(dims4K.width).toBe(4096);
-    expect(dims4K.height).toBe(2304);
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/image.test.ts
-```
-
-Expected: FAIL with "Cannot find module"
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/types/image.ts`:
-
-```typescript
-import { z } from 'zod';
-
-export const SUPPORTED_RATIOS = [
-  '1:1', '2:3', '3:2', '3:4', '4:3',
-  '4:5', '5:4', '9:16', '16:9', '21:9',
-] as const;
-
-export type SupportedRatio = typeof SUPPORTED_RATIOS[number];
-
-export const RatioSchema = z.enum(SUPPORTED_RATIOS);
-
-export const ImageResultSchema = z.object({
-  data: z.instanceof(Buffer),
-  path: z.string().optional(),
-  ratio: RatioSchema,
-  width: z.number().positive(),
-  height: z.number().positive(),
-  provider: z.string(),
-  model: z.string(),
-  timestamp: z.date().optional(),
-});
-
-export type ImageResult = z.infer<typeof ImageResultSchema>;
-
-export type ImageSize = '1K' | '2K' | '4K';
-
-const BASE_DIMENSIONS: Record<SupportedRatio, { width: number; height: number }> = {
-  '1:1': { width: 2048, height: 2048 },
-  '2:3': { width: 1365, height: 2048 },
-  '3:2': { width: 2048, height: 1365 },
-  '3:4': { width: 1536, height: 2048 },
-  '4:3': { width: 2048, height: 1536 },
-  '4:5': { width: 1638, height: 2048 },
-  '5:4': { width: 2048, height: 1638 },
-  '9:16': { width: 1152, height: 2048 },
-  '16:9': { width: 2048, height: 1152 },
-  '21:9': { width: 2048, height: 878 },
-};
-
-const SIZE_MULTIPLIERS: Record<ImageSize, number> = {
-  '1K': 0.5,
-  '2K': 1,
-  '4K': 2,
-};
-
-export function getDimensionsForRatio(
-  ratio: SupportedRatio,
-  size: ImageSize = '2K'
-): { width: number; height: number } {
-  const base = BASE_DIMENSIONS[ratio];
-  const multiplier = SIZE_MULTIPLIERS[size];
-  return {
-    width: Math.round(base.width * multiplier),
-    height: Math.round(base.height * multiplier),
-  };
-}
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/image.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/types/
-git commit -m "feat(pictura): add image types and ratio definitions"
-```
-
----
-
-### Task 5: Define Provider Specification Interface
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/provider-spec/types.ts`
-- Test: `plugins/maccing-pictura/server/src/provider-spec/types.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/provider-spec/types.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import {
-  GenerateImageParamsSchema,
-  ImageModelCapabilitiesSchema,
-  type ImageModel,
-  type ImageProviderSpec,
-} from './types.js';
-
-describe('Provider specification types', () => {
-  it('should validate generate image params', () => {
-    const params = {
-      prompt: 'cat on roof',
-      ratio: '16:9' as const,
-      size: '2K' as const,
-    };
-
-    const result = GenerateImageParamsSchema.safeParse(params);
-    expect(result.success).toBe(true);
-  });
-
-  it('should validate capabilities', () => {
-    const caps = {
-      maxResolution: '4K' as const,
-      supportedRatios: ['16:9', '1:1'] as const,
-      supportsReference: true,
-      supportsEdit: true,
-      supportsInpaint: true,
-      supportsOutpaint: false,
-    };
-
-    const result = ImageModelCapabilitiesSchema.safeParse(caps);
-    expect(result.success).toBe(true);
-  });
-
-  it('should type-check ImageModel interface', () => {
-    const model: ImageModel = {
-      provider: 'gemini',
-      modelId: 'gemini-3-pro-image',
-      capabilities: {
-        maxResolution: '4K',
-        supportedRatios: ['16:9', '1:1'],
-        supportsReference: true,
-        supportsEdit: true,
-        supportsInpaint: true,
-        supportsOutpaint: true,
-      },
-    };
-
-    expect(model.provider).toBe('gemini');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/provider-spec/types.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/provider-spec/types.ts`:
-
-```typescript
-import { z } from 'zod';
-import type { ImageResult, SupportedRatio, ImageSize } from '../types/image.js';
-import { RatioSchema } from '../types/image.js';
-
-// Generation parameters
-export const GenerateImageParamsSchema = z.object({
-  prompt: z.string(),
-  ratio: RatioSchema,
-  size: z.enum(['1K', '2K', '4K']).default('2K'),
-  reference: z.instanceof(Buffer).optional(),
-  negativePrompt: z.string().optional(),
-});
-
-export type GenerateImageParams = z.infer<typeof GenerateImageParamsSchema>;
-
-// Edit parameters
-export const EditImageParamsSchema = z.object({
-  image: z.instanceof(Buffer),
-  prompt: z.string(),
-  mask: z.string().optional(),
-  extend: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-  style: z.instanceof(Buffer).optional(),
-});
-
-export type EditImageParams = z.infer<typeof EditImageParamsSchema>;
-
-// Upscale parameters
-export const UpscaleImageParamsSchema = z.object({
-  image: z.instanceof(Buffer),
-  scale: z.number().min(1).max(8).default(4),
-  model: z.string().optional(),
-});
-
-export type UpscaleImageParams = z.infer<typeof UpscaleImageParamsSchema>;
-
-// Model capabilities
-export const ImageModelCapabilitiesSchema = z.object({
-  maxResolution: z.enum(['1K', '2K', '4K']),
-  supportedRatios: z.array(RatioSchema),
-  supportsReference: z.boolean(),
-  supportsEdit: z.boolean(),
-  supportsInpaint: z.boolean(),
-  supportsOutpaint: z.boolean(),
-});
-
-export type ImageModelCapabilities = z.infer<typeof ImageModelCapabilitiesSchema>;
-
-// Image model interface (what providers return)
-export interface ImageModel {
-  provider: string;
-  modelId: string;
-  capabilities: ImageModelCapabilities;
-}
-
-// Provider specification (what providers implement)
-export interface ImageProviderSpec {
-  name: string;
-  models: Record<string, {
-    id: string;
-    capabilities: ImageModelCapabilities;
-  }>;
-
-  generateImage(
-    modelId: string,
-    params: GenerateImageParams,
-    config: Record<string, unknown>
-  ): Promise<ImageResult>;
-
-  editImage?(
-    modelId: string,
-    params: EditImageParams,
-    config: Record<string, unknown>
-  ): Promise<ImageResult>;
-}
-
-// Upscale provider specification
-export interface UpscaleProviderSpec {
-  name: string;
-  models: string[];
-  maxScale: number;
-
-  upscale(
-    params: UpscaleImageParams,
-    config: Record<string, unknown>
-  ): Promise<ImageResult>;
-}
-
-// Model selector type (what users pass to generateImage)
-export type ModelSelector<T extends string = string> = {
-  provider: string;
-  modelId: T;
-  capabilities: ImageModelCapabilities;
-};
-
-// Fallback chain type
-export type ModelWithFallbacks = ModelSelector | ModelSelector[];
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/provider-spec/types.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/provider-spec/
-git commit -m "feat(pictura): add provider specification types (AI SDK pattern)"
-```
-
----
-
-### Task 6: Implement Provider Factory
+### Task 4: Implement Provider Factory with Types
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/provider-spec/factory.ts`
@@ -607,8 +253,15 @@ Create `plugins/maccing-pictura/server/src/provider-spec/factory.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
-import { createImageProvider, createUpscaleProvider } from './factory.js';
-import type { ImageProviderSpec, UpscaleProviderSpec } from './types.js';
+import {
+  createImageProvider,
+  createUpscaleProvider,
+  SUPPORTED_RATIOS,
+  getDimensionsForRatio,
+  type ImageProviderSpec,
+  type UpscaleProviderSpec,
+  type ImageResult,
+} from './factory';
 
 describe('createImageProvider', () => {
   it('should create a provider with model selector function', () => {
@@ -654,20 +307,24 @@ describe('createImageProvider', () => {
   });
 });
 
-describe('createUpscaleProvider', () => {
-  it('should create an upscale provider', () => {
-    const mockSpec: UpscaleProviderSpec = {
-      name: 'test-upscaler',
-      models: ['model-x', 'model-y'],
-      maxScale: 8,
-      upscale: vi.fn(),
-    };
+describe('getDimensionsForRatio', () => {
+  it('should calculate dimensions for ratio and size', () => {
+    const dims2K = getDimensionsForRatio('16:9', '2K');
+    expect(dims2K.width).toBe(2048);
+    expect(dims2K.height).toBe(1152);
 
-    const provider = createUpscaleProvider(mockSpec);
+    const dims4K = getDimensionsForRatio('16:9', '4K');
+    expect(dims4K.width).toBe(4096);
+    expect(dims4K.height).toBe(2304);
+  });
+});
 
-    expect(provider.name).toBe('test-upscaler');
-    expect(provider.models).toContain('model-x');
-    expect(provider.maxScale).toBe(8);
+describe('SUPPORTED_RATIOS', () => {
+  it('should have all supported ratios', () => {
+    expect(SUPPORTED_RATIOS).toContain('16:9');
+    expect(SUPPORTED_RATIOS).toContain('1:1');
+    expect(SUPPORTED_RATIOS).toContain('9:16');
+    expect(SUPPORTED_RATIOS.length).toBe(10);
   });
 });
 ```
@@ -685,17 +342,139 @@ Expected: FAIL
 Create `plugins/maccing-pictura/server/src/provider-spec/factory.ts`:
 
 ```typescript
-import type {
-  ImageProviderSpec,
-  UpscaleProviderSpec,
-  ModelSelector,
-  GenerateImageParams,
-  EditImageParams,
-  UpscaleImageParams,
-} from './types.js';
-import type { ImageResult } from '../types/image.js';
+import { z } from 'zod';
 
-// Type for the provider function that selects models
+// ============================================================================
+// Image Types
+// ============================================================================
+
+export const SUPPORTED_RATIOS = [
+  '1:1', '2:3', '3:2', '3:4', '4:3',
+  '4:5', '5:4', '9:16', '16:9', '21:9',
+] as const;
+
+export type SupportedRatio = typeof SUPPORTED_RATIOS[number];
+export type ImageSize = '1K' | '2K' | '4K';
+
+export const RatioSchema = z.enum(SUPPORTED_RATIOS);
+
+export interface ImageResult {
+  data: Buffer;
+  path?: string;
+  ratio: SupportedRatio;
+  width: number;
+  height: number;
+  provider: string;
+  model: string;
+  timestamp?: Date;
+}
+
+const BASE_DIMENSIONS: Record<SupportedRatio, { width: number; height: number }> = {
+  '1:1': { width: 2048, height: 2048 },
+  '2:3': { width: 1365, height: 2048 },
+  '3:2': { width: 2048, height: 1365 },
+  '3:4': { width: 1536, height: 2048 },
+  '4:3': { width: 2048, height: 1536 },
+  '4:5': { width: 1638, height: 2048 },
+  '5:4': { width: 2048, height: 1638 },
+  '9:16': { width: 1152, height: 2048 },
+  '16:9': { width: 2048, height: 1152 },
+  '21:9': { width: 2048, height: 878 },
+};
+
+const SIZE_MULTIPLIERS: Record<ImageSize, number> = {
+  '1K': 0.5,
+  '2K': 1,
+  '4K': 2,
+};
+
+export function getDimensionsForRatio(
+  ratio: SupportedRatio,
+  size: ImageSize = '2K'
+): { width: number; height: number } {
+  const base = BASE_DIMENSIONS[ratio];
+  const multiplier = SIZE_MULTIPLIERS[size];
+  return {
+    width: Math.round(base.width * multiplier),
+    height: Math.round(base.height * multiplier),
+  };
+}
+
+// ============================================================================
+// Provider Types
+// ============================================================================
+
+export interface GenerateImageParams {
+  prompt: string;
+  ratio: SupportedRatio;
+  size?: ImageSize;
+  reference?: Buffer;
+  negativePrompt?: string;
+}
+
+export interface EditImageParams {
+  image: Buffer;
+  prompt: string;
+  mask?: string;
+  extend?: 'top' | 'bottom' | 'left' | 'right';
+  style?: Buffer;
+}
+
+export interface UpscaleImageParams {
+  image: Buffer;
+  scale?: number;
+  model?: string;
+}
+
+export interface ImageModelCapabilities {
+  maxResolution: ImageSize;
+  supportedRatios: SupportedRatio[];
+  supportsReference: boolean;
+  supportsEdit: boolean;
+  supportsInpaint: boolean;
+  supportsOutpaint: boolean;
+}
+
+export interface ImageProviderSpec {
+  name: string;
+  models: Record<string, {
+    id: string;
+    capabilities: ImageModelCapabilities;
+  }>;
+  generateImage(
+    modelId: string,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+  editImage?(
+    modelId: string,
+    params: EditImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+}
+
+export interface UpscaleProviderSpec {
+  name: string;
+  models: string[];
+  maxScale: number;
+  upscale(
+    params: UpscaleImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+}
+
+export interface ModelSelector<T extends string = string> {
+  provider: string;
+  modelId: T;
+  capabilities: ImageModelCapabilities;
+}
+
+export type ModelWithFallbacks = ModelSelector | ModelSelector[];
+
+// ============================================================================
+// Provider Factory
+// ============================================================================
+
 export interface ImageProviderFunction<TModels extends string = string> {
   (modelId: TModels): ModelSelector<TModels>;
   name: string;
@@ -720,7 +499,6 @@ export function createImageProvider<TModels extends string>(
     if (!modelDef) {
       throw new Error(`Unknown model: ${modelId} for provider ${spec.name}`);
     }
-
     return {
       provider: spec.name,
       modelId,
@@ -780,25 +558,9 @@ cd plugins/maccing-pictura/server && npm test -- src/provider-spec/factory.test.
 
 Expected: PASS
 
-**Step 5: Create provider-spec index**
-
-Create `plugins/maccing-pictura/server/src/provider-spec/index.ts`:
-
-```typescript
-export * from './types.js';
-export * from './factory.js';
-```
-
-**Step 6: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/provider-spec/
-git commit -m "feat(pictura): add provider factory (AI SDK pattern)"
-```
-
 ---
 
-### Task 7: Implement Unified Generate Function
+### Task 5: Implement Unified Generate Function
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/generate.ts`
@@ -810,9 +572,8 @@ Create `plugins/maccing-pictura/server/src/generate.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateImage, type GenerateImageOptions } from './generate.js';
-import { createImageProvider } from './provider-spec/index.js';
-import type { ImageProviderSpec } from './provider-spec/index.js';
+import { generateImage, type GenerateImageOptions } from './generate';
+import { createImageProvider, type ImageProviderSpec } from './provider-spec/factory';
 
 describe('generateImage', () => {
   const mockGenerateImage = vi.fn();
@@ -912,13 +673,15 @@ Expected: FAIL
 Create `plugins/maccing-pictura/server/src/generate.ts`:
 
 ```typescript
-import type {
-  ModelSelector,
-  ModelWithFallbacks,
-  GenerateImageParams,
-} from './provider-spec/types.js';
-import type { ImageProviderFunction } from './provider-spec/factory.js';
-import type { ImageResult, SupportedRatio, ImageSize } from './types/image.js';
+import {
+  type ModelSelector,
+  type ModelWithFallbacks,
+  type GenerateImageParams,
+  type ImageProviderFunction,
+  type ImageResult,
+  type SupportedRatio,
+  type ImageSize,
+} from './provider-spec/factory';
 
 export interface GenerateImageOptions {
   model: ModelWithFallbacks;
@@ -1012,13 +775,6 @@ cd plugins/maccing-pictura/server && npm test -- src/generate.test.ts
 
 Expected: PASS
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/generate.ts plugins/maccing-pictura/server/src/generate.test.ts
-git commit -m "feat(pictura): add unified generateImage with fallback chains"
-```
-
 ---
 
 ## Phase 3: Provider Implementations
@@ -1035,7 +791,7 @@ Create `plugins/maccing-pictura/server/src/providers/gemini.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { gemini, GEMINI_MODELS } from './gemini.js';
+import { gemini, GEMINI_MODELS } from './gemini';
 
 describe('Gemini provider', () => {
   it('should have correct provider name', () => {
@@ -1080,10 +836,15 @@ Expected: FAIL
 Create `plugins/maccing-pictura/server/src/providers/gemini.ts`:
 
 ```typescript
-import { createImageProvider } from '../provider-spec/index.js';
-import type { ImageProviderSpec, GenerateImageParams, EditImageParams } from '../provider-spec/index.js';
-import type { ImageResult } from '../types/image.js';
-import { getDimensionsForRatio, SUPPORTED_RATIOS } from '../types/image.js';
+import {
+  createImageProvider,
+  getDimensionsForRatio,
+  SUPPORTED_RATIOS,
+  type ImageProviderSpec,
+  type GenerateImageParams,
+  type EditImageParams,
+  type ImageResult,
+} from '../provider-spec/factory';
 
 export const GEMINI_MODELS = ['flash', 'pro'] as const;
 export type GeminiModel = typeof GEMINI_MODELS[number];
@@ -1193,16 +954,11 @@ cd plugins/maccing-pictura/server && npm test -- src/providers/gemini.test.ts
 
 Expected: PASS
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/providers/
-git commit -m "feat(pictura): add Gemini provider (AI SDK pattern)"
-```
-
 ---
 
-### Task 9: Implement OpenAI Provider
+### Task 9: Implement OpenAI Provider (GPT Image 1.5)
+
+> **CRITICAL:** DALL-E 2 and DALL-E 3 are deprecated and will be removed on **May 12, 2026**. This implementation uses GPT Image models.
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/providers/openai.ts`
@@ -1214,22 +970,31 @@ Create `plugins/maccing-pictura/server/src/providers/openai.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { openai, OPENAI_MODELS } from './openai.js';
+import { openai, OPENAI_MODELS, OPENAI_SIZES } from './openai';
 
 describe('OpenAI provider', () => {
   it('should have correct provider name', () => {
     expect(openai.name).toBe('openai');
   });
 
-  it('should expose dall-e-3 model', () => {
-    expect(OPENAI_MODELS).toContain('dall-e-3');
+  it('should expose gpt-image-1.5 model (not deprecated DALL-E)', () => {
+    expect(OPENAI_MODELS).toContain('gpt-image-1.5');
+    expect(OPENAI_MODELS).toContain('gpt-image-1');
+    expect(OPENAI_MODELS).not.toContain('dall-e-3'); // Deprecated May 2026
   });
 
-  it('should create model selector for dall-e-3', () => {
-    const model = openai('dall-e-3');
+  it('should create model selector for gpt-image-1.5', () => {
+    const model = openai('gpt-image-1.5');
     expect(model.provider).toBe('openai');
-    expect(model.modelId).toBe('dall-e-3');
-    expect(model.capabilities.maxResolution).toBe('1K');
+    expect(model.modelId).toBe('gpt-image-1.5');
+  });
+
+  it('should have correct size mappings', () => {
+    expect(OPENAI_SIZES).toEqual({
+      '1:1': '1024x1024',
+      '3:2': '1536x1024',
+      '2:3': '1024x1536',
+    });
   });
 });
 ```
@@ -1247,39 +1012,72 @@ Expected: FAIL
 Create `plugins/maccing-pictura/server/src/providers/openai.ts`:
 
 ```typescript
-import { createImageProvider } from '../provider-spec/index.js';
-import type { ImageProviderSpec, GenerateImageParams } from '../provider-spec/index.js';
-import type { ImageResult, SupportedRatio } from '../types/image.js';
-import { getDimensionsForRatio } from '../types/image.js';
+import {
+  createImageProvider,
+  type ImageProviderSpec,
+  type GenerateImageParams,
+  type ImageResult,
+  type SupportedRatio,
+} from '../provider-spec/factory';
 
-export const OPENAI_MODELS = ['dall-e-3', 'dall-e-2'] as const;
+// GPT Image models (DALL-E 2/3 deprecated May 12, 2026)
+export const OPENAI_MODELS = ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini'] as const;
 export type OpenAIModel = typeof OPENAI_MODELS[number];
 
-// OpenAI has limited aspect ratio support
-const OPENAI_RATIOS: SupportedRatio[] = ['1:1', '16:9', '9:16'];
+// OpenAI uses fixed sizes, not aspect ratios
+export const OPENAI_SIZES: Record<string, string> = {
+  '1:1': '1024x1024',
+  '3:2': '1536x1024',  // Landscape
+  '2:3': '1024x1536',  // Portrait
+};
+
+// Map unsupported ratios to nearest size
+const RATIO_TO_SIZE: Record<SupportedRatio, string> = {
+  '1:1': '1024x1024',
+  '2:3': '1024x1536',
+  '3:2': '1536x1024',
+  '3:4': '1024x1536',  // Map to portrait
+  '4:3': '1536x1024',  // Map to landscape
+  '4:5': '1024x1536',  // Map to portrait
+  '5:4': '1536x1024',  // Map to landscape
+  '9:16': '1024x1536', // Map to portrait
+  '16:9': '1536x1024', // Map to landscape
+  '21:9': '1536x1024', // Map to landscape
+};
 
 const openaiSpec: ImageProviderSpec = {
   name: 'openai',
   models: {
-    'dall-e-3': {
-      id: 'dall-e-3',
+    'gpt-image-1.5': {
+      id: 'gpt-image-1.5',
       capabilities: {
-        maxResolution: '1K',
-        supportedRatios: OPENAI_RATIOS,
-        supportsReference: false,
+        maxResolution: '2K',
+        supportedRatios: ['1:1', '3:2', '2:3'], // Native support
+        supportsReference: true,
         supportsEdit: true,
         supportsInpaint: true,
         supportsOutpaint: false,
       },
     },
-    'dall-e-2': {
-      id: 'dall-e-2',
+    'gpt-image-1': {
+      id: 'gpt-image-1',
       capabilities: {
-        maxResolution: '1K',
-        supportedRatios: ['1:1'],
-        supportsReference: false,
+        maxResolution: '2K',
+        supportedRatios: ['1:1', '3:2', '2:3'],
+        supportsReference: true,
         supportsEdit: true,
         supportsInpaint: true,
+        supportsOutpaint: false,
+      },
+    },
+    'gpt-image-1-mini': {
+      id: 'gpt-image-1-mini',
+      capabilities: {
+        maxResolution: '1K',
+        supportedRatios: ['1:1', '3:2', '2:3'],
+        supportsReference: false,
+        supportsEdit: false,
+        supportsInpaint: false,
         supportsOutpaint: false,
       },
     },
@@ -1295,7 +1093,8 @@ const openaiSpec: ImageProviderSpec = {
       throw new Error('OpenAI API key is required');
     }
 
-    const dimensions = getDimensionsForRatio(params.ratio, '1K');
+    const size = RATIO_TO_SIZE[params.ratio] || '1024x1024';
+    const [width, height] = size.split('x').map(Number);
 
     // TODO: Implement actual OpenAI API call
     // import OpenAI from 'openai';
@@ -1303,7 +1102,7 @@ const openaiSpec: ImageProviderSpec = {
     // const response = await client.images.generate({
     //   model: modelId,
     //   prompt: params.prompt,
-    //   size: `${dimensions.width}x${dimensions.height}`,
+    //   size: size as '1024x1024' | '1536x1024' | '1024x1536',
     //   response_format: 'b64_json',
     // });
 
@@ -1313,8 +1112,8 @@ const openaiSpec: ImageProviderSpec = {
     return {
       data: stubData,
       ratio: params.ratio,
-      width: dimensions.width,
-      height: dimensions.height,
+      width,
+      height,
       provider: 'openai',
       model: modelId,
     };
@@ -1332,13 +1131,6 @@ cd plugins/maccing-pictura/server && npm test -- src/providers/openai.test.ts
 
 Expected: PASS
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/providers/
-git commit -m "feat(pictura): add OpenAI provider (AI SDK pattern)"
-```
-
 ---
 
 ### Task 10: Implement Topaz Upscale Provider
@@ -1353,7 +1145,7 @@ Create `plugins/maccing-pictura/server/src/providers/topaz.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { topaz, TOPAZ_MODELS } from './topaz.js';
+import { topaz, TOPAZ_MODELS } from './topaz';
 
 describe('Topaz provider', () => {
   it('should have correct provider name', () => {
@@ -1385,19 +1177,31 @@ Expected: FAIL
 Create `plugins/maccing-pictura/server/src/providers/topaz.ts`:
 
 ```typescript
-import { createUpscaleProvider } from '../provider-spec/index.js';
-import type { UpscaleProviderSpec, UpscaleImageParams } from '../provider-spec/index.js';
-import type { ImageResult } from '../types/image.js';
+import {
+  createUpscaleProvider,
+  type UpscaleProviderSpec,
+  type UpscaleImageParams,
+  type ImageResult,
+} from '../provider-spec/factory';
 
+// Standard models: synchronous, fast
+// Generative models: async only, higher quality
 export const TOPAZ_MODELS = [
-  'standard-v2',
-  'standard-max',
-  'recovery-v2',
-  'high-fidelity-v2',
-  'redefine',
+  'standard-v2',      // Standard: fast general-purpose
+  'standard-max',     // Generative: photorealistic detail (ASYNC)
+  'recovery-v2',      // Generative: max enhancement for low-res (ASYNC)
+  'high-fidelity-v2', // Standard: preserves fine details
+  'redefine',         // Generative: creative upscaling (ASYNC)
+  'low-resolution-v2',// Standard: optimized for web graphics
+  'cgi',              // Standard: for computer-generated imagery
 ] as const;
 
 export type TopazModel = typeof TOPAZ_MODELS[number];
+
+// Generative models require async polling
+const ASYNC_MODELS: TopazModel[] = ['standard-max', 'recovery-v2', 'redefine'];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const topazSpec: UpscaleProviderSpec = {
   name: 'topaz',
@@ -1413,28 +1217,50 @@ const topazSpec: UpscaleProviderSpec = {
       throw new Error('Topaz API key is required');
     }
 
-    const model = params.model || 'standard-max';
+    const model = (params.model || 'standard-max') as TopazModel;
     const scale = params.scale || 4;
+    const isAsync = ASYNC_MODELS.includes(model);
 
     // TODO: Implement actual Topaz API call
-    // const response = await fetch('https://api.topazlabs.com/v1/enhance', {
-    //   method: 'POST',
-    //   headers: {
-    //     'X-API-Key': apiKey,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     image: params.image.toString('base64'),
-    //     model,
-    //     scale,
-    //   }),
-    // });
+    const response = await fetch('https://api.topazlabs.com/v1/enhance', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: params.image.toString('base64'),
+        model,
+        scale,
+      }),
+    });
 
-    // Stub for development
-    const stubData = Buffer.from(`topaz-${model}-${scale}x-${Date.now()}`);
+    if (response.status === 413) {
+      throw new Error('Request too large: Topaz API limit is 500MB');
+    }
+
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      throw new Error(`Rate limited. Retry after: ${retryAfter || 'unknown'} seconds`);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Topaz API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Handle async generative models
+    if (isAsync && data.jobId) {
+      const result = await pollForCompletion(data.jobId, apiKey);
+      return result;
+    }
+
+    // Synchronous models return immediately
+    const imageBuffer = Buffer.from(data.image, 'base64');
 
     return {
-      data: stubData,
+      data: imageBuffer,
       ratio: '16:9', // Would come from original image metadata
       width: 2048 * scale,
       height: 1152 * scale,
@@ -1443,6 +1269,52 @@ const topazSpec: UpscaleProviderSpec = {
     };
   },
 };
+
+/**
+ * Poll Topaz job status for async generative models
+ */
+async function pollForCompletion(
+  jobId: string,
+  apiKey: string,
+  maxAttempts = 30 // ~5 minutes max
+): Promise<ImageResult> {
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    // Exponential backoff: 2s, 3s, 4.5s, ... capped at 30s
+    const delay = Math.min(2000 * Math.pow(1.5, attempts), 30000);
+    await sleep(delay);
+
+    const response = await fetch(`https://api.topazlabs.com/v1/jobs/${jobId}`, {
+      headers: { 'X-API-Key': apiKey },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to check job status: ${response.status}`);
+    }
+
+    const { state, output, error } = await response.json();
+
+    if (state === 'completed' && output) {
+      return {
+        data: Buffer.from(output.image, 'base64'),
+        ratio: '16:9',
+        width: output.width,
+        height: output.height,
+        provider: 'topaz',
+        model: output.model,
+      };
+    }
+
+    if (state === 'failed') {
+      throw new Error(`Topaz enhancement failed: ${error || 'Unknown error'}`);
+    }
+
+    attempts++;
+  }
+
+  throw new Error(`Topaz job timed out after ${maxAttempts} polling attempts`);
+}
 
 export const topaz = createUpscaleProvider(topazSpec);
 ```
@@ -1454,23 +1326,6 @@ cd plugins/maccing-pictura/server && npm test -- src/providers/topaz.test.ts
 ```
 
 Expected: PASS
-
-**Step 5: Create providers index**
-
-Create `plugins/maccing-pictura/server/src/providers/index.ts`:
-
-```typescript
-export { gemini, GEMINI_MODELS, type GeminiModel } from './gemini.js';
-export { openai, OPENAI_MODELS, type OpenAIModel } from './openai.js';
-export { topaz, TOPAZ_MODELS, type TopazModel } from './topaz.js';
-```
-
-**Step 6: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/providers/
-git commit -m "feat(pictura): add Topaz upscale provider"
-```
 
 ---
 
@@ -1488,7 +1343,7 @@ Create `plugins/maccing-pictura/server/src/core/config.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConfigManager, ConfigSchema } from './config.js';
+import { ConfigManager, ConfigSchema } from './config';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -1574,7 +1429,7 @@ Create `plugins/maccing-pictura/server/src/core/config.ts`:
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { z } from 'zod';
-import { RatioSchema } from '../types/image.js';
+import { RatioSchema } from '../provider-spec/factory';
 
 const GeminiConfigSchema = z.object({
   apiKey: z.string(),
@@ -1674,7 +1529,37 @@ export class ConfigManager {
       throw new Error('Config not loaded');
     }
     const providerConfig = this.cachedConfig.providers[type][name as keyof typeof this.cachedConfig.providers.generation];
-    return providerConfig as Record<string, unknown> || {};
+    const config = providerConfig as Record<string, unknown> || {};
+
+    // Environment variables take precedence over config file
+    const envKey = this.getEnvKeyForProvider(name);
+    if (envKey && process.env[envKey]) {
+      return { ...config, apiKey: process.env[envKey] };
+    }
+
+    return config;
+  }
+
+  private getEnvKeyForProvider(name: string): string | null {
+    const envMap: Record<string, string> = {
+      gemini: 'PICTURA_GEMINI_API_KEY',
+      openai: 'PICTURA_OPENAI_API_KEY',
+      topaz: 'PICTURA_TOPAZ_API_KEY',
+      replicate: 'PICTURA_REPLICATE_API_KEY',
+    };
+    return envMap[name] || null;
+  }
+
+  async verifyPermissions(): Promise<void> {
+    try {
+      const stats = await fs.stat(this.configPath);
+      const mode = stats.mode & 0o777;
+      if (mode !== 0o600) {
+        console.warn(`Warning: Config file has insecure permissions (${mode.toString(8)}). Expected 600.`);
+      }
+    } catch {
+      // File doesn't exist yet, permissions will be set on save
+    }
   }
 }
 ```
@@ -1686,13 +1571,6 @@ cd plugins/maccing-pictura/server && npm test -- src/core/config.test.ts
 ```
 
 Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add config manager with provider configs"
-```
 
 ---
 
@@ -1708,7 +1586,7 @@ Create `plugins/maccing-pictura/server/src/core/retry.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
-import { withRetry, RetryError, isRetryableError } from './retry.js';
+import { withRetry, RetryError, isRetryableError } from './retry';
 
 describe('withRetry', () => {
   it('should return result on first success', async () => {
@@ -1768,8 +1646,10 @@ export interface RetryOptions {
   maxAttempts: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  jitterMs?: number;
   shouldRetry?: (error: Error) => boolean;
-  onRetry?: (attempt: number, error: Error) => void;
+  onRetry?: (attempt: number, error: Error, nextDelayMs: number) => void;
+  retryAfterHeader?: string; // From response headers
 }
 
 export class RetryError extends Error {
@@ -1786,6 +1666,31 @@ export class RetryError extends Error {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Calculate delay with exponential backoff and jitter to prevent thundering herd
+ */
+function calculateDelay(
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+  jitterMs: number,
+  retryAfterMs?: number
+): number {
+  // Respect Retry-After header if provided
+  if (retryAfterMs && retryAfterMs > 0) {
+    return retryAfterMs;
+  }
+
+  // Exponential backoff: base * 2^(attempt-1)
+  const exponentialDelay = baseDelayMs * Math.pow(2, attempt - 1);
+
+  // Add random jitter to prevent thundering herd
+  const jitter = Math.random() * jitterMs;
+
+  // Cap at max delay
+  return Math.min(exponentialDelay + jitter, maxDelayMs);
+}
+
 export async function withRetry<T>(
   fn: () => Promise<T>,
   options: RetryOptions
@@ -1794,11 +1699,22 @@ export async function withRetry<T>(
     maxAttempts,
     baseDelayMs = 2000,
     maxDelayMs = 30000,
+    jitterMs = 3000,
     shouldRetry = isRetryableError,
     onRetry,
+    retryAfterHeader,
   } = options;
 
   let lastError: Error | undefined;
+  let retryAfterMs: number | undefined;
+
+  // Parse Retry-After header if provided
+  if (retryAfterHeader) {
+    const parsed = parseInt(retryAfterHeader, 10);
+    if (!isNaN(parsed)) {
+      retryAfterMs = parsed * 1000;
+    }
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -1817,9 +1733,12 @@ export async function withRetry<T>(
         throw lastError;
       }
 
-      const delay = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
-      onRetry?.(attempt, lastError);
+      const delay = calculateDelay(attempt, baseDelayMs, maxDelayMs, jitterMs, retryAfterMs);
+      onRetry?.(attempt, lastError, delay);
       await sleep(delay);
+
+      // Clear retryAfterMs after first use
+      retryAfterMs = undefined;
     }
   }
 
@@ -1833,20 +1752,23 @@ export async function withRetry<T>(
 export function isRetryableError(error: Error): boolean {
   const message = error.message.toLowerCase();
 
-  // Non-retryable errors
+  // Non-retryable errors: stop immediately, don't waste quota
   const nonRetryable = [
     'content policy',
     'invalid api key',
     'unauthorized',
     'forbidden',
     'not found',
+    'quota exceeded',
+    'insufficient_quota',
+    'billing',
   ];
 
   if (nonRetryable.some((pattern) => message.includes(pattern))) {
     return false;
   }
 
-  // Retryable errors
+  // Retryable errors: exponential backoff with jitter
   const retryable = [
     'rate limit',
     '429',
@@ -1873,13 +1795,6 @@ cd plugins/maccing-pictura/server && npm test -- src/core/retry.test.ts
 
 Expected: PASS
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add retry utility with exponential backoff"
-```
-
 ---
 
 ### Task 13: Implement Slug and Output Utilities
@@ -1895,7 +1810,7 @@ Create `plugins/maccing-pictura/server/src/utils/slug.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { generateSlug, generateTimestamp, ratioToFilename } from './slug.js';
+import { generateSlug, generateTimestamp, ratioToFilename } from './slug';
 
 describe('generateSlug', () => {
   it('should convert prompt to lowercase kebab-case', () => {
@@ -1997,8 +1912,8 @@ Create `plugins/maccing-pictura/server/src/core/output.ts`:
 ```typescript
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { ImageResult, SupportedRatio } from '../types/image.js';
-import { ratioToFilename, filenameToRatio } from '../utils/slug.js';
+import { ratioToFilename, filenameToRatio } from '../utils/slug';
+import type { ImageResult, SupportedRatio } from '../provider-spec/factory';
 
 export interface BatchInfo {
   timestamp: string;
@@ -2080,29 +1995,6 @@ export class OutputManager {
 }
 ```
 
-**Step 6: Create utils and core indexes**
-
-Create `plugins/maccing-pictura/server/src/utils/index.ts`:
-
-```typescript
-export * from './slug.js';
-```
-
-Create `plugins/maccing-pictura/server/src/core/index.ts`:
-
-```typescript
-export * from './config.js';
-export * from './retry.js';
-export * from './output.js';
-```
-
-**Step 7: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/utils/ plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add slug, output utilities"
-```
-
 ---
 
 ## Phase 5: Prompt Enhancement
@@ -2119,7 +2011,7 @@ Create `plugins/maccing-pictura/server/src/core/prompt-enhancer.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { PromptEnhancer, detectStyle, STYLE_PROFILES } from './prompt-enhancer.js';
+import { PromptEnhancer, detectStyle, STYLE_PROFILES } from './prompt-enhancer';
 
 describe('detectStyle', () => {
   it('should detect photo style', () => {
@@ -2249,21 +2141,6 @@ cd plugins/maccing-pictura/server && npm test -- src/core/prompt-enhancer.test.t
 
 Expected: PASS
 
-**Step 5: Update core index**
-
-Add to `plugins/maccing-pictura/server/src/core/index.ts`:
-
-```typescript
-export * from './prompt-enhancer.js';
-```
-
-**Step 6: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add prompt enhancer with style detection"
-```
-
 ---
 
 ## Phase 6: MCP Server and Tools
@@ -2278,18 +2155,21 @@ git commit -m "feat(pictura): add prompt enhancer with style detection"
 Create `plugins/maccing-pictura/server/src/index.ts`:
 
 ```typescript
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-import { ConfigManager } from './core/index.js';
-import { OutputManager } from './core/index.js';
-import { PromptEnhancer } from './core/index.js';
-import { withRetry } from './core/index.js';
-import { generateSlug, generateTimestamp } from './utils/index.js';
-import { gemini, openai, topaz } from './providers/index.js';
-import { registerProvider, generateImages } from './generate.js';
-import type { SupportedRatio } from './types/image.js';
-import { PRESET_BUNDLES, type PresetBundle } from './core/config.js';
+import { ConfigManager, PRESET_BUNDLES, type PresetBundle } from './core/config';
+import { OutputManager, type BatchInfo } from './core/output';
+import { PromptEnhancer } from './core/prompt-enhancer';
+import { withRetry } from './core/retry';
+import { generateSlug, generateTimestamp } from './utils/slug';
+import { gemini } from './providers/gemini';
+import { openai } from './providers/openai';
+import { topaz } from './providers/topaz';
+import { registerProvider, generateImages } from './generate';
+import type { SupportedRatio } from './provider-spec/factory';
 
 // Register providers
 registerProvider(gemini);
@@ -2352,7 +2232,8 @@ server.tool(
       // Select provider
       const providerName = (p.provider as string) || config.providers.generation.default;
       const provider = providerName === 'openai' ? openai : gemini;
-      const modelId = providerName === 'openai' ? 'dall-e-3' : (config.defaultQuality === 'draft' ? 'flash' : 'pro');
+      // Use GPT Image 1.5 for OpenAI (DALL-E deprecated May 2026)
+      const modelId = providerName === 'openai' ? 'gpt-image-1.5' : (config.defaultQuality === 'draft' ? 'flash' : 'pro');
 
       // Generate images
       const providerConfig = configManager.getProviderConfig('generation', providerName);
@@ -2430,6 +2311,181 @@ server.tool(
   }
 );
 
+// Edit tool
+server.tool(
+  'pictura_edit',
+  'Edit existing image batch by prompt slug',
+  {
+    type: 'object',
+    properties: {
+      slug: { type: 'string', description: 'Prompt slug of batch to edit' },
+      prompt: { type: 'string', description: 'Edit instruction' },
+      mask: { type: 'string', description: 'Region description for inpainting' },
+      extend: { type: 'string', enum: ['top', 'bottom', 'left', 'right'] },
+      stylePath: { type: 'string', description: 'Path to style reference image' },
+    },
+    required: ['slug', 'prompt'],
+  },
+  async (params) => {
+    try {
+      const config = await configManager.load();
+      const outputManager = new OutputManager(config.outputDir);
+      const p = params as Record<string, unknown>;
+
+      const batch = await outputManager.loadBatch(p.slug as string);
+      if (!batch) {
+        return { content: [{ type: 'text', text: `Batch not found: ${p.slug}` }], isError: true };
+      }
+
+      // TODO: Implement edit logic using provider's editImage method
+      // For each image in batch:
+      // 1. Load image data
+      // 2. Call provider.editImage with prompt and mask
+      // 3. Save edited image
+
+      return {
+        content: [{ type: 'text', text: `Edit tool not yet fully implemented. Found batch: ${batch.path}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : error}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Upscale tool
+server.tool(
+  'pictura_upscale',
+  'Two-turn premium upscale: Generation API (4K) then Topaz Labs',
+  {
+    type: 'object',
+    properties: {
+      slug: { type: 'string', description: 'Prompt slug of batch to upscale' },
+      topazModel: { type: 'string', enum: ['standard-max', 'recovery-v2', 'high-fidelity-v2', 'standard-v2'] },
+      upscaler: { type: 'string', enum: ['topaz', 'replicate'] },
+      skipTopaz: { type: 'boolean', description: 'Skip Topaz, Gemini 4K only' },
+    },
+    required: ['slug'],
+  },
+  async (params) => {
+    try {
+      const config = await configManager.load();
+      const outputManager = new OutputManager(config.outputDir);
+      const p = params as Record<string, unknown>;
+
+      const batch = await outputManager.loadBatch(p.slug as string);
+      if (!batch) {
+        return { content: [{ type: 'text', text: `Batch not found: ${p.slug}` }], isError: true };
+      }
+
+      // TODO: Implement two-turn upscale:
+      // Turn 1: Regenerate at 4K using Gemini with reference
+      // Turn 2: Send to Topaz Labs API for 8x enhancement
+
+      return {
+        content: [{ type: 'text', text: `Upscale tool not yet fully implemented. Found batch: ${batch.path}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : error}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Gallery tool
+server.tool(
+  'pictura_gallery',
+  'Generate and open visual gallery in browser',
+  {
+    type: 'object',
+    properties: {
+      filter: { type: 'string', description: 'Filter by prompt slug' },
+      since: { type: 'string', description: 'Filter by date (YYYY-MM-DD)' },
+    },
+  },
+  async (params) => {
+    try {
+      const config = await configManager.load();
+      const outputManager = new OutputManager(config.outputDir);
+      const p = params as Record<string, unknown>;
+
+      let batches = await outputManager.listBatches(50);
+
+      if (p.filter) {
+        batches = batches.filter((b) => b.slug.includes(p.filter as string));
+      }
+      if (p.since) {
+        batches = batches.filter((b) => b.timestamp >= (p.since as string));
+      }
+
+      // Generate HTML gallery
+      const html = generateGalleryHtml(batches, config.outputDir);
+      const galleryPath = path.join(config.outputDir, 'gallery.html');
+      await fs.writeFile(galleryPath, html);
+
+      // Open in browser
+      const { default: open } = await import('open');
+      await open(galleryPath);
+
+      return {
+        content: [{ type: 'text', text: `Gallery opened: ${galleryPath}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : error}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// Helper function for gallery
+function generateGalleryHtml(batches: BatchInfo[], outputDir: string): string {
+  const images = batches.flatMap((b) =>
+    b.images.map((img) => ({
+      src: img.path,
+      ratio: img.ratio,
+      slug: b.slug,
+      timestamp: b.timestamp,
+    }))
+  );
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>Pictura Gallery</title>
+  <style>
+    body { font-family: system-ui; background: #1a1a1a; color: #fff; padding: 2rem; }
+    h1 { margin-bottom: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .card { background: #2a2a2a; border-radius: 8px; overflow: hidden; }
+    .card img { width: 100%; height: auto; }
+    .card-info { padding: 1rem; }
+    .card-info .slug { font-weight: bold; }
+    .card-info .meta { font-size: 0.85rem; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Pictura Gallery</h1>
+  <div class="grid">
+    ${images.map((img) => `
+      <div class="card">
+        <img src="file://${img.src}" alt="${img.slug}">
+        <div class="card-info">
+          <div class="slug">${img.slug}</div>
+          <div class="meta">${img.ratio} · ${img.timestamp}</div>
+        </div>
+      </div>
+    `).join('')}
+  </div>
+</body>
+</html>`;
+}
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -2449,13 +2505,6 @@ cd plugins/maccing-pictura/server && npm run build
 ```
 
 Expected: Success
-
-**Step 3: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/index.ts
-git commit -m "feat(pictura): add MCP server with generate and list tools"
-```
 
 ---
 
@@ -2541,13 +2590,6 @@ Use the `pictura_list` MCP tool to browse generated images.
 
 Create similar command files for edit, upscale, and gallery.
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/commands/
-git commit -m "feat(pictura): add slash commands"
-```
-
 ---
 
 ### Task 17: Create Skill
@@ -2597,13 +2639,6 @@ List recent generations.
 **Action:** Call pictura_generate with preset: "social"
 ```
 
-**Step 3: Commit**
-
-```bash
-git add plugins/maccing-pictura/skills/
-git commit -m "feat(pictura): add image generation skill"
-```
-
 ---
 
 ## Phase 8: Integration
@@ -2629,13 +2664,6 @@ Add to `.claude-plugin/marketplace.json`:
 }
 ```
 
-**Step 2: Commit**
-
-```bash
-git add .claude-plugin/marketplace.json
-git commit -m "feat(marketplace): add maccing-pictura"
-```
-
 ---
 
 ### Task 19: Run All Tests
@@ -2656,12 +2684,1190 @@ cd plugins/maccing-pictura/server && npm run build
 
 Expected: No errors
 
-**Step 3: Final commit**
+---
+
+## Phase 9: AI-Guided Validation and Production Readiness
+
+> **This phase is fully guided by Claude Code.** Claude executes each validation step, interprets results, diagnoses issues, and provides remediation guidance. No manual intervention required unless issues are found.
+
+### Overview
+
+The AI-guided validation phase uses a **four-layer testing approach**:
+
+1. **Pre-flight Checks** - Config, permissions, server startup
+2. **Tool Discovery** - MCP protocol compliance, tool exposure
+3. **Provider Health** - API connectivity, authentication
+4. **End-to-End Smoke Tests** - Full generation workflows
+
+### Task 20: Create Validation Script
+
+**Files:**
+- Create: `plugins/maccing-pictura/server/src/validation/index.ts`
+- Create: `plugins/maccing-pictura/server/src/validation/checks.ts`
+
+**Step 1: Create validation checks module**
+
+Create `plugins/maccing-pictura/server/src/validation/checks.ts`:
+
+```typescript
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+export interface ValidationResult {
+  name: string;
+  status: 'pass' | 'fail' | 'warn' | 'skip';
+  message: string;
+  duration?: number;
+  details?: Record<string, unknown>;
+  remediation?: string;
+}
+
+export interface ValidationContext {
+  configPath: string;
+  outputDir: string;
+  providers: {
+    gemini?: { apiKey: string };
+    openai?: { apiKey: string };
+    topaz?: { apiKey: string };
+  };
+}
+
+// ============================================================================
+// Pre-flight Checks
+// ============================================================================
+
+export async function checkConfigExists(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  try {
+    await fs.access(ctx.configPath);
+    return {
+      name: 'Config File Exists',
+      status: 'pass',
+      message: `Found config at ${ctx.configPath}`,
+      duration: Date.now() - start,
+    };
+  } catch {
+    return {
+      name: 'Config File Exists',
+      status: 'fail',
+      message: `Config not found at ${ctx.configPath}`,
+      duration: Date.now() - start,
+      remediation: 'Run /pictura:setup to create config or create manually',
+    };
+  }
+}
+
+export async function checkConfigPermissions(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  try {
+    const stats = await fs.stat(ctx.configPath);
+    const mode = stats.mode & 0o777;
+    if (mode === 0o600) {
+      return {
+        name: 'Config Permissions',
+        status: 'pass',
+        message: 'Config has secure permissions (600)',
+        duration: Date.now() - start,
+      };
+    }
+    return {
+      name: 'Config Permissions',
+      status: 'warn',
+      message: `Config has insecure permissions (${mode.toString(8)})`,
+      duration: Date.now() - start,
+      remediation: `chmod 600 ${ctx.configPath}`,
+    };
+  } catch {
+    return {
+      name: 'Config Permissions',
+      status: 'skip',
+      message: 'Config does not exist',
+      duration: Date.now() - start,
+    };
+  }
+}
+
+export async function checkOutputDirectory(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  try {
+    await fs.mkdir(ctx.outputDir, { recursive: true });
+    // Test write permission
+    const testFile = path.join(ctx.outputDir, '.write-test');
+    await fs.writeFile(testFile, 'test');
+    await fs.unlink(testFile);
+    return {
+      name: 'Output Directory',
+      status: 'pass',
+      message: `Output directory writable: ${ctx.outputDir}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Output Directory',
+      status: 'fail',
+      message: `Cannot write to output directory: ${error}`,
+      duration: Date.now() - start,
+      remediation: `mkdir -p ${ctx.outputDir} && chmod 755 ${ctx.outputDir}`,
+    };
+  }
+}
+
+// ============================================================================
+// Provider Health Checks
+// ============================================================================
+
+export async function checkGeminiConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.gemini?.apiKey) {
+    return {
+      name: 'Gemini API Connection',
+      status: 'skip',
+      message: 'Gemini API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    // Test API key validity with a minimal request
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${ctx.providers.gemini.apiKey}`
+    );
+
+    if (response.status === 200) {
+      const data = await response.json();
+      const imageModels = data.models?.filter((m: any) =>
+        m.name.includes('image') || m.name.includes('gemini-2.5-flash-image')
+      );
+      return {
+        name: 'Gemini API Connection',
+        status: 'pass',
+        message: `Connected. Found ${imageModels?.length || 0} image models`,
+        duration: Date.now() - start,
+        details: { models: imageModels?.map((m: any) => m.name) },
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        name: 'Gemini API Connection',
+        status: 'fail',
+        message: 'Invalid or expired API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://aistudio.google.com/apikey',
+      };
+    }
+
+    return {
+      name: 'Gemini API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Gemini API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+      remediation: 'Check network connectivity and firewall settings',
+    };
+  }
+}
+
+export async function checkOpenAIConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.openai?.apiKey) {
+    return {
+      name: 'OpenAI API Connection',
+      status: 'skip',
+      message: 'OpenAI API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${ctx.providers.openai.apiKey}` },
+    });
+
+    if (response.status === 200) {
+      const data = await response.json();
+      const imageModels = data.data?.filter((m: any) =>
+        m.id.includes('gpt-image') || m.id.includes('dall-e')
+      );
+      return {
+        name: 'OpenAI API Connection',
+        status: 'pass',
+        message: `Connected. Found ${imageModels?.length || 0} image models`,
+        duration: Date.now() - start,
+        details: { models: imageModels?.map((m: any) => m.id) },
+      };
+    }
+
+    if (response.status === 401) {
+      return {
+        name: 'OpenAI API Connection',
+        status: 'fail',
+        message: 'Invalid API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://platform.openai.com/api-keys',
+      };
+    }
+
+    return {
+      name: 'OpenAI API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'OpenAI API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+    };
+  }
+}
+
+export async function checkTopazConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.topaz?.apiKey) {
+    return {
+      name: 'Topaz API Connection',
+      status: 'skip',
+      message: 'Topaz API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    // Topaz health endpoint or models list
+    const response = await fetch('https://api.topazlabs.com/v1/models', {
+      headers: { 'X-API-Key': ctx.providers.topaz.apiKey },
+    });
+
+    if (response.status === 200) {
+      return {
+        name: 'Topaz API Connection',
+        status: 'pass',
+        message: 'Connected to Topaz Labs API',
+        duration: Date.now() - start,
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        name: 'Topaz API Connection',
+        status: 'fail',
+        message: 'Invalid API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://www.topazlabs.com/api',
+      };
+    }
+
+    return {
+      name: 'Topaz API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Topaz API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+    };
+  }
+}
+
+// ============================================================================
+// Smoke Tests
+// ============================================================================
+
+export async function smokeTestGeneration(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.gemini?.apiKey) {
+    return {
+      name: 'Smoke Test: Image Generation',
+      status: 'skip',
+      message: 'No generation provider configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    // Minimal generation test with safe prompt
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(ctx.providers.gemini.apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+
+    const response = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: 'A simple blue circle on white background' }] }],
+      generationConfig: {
+        responseModalities: ['image'],
+      },
+    });
+
+    const hasImage = response.response.candidates?.[0]?.content?.parts?.some(
+      (p: any) => p.inlineData?.mimeType?.startsWith('image/')
+    );
+
+    if (hasImage) {
+      return {
+        name: 'Smoke Test: Image Generation',
+        status: 'pass',
+        message: `Image generated successfully in ${Date.now() - start}ms`,
+        duration: Date.now() - start,
+        details: { provider: 'gemini', model: 'gemini-2.5-flash-image' },
+      };
+    }
+
+    return {
+      name: 'Smoke Test: Image Generation',
+      status: 'fail',
+      message: 'No image in response',
+      duration: Date.now() - start,
+    };
+  } catch (error: any) {
+    // Check for specific error types
+    if (error.message?.includes('content policy')) {
+      return {
+        name: 'Smoke Test: Image Generation',
+        status: 'fail',
+        message: 'Content policy violation (unexpected for test prompt)',
+        duration: Date.now() - start,
+        remediation: 'This may indicate API changes, check Gemini documentation',
+      };
+    }
+
+    if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+      return {
+        name: 'Smoke Test: Image Generation',
+        status: 'warn',
+        message: 'Rate limited, generation likely works but at quota',
+        duration: Date.now() - start,
+        remediation: 'Wait and retry, or upgrade API tier',
+      };
+    }
+
+    return {
+      name: 'Smoke Test: Image Generation',
+      status: 'fail',
+      message: `Generation failed: ${error.message}`,
+      duration: Date.now() - start,
+    };
+  }
+}
+
+export async function smokeTestPromptEnhancement(): Promise<ValidationResult> {
+  const start = Date.now();
+  try {
+    // Dynamic import to test module loading
+    const { PromptEnhancer } = await import('../core/prompt-enhancer');
+    const enhancer = new PromptEnhancer();
+
+    const original = 'cat on roof';
+    const enhanced = enhancer.enhance(original, { style: 'photo' });
+
+    if (enhanced.length > original.length) {
+      return {
+        name: 'Smoke Test: Prompt Enhancement',
+        status: 'pass',
+        message: 'Prompt enhancer working',
+        duration: Date.now() - start,
+        details: { original, enhanced: enhanced.slice(0, 100) + '...' },
+      };
+    }
+
+    return {
+      name: 'Smoke Test: Prompt Enhancement',
+      status: 'fail',
+      message: 'Enhancement did not expand prompt',
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Smoke Test: Prompt Enhancement',
+      status: 'fail',
+      message: `Import or execution failed: ${error}`,
+      duration: Date.now() - start,
+    };
+  }
+}
+
+export async function smokeTestRetryLogic(): Promise<ValidationResult> {
+  const start = Date.now();
+  try {
+    const { withRetry, isRetryableError } = await import('../core/retry');
+
+    // Test retry with simulated failures
+    let attempts = 0;
+    const result = await withRetry(
+      async () => {
+        attempts++;
+        if (attempts < 3) throw new Error('rate limit 429');
+        return 'success';
+      },
+      { maxAttempts: 5, baseDelayMs: 10, jitterMs: 5 }
+    );
+
+    if (result === 'success' && attempts === 3) {
+      return {
+        name: 'Smoke Test: Retry Logic',
+        status: 'pass',
+        message: `Retry logic working (succeeded after ${attempts} attempts)`,
+        duration: Date.now() - start,
+      };
+    }
+
+    return {
+      name: 'Smoke Test: Retry Logic',
+      status: 'fail',
+      message: 'Unexpected retry behavior',
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Smoke Test: Retry Logic',
+      status: 'fail',
+      message: `Retry test failed: ${error}`,
+      duration: Date.now() - start,
+    };
+  }
+}
+```
+
+**Step 2: Create validation runner**
+
+Create `plugins/maccing-pictura/server/src/validation/index.ts`:
+
+```typescript
+import {
+  checkConfigExists,
+  checkConfigPermissions,
+  checkOutputDirectory,
+  checkGeminiConnection,
+  checkOpenAIConnection,
+  checkTopazConnection,
+  smokeTestGeneration,
+  smokeTestPromptEnhancement,
+  smokeTestRetryLogic,
+  type ValidationResult,
+  type ValidationContext,
+} from './checks';
+import { ConfigManager } from '../core/config';
+
+export interface ValidationReport {
+  timestamp: string;
+  duration: number;
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    warnings: number;
+    skipped: number;
+  };
+  results: ValidationResult[];
+  productionReady: boolean;
+  blockers: string[];
+  recommendations: string[];
+}
+
+export async function runValidation(configPath: string): Promise<ValidationReport> {
+  const start = Date.now();
+  const results: ValidationResult[] = [];
+
+  // Build context
+  let ctx: ValidationContext = {
+    configPath,
+    outputDir: '.claude/plugins/maccing/pictura/output',
+    providers: {},
+  };
+
+  // Try to load config for provider credentials
+  const configManager = new ConfigManager(configPath);
+  if (await configManager.exists()) {
+    try {
+      const config = await configManager.load();
+      ctx.outputDir = config.outputDir;
+      ctx.providers = {
+        gemini: config.providers.generation.gemini,
+        openai: config.providers.generation.openai,
+        topaz: config.providers.upscale.topaz,
+      };
+    } catch (e) {
+      results.push({
+        name: 'Config Parse',
+        status: 'fail',
+        message: `Failed to parse config: ${e}`,
+        remediation: 'Check config.json for syntax errors',
+      });
+    }
+  }
+
+  // ========================================
+  // Phase 1: Pre-flight Checks
+  // ========================================
+  console.log('\n◎ Phase 1: Pre-flight Checks ────────────────────────────────\n');
+
+  results.push(await checkConfigExists(ctx));
+  logResult(results[results.length - 1]);
+
+  results.push(await checkConfigPermissions(ctx));
+  logResult(results[results.length - 1]);
+
+  results.push(await checkOutputDirectory(ctx));
+  logResult(results[results.length - 1]);
+
+  // ========================================
+  // Phase 2: Provider Health Checks
+  // ========================================
+  console.log('\n◎ Phase 2: Provider Health ──────────────────────────────────\n');
+
+  results.push(await checkGeminiConnection(ctx));
+  logResult(results[results.length - 1]);
+
+  results.push(await checkOpenAIConnection(ctx));
+  logResult(results[results.length - 1]);
+
+  results.push(await checkTopazConnection(ctx));
+  logResult(results[results.length - 1]);
+
+  // ========================================
+  // Phase 3: Smoke Tests
+  // ========================================
+  console.log('\n◎ Phase 3: Smoke Tests ──────────────────────────────────────\n');
+
+  results.push(await smokeTestPromptEnhancement());
+  logResult(results[results.length - 1]);
+
+  results.push(await smokeTestRetryLogic());
+  logResult(results[results.length - 1]);
+
+  // Only run generation smoke test if pre-flight passed
+  const preflightPassed = results.filter(r =>
+    r.name.includes('Config') || r.name.includes('Output')
+  ).every(r => r.status !== 'fail');
+
+  if (preflightPassed && ctx.providers.gemini?.apiKey) {
+    results.push(await smokeTestGeneration(ctx));
+    logResult(results[results.length - 1]);
+  } else {
+    results.push({
+      name: 'Smoke Test: Image Generation',
+      status: 'skip',
+      message: 'Skipped due to pre-flight failures or missing config',
+    });
+    logResult(results[results.length - 1]);
+  }
+
+  // ========================================
+  // Generate Report
+  // ========================================
+  const summary = {
+    total: results.length,
+    passed: results.filter(r => r.status === 'pass').length,
+    failed: results.filter(r => r.status === 'fail').length,
+    warnings: results.filter(r => r.status === 'warn').length,
+    skipped: results.filter(r => r.status === 'skip').length,
+  };
+
+  const blockers = results
+    .filter(r => r.status === 'fail')
+    .map(r => `${r.name}: ${r.message}`);
+
+  const recommendations = results
+    .filter(r => r.remediation)
+    .map(r => `${r.name}: ${r.remediation}`);
+
+  const productionReady = summary.failed === 0 && summary.passed >= 3;
+
+  return {
+    timestamp: new Date().toISOString(),
+    duration: Date.now() - start,
+    summary,
+    results,
+    productionReady,
+    blockers,
+    recommendations,
+  };
+}
+
+function logResult(result: ValidationResult): void {
+  // Follow maccing marketplace output patterns
+  const statusFormat = {
+    pass: '✓`',
+    fail: '✖ FAIL',
+    warn: '▲ WARN',
+    skip: '○',
+  }[result.status];
+
+  const duration = result.duration ? ` (${result.duration}ms)` : '';
+
+  if (result.status === 'fail' || result.status === 'warn') {
+    // Failure/warning format: status on its own line with details below
+    console.log(`${statusFormat}: ${result.name}`);
+    console.log(`${result.message}`);
+    if (result.remediation) {
+      console.log(`→ ${result.remediation}`);
+    }
+    console.log('');
+  } else {
+    // Pass/skip format: inline with name and duration
+    console.log(`${statusFormat} ${result.name}${duration}`);
+  }
+}
+
+export function formatReport(report: ValidationReport): string {
+  const lines: string[] = [];
+  const date = new Date(report.timestamp);
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+  // Header: follows maccing pattern with ★ and ─
+  lines.push('');
+  lines.push('★ maccing-pictura: Validation Report ────────────────────────');
+  lines.push('');
+  lines.push(`Date:       ${dateStr}`);
+  lines.push(`Duration:   ${report.duration}ms`);
+  lines.push('');
+
+  // Group results by phase for output
+  const preflightResults = report.results.filter(r =>
+    r.name.includes('Config') || r.name.includes('Output')
+  );
+  const providerResults = report.results.filter(r =>
+    r.name.includes('Connection')
+  );
+  const smokeResults = report.results.filter(r =>
+    r.name.includes('Smoke')
+  );
+
+  // Phase sections with ◎ and ─
+  if (preflightResults.length > 0) {
+    lines.push('◎ Phase 1: Pre-flight Checks ────────────────────────────────');
+    lines.push('');
+    preflightResults.forEach(r => {
+      const icon = { pass: '✓`', fail: '✖', warn: '▲', skip: '○' }[r.status];
+      const dur = r.duration ? ` (${r.duration}ms)` : '';
+      lines.push(`${icon} ${r.name}${dur}`);
+    });
+    lines.push('');
+  }
+
+  if (providerResults.length > 0) {
+    lines.push('◎ Phase 2: Provider Health ──────────────────────────────────');
+    lines.push('');
+    providerResults.forEach(r => {
+      const icon = { pass: '✓`', fail: '✖', warn: '▲', skip: '○' }[r.status];
+      const dur = r.duration ? ` (${r.duration}ms)` : '';
+      lines.push(`${icon} ${r.name}${dur}`);
+    });
+    lines.push('');
+  }
+
+  if (smokeResults.length > 0) {
+    lines.push('◎ Phase 3: Smoke Tests ──────────────────────────────────────');
+    lines.push('');
+    smokeResults.forEach(r => {
+      const icon = { pass: '✓`', fail: '✖', warn: '▲', skip: '○' }[r.status];
+      const dur = r.duration ? ` (${r.duration}ms)` : '';
+      lines.push(`${icon} ${r.name}${dur}`);
+    });
+    lines.push('');
+  }
+
+  // Failures and warnings with details
+  const failures = report.results.filter(r => r.status === 'fail');
+  const warnings = report.results.filter(r => r.status === 'warn');
+
+  if (failures.length > 0 || warnings.length > 0) {
+    lines.push('────────────────────────────────────────────────────────────────');
+    lines.push('');
+
+    failures.forEach(r => {
+      lines.push(`✖ FAIL: ${r.name}`);
+      lines.push(r.message);
+      if (r.remediation) {
+        lines.push(`→ ${r.remediation}`);
+      }
+      lines.push('');
+    });
+
+    warnings.forEach(r => {
+      lines.push(`▲ WARN: ${r.name}`);
+      lines.push(r.message);
+      if (r.remediation) {
+        lines.push(`→ ${r.remediation}`);
+      }
+      lines.push('');
+    });
+  }
+
+  // Summary section with ─
+  lines.push('────────────────────────────────────────────────────────────────');
+  lines.push('');
+  lines.push('Summary:');
+  lines.push(`- Passed:   ${report.summary.passed}`);
+  lines.push(`- Failed:   ${report.summary.failed}`);
+  lines.push(`- Warnings: ${report.summary.warnings}`);
+  lines.push(`- Skipped:  ${report.summary.skipped}`);
+  lines.push('');
+
+  // Final verdict with ✓/⚠ and ─
+  if (report.productionReady) {
+    lines.push('✓ maccing-pictura: PRODUCTION READY ────────────────────────');
+  } else {
+    lines.push('⚠ maccing-pictura: NOT PRODUCTION READY ────────────────────');
+    lines.push('');
+    lines.push('Blockers:');
+    report.blockers.forEach((b, i) => {
+      lines.push(`${i + 1}. ${b}`);
+    });
+
+    if (report.recommendations.length > 0) {
+      lines.push('');
+      lines.push('Next Steps:');
+      report.recommendations.forEach((r, i) => {
+        lines.push(`${i + 1}. ${r}`);
+      });
+    }
+  }
+
+  return lines.join('\n');
+}
+
+// CLI entry point
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const configPath = process.argv[2] || '.claude/plugins/maccing/pictura/config.json';
+  runValidation(configPath).then(report => {
+    console.log(formatReport(report));
+    process.exit(report.productionReady ? 0 : 1);
+  });
+}
+```
+
+---
+
+### Task 21: Create AI-Guided Validation Command
+
+**Files:**
+- Create: `plugins/maccing-pictura/commands/validate.md`
+- Create: `plugins/maccing-pictura/skills/validation/SKILL.md`
+
+**Step 1: Create validate command**
+
+Create `plugins/maccing-pictura/commands/validate.md`:
+
+```markdown
+---
+description: Run AI-guided validation to verify pictura installation and configuration
+---
+
+# Pictura Validate
+
+Run comprehensive validation to verify the pictura plugin is correctly installed and configured.
+
+## What This Command Does
+
+Claude will:
+1. Execute the validation script against your configuration
+2. Analyze results and identify issues
+3. Provide specific remediation steps for any failures
+4. Confirm production readiness
+
+## Arguments
+
+$ARGUMENTS is optional. Can be:
+- `--full`: Run all checks including live API tests (may incur costs)
+- `--quick`: Run only pre-flight checks (no API calls)
+- `--provider gemini|openai|topaz`: Test specific provider only
+
+## AI-Guided Process
+
+When you run this command, Claude will:
+
+1. **Check pre-flight conditions:**
+   - Config file exists and is valid JSON
+   - Permissions are secure (600)
+   - Output directory is writable
+
+2. **Verify provider connections:**
+   - Test each configured API key
+   - Verify quota/rate limit status
+   - Check available models
+
+3. **Run smoke tests:**
+   - Generate a simple test image
+   - Verify prompt enhancement
+   - Test retry logic
+
+4. **Provide remediation:**
+   - For each failure, provide specific fix
+   - Explain root cause
+   - Link to relevant documentation
+
+## Examples
+
+```
+/pictura:validate
+/pictura:validate --full
+/pictura:validate --provider gemini
+```
+
+## Production Readiness Criteria
+
+The plugin is production-ready when:
+- [ ] Config file exists with secure permissions
+- [ ] At least one generation provider is configured and connected
+- [ ] Output directory is writable
+- [ ] Smoke tests pass
+
+## Troubleshooting
+
+If validation fails, Claude will guide you through fixes. Common issues:
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Config not found | First run | Run `/pictura:setup` |
+| Invalid API key | Expired or wrong key | Regenerate at provider dashboard |
+| Rate limited | Quota exceeded | Wait or upgrade tier |
+| Permission denied | File permissions | `chmod 600 config.json` |
+```
+
+**Step 2: Create validation skill**
+
+Create `plugins/maccing-pictura/skills/validation/SKILL.md`:
+
+```markdown
+---
+name: pictura-validation
+description: Use when user wants to verify, validate, test, or check if pictura is working correctly. Also triggers for troubleshooting, debugging, or diagnosing pictura issues.
+---
+
+# Pictura Validation Skill
+
+This skill guides comprehensive validation of the pictura plugin installation.
+
+## When to Use
+
+- User asks "is pictura working?"
+- User reports generation failures
+- After initial setup
+- Before production deployment
+- When troubleshooting issues
+
+## Validation Process
+
+### Step 1: Run Validation Script
+
+Execute the validation runner:
 
 ```bash
-git add -A
-git commit -m "chore(pictura): finalize v1.0.0"
+cd plugins/maccing-pictura/server && npx tsx src/validation/index.ts
 ```
+
+Or via MCP tool if server is running:
+
+```
+pictura_validate
+```
+
+### Step 2: Analyze Results
+
+For each check, interpret the result:
+
+**PASS results:** Confirm working, no action needed.
+
+**FAIL results:** This is critical. Provide:
+1. What failed and why
+2. Exact command or action to fix
+3. How to verify the fix worked
+
+**WARN results:** Not blocking but should be addressed:
+1. Explain the risk
+2. Provide remediation steps
+3. Note if it can be ignored
+
+**SKIP results:** Expected when feature not configured:
+1. Explain what was skipped
+2. Note if this is intentional
+
+### Step 3: Production Readiness Assessment
+
+After all checks, make a clear determination:
+
+**If ALL critical checks pass:**
+```
+✓ Pictura is PRODUCTION READY
+
+All critical systems validated:
+- Configuration: Valid
+- Providers: Gemini connected
+- Generation: Working
+- Output: Writable
+
+You can now use /pictura:generate to create images.
+```
+
+**If ANY critical check fails:**
+```
+✗ Pictura is NOT READY
+
+Blockers found:
+1. [Blocker 1]: [Fix]
+2. [Blocker 2]: [Fix]
+
+Please resolve these issues and run /pictura:validate again.
+```
+
+### Step 4: Interactive Troubleshooting
+
+If user wants help fixing issues:
+
+1. Ask which issue to address first
+2. Guide through fix step-by-step
+3. Re-run relevant check to confirm
+4. Repeat until all issues resolved
+
+## Common Issues and Fixes
+
+### Config Not Found
+```bash
+# Create config directory
+mkdir -p .claude/plugins/maccing/pictura
+
+# Run setup
+/pictura:setup
+```
+
+### Invalid Gemini API Key
+```
+1. Go to https://aistudio.google.com/apikey
+2. Create new API key or copy existing
+3. Update config.json with new key
+4. Re-run validation
+```
+
+### Rate Limited
+```
+Free tier: 2 images/minute
+Tier 1: 10 images/minute
+Tier 2: 20 images/minute
+
+Options:
+- Wait 60 seconds and retry
+- Upgrade at https://ai.google.dev/pricing
+```
+
+### Permission Denied on Config
+```bash
+chmod 600 .claude/plugins/maccing/pictura/config.json
+```
+
+## Validation Checklist
+
+Use this checklist for manual verification:
+
+- [ ] `config.json` exists in `.claude/plugins/maccing/pictura/`
+- [ ] Config has `600` permissions
+- [ ] At least one `providers.generation` entry has valid `apiKey`
+- [ ] MCP server starts without errors
+- [ ] `pictura_generate` tool appears in Claude's tool list
+- [ ] Test generation produces an image file
+- [ ] Image file saved to correct output path
+```
+
+---
+
+### Task 22: Add Validation MCP Tool
+
+**Files:**
+- Modify: `plugins/maccing-pictura/server/src/index.ts`
+
+**Step 1: Add validate tool to MCP server**
+
+Add to `plugins/maccing-pictura/server/src/index.ts`:
+
+```typescript
+import { runValidation, formatReport } from './validation';
+
+// Validate tool
+server.tool(
+  'pictura_validate',
+  'Run comprehensive validation to verify pictura installation and configuration',
+  {
+    type: 'object',
+    properties: {
+      mode: {
+        type: 'string',
+        enum: ['full', 'quick', 'provider'],
+        default: 'full',
+        description: 'Validation mode: full (all checks), quick (pre-flight only), provider (specific provider)',
+      },
+      provider: {
+        type: 'string',
+        enum: ['gemini', 'openai', 'topaz'],
+        description: 'Specific provider to test (only with mode=provider)',
+      },
+    },
+  },
+  async (params) => {
+    try {
+      const p = params as Record<string, unknown>;
+      const report = await runValidation(configPath);
+
+      const summary = [
+        formatReport(report),
+        '',
+        '---',
+        '',
+        report.productionReady
+          ? '✓ **PRODUCTION READY** - All critical checks passed.'
+          : '✗ **NOT READY** - Please address the blockers above.',
+      ];
+
+      if (!report.productionReady && report.recommendations.length > 0) {
+        summary.push('');
+        summary.push('**Next Steps:**');
+        report.recommendations.forEach((rec, i) => {
+          summary.push(`${i + 1}. ${rec}`);
+        });
+      }
+
+      return {
+        content: [{ type: 'text', text: summary.join('\n') }],
+        isError: !report.productionReady,
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `Validation failed: ${error}` }],
+        isError: true,
+      };
+    }
+  }
+);
+```
+
+---
+
+### Task 23: Production Readiness Checklist
+
+**Files:**
+- Create: `plugins/maccing-pictura/PRODUCTION_CHECKLIST.md`
+
+**Step 1: Create checklist document**
+
+Create `plugins/maccing-pictura/PRODUCTION_CHECKLIST.md`:
+
+```markdown
+# Pictura Production Readiness Checklist
+
+Use this checklist before deploying pictura to production.
+
+## Automated Checks (via /pictura:validate)
+
+Run `/pictura:validate --full` and ensure all pass:
+
+- [ ] Config file exists with valid JSON
+- [ ] Config permissions are 600 (user-only)
+- [ ] Output directory exists and is writable
+- [ ] At least one generation provider connected
+- [ ] Smoke test generation succeeds
+- [ ] Prompt enhancement working
+- [ ] Retry logic working
+
+## Manual Verification
+
+### Security
+- [ ] API keys are not committed to git
+- [ ] `.gitignore` includes config path
+- [ ] Environment variables used in CI/CD (not config file)
+- [ ] No API keys in logs or error messages
+
+### Rate Limits
+- [ ] Understand your tier limits (Free: 2 IPM, Tier 1: 10 IPM)
+- [ ] Retry logic handles 429 with exponential backoff
+- [ ] Jitter added to prevent thundering herd
+
+### Error Handling
+- [ ] Content policy violations handled gracefully
+- [ ] Network timeouts trigger retries
+- [ ] Invalid API keys stop batch immediately
+- [ ] Users see helpful error messages
+
+### Cost Control
+- [ ] Using draft mode for development
+- [ ] Batch API considered for non-urgent work
+- [ ] Request caching prevents duplicate generations
+
+### Monitoring
+- [ ] Generation success/failure logged
+- [ ] API costs tracked
+- [ ] Rate limit warnings logged
+
+## Provider-Specific Checks
+
+### Gemini
+- [ ] API key from aistudio.google.com
+- [ ] Model `gemini-2.5-flash-image` accessible
+- [ ] Tier appropriate for expected volume
+
+### OpenAI (if used)
+- [ ] Using `gpt-image-1.5` (not deprecated DALL-E)
+- [ ] Aware of 3-size limitation
+- [ ] Ratio mapping configured
+
+### Topaz (if used)
+- [ ] API key from topazlabs.com
+- [ ] Async polling implemented for generative models
+- [ ] 500MB request limit understood
+
+## Go/No-Go Decision
+
+**GO** if:
+- All automated checks pass
+- At least one provider fully configured
+- Security checklist complete
+
+**NO-GO** if:
+- Any automated check fails
+- API keys exposed
+- No provider configured
+```
+
+---
+
+### Task 24: Run Full Validation
+
+**Step 1: Build the validation module**
+
+```bash
+cd plugins/maccing-pictura/server && npm run build
+```
+
+Expected: Build succeeds
+
+**Step 2: Run validation**
+
+```bash
+cd plugins/maccing-pictura/server && npx tsx src/validation/index.ts
+```
+
+Expected: Validation report with pass/fail status
+
+**Step 3: Address any failures**
+
+For each failure, follow the remediation steps provided.
+
+**Step 4: Confirm production readiness**
+
+```bash
+/pictura:validate
+```
+
+Expected: "PRODUCTION READY" status
 
 ---
 
@@ -2675,8 +3881,10 @@ git commit -m "chore(pictura): finalize v1.0.0"
 3. **Providers** (`providers/`): Gemini, OpenAI, Topaz implementations
 4. **Core** (`core/`): Config, retry, output, prompt enhancer
 5. **MCP Server** (`index.ts`): Tools exposed via Model Context Protocol
+6. **Validation** (`validation/`): AI-guided production readiness verification
 
-**Total Tasks:** 19
-**Estimated Commits:** 19+
+**Total Tasks:** 24
 
-Each task follows TDD: test → fail → implement → pass → commit.
+Each task follows TDD: test → fail → implement → pass.
+
+**Final Step:** Run `/pictura:validate` to confirm production readiness.

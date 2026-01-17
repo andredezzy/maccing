@@ -88,12 +88,80 @@ interface UpscaleProvider {
 
 **Bundled Providers (v1.0):**
 
-| Type | Provider | Notes |
-|------|----------|-------|
-| Generation | Gemini | Nano Banana + Pro |
-| Generation | OpenAI | DALL-E 3 |
-| Upscale | Topaz Labs | Standard + Generative models |
-| Upscale | Replicate | Various open models |
+| Type | Provider | Model IDs | Limitations |
+|------|----------|-----------|-------------|
+| Generation | Gemini | `gemini-2.5-flash-image` (draft), `gemini-3-pro-image-preview` (pro) | All 10 ratios, 4K max on Pro |
+| Generation | OpenAI | `gpt-image-1.5` (recommended), `gpt-image-1` | **Only 3 sizes:** 1024x1024, 1536x1024, 1024x1536 |
+| Upscale | Topaz Labs | `standard-v2`, `standard-max`, `recovery-v2`, `high-fidelity-v2` | Generative models are **async only** |
+| Upscale | Replicate | TBD (v1.1) | Deferred to future release |
+
+> **CRITICAL: OpenAI DALL-E 3 Deprecation**
+> DALL-E 2 and DALL-E 3 are deprecated and will be removed on **May 12, 2026**. Use GPT Image models instead (`gpt-image-1.5`, `gpt-image-1`, `gpt-image-1-mini`).
+
+**OpenAI Size Limitation Handling:**
+
+OpenAI GPT Image models only support 3 fixed sizes, not aspect ratios:
+- 1024x1024 (1:1 square)
+- 1536x1024 (~3:2 landscape)
+- 1024x1536 (~2:3 portrait)
+
+When OpenAI is selected and user requests unsupported ratio:
+1. Warn user that OpenAI has limited size options
+2. Fall back to Gemini if configured
+3. Or map to nearest supported size (e.g., 16:9 → 1536x1024, 9:16 → 1024x1536)
+
+---
+
+## Rate Limiting and Quotas
+
+### Gemini API Limits
+
+Rate limits apply **per Google Cloud Project**, not per API key. Creating multiple keys won't multiply limits.
+
+| Tier | Images Per Minute (IPM) | Cost |
+|------|-------------------------|------|
+| Free | 2 IPM | $0 |
+| Tier 1 | 10 IPM | Pay-as-you-go |
+| Tier 2 | 20 IPM | $250+ cumulative spend + 30 days |
+| Tier 3+ | 100+ IPM | Enterprise agreement |
+
+**Pricing:** Gemini 2.5 Flash Image: $0.039 per image (1290 output tokens at $30/1M tokens)
+
+### Topaz API Limits
+
+- Request size limit: **500MB** (HTTP 413 if exceeded)
+- Rate limits are dynamic based on server load
+- Generative models (standard-max, recovery-v2, high-fidelity-v2) are **async only**
+
+### Cost Optimization Strategies
+
+1. **Batch API:** Gemini offers 50% cost reduction for non-time-sensitive workloads
+2. **Context Caching:** Can reduce costs by up to 75% on cached prompt portions
+3. **Draft Mode:** Use `gemini-2.5-flash-image` for rapid prototyping, Pro for final assets
+4. **Request Caching:** Prevent duplicate generations by caching results locally
+
+---
+
+## Reference Image Handling
+
+### Gemini 3 Pro Multi-Image Support
+
+Gemini 3 Pro Image Preview supports up to **14 reference images**:
+- Up to **6 images of objects** for high-fidelity inclusion
+- Up to **5 images of humans** for character consistency across generations
+
+### Character Consistency Workflow
+
+1. Upload reference images of the character (up to 5)
+2. Model "memorizes" facial features and clothing
+3. Subsequent generations maintain consistency
+4. If features drift after many edits, restart with detailed description
+
+### Best Practices
+
+- For brand consistency: provide logo/style reference images
+- For character series: maintain same reference set across all generations
+- Include both front and side views for better character understanding
 
 ---
 
@@ -114,43 +182,25 @@ plugins/maccing-pictura/
 │   ├── edit.md
 │   ├── upscale.md
 │   ├── list.md
-│   └── gallery.md
+│   ├── gallery.md
+│   └── setup.md
 ├── server/                          # MCP Server (TypeScript)
 │   ├── src/
 │   │   ├── index.ts                 # MCP server entry
-│   │   ├── tools/
-│   │   │   ├── generate.ts
-│   │   │   ├── edit.ts
-│   │   │   ├── upscale.ts
-│   │   │   ├── list.ts
-│   │   │   └── gallery.ts
+│   │   ├── generate.ts              # Unified generate with fallback chains
+│   │   ├── provider-spec/
+│   │   │   └── factory.ts           # Provider factory + all types
 │   │   ├── providers/
-│   │   │   ├── generation/
-│   │   │   │   ├── base.ts
-│   │   │   │   ├── gemini.ts
-│   │   │   │   └── openai.ts
-│   │   │   └── upscale/
-│   │   │       ├── base.ts
-│   │   │       ├── topaz.ts
-│   │   │       └── replicate.ts
+│   │   │   ├── gemini.ts
+│   │   │   ├── openai.ts
+│   │   │   └── topaz.ts
 │   │   ├── core/
-│   │   │   ├── orchestrator.ts
-│   │   │   ├── prompt-enhancer.ts
-│   │   │   ├── consistency.ts
 │   │   │   ├── config.ts
-│   │   │   ├── retry.ts
-│   │   │   └── output.ts
-│   │   ├── gallery/
-│   │   │   ├── generator.ts
-│   │   │   └── template.html
-│   │   ├── types/
-│   │   │   ├── provider.ts
-│   │   │   ├── image.ts
-│   │   │   └── config.ts
+│   │   │   ├── output.ts
+│   │   │   ├── prompt-enhancer.ts
+│   │   │   └── retry.ts
 │   │   └── utils/
-│   │       ├── slug.ts
-│   │       ├── ratio.ts
-│   │       └── logger.ts
+│   │       └── slug.ts
 │   ├── dist/
 │   ├── package.json
 │   └── tsconfig.json
@@ -233,12 +283,26 @@ Project-local: `.claude/plugins/maccing/pictura/config.json`
 
 ### First-Run Setup
 
+MCP servers run in the background and cannot prompt interactively. The setup flow is:
+
 1. User runs `/pictura:generate "test prompt"`
-2. Plugin detects missing config
-3. Prompts: "Gemini API key not found. Enter your key:"
-4. Prompts: "Topaz API key (optional, for premium upscale):"
-5. Creates config file with defaults
-6. Proceeds with generation
+2. MCP tool returns error with setup instructions:
+   ```
+   Configuration required. Create config file at:
+   .claude/plugins/maccing/pictura/config.json
+
+   Required fields:
+   - providers.generation.gemini.apiKey: Your Gemini API key
+
+   Optional fields:
+   - providers.upscale.topaz.apiKey: For premium upscaling
+   ```
+3. User creates config file manually or via `/pictura:setup` command
+4. `/pictura:setup` command guides Claude to:
+   - Ask user for API keys
+   - Generate config JSON
+   - Write to config file using Write tool
+5. Subsequent runs use the config
 
 ---
 
@@ -286,6 +350,13 @@ Edit existing image batch by prompt slug.
 - `--extend top|bottom|left|right`: Outpaint direction
 - `--style path/to/style.png`: Style transfer reference
 
+**Mask Handling:**
+
+The `--mask` flag accepts natural language region descriptions. How it works:
+1. Gemini API supports text-based masking natively via prompt engineering
+2. The edit prompt is structured as: `"In the image, modify only the {mask region}: {edit instruction}"`
+3. For providers without native text masking, a separate segmentation model generates the mask
+
 **Examples:**
 ```bash
 /pictura:edit "mountain-sunset" --prompt "add dramatic clouds"
@@ -326,6 +397,22 @@ Open visual browser in default browser.
 - `--filter "product"`: Show only matching slugs
 - `--since 2026-01-15`: Filter by date
 
+### /pictura:setup
+
+Configure API keys and preferences interactively.
+
+**How it works:**
+1. Command triggers a skill that guides Claude through setup
+2. Claude asks user for each required API key
+3. Claude generates the config JSON structure
+4. Claude writes config to `.claude/plugins/maccing/pictura/config.json`
+
+**Examples:**
+```bash
+/pictura:setup                    # Full interactive setup
+/pictura:setup --provider gemini  # Configure only Gemini
+```
+
 ---
 
 ## Consistency Strategies
@@ -336,21 +423,50 @@ Open visual browser in default browser.
 - Uses that image as reference for remaining ratios
 - Best balance of consistency and simplicity
 
+**Implementation:**
+```typescript
+const referenceImage = await generateImage({ prompt, ratio: '16:9' });
+for (const ratio of remainingRatios) {
+  await generateImage({ prompt, ratio, reference: referenceImage.data });
+}
+```
+
 ### 2. User-provided reference
 
 - User supplies reference image upfront
 - All ratios generated using that reference
 - Best for matching existing brand assets
 
+**Implementation:**
+```typescript
+const reference = await fs.readFile(userRefPath);
+for (const ratio of ratios) {
+  await generateImage({ prompt, ratio, reference });
+}
+```
+
 ### 3. Multi-turn conversation
 
-- Single chat session maintained
-- Each ratio generated sequentially with full context
+- Single API session maintained with conversation history
+- Each ratio generated sequentially with Claude describing the previous result
 - Best for complex scenes requiring reasoning
+
+**Implementation Note:**
+Gemini image generation doesn't maintain true conversation state. This strategy works by:
+1. Generating first image
+2. Claude describes the generated image in detail
+3. Subsequent generations include both the original prompt AND Claude's description
+4. This creates semantic consistency without actual multi-turn API support
+
+**Limitation:** More expensive (requires Claude analysis between generations)
 
 ---
 
 ## Automatic Prompt Enhancement
+
+### Core Principle
+
+**"Describe the scene, don't just list keywords."** Gemini excels with narrative, descriptive paragraphs rather than disconnected terms.
 
 ### Enhancement Pipeline
 
@@ -364,6 +480,16 @@ User prompt --> Prompt Enhancer --> Enhanced prompt --> Image Generation API
                                  85mm portrait lens, warm amber tones"
 ```
 
+### Prompt Structure Template
+
+Effective prompts follow this structure:
+
+```
+"A [style adjective] [shot type] of [subject], [action/pose],
+set in [environment]. The scene is illuminated by [lighting],
+creating a [mood] atmosphere. [Technical specifications]."
+```
+
 ### Enhancement Taxonomy (24-point framework)
 
 | Category | Elements Added |
@@ -375,6 +501,24 @@ User prompt --> Prompt Enhancer --> Enhanced prompt --> Image Generation API
 | **Style** | Art movement, technique, medium, artist reference |
 | **Technical** | Lens, aperture, resolution, aspect ratio |
 
+### Photography/Cinematic Language
+
+Use specific terminology for better control:
+- **Shot types:** wide-angle, macro, close-up, aerial, Dutch angle
+- **Lenses:** 85mm portrait lens, 35mm wide angle, 200mm telephoto
+- **Angles:** low-angle, high-angle, eye-level, bird's eye view
+- **Depth:** shallow depth of field, bokeh, tilt-shift
+
+### Negative Prompts
+
+Use semantic negative prompts (describe what you want positively):
+
+| Instead of | Use |
+|------------|-----|
+| "no cars" | "empty street with no traffic" |
+| "without people" | "deserted landscape" |
+| "no text" | "clean background" |
+
 ### Style Detection
 
 | User Input | Style Detected | Enhanced Output |
@@ -382,6 +526,14 @@ User prompt --> Prompt Enhancer --> Enhanced prompt --> Image Generation API
 | "cat on roof" | photorealistic | "A fluffy orange tabby cat perched on weathered terracotta roof tiles, golden hour lighting, shallow depth of field, 85mm lens, warm amber tones" |
 | "happy robot" | illustration | "A cheerful humanoid robot with rounded features and glowing blue eyes, clean vector style, bold outlines, cel-shaded, vibrant pastel color palette, white background" |
 | "luxury watch" | commercial | "High-end chronograph watch on polished marble surface, studio lighting with soft diffusion, elevated 45-degree angle, ultra-realistic product photography, reflective metal details" |
+
+### Iterative Refinement
+
+Don't expect perfection on first attempt:
+1. Generate initial image
+2. Make incremental adjustments with follow-up prompts
+3. If character features drift, restart with detailed description
+4. Use "hyper-specific" descriptions for consistency
 
 ---
 
@@ -396,11 +548,52 @@ User prompt --> Prompt Enhancer --> Enhanced prompt --> Image Generation API
 
 **Turn 2: Topaz Labs API (8x Enhancement)**
 - Sends 4K output to Topaz Labs Enhance API
-- Model options:
-  - `Standard MAX`: Photorealistic detail, best for photos (default)
-  - `Recovery V2`: Maximum enhancement for lower quality inputs
-  - `High Fidelity V2`: Preserves fine details for professional use
+- Model options (exact API names):
+  - `standard-max` (Generative): Photorealistic detail, best for photos (default)
+  - `recovery-v2` (Generative): Maximum enhancement for lower quality inputs
+  - `high-fidelity-v2` (Standard): Preserves fine details for professional use
+  - `standard-v2` (Standard): Fast general-purpose upscaling
 - Face recovery, sharpening, denoising applied automatically
+- **Note:** Generative models are async and may take several minutes
+
+### Topaz Async Job Handling
+
+Generative models (`standard-max`, `recovery-v2`, `high-fidelity-v2`, `redefine`, `wonder`) return a job ID instead of immediate results:
+
+```typescript
+// 1. Submit enhancement request
+const response = await fetch('https://api.topazlabs.com/v1/enhance', {
+  method: 'POST',
+  headers: { 'X-API-Key': apiKey },
+  body: JSON.stringify({ image: base64, model: 'standard-max', scale: 4 }),
+});
+
+const { jobId } = await response.json();
+
+// 2. Poll for completion with exponential backoff
+let result = null;
+let attempts = 0;
+const maxAttempts = 30; // ~5 minutes max
+
+while (!result && attempts < maxAttempts) {
+  await sleep(Math.min(2000 * Math.pow(1.5, attempts), 30000));
+  const status = await fetch(`https://api.topazlabs.com/v1/jobs/${jobId}`);
+  const { state, output } = await status.json();
+
+  if (state === 'completed') result = output;
+  if (state === 'failed') throw new Error('Topaz enhancement failed');
+  attempts++;
+}
+```
+
+**Standard models** (`standard-v2`, `low-resolution-v2`, `high-fidelity-v2`, `cgi`) are synchronous and return results immediately
+
+**Topaz API Endpoint:**
+```
+POST https://api.topazlabs.com/v1/enhance
+Headers: X-API-Key: {apiKey}
+Body: { image: base64, model: "standard-max", scale: 4 }
+```
 
 **Result:** Up to 32K effective resolution (4K x 8x) with best-in-class quality.
 
@@ -408,23 +601,63 @@ User prompt --> Prompt Enhancer --> Enhanced prompt --> Image Generation API
 
 ## Error Handling
 
-### Best Effort + Retry Strategy
+### Exponential Backoff with Jitter
 
-- Exponential backoff: 2s, 4s, 8s
-- Max attempts configurable (default: 3)
-- Continues to next ratio after max retries exhausted
+Proper retry strategy to prevent thundering herd:
+
+```typescript
+// Delay calculation with jitter
+const delay = Math.min(
+  baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * jitterMs,
+  maxDelayMs
+);
+```
+
+**Parameters:**
+- Base delay: 2000ms
+- Max delay: 30000ms
+- Jitter: 0-3000ms (random)
+- Max attempts: 3 (configurable)
+
+### Retry-After Header Handling
+
+Always check and respect the `Retry-After` header when present:
+
+```typescript
+const retryAfter = response.headers.get('Retry-After');
+if (retryAfter) {
+  await sleep(parseInt(retryAfter, 10) * 1000);
+}
+```
 
 ### Error Types and Actions
 
-| Error | Action |
-|-------|--------|
-| Rate limit (429) | Retry with backoff |
-| Content policy | Skip, report, suggest prompt edit |
-| Network timeout | Retry with backoff |
-| Invalid API key | Stop batch, prompt for config update |
-| Topaz rate limit | Retry with backoff |
-| Topaz timeout | Retry with backoff |
-| Topaz invalid key | Stop upscale, prompt for config update |
+| Error | Action | Retryable |
+|-------|--------|-----------|
+| Rate limit (429) | Check Retry-After, then exponential backoff | Yes |
+| Quota exceeded | Stop, prompt for tier upgrade | No |
+| Content policy | Skip, report, suggest prompt edit | No |
+| Network timeout (ECONNRESET, ENOTFOUND) | Retry with backoff | Yes |
+| Server error (500, 502, 503, 504) | Retry with backoff | Yes |
+| Invalid API key (401, 403) | Stop batch, prompt for config update | No |
+| Request too large (413) | Reduce image size, retry | No |
+| Topaz async timeout | Poll status endpoint, retry | Yes |
+
+### Differentiating Error Types
+
+```typescript
+function isRetryableError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+
+  // Non-retryable errors: stop immediately
+  const nonRetryable = ['content policy', 'invalid api key', 'unauthorized', 'quota'];
+  if (nonRetryable.some(p => message.includes(p))) return false;
+
+  // Retryable errors: exponential backoff
+  const retryable = ['rate limit', '429', 'timeout', 'econnreset', '500', '502', '503', '504'];
+  return retryable.some(p => message.includes(p));
+}
+```
 
 ---
 
@@ -452,6 +685,34 @@ description: Use when user wants to generate, create, or make images,
 
 ---
 
+## Technical Considerations
+
+### SynthID Watermarks
+
+All Gemini-generated images include an invisible **SynthID watermark** for authentication and provenance tracking. This is embedded by Google and cannot be disabled.
+
+### Aspect Ratio Preservation
+
+During editing operations:
+- Gemini generally preserves the input image's aspect ratio
+- If multiple images with different ratios are provided, the model adopts the **last image's** ratio
+- Include explicit instruction: "Do not change the input aspect ratio" when ratio must be preserved
+
+### Gemini 3 Pro Advanced Features
+
+- **Thinking Mode:** Model uses internal reasoning to refine composition before final output
+- **Google Search Grounding:** Real-time data integration for factual imagery
+- **Text Rendering:** Capable of generating legible, stylized text for infographics
+
+### Response Metadata
+
+Gemini responses include `groundingMetadata` when using search grounding:
+- Search suggestions
+- Top 3 web sources used
+- Thought signatures (encrypted reasoning traces)
+
+---
+
 ## Security
 
 ### Gitignore
@@ -466,8 +727,144 @@ Output images can be committed and shared.
 
 ### API Key Protection
 
-- Config file permissions set to user-only (600)
+- Config file permissions set to user-only (600) on creation
+- Verify permissions on load: warn if permissions are too open
 - API keys never logged or exposed in output
+- Keys never included in error messages
+
+### Environment Variable Alternative
+
+For CI/CD or containerized deployments, support environment variables:
+
+```bash
+PICTURA_GEMINI_API_KEY=...
+PICTURA_OPENAI_API_KEY=...
+PICTURA_TOPAZ_API_KEY=...
+```
+
+Environment variables take precedence over config file.
+
+---
+
+## AI-Guided Validation
+
+### Overview
+
+The plugin includes a comprehensive validation system that Claude Code executes to verify installation, configuration, and production readiness. No manual intervention required unless issues are found.
+
+### Validation Phases
+
+**Phase 1: Pre-flight Checks**
+- Config file exists and is valid JSON
+- Permissions are secure (600)
+- Output directory is writable
+
+**Phase 2: Provider Health Checks**
+- Test each configured API key
+- Verify quota/rate limit status
+- Check available models
+
+**Phase 3: Smoke Tests**
+- Generate a simple test image
+- Verify prompt enhancement
+- Test retry logic with simulated failures
+
+### Running Validation
+
+```bash
+# Via command
+/pictura:validate
+
+# Via MCP tool
+pictura_validate
+
+# Via CLI
+cd plugins/maccing-pictura/server && npx tsx src/validation/index.ts
+```
+
+### Production Readiness Criteria
+
+The plugin is **PRODUCTION READY** when:
+- All automated checks pass (0 failures)
+- At least 3 checks pass
+- At least one generation provider connected
+- Output directory writable
+
+### Validation Output
+
+**Success output:**
+
+★ maccing-pictura: Validation Report ────────────────────────
+
+Date:       2026-01-17 14:30
+Config:     .claude/plugins/maccing/pictura/config.json
+
+◎ Phase 1: Pre-flight Checks ────────────────────────────────
+
+✓ Config File Exists (2ms)
+✓ Config Permissions (1ms)
+✓ Output Directory (3ms)
+
+◎ Phase 2: Provider Health ──────────────────────────────────
+
+✓ Gemini API Connection (145ms)
+○ OpenAI API Connection (skipped)
+○ Topaz API Connection (skipped)
+
+◎ Phase 3: Smoke Tests ──────────────────────────────────────
+
+✓ Prompt Enhancement (12ms)
+✓ Retry Logic (45ms)
+✓ Image Generation (2340ms)
+
+────────────────────────────────────────────────────────────────
+
+Summary:
+- Passed:   7
+- Failed:   0
+- Warnings: 0
+- Skipped:  2
+
+✓ maccing-pictura: PRODUCTION READY ────────────────────────
+
+**Failure output:**
+
+★ maccing-pictura: Validation Report ────────────────────────
+
+...
+
+✖ FAIL: Config Permissions
+Config has insecure permissions (644)
+→ chmod 600 .claude/plugins/maccing/pictura/config.json
+
+▲ WARN: Gemini API Connection
+Rate limited, generation likely works but at quota
+→ Wait 60 seconds and retry, or upgrade API tier
+
+────────────────────────────────────────────────────────────────
+
+Summary:
+- Passed:   5
+- Failed:   1
+- Warnings: 1
+- Skipped:  2
+
+⚠ maccing-pictura: NOT PRODUCTION READY ────────────────────
+
+Blockers:
+1. Config Permissions: Config has insecure permissions (644)
+
+Next Steps:
+1. chmod 600 .claude/plugins/maccing/pictura/config.json
+2. Re-run /pictura:validate
+
+### Interactive Troubleshooting
+
+If validation fails, Claude will:
+1. Identify the specific failure
+2. Explain the root cause
+3. Provide exact remediation command
+4. Re-run the check to confirm fix
 
 ---
 
