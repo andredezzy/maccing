@@ -10,6 +10,8 @@ Use the `pictura_gallery` MCP tool to view and manage generated images.
 
 - `--batch`: Open a specific batch by ID
 - `--browse`: Browse all batches in the gallery
+- `--filter`: Filter batches by prompt slug
+- `--since`: Only show batches since date (YYYY-MM-DD)
 
 ## Examples
 
@@ -17,4 +19,6 @@ Use the `pictura_gallery` MCP tool to view and manage generated images.
 /pictura:gallery
 /pictura:gallery --browse
 /pictura:gallery --batch abc123
+/pictura:gallery --filter "product"
+/pictura:gallery --since 2026-01-15
 ```
