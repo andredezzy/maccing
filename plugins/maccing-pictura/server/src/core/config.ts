@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { z } from 'zod';
-import { RatioSchema } from '../provider-spec/factory';
+import { RatioSchema } from '../provider-spec/factory.js';
 
 // ============================================================================
 // Provider Config Schemas
@@ -135,9 +135,8 @@ export class ConfigManager {
       throw new Error('Config not loaded');
     }
 
-    const providerConfig = this.cachedConfig.providers[type][
-      name as keyof typeof this.cachedConfig.providers.generation
-    ];
+    const providers = this.cachedConfig.providers[type] as Record<string, unknown>;
+    const providerConfig = providers[name];
     const config = (providerConfig as Record<string, unknown>) || {};
 
     // Environment variables take precedence over config file

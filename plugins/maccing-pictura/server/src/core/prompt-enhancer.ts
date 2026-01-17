@@ -107,13 +107,18 @@ const STYLE_KEYWORDS: Record<'photo' | 'art' | 'commercial', string[]> = {
 // ============================================================================
 
 /**
+ * The style types that can be detected from a prompt
+ */
+export type DetectedStyleType = 'photo' | 'art' | 'commercial' | 'auto';
+
+/**
  * Detect the style of a prompt based on keyword analysis.
  * Returns 'auto' if no specific style is detected.
  *
  * @param prompt The prompt to analyze
  * @returns Detected style type ('photo', 'art', 'commercial', or 'auto')
  */
-export function detectStyle(prompt: string): StyleType {
+export function detectStyle(prompt: string): DetectedStyleType {
   const lowerPrompt = prompt.toLowerCase();
 
   // Check each style's keywords
@@ -172,9 +177,11 @@ export class PromptEnhancer {
       } else {
         profile = STYLE_PROFILES[detectedStyle];
       }
+    } else if (style === 'photo' || style === 'art' || style === 'commercial') {
+      profile = STYLE_PROFILES[style];
     } else {
-      // style is now narrowed to 'photo' | 'art' | 'commercial'
-      profile = STYLE_PROFILES[style as 'photo' | 'art' | 'commercial'];
+      // Fallback for any unexpected style value
+      profile = GENERIC_ENHANCEMENT;
     }
 
     // Build enhanced prompt

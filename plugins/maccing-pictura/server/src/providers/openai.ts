@@ -5,7 +5,7 @@ import {
   type EditImageParams,
   type ImageResult,
   type SupportedRatio,
-} from '../provider-spec/factory';
+} from '../provider-spec/factory.js';
 
 // GPT Image models (DALL-E 2/3 deprecated May 12, 2026)
 export const OPENAI_MODELS = ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini'] as const;
