@@ -6,7 +6,7 @@ import {
   type ImageResult,
   type SupportedRatio,
   type ImageSize,
-} from './provider-spec/factory';
+} from './provider-spec/factory.js';
 
 // ============================================================================
 // Types
@@ -30,13 +30,15 @@ export interface GenerateImagesOptions extends Omit<GenerateImageOptions, 'ratio
 // Provider Registry
 // ============================================================================
 
-const providerRegistry = new Map<string, ImageProviderFunction>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const providerRegistry = new Map<string, ImageProviderFunction<any>>();
 
 /**
  * Register a provider implementation for use with generateImage.
  * The provider is indexed by its name property.
  */
-export function registerProvider(provider: ImageProviderFunction): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function registerProvider(provider: ImageProviderFunction<any>): void {
   providerRegistry.set(provider.name, provider);
 }
 
@@ -52,7 +54,8 @@ export function clearProviderRegistry(): void {
  * Get a registered provider by name.
  * Returns undefined if not found.
  */
-export function getProvider(name: string): ImageProviderFunction | undefined {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getProvider(name: string): ImageProviderFunction<any> | undefined {
   return providerRegistry.get(name);
 }
 

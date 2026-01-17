@@ -3,7 +3,7 @@ import {
   type UpscaleProviderSpec,
   type UpscaleImageParams,
   type ImageResult,
-} from '../provider-spec/factory';
+} from '../provider-spec/factory.js';
 
 // Standard models: synchronous, fast
 // Generative models: async only, higher quality
@@ -79,21 +79,25 @@ async function pollForCompletion(
       throw new Error(`Failed to check job status: ${response.status}`);
     }
 
-    const { state, output, error } = await response.json();
+    const result = await response.json() as {
+      state: string;
+      output?: { image: string; width: number; height: number; model: string };
+      error?: string;
+    };
 
-    if (state === 'completed' && output) {
+    if (result.state === 'completed' && result.output) {
       return {
-        data: Buffer.from(output.image, 'base64'),
+        data: Buffer.from(result.output.image, 'base64'),
         ratio: '16:9',
-        width: output.width,
-        height: output.height,
+        width: result.output.width,
+        height: result.output.height,
         provider: 'topaz',
-        model: output.model,
+        model: result.output.model,
       };
     }
 
-    if (state === 'failed') {
-      throw new Error(`Topaz enhancement failed: ${error || 'Unknown error'}`);
+    if (result.state === 'failed') {
+      throw new Error(`Topaz enhancement failed: ${result.error || 'Unknown error'}`);
     }
 
     attempts++;

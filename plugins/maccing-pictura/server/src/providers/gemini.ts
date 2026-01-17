@@ -6,7 +6,7 @@ import {
   type GenerateImageParams,
   type EditImageParams,
   type ImageResult,
-} from '../provider-spec/factory';
+} from '../provider-spec/factory.js';
 
 export const GEMINI_MODELS = ['flash', 'pro'] as const;
 export type GeminiModel = typeof GEMINI_MODELS[number];
