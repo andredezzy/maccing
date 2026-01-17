@@ -1,0 +1,16 @@
+{
+  "name": "maccing-pictura",
+  "version": "1.0.0",
+  "description": "Provider-agnostic multi-ratio image generation with automatic prompt enhancement and premium upscaling",
+  "author": {
+    "name": "Andre Dezzy",
+    "email": "andredezzy@users.noreply.github.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "homepage": "https://github.com/andredezzy/maccing",
+  "repository": "https://github.com/andredezzy/maccing",
+  "license": "MIT",
+  "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio", "consistency"],
+  "skills": "./skills/",
+  "commands": ["./commands/"]
+}
