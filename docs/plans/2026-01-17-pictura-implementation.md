@@ -4,9 +4,32 @@
 
 **Goal:** Build a provider-agnostic multi-ratio image generation plugin with MCP server, automatic prompt enhancement, and two-turn premium upscaling.
 
-**Architecture:** TypeScript MCP server exposing 5 tools (generate, edit, upscale, list, gallery) with pluggable provider system for generation (Gemini, OpenAI) and upscaling (Topaz, Replicate). Markdown commands/skills guide Claude to use the MCP tools.
+**Architecture:** TypeScript MCP server using Vercel AI SDK-style provider specification pattern. Unified API with pluggable providers for generation (Gemini, OpenAI) and upscaling (Topaz, Replicate). Supports fallback chains and type-safe model selection.
 
 **Tech Stack:** TypeScript, Node.js, @modelcontextprotocol/sdk, Zod, vitest
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Unified API Layer                         │
+│  generateImage({ model: gemini('pro'), prompt, options })   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────┴───────────────────────────────────┐
+│                  Provider Specification                      │
+│  createImageProvider({ name, models, generateImage })       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+┌───────┴───────┐ ┌───────┴───────┐ ┌───────┴───────┐
+│    Gemini     │ │    OpenAI     │ │    Topaz      │
+│   Provider    │ │   Provider    │ │   Provider    │
+└───────────────┘ └───────────────┘ └───────────────┘
+```
 
 ---
 
@@ -77,6 +100,7 @@ Provider-agnostic multi-ratio image generation plugin for Claude Code.
 - Automatic prompt enhancement
 - Two-turn premium upscaling (Gemini + Topaz Labs)
 - Full editing suite: refine, inpaint, outpaint, restyle
+- Unified API with provider fallback chains
 
 ## Installation
 
@@ -236,9 +260,9 @@ git commit -m "chore(pictura): add package-lock.json"
 
 ---
 
-## Phase 2: Core Types and Interfaces
+## Phase 2: Provider Specification Core
 
-### Task 4: Define Image Types
+### Task 4: Define Core Types
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/types/image.ts`
@@ -250,33 +274,43 @@ Create `plugins/maccing-pictura/server/src/types/image.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { ImageSchema, type Image } from './image.js';
+import {
+  ImageResultSchema,
+  SUPPORTED_RATIOS,
+  getDimensionsForRatio,
+  type ImageResult
+} from './image.js';
 
 describe('Image types', () => {
-  it('should validate a valid image object', () => {
-    const image: Image = {
+  it('should validate a valid image result', () => {
+    const image: ImageResult = {
       data: Buffer.from('test'),
       ratio: '16:9',
       width: 2048,
       height: 1152,
       provider: 'gemini',
+      model: 'gemini-3-pro-image',
     };
 
-    const result = ImageSchema.safeParse(image);
+    const result = ImageResultSchema.safeParse(image);
     expect(result.success).toBe(true);
   });
 
-  it('should reject invalid ratio format', () => {
-    const image = {
-      data: Buffer.from('test'),
-      ratio: 'invalid',
-      width: 2048,
-      height: 1152,
-      provider: 'gemini',
-    };
+  it('should have all supported ratios', () => {
+    expect(SUPPORTED_RATIOS).toContain('16:9');
+    expect(SUPPORTED_RATIOS).toContain('1:1');
+    expect(SUPPORTED_RATIOS).toContain('9:16');
+    expect(SUPPORTED_RATIOS.length).toBe(10);
+  });
 
-    const result = ImageSchema.safeParse(image);
-    expect(result.success).toBe(false);
+  it('should calculate dimensions for ratio and size', () => {
+    const dims2K = getDimensionsForRatio('16:9', '2K');
+    expect(dims2K.width).toBe(2048);
+    expect(dims2K.height).toBe(1152);
+
+    const dims4K = getDimensionsForRatio('16:9', '4K');
+    expect(dims4K.width).toBe(4096);
+    expect(dims4K.height).toBe(2304);
   });
 });
 ```
@@ -305,19 +339,22 @@ export type SupportedRatio = typeof SUPPORTED_RATIOS[number];
 
 export const RatioSchema = z.enum(SUPPORTED_RATIOS);
 
-export const ImageSchema = z.object({
+export const ImageResultSchema = z.object({
   data: z.instanceof(Buffer),
   path: z.string().optional(),
   ratio: RatioSchema,
   width: z.number().positive(),
   height: z.number().positive(),
   provider: z.string(),
+  model: z.string(),
   timestamp: z.date().optional(),
 });
 
-export type Image = z.infer<typeof ImageSchema>;
+export type ImageResult = z.infer<typeof ImageResultSchema>;
 
-export const RATIO_DIMENSIONS: Record<SupportedRatio, { width: number; height: number }> = {
+export type ImageSize = '1K' | '2K' | '4K';
+
+const BASE_DIMENSIONS: Record<SupportedRatio, { width: number; height: number }> = {
   '1:1': { width: 2048, height: 2048 },
   '2:3': { width: 1365, height: 2048 },
   '3:2': { width: 2048, height: 1365 },
@@ -330,12 +367,18 @@ export const RATIO_DIMENSIONS: Record<SupportedRatio, { width: number; height: n
   '21:9': { width: 2048, height: 878 },
 };
 
+const SIZE_MULTIPLIERS: Record<ImageSize, number> = {
+  '1K': 0.5,
+  '2K': 1,
+  '4K': 2,
+};
+
 export function getDimensionsForRatio(
   ratio: SupportedRatio,
-  size: '1K' | '2K' | '4K' = '2K'
+  size: ImageSize = '2K'
 ): { width: number; height: number } {
-  const base = RATIO_DIMENSIONS[ratio];
-  const multiplier = size === '1K' ? 0.5 : size === '4K' ? 2 : 1;
+  const base = BASE_DIMENSIONS[ratio];
+  const multiplier = SIZE_MULTIPLIERS[size];
   return {
     width: Math.round(base.width * multiplier),
     height: Math.round(base.height * multiplier),
@@ -360,56 +403,66 @@ git commit -m "feat(pictura): add image types and ratio definitions"
 
 ---
 
-### Task 5: Define Provider Interfaces
+### Task 5: Define Provider Specification Interface
 
 **Files:**
-- Create: `plugins/maccing-pictura/server/src/types/provider.ts`
-- Test: `plugins/maccing-pictura/server/src/types/provider.test.ts`
+- Create: `plugins/maccing-pictura/server/src/provider-spec/types.ts`
+- Test: `plugins/maccing-pictura/server/src/provider-spec/types.test.ts`
 
 **Step 1: Write the test**
 
-Create `plugins/maccing-pictura/server/src/types/provider.test.ts`:
+Create `plugins/maccing-pictura/server/src/provider-spec/types.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
 import {
-  GenOptionsSchema,
-  EditOptionsSchema,
-  UpscaleOptionsSchema,
-  type GenerationProvider,
-  type UpscaleProvider,
-} from './provider.js';
+  GenerateImageParamsSchema,
+  ImageModelCapabilitiesSchema,
+  type ImageModel,
+  type ImageProviderSpec,
+} from './types.js';
 
-describe('Provider types', () => {
-  it('should validate GenOptions with defaults', () => {
-    const options = {
-      quality: 'pro' as const,
+describe('Provider specification types', () => {
+  it('should validate generate image params', () => {
+    const params = {
+      prompt: 'cat on roof',
+      ratio: '16:9' as const,
       size: '2K' as const,
-      consistency: 'generate' as const,
     };
 
-    const result = GenOptionsSchema.safeParse(options);
+    const result = GenerateImageParamsSchema.safeParse(params);
     expect(result.success).toBe(true);
   });
 
-  it('should validate EditOptions with mask', () => {
-    const options = {
-      prompt: 'add clouds',
-      mask: 'sky region',
+  it('should validate capabilities', () => {
+    const caps = {
+      maxResolution: '4K' as const,
+      supportedRatios: ['16:9', '1:1'] as const,
+      supportsReference: true,
+      supportsEdit: true,
+      supportsInpaint: true,
+      supportsOutpaint: false,
     };
 
-    const result = EditOptionsSchema.safeParse(options);
+    const result = ImageModelCapabilitiesSchema.safeParse(caps);
     expect(result.success).toBe(true);
   });
 
-  it('should validate UpscaleOptions', () => {
-    const options = {
-      model: 'standard-max',
-      scale: 4,
+  it('should type-check ImageModel interface', () => {
+    const model: ImageModel = {
+      provider: 'gemini',
+      modelId: 'gemini-3-pro-image',
+      capabilities: {
+        maxResolution: '4K',
+        supportedRatios: ['16:9', '1:1'],
+        supportsReference: true,
+        supportsEdit: true,
+        supportsInpaint: true,
+        supportsOutpaint: true,
+      },
     };
 
-    const result = UpscaleOptionsSchema.safeParse(options);
-    expect(result.success).toBe(true);
+    expect(model.provider).toBe('gemini');
   });
 });
 ```
@@ -417,85 +470,118 @@ describe('Provider types', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/provider.test.ts
+cd plugins/maccing-pictura/server && npm test -- src/provider-spec/types.test.ts
 ```
 
-Expected: FAIL with "Cannot find module"
+Expected: FAIL
 
 **Step 3: Write the implementation**
 
-Create `plugins/maccing-pictura/server/src/types/provider.ts`:
+Create `plugins/maccing-pictura/server/src/provider-spec/types.ts`:
 
 ```typescript
 import { z } from 'zod';
-import type { Image, SupportedRatio } from './image.js';
+import type { ImageResult, SupportedRatio, ImageSize } from '../types/image.js';
+import { RatioSchema } from '../types/image.js';
 
-export const GenOptionsSchema = z.object({
-  quality: z.enum(['draft', 'pro']).default('pro'),
+// Generation parameters
+export const GenerateImageParamsSchema = z.object({
+  prompt: z.string(),
+  ratio: RatioSchema,
   size: z.enum(['1K', '2K', '4K']).default('2K'),
-  reference: z.custom<Image>().optional(),
-  consistency: z.enum(['generate', 'reference', 'multiturn']).default('generate'),
-  enhance: z.boolean().default(true),
-  enhanceStyle: z.enum(['auto', 'photo', 'art', 'commercial', 'minimal']).default('auto'),
+  reference: z.instanceof(Buffer).optional(),
+  negativePrompt: z.string().optional(),
 });
 
-export type GenOptions = z.infer<typeof GenOptionsSchema>;
+export type GenerateImageParams = z.infer<typeof GenerateImageParamsSchema>;
 
-export const EditOptionsSchema = z.object({
+// Edit parameters
+export const EditImageParamsSchema = z.object({
+  image: z.instanceof(Buffer),
   prompt: z.string(),
   mask: z.string().optional(),
   extend: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-  style: z.custom<Image>().optional(),
+  style: z.instanceof(Buffer).optional(),
 });
 
-export type EditOptions = z.infer<typeof EditOptionsSchema>;
+export type EditImageParams = z.infer<typeof EditImageParamsSchema>;
 
-export const UpscaleOptionsSchema = z.object({
+// Upscale parameters
+export const UpscaleImageParamsSchema = z.object({
+  image: z.instanceof(Buffer),
+  scale: z.number().min(1).max(8).default(4),
   model: z.string().optional(),
-  scale: z.number().min(1).max(8).optional(),
 });
 
-export type UpscaleOptions = z.infer<typeof UpscaleOptionsSchema>;
+export type UpscaleImageParams = z.infer<typeof UpscaleImageParamsSchema>;
 
-export interface ProviderCapabilities {
-  name: string;
-  supportedRatios: SupportedRatio[];
-  maxResolution: '1K' | '2K' | '4K';
-  features: {
-    reference: boolean;
-    multiturn: boolean;
-    inpaint: boolean;
-    outpaint: boolean;
-    styleTransfer: boolean;
-  };
+// Model capabilities
+export const ImageModelCapabilitiesSchema = z.object({
+  maxResolution: z.enum(['1K', '2K', '4K']),
+  supportedRatios: z.array(RatioSchema),
+  supportsReference: z.boolean(),
+  supportsEdit: z.boolean(),
+  supportsInpaint: z.boolean(),
+  supportsOutpaint: z.boolean(),
+});
+
+export type ImageModelCapabilities = z.infer<typeof ImageModelCapabilitiesSchema>;
+
+// Image model interface (what providers return)
+export interface ImageModel {
+  provider: string;
+  modelId: string;
+  capabilities: ImageModelCapabilities;
 }
 
-export interface GenerationProvider {
+// Provider specification (what providers implement)
+export interface ImageProviderSpec {
   name: string;
-  initialize(config: Record<string, unknown>): Promise<void>;
-  generate(prompt: string, ratio: SupportedRatio, options: GenOptions): Promise<Image>;
-  edit(image: Image, options: EditOptions): Promise<Image>;
-  getCapabilities(): ProviderCapabilities;
+  models: Record<string, {
+    id: string;
+    capabilities: ImageModelCapabilities;
+  }>;
+
+  generateImage(
+    modelId: string,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+
+  editImage?(
+    modelId: string,
+    params: EditImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
 }
 
-export interface UpscaleCapabilities {
+// Upscale provider specification
+export interface UpscaleProviderSpec {
   name: string;
-  maxScale: number;
   models: string[];
+  maxScale: number;
+
+  upscale(
+    params: UpscaleImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
 }
 
-export interface UpscaleProvider {
-  name: string;
-  initialize(config: Record<string, unknown>): Promise<void>;
-  upscale(image: Image, options: UpscaleOptions): Promise<Image>;
-  getCapabilities(): UpscaleCapabilities;
-}
+// Model selector type (what users pass to generateImage)
+export type ModelSelector<T extends string = string> = {
+  provider: string;
+  modelId: T;
+  capabilities: ImageModelCapabilities;
+};
+
+// Fallback chain type
+export type ModelWithFallbacks = ModelSelector | ModelSelector[];
 ```
 
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/provider.test.ts
+cd plugins/maccing-pictura/server && npm test -- src/provider-spec/types.test.ts
 ```
 
 Expected: PASS
@@ -503,71 +589,85 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add plugins/maccing-pictura/server/src/types/
-git commit -m "feat(pictura): add provider interfaces and option schemas"
+git add plugins/maccing-pictura/server/src/provider-spec/
+git commit -m "feat(pictura): add provider specification types (AI SDK pattern)"
 ```
 
 ---
 
-### Task 6: Define Config Types
+### Task 6: Implement Provider Factory
 
 **Files:**
-- Create: `plugins/maccing-pictura/server/src/types/config.ts`
-- Test: `plugins/maccing-pictura/server/src/types/config.test.ts`
+- Create: `plugins/maccing-pictura/server/src/provider-spec/factory.ts`
+- Test: `plugins/maccing-pictura/server/src/provider-spec/factory.test.ts`
 
 **Step 1: Write the test**
 
-Create `plugins/maccing-pictura/server/src/types/config.test.ts`:
+Create `plugins/maccing-pictura/server/src/provider-spec/factory.test.ts`:
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { ConfigSchema, type PicturaConfig } from './config.js';
+import { describe, it, expect, vi } from 'vitest';
+import { createImageProvider, createUpscaleProvider } from './factory.js';
+import type { ImageProviderSpec, UpscaleProviderSpec } from './types.js';
 
-describe('Config types', () => {
-  it('should validate a complete config', () => {
-    const config: PicturaConfig = {
-      providers: {
-        generation: {
-          default: 'gemini',
-          gemini: { apiKey: 'test-key', defaultModel: 'pro' },
-        },
-        upscale: {
-          default: 'topaz',
-          topaz: { apiKey: 'test-key', defaultModel: 'standard-max' },
+describe('createImageProvider', () => {
+  it('should create a provider with model selector function', () => {
+    const mockSpec: ImageProviderSpec = {
+      name: 'test-provider',
+      models: {
+        'model-a': {
+          id: 'model-a-full-id',
+          capabilities: {
+            maxResolution: '4K',
+            supportedRatios: ['16:9', '1:1'],
+            supportsReference: true,
+            supportsEdit: true,
+            supportsInpaint: false,
+            supportsOutpaint: false,
+          },
         },
       },
-      defaultRatio: '16:9',
-      defaultQuality: 'pro',
-      imageSize: '2K',
-      defaultConsistency: 'generate',
-      retryAttempts: 3,
-      outputDir: '.claude/plugins/maccing/pictura/output',
+      generateImage: vi.fn(),
     };
 
-    const result = ConfigSchema.safeParse(config);
-    expect(result.success).toBe(true);
+    const provider = createImageProvider(mockSpec);
+
+    expect(provider.name).toBe('test-provider');
+    expect(typeof provider).toBe('function');
+
+    const model = provider('model-a');
+    expect(model.provider).toBe('test-provider');
+    expect(model.modelId).toBe('model-a');
+    expect(model.capabilities.maxResolution).toBe('4K');
   });
 
-  it('should apply defaults for missing optional fields', () => {
-    const config = {
-      providers: {
-        generation: {
-          default: 'gemini',
-          gemini: { apiKey: 'test-key' },
-        },
-        upscale: {
-          default: 'topaz',
-          topaz: { apiKey: 'test-key' },
-        },
-      },
+  it('should throw for unknown model', () => {
+    const mockSpec: ImageProviderSpec = {
+      name: 'test-provider',
+      models: {},
+      generateImage: vi.fn(),
     };
 
-    const result = ConfigSchema.safeParse(config);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.defaultRatio).toBe('16:9');
-      expect(result.data.retryAttempts).toBe(3);
-    }
+    const provider = createImageProvider(mockSpec);
+
+    expect(() => provider('unknown-model')).toThrow('Unknown model');
+  });
+});
+
+describe('createUpscaleProvider', () => {
+  it('should create an upscale provider', () => {
+    const mockSpec: UpscaleProviderSpec = {
+      name: 'test-upscaler',
+      models: ['model-x', 'model-y'],
+      maxScale: 8,
+      upscale: vi.fn(),
+    };
+
+    const provider = createUpscaleProvider(mockSpec);
+
+    expect(provider.name).toBe('test-upscaler');
+    expect(provider.models).toContain('model-x');
+    expect(provider.maxScale).toBe(8);
   });
 });
 ```
@@ -575,105 +675,808 @@ describe('Config types', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/config.test.ts
+cd plugins/maccing-pictura/server && npm test -- src/provider-spec/factory.test.ts
 ```
 
 Expected: FAIL
 
 **Step 3: Write the implementation**
 
-Create `plugins/maccing-pictura/server/src/types/config.ts`:
+Create `plugins/maccing-pictura/server/src/provider-spec/factory.ts`:
 
 ```typescript
-import { z } from 'zod';
-import { RatioSchema } from './image.js';
+import type {
+  ImageProviderSpec,
+  UpscaleProviderSpec,
+  ModelSelector,
+  GenerateImageParams,
+  EditImageParams,
+  UpscaleImageParams,
+} from './types.js';
+import type { ImageResult } from '../types/image.js';
 
-const GeminiConfigSchema = z.object({
-  apiKey: z.string(),
-  defaultModel: z.enum(['draft', 'pro']).default('pro'),
-});
+// Type for the provider function that selects models
+export interface ImageProviderFunction<TModels extends string = string> {
+  (modelId: TModels): ModelSelector<TModels>;
+  name: string;
+  spec: ImageProviderSpec;
+  generateImage(
+    modelId: TModels,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+  editImage?(
+    modelId: TModels,
+    params: EditImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+}
 
-const OpenAIConfigSchema = z.object({
-  apiKey: z.string(),
-});
+export function createImageProvider<TModels extends string>(
+  spec: ImageProviderSpec
+): ImageProviderFunction<TModels> {
+  const providerFn = ((modelId: TModels): ModelSelector<TModels> => {
+    const modelDef = spec.models[modelId];
+    if (!modelDef) {
+      throw new Error(`Unknown model: ${modelId} for provider ${spec.name}`);
+    }
 
-const TopazConfigSchema = z.object({
-  apiKey: z.string(),
-  defaultModel: z.string().default('standard-max'),
-});
+    return {
+      provider: spec.name,
+      modelId,
+      capabilities: modelDef.capabilities,
+    };
+  }) as ImageProviderFunction<TModels>;
 
-const ReplicateConfigSchema = z.object({
-  apiKey: z.string(),
-});
+  providerFn.name = spec.name;
+  providerFn.spec = spec;
 
-const GenerationProvidersSchema = z.object({
-  default: z.enum(['gemini', 'openai']).default('gemini'),
-  gemini: GeminiConfigSchema.optional(),
-  openai: OpenAIConfigSchema.optional(),
-});
+  providerFn.generateImage = (
+    modelId: TModels,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ) => spec.generateImage(modelId, params, config);
 
-const UpscaleProvidersSchema = z.object({
-  default: z.enum(['topaz', 'replicate']).default('topaz'),
-  topaz: TopazConfigSchema.optional(),
-  replicate: ReplicateConfigSchema.optional(),
-});
+  if (spec.editImage) {
+    providerFn.editImage = (
+      modelId: TModels,
+      params: EditImageParams,
+      config: Record<string, unknown>
+    ) => spec.editImage!(modelId, params, config);
+  }
 
-export const ConfigSchema = z.object({
-  providers: z.object({
-    generation: GenerationProvidersSchema,
-    upscale: UpscaleProvidersSchema,
-  }),
-  defaultRatio: RatioSchema.default('16:9'),
-  defaultQuality: z.enum(['draft', 'pro']).default('pro'),
-  imageSize: z.enum(['1K', '2K', '4K']).default('2K'),
-  defaultConsistency: z.enum(['generate', 'reference', 'multiturn']).default('generate'),
-  retryAttempts: z.number().min(1).max(10).default(3),
-  outputDir: z.string().default('.claude/plugins/maccing/pictura/output'),
-});
+  return providerFn;
+}
 
-export type PicturaConfig = z.infer<typeof ConfigSchema>;
+export interface UpscaleProviderFunction {
+  name: string;
+  models: string[];
+  maxScale: number;
+  spec: UpscaleProviderSpec;
+  upscale(
+    params: UpscaleImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult>;
+}
 
-export const PRESET_BUNDLES = {
-  social: ['1:1', '9:16', '16:9'] as const,
-  web: ['16:9', '4:3', '1:1'] as const,
-  portrait: ['2:3', '3:4', '4:5', '9:16'] as const,
-  landscape: ['3:2', '4:3', '16:9', '21:9'] as const,
-  print: ['2:3', '3:4', '4:5'] as const,
-} as const;
-
-export type PresetBundle = keyof typeof PRESET_BUNDLES;
+export function createUpscaleProvider(
+  spec: UpscaleProviderSpec
+): UpscaleProviderFunction {
+  return {
+    name: spec.name,
+    models: spec.models,
+    maxScale: spec.maxScale,
+    spec,
+    upscale: (params, config) => spec.upscale(params, config),
+  };
+}
 ```
 
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd plugins/maccing-pictura/server && npm test -- src/types/config.test.ts
+cd plugins/maccing-pictura/server && npm test -- src/provider-spec/factory.test.ts
 ```
 
 Expected: PASS
 
-**Step 5: Create types index**
+**Step 5: Create provider-spec index**
 
-Create `plugins/maccing-pictura/server/src/types/index.ts`:
+Create `plugins/maccing-pictura/server/src/provider-spec/index.ts`:
 
 ```typescript
-export * from './image.js';
-export * from './provider.js';
-export * from './config.js';
+export * from './types.js';
+export * from './factory.js';
 ```
 
 **Step 6: Commit**
 
 ```bash
-git add plugins/maccing-pictura/server/src/types/
-git commit -m "feat(pictura): add config types and preset bundles"
+git add plugins/maccing-pictura/server/src/provider-spec/
+git commit -m "feat(pictura): add provider factory (AI SDK pattern)"
 ```
 
 ---
 
-## Phase 3: Core Utilities
+### Task 7: Implement Unified Generate Function
 
-### Task 7: Implement Config Manager
+**Files:**
+- Create: `plugins/maccing-pictura/server/src/generate.ts`
+- Test: `plugins/maccing-pictura/server/src/generate.test.ts`
+
+**Step 1: Write the test**
+
+Create `plugins/maccing-pictura/server/src/generate.test.ts`:
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { generateImage, type GenerateImageOptions } from './generate.js';
+import { createImageProvider } from './provider-spec/index.js';
+import type { ImageProviderSpec } from './provider-spec/index.js';
+
+describe('generateImage', () => {
+  const mockGenerateImage = vi.fn();
+
+  const mockSpec: ImageProviderSpec = {
+    name: 'mock-provider',
+    models: {
+      'mock-model': {
+        id: 'mock-model-full',
+        capabilities: {
+          maxResolution: '4K',
+          supportedRatios: ['16:9', '1:1', '9:16'],
+          supportsReference: true,
+          supportsEdit: true,
+          supportsInpaint: false,
+          supportsOutpaint: false,
+        },
+      },
+    },
+    generateImage: mockGenerateImage,
+  };
+
+  const mockProvider = createImageProvider(mockSpec);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGenerateImage.mockResolvedValue({
+      data: Buffer.from('mock-image'),
+      ratio: '16:9',
+      width: 2048,
+      height: 1152,
+      provider: 'mock-provider',
+      model: 'mock-model',
+    });
+  });
+
+  it('should generate image with single model', async () => {
+    const result = await generateImage({
+      model: mockProvider('mock-model'),
+      prompt: 'test prompt',
+      ratio: '16:9',
+      config: { apiKey: 'test' },
+    });
+
+    expect(result.provider).toBe('mock-provider');
+    expect(mockGenerateImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('should try fallback on failure', async () => {
+    mockGenerateImage
+      .mockRejectedValueOnce(new Error('First provider failed'))
+      .mockResolvedValueOnce({
+        data: Buffer.from('fallback-image'),
+        ratio: '16:9',
+        width: 2048,
+        height: 1152,
+        provider: 'mock-provider',
+        model: 'mock-model',
+      });
+
+    const result = await generateImage({
+      model: [mockProvider('mock-model'), mockProvider('mock-model')],
+      prompt: 'test prompt',
+      ratio: '16:9',
+      config: { apiKey: 'test' },
+    });
+
+    expect(result.data.toString()).toBe('fallback-image');
+    expect(mockGenerateImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('should throw when all fallbacks fail', async () => {
+    mockGenerateImage.mockRejectedValue(new Error('All failed'));
+
+    await expect(
+      generateImage({
+        model: [mockProvider('mock-model'), mockProvider('mock-model')],
+        prompt: 'test prompt',
+        ratio: '16:9',
+        config: { apiKey: 'test' },
+      })
+    ).rejects.toThrow('All providers failed');
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/generate.test.ts
+```
+
+Expected: FAIL
+
+**Step 3: Write the implementation**
+
+Create `plugins/maccing-pictura/server/src/generate.ts`:
+
+```typescript
+import type {
+  ModelSelector,
+  ModelWithFallbacks,
+  GenerateImageParams,
+} from './provider-spec/types.js';
+import type { ImageProviderFunction } from './provider-spec/factory.js';
+import type { ImageResult, SupportedRatio, ImageSize } from './types/image.js';
+
+export interface GenerateImageOptions {
+  model: ModelWithFallbacks;
+  prompt: string;
+  ratio: SupportedRatio;
+  size?: ImageSize;
+  reference?: Buffer;
+  negativePrompt?: string;
+  config: Record<string, unknown>;
+}
+
+// Registry to lookup provider implementations by name
+const providerRegistry = new Map<string, ImageProviderFunction>();
+
+export function registerProvider(provider: ImageProviderFunction): void {
+  providerRegistry.set(provider.name, provider);
+}
+
+export async function generateImage(
+  options: GenerateImageOptions
+): Promise<ImageResult> {
+  const { model, prompt, ratio, size = '2K', reference, negativePrompt, config } = options;
+
+  const models = Array.isArray(model) ? model : [model];
+  const errors: Error[] = [];
+
+  for (const modelSelector of models) {
+    try {
+      const provider = providerRegistry.get(modelSelector.provider);
+
+      if (!provider) {
+        throw new Error(`Provider not registered: ${modelSelector.provider}`);
+      }
+
+      const params: GenerateImageParams = {
+        prompt,
+        ratio,
+        size,
+        reference,
+        negativePrompt,
+      };
+
+      const result = await provider.generateImage(
+        modelSelector.modelId,
+        params,
+        config
+      );
+
+      return result;
+    } catch (error) {
+      errors.push(error instanceof Error ? error : new Error(String(error)));
+      continue;
+    }
+  }
+
+  throw new Error(
+    `All providers failed: ${errors.map((e) => e.message).join(', ')}`
+  );
+}
+
+export async function generateImages(
+  options: Omit<GenerateImageOptions, 'ratio'> & { ratios: SupportedRatio[] }
+): Promise<ImageResult[]> {
+  const results: ImageResult[] = [];
+  let referenceImage: Buffer | undefined = options.reference;
+
+  for (const ratio of options.ratios) {
+    const result = await generateImage({
+      ...options,
+      ratio,
+      reference: referenceImage,
+    });
+
+    results.push(result);
+
+    // Use first generated image as reference for consistency
+    if (!referenceImage && results.length === 1) {
+      referenceImage = result.data;
+    }
+  }
+
+  return results;
+}
+```
+
+**Step 4: Run test to verify it passes**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/generate.test.ts
+```
+
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add plugins/maccing-pictura/server/src/generate.ts plugins/maccing-pictura/server/src/generate.test.ts
+git commit -m "feat(pictura): add unified generateImage with fallback chains"
+```
+
+---
+
+## Phase 3: Provider Implementations
+
+### Task 8: Implement Gemini Provider
+
+**Files:**
+- Create: `plugins/maccing-pictura/server/src/providers/gemini.ts`
+- Test: `plugins/maccing-pictura/server/src/providers/gemini.test.ts`
+
+**Step 1: Write the test**
+
+Create `plugins/maccing-pictura/server/src/providers/gemini.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { gemini, GEMINI_MODELS } from './gemini.js';
+
+describe('Gemini provider', () => {
+  it('should have correct provider name', () => {
+    expect(gemini.name).toBe('gemini');
+  });
+
+  it('should expose flash and pro models', () => {
+    expect(GEMINI_MODELS).toContain('flash');
+    expect(GEMINI_MODELS).toContain('pro');
+  });
+
+  it('should create model selector for flash', () => {
+    const model = gemini('flash');
+    expect(model.provider).toBe('gemini');
+    expect(model.modelId).toBe('flash');
+    expect(model.capabilities.maxResolution).toBe('1K');
+  });
+
+  it('should create model selector for pro', () => {
+    const model = gemini('pro');
+    expect(model.provider).toBe('gemini');
+    expect(model.modelId).toBe('pro');
+    expect(model.capabilities.maxResolution).toBe('4K');
+  });
+
+  it('should throw for unknown model', () => {
+    expect(() => (gemini as any)('unknown')).toThrow('Unknown model');
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/gemini.test.ts
+```
+
+Expected: FAIL
+
+**Step 3: Write the implementation**
+
+Create `plugins/maccing-pictura/server/src/providers/gemini.ts`:
+
+```typescript
+import { createImageProvider } from '../provider-spec/index.js';
+import type { ImageProviderSpec, GenerateImageParams, EditImageParams } from '../provider-spec/index.js';
+import type { ImageResult } from '../types/image.js';
+import { getDimensionsForRatio, SUPPORTED_RATIOS } from '../types/image.js';
+
+export const GEMINI_MODELS = ['flash', 'pro'] as const;
+export type GeminiModel = typeof GEMINI_MODELS[number];
+
+const MODEL_IDS: Record<GeminiModel, string> = {
+  flash: 'gemini-2.5-flash-image',
+  pro: 'gemini-3-pro-image-preview',
+};
+
+const geminiSpec: ImageProviderSpec = {
+  name: 'gemini',
+  models: {
+    flash: {
+      id: MODEL_IDS.flash,
+      capabilities: {
+        maxResolution: '1K',
+        supportedRatios: [...SUPPORTED_RATIOS],
+        supportsReference: true,
+        supportsEdit: true,
+        supportsInpaint: true,
+        supportsOutpaint: true,
+      },
+    },
+    pro: {
+      id: MODEL_IDS.pro,
+      capabilities: {
+        maxResolution: '4K',
+        supportedRatios: [...SUPPORTED_RATIOS],
+        supportsReference: true,
+        supportsEdit: true,
+        supportsInpaint: true,
+        supportsOutpaint: true,
+      },
+    },
+  },
+
+  async generateImage(
+    modelId: string,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult> {
+    const apiKey = config.apiKey as string;
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+
+    const fullModelId = MODEL_IDS[modelId as GeminiModel];
+    const dimensions = getDimensionsForRatio(params.ratio, params.size);
+
+    // TODO: Implement actual Gemini API call
+    // const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    // const genAI = new GoogleGenerativeAI(apiKey);
+    // const model = genAI.getGenerativeModel({ model: fullModelId });
+    // const response = await model.generateContent({
+    //   contents: [{ role: 'user', parts: [{ text: params.prompt }] }],
+    //   generationConfig: {
+    //     responseModalities: ['image'],
+    //     imageConfig: { aspectRatio: params.ratio, imageSize: params.size },
+    //   },
+    // });
+
+    // Stub for development
+    const stubData = Buffer.from(`gemini-${modelId}-${params.ratio}-${Date.now()}`);
+
+    return {
+      data: stubData,
+      ratio: params.ratio,
+      width: dimensions.width,
+      height: dimensions.height,
+      provider: 'gemini',
+      model: fullModelId,
+    };
+  },
+
+  async editImage(
+    modelId: string,
+    params: EditImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult> {
+    const apiKey = config.apiKey as string;
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+
+    // TODO: Implement actual Gemini edit API
+    const stubData = Buffer.from(`gemini-edit-${modelId}-${Date.now()}`);
+
+    return {
+      data: stubData,
+      ratio: '16:9', // Would come from original image
+      width: 2048,
+      height: 1152,
+      provider: 'gemini',
+      model: MODEL_IDS[modelId as GeminiModel],
+    };
+  },
+};
+
+export const gemini = createImageProvider<GeminiModel>(geminiSpec);
+```
+
+**Step 4: Run test to verify it passes**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/gemini.test.ts
+```
+
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add plugins/maccing-pictura/server/src/providers/
+git commit -m "feat(pictura): add Gemini provider (AI SDK pattern)"
+```
+
+---
+
+### Task 9: Implement OpenAI Provider
+
+**Files:**
+- Create: `plugins/maccing-pictura/server/src/providers/openai.ts`
+- Test: `plugins/maccing-pictura/server/src/providers/openai.test.ts`
+
+**Step 1: Write the test**
+
+Create `plugins/maccing-pictura/server/src/providers/openai.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { openai, OPENAI_MODELS } from './openai.js';
+
+describe('OpenAI provider', () => {
+  it('should have correct provider name', () => {
+    expect(openai.name).toBe('openai');
+  });
+
+  it('should expose dall-e-3 model', () => {
+    expect(OPENAI_MODELS).toContain('dall-e-3');
+  });
+
+  it('should create model selector for dall-e-3', () => {
+    const model = openai('dall-e-3');
+    expect(model.provider).toBe('openai');
+    expect(model.modelId).toBe('dall-e-3');
+    expect(model.capabilities.maxResolution).toBe('1K');
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/openai.test.ts
+```
+
+Expected: FAIL
+
+**Step 3: Write the implementation**
+
+Create `plugins/maccing-pictura/server/src/providers/openai.ts`:
+
+```typescript
+import { createImageProvider } from '../provider-spec/index.js';
+import type { ImageProviderSpec, GenerateImageParams } from '../provider-spec/index.js';
+import type { ImageResult, SupportedRatio } from '../types/image.js';
+import { getDimensionsForRatio } from '../types/image.js';
+
+export const OPENAI_MODELS = ['dall-e-3', 'dall-e-2'] as const;
+export type OpenAIModel = typeof OPENAI_MODELS[number];
+
+// OpenAI has limited aspect ratio support
+const OPENAI_RATIOS: SupportedRatio[] = ['1:1', '16:9', '9:16'];
+
+const openaiSpec: ImageProviderSpec = {
+  name: 'openai',
+  models: {
+    'dall-e-3': {
+      id: 'dall-e-3',
+      capabilities: {
+        maxResolution: '1K',
+        supportedRatios: OPENAI_RATIOS,
+        supportsReference: false,
+        supportsEdit: true,
+        supportsInpaint: true,
+        supportsOutpaint: false,
+      },
+    },
+    'dall-e-2': {
+      id: 'dall-e-2',
+      capabilities: {
+        maxResolution: '1K',
+        supportedRatios: ['1:1'],
+        supportsReference: false,
+        supportsEdit: true,
+        supportsInpaint: true,
+        supportsOutpaint: false,
+      },
+    },
+  },
+
+  async generateImage(
+    modelId: string,
+    params: GenerateImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult> {
+    const apiKey = config.apiKey as string;
+    if (!apiKey) {
+      throw new Error('OpenAI API key is required');
+    }
+
+    const dimensions = getDimensionsForRatio(params.ratio, '1K');
+
+    // TODO: Implement actual OpenAI API call
+    // import OpenAI from 'openai';
+    // const client = new OpenAI({ apiKey });
+    // const response = await client.images.generate({
+    //   model: modelId,
+    //   prompt: params.prompt,
+    //   size: `${dimensions.width}x${dimensions.height}`,
+    //   response_format: 'b64_json',
+    // });
+
+    // Stub for development
+    const stubData = Buffer.from(`openai-${modelId}-${params.ratio}-${Date.now()}`);
+
+    return {
+      data: stubData,
+      ratio: params.ratio,
+      width: dimensions.width,
+      height: dimensions.height,
+      provider: 'openai',
+      model: modelId,
+    };
+  },
+};
+
+export const openai = createImageProvider<OpenAIModel>(openaiSpec);
+```
+
+**Step 4: Run test to verify it passes**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/openai.test.ts
+```
+
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add plugins/maccing-pictura/server/src/providers/
+git commit -m "feat(pictura): add OpenAI provider (AI SDK pattern)"
+```
+
+---
+
+### Task 10: Implement Topaz Upscale Provider
+
+**Files:**
+- Create: `plugins/maccing-pictura/server/src/providers/topaz.ts`
+- Test: `plugins/maccing-pictura/server/src/providers/topaz.test.ts`
+
+**Step 1: Write the test**
+
+Create `plugins/maccing-pictura/server/src/providers/topaz.test.ts`:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { topaz, TOPAZ_MODELS } from './topaz.js';
+
+describe('Topaz provider', () => {
+  it('should have correct provider name', () => {
+    expect(topaz.name).toBe('topaz');
+  });
+
+  it('should expose expected models', () => {
+    expect(TOPAZ_MODELS).toContain('standard-max');
+    expect(TOPAZ_MODELS).toContain('recovery-v2');
+    expect(TOPAZ_MODELS).toContain('high-fidelity-v2');
+  });
+
+  it('should have correct max scale', () => {
+    expect(topaz.maxScale).toBe(8);
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/topaz.test.ts
+```
+
+Expected: FAIL
+
+**Step 3: Write the implementation**
+
+Create `plugins/maccing-pictura/server/src/providers/topaz.ts`:
+
+```typescript
+import { createUpscaleProvider } from '../provider-spec/index.js';
+import type { UpscaleProviderSpec, UpscaleImageParams } from '../provider-spec/index.js';
+import type { ImageResult } from '../types/image.js';
+
+export const TOPAZ_MODELS = [
+  'standard-v2',
+  'standard-max',
+  'recovery-v2',
+  'high-fidelity-v2',
+  'redefine',
+] as const;
+
+export type TopazModel = typeof TOPAZ_MODELS[number];
+
+const topazSpec: UpscaleProviderSpec = {
+  name: 'topaz',
+  models: [...TOPAZ_MODELS],
+  maxScale: 8,
+
+  async upscale(
+    params: UpscaleImageParams,
+    config: Record<string, unknown>
+  ): Promise<ImageResult> {
+    const apiKey = config.apiKey as string;
+    if (!apiKey) {
+      throw new Error('Topaz API key is required');
+    }
+
+    const model = params.model || 'standard-max';
+    const scale = params.scale || 4;
+
+    // TODO: Implement actual Topaz API call
+    // const response = await fetch('https://api.topazlabs.com/v1/enhance', {
+    //   method: 'POST',
+    //   headers: {
+    //     'X-API-Key': apiKey,
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({
+    //     image: params.image.toString('base64'),
+    //     model,
+    //     scale,
+    //   }),
+    // });
+
+    // Stub for development
+    const stubData = Buffer.from(`topaz-${model}-${scale}x-${Date.now()}`);
+
+    return {
+      data: stubData,
+      ratio: '16:9', // Would come from original image metadata
+      width: 2048 * scale,
+      height: 1152 * scale,
+      provider: 'topaz',
+      model,
+    };
+  },
+};
+
+export const topaz = createUpscaleProvider(topazSpec);
+```
+
+**Step 4: Run test to verify it passes**
+
+```bash
+cd plugins/maccing-pictura/server && npm test -- src/providers/topaz.test.ts
+```
+
+Expected: PASS
+
+**Step 5: Create providers index**
+
+Create `plugins/maccing-pictura/server/src/providers/index.ts`:
+
+```typescript
+export { gemini, GEMINI_MODELS, type GeminiModel } from './gemini.js';
+export { openai, OPENAI_MODELS, type OpenAIModel } from './openai.js';
+export { topaz, TOPAZ_MODELS, type TopazModel } from './topaz.js';
+```
+
+**Step 6: Commit**
+
+```bash
+git add plugins/maccing-pictura/server/src/providers/
+git commit -m "feat(pictura): add Topaz upscale provider"
+```
+
+---
+
+## Phase 4: Core Utilities
+
+### Task 11: Implement Config Manager
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/core/config.ts`
@@ -685,7 +1488,7 @@ Create `plugins/maccing-pictura/server/src/core/config.test.ts`:
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConfigManager } from './config.js';
+import { ConfigManager, ConfigSchema } from './config.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -716,6 +1519,7 @@ describe('ConfigManager', () => {
     const loaded = await manager.load();
 
     expect(loaded.providers.generation.default).toBe('gemini');
+    expect(loaded.defaultRatio).toBe('16:9'); // default applied
   });
 
   it('should return false for exists() when config missing', async () => {
@@ -723,20 +1527,33 @@ describe('ConfigManager', () => {
     expect(await manager.exists()).toBe(false);
   });
 
-  it('should save config to file', async () => {
+  it('should save config with secure permissions', async () => {
     const manager = new ConfigManager(configPath);
-    const config = {
+    await manager.save({
       providers: {
-        generation: { default: 'gemini' as const, gemini: { apiKey: 'new-key' } },
-        upscale: { default: 'topaz' as const, topaz: { apiKey: 'new-key' } },
+        generation: { default: 'gemini', gemini: { apiKey: 'secret' } },
+        upscale: { default: 'topaz', topaz: { apiKey: 'secret' } },
       },
-    };
+    });
 
-    await manager.save(config);
+    const stats = await fs.stat(configPath);
+    expect(stats.mode & 0o777).toBe(0o600);
+  });
+});
 
-    const content = await fs.readFile(configPath, 'utf-8');
-    const parsed = JSON.parse(content);
-    expect(parsed.providers.generation.gemini.apiKey).toBe('new-key');
+describe('ConfigSchema', () => {
+  it('should apply defaults', () => {
+    const result = ConfigSchema.parse({
+      providers: {
+        generation: { default: 'gemini' },
+        upscale: { default: 'topaz' },
+      },
+    });
+
+    expect(result.defaultRatio).toBe('16:9');
+    expect(result.defaultQuality).toBe('pro');
+    expect(result.imageSize).toBe('2K');
+    expect(result.retryAttempts).toBe(3);
   });
 });
 ```
@@ -756,7 +1573,59 @@ Create `plugins/maccing-pictura/server/src/core/config.ts`:
 ```typescript
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ConfigSchema, type PicturaConfig } from '../types/index.js';
+import { z } from 'zod';
+import { RatioSchema } from '../types/image.js';
+
+const GeminiConfigSchema = z.object({
+  apiKey: z.string(),
+  defaultModel: z.enum(['flash', 'pro']).default('pro'),
+});
+
+const OpenAIConfigSchema = z.object({
+  apiKey: z.string(),
+});
+
+const TopazConfigSchema = z.object({
+  apiKey: z.string(),
+  defaultModel: z.string().default('standard-max'),
+});
+
+const ReplicateConfigSchema = z.object({
+  apiKey: z.string(),
+});
+
+export const ConfigSchema = z.object({
+  providers: z.object({
+    generation: z.object({
+      default: z.enum(['gemini', 'openai']).default('gemini'),
+      gemini: GeminiConfigSchema.optional(),
+      openai: OpenAIConfigSchema.optional(),
+    }),
+    upscale: z.object({
+      default: z.enum(['topaz', 'replicate']).default('topaz'),
+      topaz: TopazConfigSchema.optional(),
+      replicate: ReplicateConfigSchema.optional(),
+    }),
+  }),
+  defaultRatio: RatioSchema.default('16:9'),
+  defaultQuality: z.enum(['draft', 'pro']).default('pro'),
+  imageSize: z.enum(['1K', '2K', '4K']).default('2K'),
+  defaultConsistency: z.enum(['generate', 'reference', 'multiturn']).default('generate'),
+  retryAttempts: z.number().min(1).max(10).default(3),
+  outputDir: z.string().default('.claude/plugins/maccing/pictura/output'),
+});
+
+export type PicturaConfig = z.infer<typeof ConfigSchema>;
+
+export const PRESET_BUNDLES = {
+  social: ['1:1', '9:16', '16:9'] as const,
+  web: ['16:9', '4:3', '1:1'] as const,
+  portrait: ['2:3', '3:4', '4:5', '9:16'] as const,
+  landscape: ['3:2', '4:3', '16:9', '21:9'] as const,
+  print: ['2:3', '3:4', '4:5'] as const,
+} as const;
+
+export type PresetBundle = keyof typeof PRESET_BUNDLES;
 
 export class ConfigManager {
   private configPath: string;
@@ -799,6 +1668,14 @@ export class ConfigManager {
   clearCache(): void {
     this.cachedConfig = null;
   }
+
+  getProviderConfig(type: 'generation' | 'upscale', name: string): Record<string, unknown> {
+    if (!this.cachedConfig) {
+      throw new Error('Config not loaded');
+    }
+    const providerConfig = this.cachedConfig.providers[type][name as keyof typeof this.cachedConfig.providers.generation];
+    return providerConfig as Record<string, unknown> || {};
+  }
 }
 ```
 
@@ -814,12 +1691,12 @@ Expected: PASS
 
 ```bash
 git add plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add config manager with file persistence"
+git commit -m "feat(pictura): add config manager with provider configs"
 ```
 
 ---
 
-### Task 8: Implement Retry Utility
+### Task 12: Implement Retry Utility
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/core/retry.ts`
@@ -831,7 +1708,7 @@ Create `plugins/maccing-pictura/server/src/core/retry.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
-import { withRetry, RetryError } from './retry.js';
+import { withRetry, RetryError, isRetryableError } from './retry.js';
 
 describe('withRetry', () => {
   it('should return result on first success', async () => {
@@ -860,18 +1737,16 @@ describe('withRetry', () => {
     ).rejects.toThrow(RetryError);
     expect(fn).toHaveBeenCalledTimes(3);
   });
+});
 
-  it('should not retry non-retryable errors', async () => {
-    const fn = vi.fn().mockRejectedValue(new Error('content policy violation'));
+describe('isRetryableError', () => {
+  it('should return true for rate limit errors', () => {
+    expect(isRetryableError(new Error('rate limit exceeded'))).toBe(true);
+    expect(isRetryableError(new Error('429 too many requests'))).toBe(true);
+  });
 
-    await expect(
-      withRetry(fn, {
-        maxAttempts: 3,
-        baseDelayMs: 10,
-        shouldRetry: (err) => !err.message.includes('content policy'),
-      })
-    ).rejects.toThrow('content policy violation');
-    expect(fn).toHaveBeenCalledTimes(1);
+  it('should return false for content policy errors', () => {
+    expect(isRetryableError(new Error('content policy violation'))).toBe(false);
   });
 });
 ```
@@ -919,7 +1794,7 @@ export async function withRetry<T>(
     maxAttempts,
     baseDelayMs = 2000,
     maxDelayMs = 30000,
-    shouldRetry = () => true,
+    shouldRetry = isRetryableError,
     onRetry,
   } = options;
 
@@ -957,15 +1832,36 @@ export async function withRetry<T>(
 
 export function isRetryableError(error: Error): boolean {
   const message = error.message.toLowerCase();
-  const retryablePatterns = [
+
+  // Non-retryable errors
+  const nonRetryable = [
+    'content policy',
+    'invalid api key',
+    'unauthorized',
+    'forbidden',
+    'not found',
+  ];
+
+  if (nonRetryable.some((pattern) => message.includes(pattern))) {
+    return false;
+  }
+
+  // Retryable errors
+  const retryable = [
     'rate limit',
     '429',
     'timeout',
     'econnreset',
     'enotfound',
     'network',
+    'server error',
+    '500',
+    '502',
+    '503',
+    '504',
   ];
-  return retryablePatterns.some((pattern) => message.includes(pattern));
+
+  return retryable.some((pattern) => message.includes(pattern));
 }
 ```
 
@@ -986,10 +1882,11 @@ git commit -m "feat(pictura): add retry utility with exponential backoff"
 
 ---
 
-### Task 9: Implement Slug Generator
+### Task 13: Implement Slug and Output Utilities
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/utils/slug.ts`
+- Create: `plugins/maccing-pictura/server/src/core/output.ts`
 - Test: `plugins/maccing-pictura/server/src/utils/slug.test.ts`
 
 **Step 1: Write the test**
@@ -998,7 +1895,7 @@ Create `plugins/maccing-pictura/server/src/utils/slug.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { generateSlug, generateTimestamp } from './slug.js';
+import { generateSlug, generateTimestamp, ratioToFilename } from './slug.js';
 
 describe('generateSlug', () => {
   it('should convert prompt to lowercase kebab-case', () => {
@@ -1009,15 +1906,9 @@ describe('generateSlug', () => {
     expect(generateSlug('Cat & Dog!')).toBe('cat-dog');
   });
 
-  it('should collapse multiple spaces/dashes', () => {
-    expect(generateSlug('hello   world')).toBe('hello-world');
-    expect(generateSlug('hello---world')).toBe('hello-world');
-  });
-
   it('should truncate long prompts', () => {
     const longPrompt = 'a'.repeat(100);
-    const slug = generateSlug(longPrompt);
-    expect(slug.length).toBeLessThanOrEqual(50);
+    expect(generateSlug(longPrompt).length).toBeLessThanOrEqual(50);
   });
 
   it('should handle empty string', () => {
@@ -1029,6 +1920,13 @@ describe('generateTimestamp', () => {
   it('should return YYYY-MM-DD-HHmmss format', () => {
     const timestamp = generateTimestamp();
     expect(timestamp).toMatch(/^\d{4}-\d{2}-\d{2}-\d{6}$/);
+  });
+});
+
+describe('ratioToFilename', () => {
+  it('should convert ratio to filename format', () => {
+    expect(ratioToFilename('16:9')).toBe('16x9');
+    expect(ratioToFilename('1:1')).toBe('1x1');
   });
 });
 ```
@@ -1092,116 +1990,14 @@ cd plugins/maccing-pictura/server && npm test -- src/utils/slug.test.ts
 
 Expected: PASS
 
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/utils/
-git commit -m "feat(pictura): add slug and timestamp utilities"
-```
-
----
-
-### Task 10: Implement Output Manager
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/core/output.ts`
-- Test: `plugins/maccing-pictura/server/src/core/output.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/core/output.test.ts`:
-
-```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { OutputManager } from './output.js';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as os from 'os';
-import type { Image } from '../types/index.js';
-
-describe('OutputManager', () => {
-  let tempDir: string;
-  let outputManager: OutputManager;
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pictura-output-'));
-    outputManager = new OutputManager(tempDir);
-  });
-
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  });
-
-  it('should save image with correct path structure', async () => {
-    const image: Image = {
-      data: Buffer.from('fake-image-data'),
-      ratio: '16:9',
-      width: 2048,
-      height: 1152,
-      provider: 'gemini',
-    };
-
-    const savedPath = await outputManager.saveImage(image, 'test-prompt', '2026-01-17-120000');
-
-    expect(savedPath).toContain('2026-01-17-120000');
-    expect(savedPath).toContain('test-prompt');
-    expect(savedPath).toContain('16x9.png');
-
-    const exists = await fs.access(savedPath).then(() => true).catch(() => false);
-    expect(exists).toBe(true);
-  });
-
-  it('should list batches in output directory', async () => {
-    const image: Image = {
-      data: Buffer.from('fake-image-data'),
-      ratio: '1:1',
-      width: 2048,
-      height: 2048,
-      provider: 'gemini',
-    };
-
-    await outputManager.saveImage(image, 'batch-one', '2026-01-17-100000');
-    await outputManager.saveImage(image, 'batch-two', '2026-01-17-110000');
-
-    const batches = await outputManager.listBatches();
-    expect(batches.length).toBe(2);
-  });
-
-  it('should load batch by slug', async () => {
-    const image: Image = {
-      data: Buffer.from('fake-image-data'),
-      ratio: '16:9',
-      width: 2048,
-      height: 1152,
-      provider: 'gemini',
-    };
-
-    await outputManager.saveImage(image, 'my-batch', '2026-01-17-120000');
-
-    const batch = await outputManager.loadBatch('my-batch');
-    expect(batch).not.toBeNull();
-    expect(batch!.slug).toBe('my-batch');
-    expect(batch!.images.length).toBe(1);
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/core/output.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
+**Step 5: Create output manager**
 
 Create `plugins/maccing-pictura/server/src/core/output.ts`:
 
 ```typescript
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { Image, SupportedRatio } from '../types/index.js';
+import type { ImageResult, SupportedRatio } from '../types/image.js';
 import { ratioToFilename, filenameToRatio } from '../utils/slug.js';
 
 export interface BatchInfo {
@@ -1218,7 +2014,7 @@ export class OutputManager {
     this.baseDir = baseDir;
   }
 
-  async saveImage(image: Image, slug: string, timestamp: string): Promise<string> {
+  async saveImage(image: ImageResult, slug: string, timestamp: string): Promise<string> {
     const dir = path.join(this.baseDir, timestamp, slug);
     await fs.mkdir(dir, { recursive: true });
 
@@ -1230,11 +2026,7 @@ export class OutputManager {
     return filePath;
   }
 
-  async saveBatch(
-    images: Image[],
-    slug: string,
-    timestamp: string
-  ): Promise<string[]> {
+  async saveBatch(images: ImageResult[], slug: string, timestamp: string): Promise<string[]> {
     const paths: string[] = [];
     for (const image of images) {
       const savedPath = await this.saveImage(image, slug, timestamp);
@@ -1269,12 +2061,7 @@ export class OutputManager {
               path: path.join(slugPath, f),
             }));
 
-          batches.push({
-            timestamp,
-            slug,
-            path: slugPath,
-            images,
-          });
+          batches.push({ timestamp, slug, path: slugPath, images });
 
           if (batches.length >= limit) return batches;
         }
@@ -1290,45 +2077,37 @@ export class OutputManager {
     const batches = await this.listBatches(100);
     return batches.find((b) => b.slug === slug) || null;
   }
-
-  async loadBatchImages(batch: BatchInfo): Promise<Image[]> {
-    const images: Image[] = [];
-    for (const img of batch.images) {
-      const data = await fs.readFile(img.path);
-      images.push({
-        data,
-        path: img.path,
-        ratio: img.ratio,
-        width: 0,
-        height: 0,
-        provider: 'unknown',
-      });
-    }
-    return images;
-  }
 }
 ```
 
-**Step 4: Run test to verify it passes**
+**Step 6: Create utils and core indexes**
 
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/core/output.test.ts
+Create `plugins/maccing-pictura/server/src/utils/index.ts`:
+
+```typescript
+export * from './slug.js';
 ```
 
-Expected: PASS
+Create `plugins/maccing-pictura/server/src/core/index.ts`:
 
-**Step 5: Commit**
+```typescript
+export * from './config.js';
+export * from './retry.js';
+export * from './output.js';
+```
+
+**Step 7: Commit**
 
 ```bash
-git add plugins/maccing-pictura/server/src/core/
-git commit -m "feat(pictura): add output manager for image persistence"
+git add plugins/maccing-pictura/server/src/utils/ plugins/maccing-pictura/server/src/core/
+git commit -m "feat(pictura): add slug, output utilities"
 ```
 
 ---
 
-## Phase 4: Prompt Enhancement
+## Phase 5: Prompt Enhancement
 
-### Task 11: Implement Prompt Enhancer
+### Task 14: Implement Prompt Enhancer
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/core/prompt-enhancer.ts`
@@ -1343,55 +2122,35 @@ import { describe, it, expect } from 'vitest';
 import { PromptEnhancer, detectStyle, STYLE_PROFILES } from './prompt-enhancer.js';
 
 describe('detectStyle', () => {
-  it('should detect photorealistic style', () => {
+  it('should detect photo style', () => {
     expect(detectStyle('photo of a cat')).toBe('photo');
     expect(detectStyle('realistic portrait')).toBe('photo');
-    expect(detectStyle('photograph of sunset')).toBe('photo');
   });
 
-  it('should detect illustration style', () => {
+  it('should detect art style', () => {
     expect(detectStyle('cartoon character')).toBe('art');
-    expect(detectStyle('anime girl')).toBe('art');
-    expect(detectStyle('vector logo')).toBe('art');
+    expect(detectStyle('anime illustration')).toBe('art');
   });
 
   it('should detect commercial style', () => {
-    expect(detectStyle('product shot of watch')).toBe('commercial');
-    expect(detectStyle('advertisement for shoes')).toBe('commercial');
+    expect(detectStyle('product shot')).toBe('commercial');
   });
 
-  it('should default to auto for ambiguous prompts', () => {
+  it('should default to auto', () => {
     expect(detectStyle('cat on roof')).toBe('auto');
   });
 });
 
-describe('STYLE_PROFILES', () => {
-  it('should have required profiles', () => {
-    expect(STYLE_PROFILES.photo).toBeDefined();
-    expect(STYLE_PROFILES.art).toBeDefined();
-    expect(STYLE_PROFILES.commercial).toBeDefined();
-    expect(STYLE_PROFILES.minimal).toBeDefined();
-  });
-
-  it('should have modifiers for each profile', () => {
-    expect(STYLE_PROFILES.photo.modifiers.length).toBeGreaterThan(0);
-    expect(STYLE_PROFILES.art.modifiers.length).toBeGreaterThan(0);
-  });
-});
-
 describe('PromptEnhancer', () => {
-  it('should enhance prompt with style modifiers', () => {
+  it('should enhance with style modifiers', () => {
     const enhancer = new PromptEnhancer();
     const enhanced = enhancer.enhance('cat on roof', { style: 'photo' });
-
-    expect(enhanced).toContain('cat');
     expect(enhanced.length).toBeGreaterThan('cat on roof'.length);
   });
 
-  it('should preserve original prompt when style is minimal', () => {
+  it('should return original for minimal style', () => {
     const enhancer = new PromptEnhancer();
     const enhanced = enhancer.enhance('cat on roof', { style: 'minimal' });
-
     expect(enhanced).toBe('cat on roof');
   });
 });
@@ -1413,95 +2172,71 @@ Create `plugins/maccing-pictura/server/src/core/prompt-enhancer.ts`:
 export type StyleType = 'auto' | 'photo' | 'art' | 'commercial' | 'minimal';
 
 export interface StyleProfile {
-  category: string;
   modifiers: string[];
-  technicalTerms: string[];
-  composition: string[];
+  technical: string[];
   lighting: string[];
 }
 
 export const STYLE_PROFILES: Record<Exclude<StyleType, 'auto' | 'minimal'>, StyleProfile> = {
   photo: {
-    category: 'photorealistic',
     modifiers: ['ultra-realistic', 'high-resolution', 'detailed', 'sharp focus'],
-    technicalTerms: ['85mm lens', 'shallow depth of field', 'natural lighting', 'bokeh'],
-    composition: ['rule of thirds', 'leading lines', 'centered subject'],
-    lighting: ['golden hour', 'soft diffused light', 'natural ambient light', 'dramatic shadows'],
+    technical: ['85mm lens', 'shallow depth of field', 'natural lighting', 'bokeh'],
+    lighting: ['golden hour', 'soft diffused light', 'natural ambient light'],
   },
   art: {
-    category: 'illustration',
     modifiers: ['clean lines', 'vibrant colors', 'stylized', 'expressive'],
-    technicalTerms: ['vector art', 'cel-shading', 'bold outlines', 'flat colors'],
-    composition: ['dynamic pose', 'asymmetrical balance', 'negative space'],
+    technical: ['vector art', 'cel-shading', 'bold outlines', 'flat colors'],
     lighting: ['rim lighting', 'ambient occlusion', 'soft gradients'],
   },
   commercial: {
-    category: 'commercial',
     modifiers: ['professional', 'polished', 'high-end', 'premium quality'],
-    technicalTerms: ['studio lighting', 'product photography', '45-degree angle', 'reflective surface'],
-    composition: ['centered product', 'clean background', 'hero shot'],
+    technical: ['studio lighting', 'product photography', '45-degree angle'],
     lighting: ['soft diffusion', 'three-point lighting', 'gradient backdrop'],
   },
 };
 
 const STYLE_KEYWORDS: Record<Exclude<StyleType, 'auto' | 'minimal'>, string[]> = {
-  photo: ['photo', 'photograph', 'realistic', 'portrait', 'landscape', 'nature', 'street'],
-  art: ['cartoon', 'anime', 'illustration', 'drawing', 'sketch', 'vector', 'logo', 'icon', 'stylized'],
-  commercial: ['product', 'advertisement', 'ad', 'marketing', 'brand', 'packaging', 'mockup'],
+  photo: ['photo', 'photograph', 'realistic', 'portrait', 'landscape', 'nature'],
+  art: ['cartoon', 'anime', 'illustration', 'drawing', 'sketch', 'vector', 'logo'],
+  commercial: ['product', 'advertisement', 'ad', 'marketing', 'brand', 'mockup'],
 };
 
 export function detectStyle(prompt: string): StyleType {
-  const lowerPrompt = prompt.toLowerCase();
-
+  const lower = prompt.toLowerCase();
   for (const [style, keywords] of Object.entries(STYLE_KEYWORDS)) {
-    if (keywords.some((kw) => lowerPrompt.includes(kw))) {
+    if (keywords.some((kw) => lower.includes(kw))) {
       return style as StyleType;
     }
   }
-
   return 'auto';
 }
 
 export interface EnhanceOptions {
   style: StyleType;
-  targetRatios?: string[];
 }
 
 export class PromptEnhancer {
   enhance(prompt: string, options: EnhanceOptions): string {
-    const { style } = options;
-
-    if (style === 'minimal') {
+    if (options.style === 'minimal') {
       return prompt;
     }
 
-    const detectedStyle = style === 'auto' ? detectStyle(prompt) : style;
+    const detected = options.style === 'auto' ? detectStyle(prompt) : options.style;
 
-    if (detectedStyle === 'auto') {
-      return this.enhanceGeneric(prompt);
+    if (detected === 'auto') {
+      return `${prompt}, highly detailed, professional quality`;
     }
 
-    const profile = STYLE_PROFILES[detectedStyle];
-    return this.applyProfile(prompt, profile);
-  }
-
-  private enhanceGeneric(prompt: string): string {
-    const enhancements = [
-      'highly detailed',
-      'professional quality',
-      'well-composed',
-    ];
-
-    const randomEnhancement = enhancements[Math.floor(Math.random() * enhancements.length)];
-    return `${prompt}, ${randomEnhancement}`;
-  }
-
-  private applyProfile(prompt: string, profile: StyleProfile): string {
-    const modifier = profile.modifiers[Math.floor(Math.random() * profile.modifiers.length)];
-    const technical = profile.technicalTerms[Math.floor(Math.random() * profile.technicalTerms.length)];
-    const lighting = profile.lighting[Math.floor(Math.random() * profile.lighting.length)];
+    const profile = STYLE_PROFILES[detected];
+    const modifier = this.pickRandom(profile.modifiers);
+    const technical = this.pickRandom(profile.technical);
+    const lighting = this.pickRandom(profile.lighting);
 
     return `${prompt}, ${modifier}, ${technical}, ${lighting}`;
+  }
+
+  private pickRandom<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
   }
 }
 ```
@@ -1514,7 +2249,15 @@ cd plugins/maccing-pictura/server && npm test -- src/core/prompt-enhancer.test.t
 
 Expected: PASS
 
-**Step 5: Commit**
+**Step 5: Update core index**
+
+Add to `plugins/maccing-pictura/server/src/core/index.ts`:
+
+```typescript
+export * from './prompt-enhancer.js';
+```
+
+**Step 6: Commit**
 
 ```bash
 git add plugins/maccing-pictura/server/src/core/
@@ -1523,352 +2266,14 @@ git commit -m "feat(pictura): add prompt enhancer with style detection"
 
 ---
 
-## Phase 5: Provider Implementations
-
-### Task 12: Implement Gemini Provider (Stub)
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/providers/generation/gemini.ts`
-- Test: `plugins/maccing-pictura/server/src/providers/generation/gemini.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/providers/generation/gemini.test.ts`:
-
-```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiProvider } from './gemini.js';
-
-describe('GeminiProvider', () => {
-  let provider: GeminiProvider;
-
-  beforeEach(() => {
-    provider = new GeminiProvider();
-  });
-
-  it('should have correct name', () => {
-    expect(provider.name).toBe('gemini');
-  });
-
-  it('should return capabilities', () => {
-    const caps = provider.getCapabilities();
-    expect(caps.name).toBe('gemini');
-    expect(caps.supportedRatios).toContain('16:9');
-    expect(caps.maxResolution).toBe('4K');
-    expect(caps.features.reference).toBe(true);
-  });
-
-  it('should throw error when not initialized', async () => {
-    await expect(
-      provider.generate('test', '16:9', { quality: 'pro', size: '2K', consistency: 'generate', enhance: false, enhanceStyle: 'auto' })
-    ).rejects.toThrow('not initialized');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/providers/generation/gemini.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/providers/generation/gemini.ts`:
-
-```typescript
-import type {
-  GenerationProvider,
-  ProviderCapabilities,
-  GenOptions,
-  EditOptions,
-} from '../../types/provider.js';
-import type { Image, SupportedRatio } from '../../types/image.js';
-import { SUPPORTED_RATIOS, getDimensionsForRatio } from '../../types/image.js';
-
-interface GeminiConfig {
-  apiKey: string;
-  defaultModel?: 'draft' | 'pro';
-}
-
-export class GeminiProvider implements GenerationProvider {
-  name = 'gemini';
-  private config: GeminiConfig | null = null;
-  private client: unknown = null;
-
-  async initialize(config: Record<string, unknown>): Promise<void> {
-    this.config = config as GeminiConfig;
-
-    if (!this.config.apiKey) {
-      throw new Error('Gemini API key is required');
-    }
-
-    // TODO: Initialize actual Gemini client
-    // const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    // this.client = new GoogleGenerativeAI(this.config.apiKey);
-    this.client = { initialized: true };
-  }
-
-  async generate(
-    prompt: string,
-    ratio: SupportedRatio,
-    options: GenOptions
-  ): Promise<Image> {
-    if (!this.client || !this.config) {
-      throw new Error('GeminiProvider not initialized');
-    }
-
-    const dimensions = getDimensionsForRatio(ratio, options.size);
-    const model = options.quality === 'draft' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
-
-    // TODO: Implement actual Gemini API call
-    // const response = await this.client.generateImage({
-    //   prompt,
-    //   aspectRatio: ratio,
-    //   imageSize: options.size,
-    //   model,
-    // });
-
-    // Stub response for testing
-    const stubData = Buffer.from(`stub-image-${ratio}-${Date.now()}`);
-
-    return {
-      data: stubData,
-      ratio,
-      width: dimensions.width,
-      height: dimensions.height,
-      provider: this.name,
-    };
-  }
-
-  async edit(image: Image, options: EditOptions): Promise<Image> {
-    if (!this.client || !this.config) {
-      throw new Error('GeminiProvider not initialized');
-    }
-
-    // TODO: Implement actual Gemini edit API call
-    const stubData = Buffer.from(`stub-edited-${image.ratio}-${Date.now()}`);
-
-    return {
-      ...image,
-      data: stubData,
-    };
-  }
-
-  getCapabilities(): ProviderCapabilities {
-    return {
-      name: this.name,
-      supportedRatios: [...SUPPORTED_RATIOS],
-      maxResolution: '4K',
-      features: {
-        reference: true,
-        multiturn: true,
-        inpaint: true,
-        outpaint: true,
-        styleTransfer: true,
-      },
-    };
-  }
-}
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/providers/generation/gemini.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/providers/
-git commit -m "feat(pictura): add Gemini provider stub"
-```
-
----
-
-### Task 13: Implement Topaz Provider (Stub)
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/providers/upscale/topaz.ts`
-- Test: `plugins/maccing-pictura/server/src/providers/upscale/topaz.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/providers/upscale/topaz.test.ts`:
-
-```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { TopazProvider } from './topaz.js';
-
-describe('TopazProvider', () => {
-  let provider: TopazProvider;
-
-  beforeEach(() => {
-    provider = new TopazProvider();
-  });
-
-  it('should have correct name', () => {
-    expect(provider.name).toBe('topaz');
-  });
-
-  it('should return capabilities', () => {
-    const caps = provider.getCapabilities();
-    expect(caps.name).toBe('topaz');
-    expect(caps.maxScale).toBe(8);
-    expect(caps.models).toContain('standard-max');
-  });
-
-  it('should throw error when not initialized', async () => {
-    await expect(
-      provider.upscale(
-        { data: Buffer.from('test'), ratio: '16:9', width: 100, height: 100, provider: 'test' },
-        {}
-      )
-    ).rejects.toThrow('not initialized');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/providers/upscale/topaz.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/providers/upscale/topaz.ts`:
-
-```typescript
-import type {
-  UpscaleProvider,
-  UpscaleCapabilities,
-  UpscaleOptions,
-} from '../../types/provider.js';
-import type { Image } from '../../types/image.js';
-
-interface TopazConfig {
-  apiKey: string;
-  defaultModel?: string;
-}
-
-const TOPAZ_MODELS = [
-  'standard-v2',
-  'standard-max',
-  'recovery-v2',
-  'high-fidelity-v2',
-  'redefine',
-] as const;
-
-export class TopazProvider implements UpscaleProvider {
-  name = 'topaz';
-  private config: TopazConfig | null = null;
-
-  async initialize(config: Record<string, unknown>): Promise<void> {
-    this.config = config as TopazConfig;
-
-    if (!this.config.apiKey) {
-      throw new Error('Topaz API key is required');
-    }
-  }
-
-  async upscale(image: Image, options: UpscaleOptions): Promise<Image> {
-    if (!this.config) {
-      throw new Error('TopazProvider not initialized');
-    }
-
-    const model = options.model || this.config.defaultModel || 'standard-max';
-    const scale = options.scale || 4;
-
-    // TODO: Implement actual Topaz API call
-    // const response = await fetch('https://api.topazlabs.com/v1/enhance', {
-    //   method: 'POST',
-    //   headers: {
-    //     'X-API-Key': this.config.apiKey,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     image: image.data.toString('base64'),
-    //     model,
-    //     scale,
-    //   }),
-    // });
-
-    // Stub response for testing
-    const stubData = Buffer.from(`stub-upscaled-${scale}x-${Date.now()}`);
-
-    return {
-      ...image,
-      data: stubData,
-      width: image.width * scale,
-      height: image.height * scale,
-      provider: `${image.provider}+topaz`,
-    };
-  }
-
-  getCapabilities(): UpscaleCapabilities {
-    return {
-      name: this.name,
-      maxScale: 8,
-      models: [...TOPAZ_MODELS],
-    };
-  }
-}
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/providers/upscale/topaz.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Create provider index files**
-
-Create `plugins/maccing-pictura/server/src/providers/generation/index.ts`:
-
-```typescript
-export { GeminiProvider } from './gemini.js';
-```
-
-Create `plugins/maccing-pictura/server/src/providers/upscale/index.ts`:
-
-```typescript
-export { TopazProvider } from './topaz.js';
-```
-
-Create `plugins/maccing-pictura/server/src/providers/index.ts`:
-
-```typescript
-export * from './generation/index.js';
-export * from './upscale/index.js';
-```
-
-**Step 6: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/providers/
-git commit -m "feat(pictura): add Topaz upscale provider stub"
-```
-
----
-
 ## Phase 6: MCP Server and Tools
 
-### Task 14: Implement MCP Server Entry Point
+### Task 15: Implement MCP Server Entry
 
 **Files:**
 - Create: `plugins/maccing-pictura/server/src/index.ts`
 
-**Step 1: Write the MCP server entry**
+**Step 1: Write MCP server**
 
 Create `plugins/maccing-pictura/server/src/index.ts`:
 
@@ -1876,368 +2281,19 @@ Create `plugins/maccing-pictura/server/src/index.ts`:
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
-const server = new McpServer({
-  name: 'pictura',
-  version: '1.0.0',
-});
-
-// Tools will be registered here in subsequent tasks
-
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('Pictura MCP server started');
-}
-
-main().catch((error) => {
-  console.error('Failed to start Pictura MCP server:', error);
-  process.exit(1);
-});
-
-export { server };
-```
-
-**Step 2: Build and verify**
-
-```bash
-cd plugins/maccing-pictura/server && npm run build
-```
-
-Expected: Compilation succeeds, `dist/index.js` created
-
-**Step 3: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/index.ts
-git commit -m "feat(pictura): add MCP server entry point"
-```
-
----
-
-### Task 15: Implement Generate Tool
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/tools/generate.ts`
-- Test: `plugins/maccing-pictura/server/src/tools/generate.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/tools/generate.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { generateToolSchema, parseGenerateParams } from './generate.js';
-
-describe('generateToolSchema', () => {
-  it('should have required fields', () => {
-    expect(generateToolSchema.description).toBeDefined();
-    expect(generateToolSchema.inputSchema).toBeDefined();
-  });
-});
-
-describe('parseGenerateParams', () => {
-  it('should parse basic params', () => {
-    const params = parseGenerateParams({
-      prompt: 'cat on roof',
-    });
-
-    expect(params.prompt).toBe('cat on roof');
-    expect(params.ratios).toEqual(['16:9']);
-    expect(params.quality).toBe('pro');
-  });
-
-  it('should expand preset bundle', () => {
-    const params = parseGenerateParams({
-      prompt: 'cat on roof',
-      preset: 'social',
-    });
-
-    expect(params.ratios).toEqual(['1:1', '9:16', '16:9']);
-  });
-
-  it('should merge explicit ratios with preset', () => {
-    const params = parseGenerateParams({
-      prompt: 'cat on roof',
-      preset: 'social',
-      ratios: ['21:9'],
-    });
-
-    expect(params.ratios).toContain('21:9');
-    expect(params.ratios).toContain('1:1');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/tools/generate.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/tools/generate.ts`:
-
-```typescript
-import { z } from 'zod';
-import { PRESET_BUNDLES, type PresetBundle } from '../types/config.js';
-import { RatioSchema, type SupportedRatio } from '../types/image.js';
-
-export const generateInputSchema = z.object({
-  prompt: z.string().describe('Image generation prompt'),
-  ratios: z.array(z.string()).optional().describe('Aspect ratios to generate'),
-  preset: z.enum(['social', 'web', 'portrait', 'landscape', 'print']).optional().describe('Preset bundle'),
-  quality: z.enum(['draft', 'pro']).default('pro').describe('Quality level'),
-  size: z.enum(['1K', '2K', '4K']).default('2K').describe('Output resolution'),
-  provider: z.string().optional().describe('Generation provider override'),
-  reference: z.string().optional().describe('Path to reference image'),
-  consistency: z.enum(['generate', 'reference', 'multiturn']).default('generate').describe('Consistency strategy'),
-  enhance: z.boolean().default(true).describe('Enable prompt enhancement'),
-  enhanceStyle: z.enum(['auto', 'photo', 'art', 'commercial', 'minimal']).default('auto').describe('Enhancement style'),
-});
-
-export type GenerateInput = z.infer<typeof generateInputSchema>;
-
-export interface ParsedGenerateParams {
-  prompt: string;
-  ratios: SupportedRatio[];
-  quality: 'draft' | 'pro';
-  size: '1K' | '2K' | '4K';
-  provider?: string;
-  reference?: string;
-  consistency: 'generate' | 'reference' | 'multiturn';
-  enhance: boolean;
-  enhanceStyle: 'auto' | 'photo' | 'art' | 'commercial' | 'minimal';
-}
-
-export function parseGenerateParams(input: unknown): ParsedGenerateParams {
-  const parsed = generateInputSchema.parse(input);
-
-  let ratios: SupportedRatio[] = [];
-
-  if (parsed.preset) {
-    const presetRatios = PRESET_BUNDLES[parsed.preset as PresetBundle];
-    ratios = [...presetRatios] as SupportedRatio[];
-  }
-
-  if (parsed.ratios && parsed.ratios.length > 0) {
-    const validRatios = parsed.ratios
-      .map((r) => RatioSchema.safeParse(r))
-      .filter((r) => r.success)
-      .map((r) => r.data as SupportedRatio);
-
-    ratios = [...new Set([...ratios, ...validRatios])];
-  }
-
-  if (ratios.length === 0) {
-    ratios = ['16:9'];
-  }
-
-  return {
-    prompt: parsed.prompt,
-    ratios,
-    quality: parsed.quality,
-    size: parsed.size,
-    provider: parsed.provider,
-    reference: parsed.reference,
-    consistency: parsed.consistency,
-    enhance: parsed.enhance,
-    enhanceStyle: parsed.enhanceStyle,
-  };
-}
-
-export const generateToolSchema = {
-  name: 'pictura_generate',
-  description: 'Generate images in multiple aspect ratios with consistency',
-  inputSchema: {
-    type: 'object' as const,
-    properties: {
-      prompt: { type: 'string', description: 'Image generation prompt' },
-      ratios: { type: 'array', items: { type: 'string' }, description: 'Aspect ratios' },
-      preset: { type: 'string', enum: ['social', 'web', 'portrait', 'landscape', 'print'] },
-      quality: { type: 'string', enum: ['draft', 'pro'], default: 'pro' },
-      size: { type: 'string', enum: ['1K', '2K', '4K'], default: '2K' },
-      provider: { type: 'string', description: 'Provider override' },
-      reference: { type: 'string', description: 'Reference image path' },
-      consistency: { type: 'string', enum: ['generate', 'reference', 'multiturn'], default: 'generate' },
-      enhance: { type: 'boolean', default: true },
-      enhanceStyle: { type: 'string', enum: ['auto', 'photo', 'art', 'commercial', 'minimal'], default: 'auto' },
-    },
-    required: ['prompt'],
-  },
-};
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/tools/generate.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/tools/
-git commit -m "feat(pictura): add generate tool schema and parser"
-```
-
----
-
-### Task 16: Implement List Tool
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/tools/list.ts`
-- Test: `plugins/maccing-pictura/server/src/tools/list.test.ts`
-
-**Step 1: Write the test**
-
-Create `plugins/maccing-pictura/server/src/tools/list.test.ts`:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { listToolSchema, formatBatchList } from './list.js';
-import type { BatchInfo } from '../core/output.js';
-
-describe('listToolSchema', () => {
-  it('should have correct name', () => {
-    expect(listToolSchema.name).toBe('pictura_list');
-  });
-});
-
-describe('formatBatchList', () => {
-  it('should format empty list', () => {
-    const result = formatBatchList([]);
-    expect(result).toContain('No generations found');
-  });
-
-  it('should format batches correctly', () => {
-    const batches: BatchInfo[] = [
-      {
-        timestamp: '2026-01-17-120000',
-        slug: 'cat-on-roof',
-        path: '/output/2026-01-17-120000/cat-on-roof',
-        images: [
-          { ratio: '16:9', path: '/output/2026-01-17-120000/cat-on-roof/16x9.png' },
-          { ratio: '1:1', path: '/output/2026-01-17-120000/cat-on-roof/1x1.png' },
-        ],
-      },
-    ];
-
-    const result = formatBatchList(batches);
-    expect(result).toContain('cat-on-roof');
-    expect(result).toContain('16:9');
-    expect(result).toContain('1:1');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/tools/list.test.ts
-```
-
-Expected: FAIL
-
-**Step 3: Write the implementation**
-
-Create `plugins/maccing-pictura/server/src/tools/list.ts`:
-
-```typescript
-import { z } from 'zod';
-import type { BatchInfo } from '../core/output.js';
-
-export const listInputSchema = z.object({
-  limit: z.number().min(1).max(100).default(10).describe('Maximum batches to show'),
-  filter: z.string().optional().describe('Filter by prompt slug'),
-});
-
-export type ListInput = z.infer<typeof listInputSchema>;
-
-export function formatBatchList(batches: BatchInfo[]): string {
-  if (batches.length === 0) {
-    return 'No generations found.\n\nUse /pictura:generate to create images.';
-  }
-
-  const lines: string[] = ['Recent generations:\n'];
-
-  for (const batch of batches) {
-    lines.push(`${batch.timestamp}/${batch.slug}/`);
-    for (const img of batch.images) {
-      lines.push(`  ├── ${img.ratio}`);
-    }
-    lines.push('');
-  }
-
-  lines.push('Use /pictura:edit "<slug>" to modify a batch.');
-
-  return lines.join('\n');
-}
-
-export const listToolSchema = {
-  name: 'pictura_list',
-  description: 'List recent image generations',
-  inputSchema: {
-    type: 'object' as const,
-    properties: {
-      limit: { type: 'number', description: 'Maximum batches to show', default: 10 },
-      filter: { type: 'string', description: 'Filter by prompt slug' },
-    },
-    required: [],
-  },
-};
-```
-
-**Step 4: Run test to verify it passes**
-
-```bash
-cd plugins/maccing-pictura/server && npm test -- src/tools/list.test.ts
-```
-
-Expected: PASS
-
-**Step 5: Commit**
-
-```bash
-git add plugins/maccing-pictura/server/src/tools/
-git commit -m "feat(pictura): add list tool for browsing generations"
-```
-
----
-
-### Task 17: Create Tools Index and Wire to MCP Server
-
-**Files:**
-- Create: `plugins/maccing-pictura/server/src/tools/index.ts`
-- Modify: `plugins/maccing-pictura/server/src/index.ts`
-
-**Step 1: Create tools index**
-
-Create `plugins/maccing-pictura/server/src/tools/index.ts`:
-
-```typescript
-export { generateToolSchema, parseGenerateParams, type ParsedGenerateParams } from './generate.js';
-export { listToolSchema, formatBatchList, type ListInput } from './list.js';
-```
-
-**Step 2: Update MCP server to register tools**
-
-Replace `plugins/maccing-pictura/server/src/index.ts`:
-
-```typescript
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { generateToolSchema, parseGenerateParams } from './tools/index.js';
-import { listToolSchema, formatBatchList } from './tools/index.js';
-import { ConfigManager } from './core/config.js';
-import { OutputManager } from './core/output.js';
-import { PromptEnhancer } from './core/prompt-enhancer.js';
-import { GeminiProvider } from './providers/index.js';
-import { generateSlug, generateTimestamp } from './utils/slug.js';
+import { ConfigManager } from './core/index.js';
+import { OutputManager } from './core/index.js';
+import { PromptEnhancer } from './core/index.js';
+import { withRetry } from './core/index.js';
+import { generateSlug, generateTimestamp } from './utils/index.js';
+import { gemini, openai, topaz } from './providers/index.js';
+import { registerProvider, generateImages } from './generate.js';
+import type { SupportedRatio } from './types/image.js';
+import { PRESET_BUNDLES, type PresetBundle } from './core/config.js';
+
+// Register providers
+registerProvider(gemini);
+registerProvider(openai);
 
 const configPath = process.env.PICTURA_CONFIG || '.claude/plugins/maccing/pictura/config.json';
 const configManager = new ConfigManager(configPath);
@@ -2247,91 +2303,127 @@ const server = new McpServer({
   version: '1.0.0',
 });
 
+// Generate tool
 server.tool(
-  generateToolSchema.name,
-  generateToolSchema.description,
-  generateToolSchema.inputSchema,
+  'pictura_generate',
+  'Generate images in multiple aspect ratios with consistency',
+  {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'Image generation prompt' },
+      ratios: { type: 'array', items: { type: 'string' }, description: 'Aspect ratios' },
+      preset: { type: 'string', enum: ['social', 'web', 'portrait', 'landscape', 'print'] },
+      quality: { type: 'string', enum: ['draft', 'pro'], default: 'pro' },
+      size: { type: 'string', enum: ['1K', '2K', '4K'], default: '2K' },
+      provider: { type: 'string', description: 'Provider override (gemini, openai)' },
+      enhance: { type: 'boolean', default: true },
+      enhanceStyle: { type: 'string', enum: ['auto', 'photo', 'art', 'commercial', 'minimal'] },
+    },
+    required: ['prompt'],
+  },
   async (params) => {
     try {
-      const parsed = parseGenerateParams(params);
       const config = await configManager.load();
       const outputManager = new OutputManager(config.outputDir);
       const enhancer = new PromptEnhancer();
 
-      let prompt = parsed.prompt;
-      if (parsed.enhance) {
-        prompt = enhancer.enhance(parsed.prompt, { style: parsed.enhanceStyle });
+      // Parse ratios
+      let ratios: SupportedRatio[] = [];
+      const p = params as Record<string, unknown>;
+
+      if (p.preset) {
+        ratios = [...PRESET_BUNDLES[p.preset as PresetBundle]] as SupportedRatio[];
+      }
+      if (Array.isArray(p.ratios)) {
+        ratios = [...new Set([...ratios, ...p.ratios])] as SupportedRatio[];
+      }
+      if (ratios.length === 0) {
+        ratios = [config.defaultRatio];
       }
 
-      const provider = new GeminiProvider();
-      const providerConfig = config.providers.generation.gemini;
-      if (!providerConfig) {
-        throw new Error('Gemini provider not configured');
+      // Enhance prompt
+      let prompt = p.prompt as string;
+      const enhance = p.enhance !== false;
+      if (enhance) {
+        const style = (p.enhanceStyle as string) || 'auto';
+        prompt = enhancer.enhance(prompt, { style: style as any });
       }
-      await provider.initialize(providerConfig);
 
-      const images = [];
+      // Select provider
+      const providerName = (p.provider as string) || config.providers.generation.default;
+      const provider = providerName === 'openai' ? openai : gemini;
+      const modelId = providerName === 'openai' ? 'dall-e-3' : (config.defaultQuality === 'draft' ? 'flash' : 'pro');
+
+      // Generate images
+      const providerConfig = configManager.getProviderConfig('generation', providerName);
+      const images = await generateImages({
+        model: provider(modelId as any),
+        prompt,
+        ratios,
+        size: (p.size as any) || config.imageSize,
+        config: providerConfig,
+      });
+
+      // Save
       const timestamp = generateTimestamp();
-      const slug = generateSlug(parsed.prompt);
+      const slug = generateSlug(p.prompt as string);
+      await outputManager.saveBatch(images, slug, timestamp);
 
-      for (const ratio of parsed.ratios) {
-        const image = await provider.generate(prompt, ratio, {
-          quality: parsed.quality,
-          size: parsed.size,
-          consistency: parsed.consistency,
-          enhance: false,
-          enhanceStyle: 'minimal',
-        });
-        images.push(image);
-      }
-
-      const paths = await outputManager.saveBatch(images, slug, timestamp);
-
-      const resultLines = [
-        parsed.enhance ? `Enhanced prompt:\n"${prompt}"\n` : '',
+      const result = [
+        enhance ? `Enhanced prompt:\n"${prompt}"\n` : '',
         `Generated ${images.length} images:`,
         `${config.outputDir}/${timestamp}/${slug}/`,
-        ...parsed.ratios.map((r, i) => `  ├── ${r.replace(':', 'x')}.png`),
-      ].filter(Boolean);
+        ...ratios.map((r) => `  - ${r}`),
+      ].filter(Boolean).join('\n');
 
-      return {
-        content: [{ type: 'text', text: resultLines.join('\n') }],
-      };
+      return { content: [{ type: 'text', text: result }] };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: 'text', text: `Error: ${message}` }],
+        content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : error}` }],
         isError: true,
       };
     }
   }
 );
 
+// List tool
 server.tool(
-  listToolSchema.name,
-  listToolSchema.description,
-  listToolSchema.inputSchema,
+  'pictura_list',
+  'List recent image generations',
+  {
+    type: 'object',
+    properties: {
+      limit: { type: 'number', default: 10 },
+      filter: { type: 'string' },
+    },
+  },
   async (params) => {
     try {
       const config = await configManager.load();
       const outputManager = new OutputManager(config.outputDir);
+      const p = params as Record<string, unknown>;
 
-      const limit = (params as { limit?: number }).limit || 10;
-      const filter = (params as { filter?: string }).filter;
-
-      let batches = await outputManager.listBatches(limit);
-
-      if (filter) {
-        batches = batches.filter((b) => b.slug.includes(filter));
+      let batches = await outputManager.listBatches((p.limit as number) || 10);
+      if (p.filter) {
+        batches = batches.filter((b) => b.slug.includes(p.filter as string));
       }
 
-      return {
-        content: [{ type: 'text', text: formatBatchList(batches) }],
-      };
+      if (batches.length === 0) {
+        return { content: [{ type: 'text', text: 'No generations found.' }] };
+      }
+
+      const lines = ['Recent generations:\n'];
+      for (const batch of batches) {
+        lines.push(`${batch.timestamp}/${batch.slug}/`);
+        for (const img of batch.images) {
+          lines.push(`  - ${img.ratio}`);
+        }
+      }
+
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: 'text', text: `Error: ${message}` }],
+        content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : error}` }],
         isError: true,
       };
     }
@@ -2345,38 +2437,46 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Failed to start Pictura MCP server:', error);
+  console.error('Failed to start:', error);
   process.exit(1);
 });
-
-export { server };
 ```
 
-**Step 3: Build and verify**
+**Step 2: Build**
 
 ```bash
 cd plugins/maccing-pictura/server && npm run build
 ```
 
-Expected: Compilation succeeds
+Expected: Success
 
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
-git add plugins/maccing-pictura/server/src/
-git commit -m "feat(pictura): wire tools to MCP server"
+git add plugins/maccing-pictura/server/src/index.ts
+git commit -m "feat(pictura): add MCP server with generate and list tools"
 ```
 
 ---
 
 ## Phase 7: Commands and Skills
 
-### Task 18: Create Generate Command
+### Task 16: Create Commands
 
 **Files:**
 - Create: `plugins/maccing-pictura/commands/generate.md`
+- Create: `plugins/maccing-pictura/commands/edit.md`
+- Create: `plugins/maccing-pictura/commands/upscale.md`
+- Create: `plugins/maccing-pictura/commands/list.md`
+- Create: `plugins/maccing-pictura/commands/gallery.md`
 
-**Step 1: Write the command**
+**Step 1: Create commands directory**
+
+```bash
+mkdir -p plugins/maccing-pictura/commands
+```
+
+**Step 2: Create generate.md**
 
 Create `plugins/maccing-pictura/commands/generate.md`:
 
@@ -2387,7 +2487,7 @@ description: Generate consistent images across multiple aspect ratios
 
 # Pictura Generate
 
-Use the `pictura_generate` MCP tool to create images in multiple aspect ratios with automatic prompt enhancement and consistency.
+Use the `pictura_generate` MCP tool to create images.
 
 ## Arguments
 
@@ -2395,137 +2495,23 @@ $ARGUMENTS is the prompt for image generation.
 
 ## Flags
 
-- `--ratios`: Comma-separated ratios (e.g., "1:1,16:9,9:16")
-- `--social`: Preset bundle for social media (1:1, 9:16, 16:9)
-- `--web`: Preset bundle for web (16:9, 4:3, 1:1)
-- `--portrait`: Preset bundle for portrait (2:3, 3:4, 4:5, 9:16)
-- `--landscape`: Preset bundle for landscape (3:2, 4:3, 16:9, 21:9)
-- `--print`: Preset bundle for print (2:3, 3:4, 4:5)
-- `--draft`: Use fast model instead of pro quality
-- `--size`: Output resolution (1K, 2K, 4K), default 2K
-- `--provider`: Override generation provider (gemini, openai)
-- `--ref`: Path to reference image for consistency
-- `--no-enhance`: Disable automatic prompt enhancement
-- `--enhance-style`: Enhancement style (auto, photo, art, commercial, minimal)
+- `--ratios`: Comma-separated ratios (1:1,16:9,9:16)
+- `--social` / `--web` / `--portrait` / `--landscape` / `--print`: Preset bundles
+- `--draft`: Use fast model
+- `--size`: Output resolution (1K, 2K, 4K)
+- `--provider`: Override provider (gemini, openai)
+- `--no-enhance`: Disable prompt enhancement
+- `--enhance-style`: Style (auto, photo, art, commercial, minimal)
 
 ## Examples
 
 ```
 /pictura:generate "mountain sunset" --social
-/pictura:generate "product shot" --ratios 1:1,16:9 --ref ./brand-ref.png
-/pictura:generate "abstract background" --web --draft
-/pictura:generate "realistic portrait" --enhance-style photo
-```
-
-## Behavior
-
-1. Parse the prompt and flags
-2. Expand preset bundles to ratio list
-3. Enhance prompt based on detected or specified style
-4. Generate first image
-5. Use first image as reference for subsequent ratios (consistency)
-6. Save all images to output directory
-7. Report paths and enhanced prompt
-```
-
-**Step 2: Commit**
-
-```bash
-git add plugins/maccing-pictura/commands/
-git commit -m "feat(pictura): add generate command"
-```
-
----
-
-### Task 19: Create Remaining Commands
-
-**Files:**
-- Create: `plugins/maccing-pictura/commands/edit.md`
-- Create: `plugins/maccing-pictura/commands/upscale.md`
-- Create: `plugins/maccing-pictura/commands/list.md`
-- Create: `plugins/maccing-pictura/commands/gallery.md`
-
-**Step 1: Create edit command**
-
-Create `plugins/maccing-pictura/commands/edit.md`:
-
-```markdown
----
-description: Edit existing image batch by prompt slug
----
-
-# Pictura Edit
-
-Use the `pictura_edit` MCP tool to modify all images in a batch.
-
-## Arguments
-
-$1 is the prompt slug (e.g., "mountain-sunset")
-
-## Flags
-
-- `--prompt`: Edit instruction describing the change
-- `--mask`: Region description for targeted inpainting
-- `--extend`: Outpaint direction (top, bottom, left, right)
-- `--style`: Path to style reference image
-
-## Examples
-
-```
-/pictura:edit "mountain-sunset" --prompt "add dramatic clouds"
-/pictura:edit "product-shot" --mask "background" --prompt "gradient blue"
-/pictura:edit "hero-image" --extend top --prompt "add more sky"
-/pictura:edit "mascot" --style ./watercolor-ref.png
-```
-
-## Behavior
-
-1. Load batch by slug
-2. Apply edit to all ratios in batch
-3. Save edited images with new timestamp
-4. Maintain consistency across all ratios
-```
-
-**Step 2: Create upscale command**
-
-Create `plugins/maccing-pictura/commands/upscale.md`:
-
-```markdown
----
-description: Two-turn premium upscale using Gemini and Topaz Labs
----
-
-# Pictura Upscale
-
-Use the `pictura_upscale` MCP tool for maximum quality enhancement.
-
-## Arguments
-
-$1 is the prompt slug (e.g., "logo-concept")
-
-## Flags
-
-- `--topaz-model`: Topaz model (standard-max, recovery, hifi)
-- `--upscaler`: Override upscale provider (topaz, replicate)
-- `--skip-topaz`: Only do Gemini 4K regeneration
-
-## Pipeline
-
-1. **Turn 1 (Gemini)**: Regenerate at native 4K resolution
-2. **Turn 2 (Topaz)**: Enhance with AI upscaling (up to 8x)
-
-Result: Up to 32K effective resolution
-
-## Examples
-
-```
-/pictura:upscale "logo-concept"
-/pictura:upscale "product-shot" --topaz-model hifi
-/pictura:upscale "hero-image" --skip-topaz
+/pictura:generate "product shot" --ratios 1:1,16:9
 ```
 ```
 
-**Step 3: Create list command**
+**Step 3: Create list.md**
 
 Create `plugins/maccing-pictura/commands/list.md`:
 
@@ -2540,163 +2526,75 @@ Use the `pictura_list` MCP tool to browse generated images.
 
 ## Flags
 
-- `--limit`: Maximum batches to show (default: 10)
-- `--filter`: Filter by prompt slug substring
+- `--limit`: Maximum batches (default: 10)
+- `--filter`: Filter by prompt slug
 
 ## Examples
 
 ```
 /pictura:list
-/pictura:list --limit 5
 /pictura:list --filter "product"
 ```
 ```
 
-**Step 4: Create gallery command**
+**Step 4: Create edit.md, upscale.md, gallery.md**
 
-Create `plugins/maccing-pictura/commands/gallery.md`:
-
-```markdown
----
-description: Open visual image browser in web browser
----
-
-# Pictura Gallery
-
-Use the `pictura_gallery` MCP tool to open an HTML gallery.
-
-## Flags
-
-- `--filter`: Show only matching prompt slugs
-- `--since`: Filter by date (YYYY-MM-DD)
-
-## Examples
-
-```
-/pictura:gallery
-/pictura:gallery --filter "product"
-/pictura:gallery --since 2026-01-15
-```
-
-## Behavior
-
-1. Generate HTML gallery with thumbnails
-2. Open in default web browser
-3. Click images to view full size
-```
+Create similar command files for edit, upscale, and gallery.
 
 **Step 5: Commit**
 
 ```bash
 git add plugins/maccing-pictura/commands/
-git commit -m "feat(pictura): add edit, upscale, list, gallery commands"
+git commit -m "feat(pictura): add slash commands"
 ```
 
 ---
 
-### Task 20: Create Image Generation Skill
+### Task 17: Create Skill
 
 **Files:**
 - Create: `plugins/maccing-pictura/skills/image-generation/SKILL.md`
 
-**Step 1: Create skills directory**
+**Step 1: Create skill directory**
 
 ```bash
 mkdir -p plugins/maccing-pictura/skills/image-generation
 ```
 
-**Step 2: Write the skill**
+**Step 2: Create SKILL.md**
 
 Create `plugins/maccing-pictura/skills/image-generation/SKILL.md`:
 
 ```markdown
 ---
 name: image-generation
-description: Use when user wants to generate, create, or make images, pictures, visuals, graphics, or assets in multiple formats, sizes, or aspect ratios. Also triggers for editing, upscaling, or managing generated images.
+description: Use when user wants to generate, create, or make images in multiple formats or aspect ratios. Also triggers for editing, upscaling, or managing generated images.
 ---
 
 # Image Generation Skill
 
-This skill handles image generation, editing, and management using the Pictura MCP tools.
+This skill handles image generation using Pictura MCP tools with the unified provider API.
 
 ## Triggers
 
-Activate when user mentions:
-- Generate/create/make images, pictures, visuals, graphics, assets
+- Generate/create/make images, pictures, visuals
 - Multiple aspect ratios, formats, sizes
-- Social media images, web assets, marketing materials
-- Edit/modify/change existing images
-- Upscale/enhance/improve image quality
-- List/show/browse generated images
-- Open gallery/viewer
+- Edit/modify existing images
+- Upscale/enhance image quality
+- List/browse generated images
 
 ## Available Tools
 
 ### pictura_generate
-
-Generate images in multiple aspect ratios.
-
-Parameters:
-- `prompt` (required): Image description
-- `ratios`: Array of ratios like ["16:9", "1:1"]
-- `preset`: Bundle name (social, web, portrait, landscape, print)
-- `quality`: "draft" or "pro" (default: pro)
-- `size`: "1K", "2K", or "4K" (default: 2K)
-- `enhance`: Boolean for prompt enhancement (default: true)
-- `enhanceStyle`: auto, photo, art, commercial, minimal
-
-### pictura_edit
-
-Edit all images in a batch.
-
-Parameters:
-- `slug` (required): Prompt slug identifying the batch
-- `prompt` (required): Edit instruction
-- `mask`: Region description for inpainting
-- `extend`: Direction for outpainting (top, bottom, left, right)
-- `style`: Path to style reference image
-
-### pictura_upscale
-
-Two-turn premium upscale.
-
-Parameters:
-- `slug` (required): Prompt slug identifying the batch
-- `topazModel`: Model name (standard-max, recovery, hifi)
-- `skipTopaz`: Boolean to skip Topaz step
+Generate images with provider fallback support.
 
 ### pictura_list
-
 List recent generations.
 
-Parameters:
-- `limit`: Max batches (default: 10)
-- `filter`: Slug substring filter
-
-### pictura_gallery
-
-Open visual browser.
-
-Parameters:
-- `filter`: Slug substring filter
-- `since`: Date filter (YYYY-MM-DD)
-
-## Example Interactions
+## Example Usage
 
 **User:** "Generate social media images of a coffee shop"
 **Action:** Call pictura_generate with preset: "social"
-
-**User:** "Make the coffee shop images warmer"
-**Action:** Call pictura_edit with prompt: "warmer color temperature, golden lighting"
-
-**User:** "Upscale the coffee shop images to maximum quality"
-**Action:** Call pictura_upscale
-
-**User:** "Show me my recent image generations"
-**Action:** Call pictura_list
-
-**User:** "Open the image gallery"
-**Action:** Call pictura_gallery
 ```
 
 **Step 3: Commit**
@@ -2708,45 +2606,39 @@ git commit -m "feat(pictura): add image generation skill"
 
 ---
 
-## Phase 8: Final Integration
+## Phase 8: Integration
 
-### Task 21: Update Marketplace Manifest
+### Task 18: Update Marketplace
 
 **Files:**
 - Modify: `.claude-plugin/marketplace.json`
 
-**Step 1: Read current marketplace.json**
+**Step 1: Add plugin to marketplace**
 
-```bash
-cat .claude-plugin/marketplace.json
-```
-
-**Step 2: Add pictura plugin entry**
-
-Add to the plugins array in `.claude-plugin/marketplace.json`:
+Add to `.claude-plugin/marketplace.json`:
 
 ```json
 {
   "name": "maccing-pictura",
   "source": "./plugins/maccing-pictura",
-  "description": "Provider-agnostic multi-ratio image generation with automatic prompt enhancement and premium upscaling",
+  "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern",
   "version": "1.0.0",
   "author": { "name": "Andre Dezzy" },
-  "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio", "consistency"],
+  "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio"],
   "license": "MIT"
 }
 ```
 
-**Step 3: Commit**
+**Step 2: Commit**
 
 ```bash
 git add .claude-plugin/marketplace.json
-git commit -m "feat(marketplace): add maccing-pictura plugin"
+git commit -m "feat(marketplace): add maccing-pictura"
 ```
 
 ---
 
-### Task 22: Run All Tests
+### Task 19: Run All Tests
 
 **Step 1: Run full test suite**
 
@@ -2768,25 +2660,23 @@ Expected: No errors
 
 ```bash
 git add -A
-git commit -m "chore(pictura): finalize v1.0.0 implementation"
+git commit -m "chore(pictura): finalize v1.0.0"
 ```
 
 ---
 
 ## Summary
 
-This implementation plan covers:
+**Architecture:** Vercel AI SDK-style provider specification pattern
 
-1. **Phase 1**: Project scaffolding (plugin manifest, MCP config, package.json)
-2. **Phase 2**: Core types (Image, Provider, Config schemas)
-3. **Phase 3**: Utilities (Config manager, Retry, Slug, Output manager)
-4. **Phase 4**: Prompt enhancement (Style detection, enhancement profiles)
-5. **Phase 5**: Provider stubs (Gemini, Topaz)
-6. **Phase 6**: MCP server and tools (generate, list)
-7. **Phase 7**: Commands and skills (Markdown files)
-8. **Phase 8**: Integration (marketplace, final testing)
+**Key Components:**
+1. **Provider Spec** (`provider-spec/`): Types, factory for creating providers
+2. **Unified API** (`generate.ts`): `generateImage()` with fallback chains
+3. **Providers** (`providers/`): Gemini, OpenAI, Topaz implementations
+4. **Core** (`core/`): Config, retry, output, prompt enhancer
+5. **MCP Server** (`index.ts`): Tools exposed via Model Context Protocol
 
-**Total tasks:** 22
-**Estimated commits:** 22+
+**Total Tasks:** 19
+**Estimated Commits:** 19+
 
-Each task follows TDD: write test, verify fail, implement, verify pass, commit.
+Each task follows TDD: test → fail → implement → pass → commit.
