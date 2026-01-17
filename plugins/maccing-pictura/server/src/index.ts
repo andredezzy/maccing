@@ -18,6 +18,7 @@ import { ConfigManager, PRESET_BUNDLES, type PresetBundle, type PicturaConfig } 
 import { OutputManager, type BatchInfo } from './core/output.js';
 import { PromptEnhancer, type StyleType } from './core/prompt-enhancer.js';
 import { generateImages, registerProvider } from './generate.js';
+import { editImage, type EditOperation } from './edit.js';
 import { SUPPORTED_RATIOS, type SupportedRatio, type ImageSize } from './provider-spec/factory.js';
 import { generateSlug, generateTimestamp } from './utils/slug.js';
 import { gemini } from './providers/gemini.js';
@@ -446,45 +447,196 @@ server.tool(
 );
 
 // ============================================================================
-// Tool: pictura_edit (Stub)
+// Tool: pictura_edit
 // ============================================================================
 
 server.tool(
   'pictura_edit',
-  'Edit an existing image batch (inpaint, outpaint, or style transfer)',
+  'Edit an existing image batch (refine, inpaint, outpaint, or style transfer)',
   EditParamsSchema.shape,
   async (params) => {
     const { slug, prompt, mask, extend, stylePath } = params;
 
-    // TODO: Implement actual edit functionality
-    // This would:
-    // 1. Load the batch by slug
-    // 2. Apply inpainting if mask is provided
-    // 3. Apply outpainting if extend direction is provided
-    // 4. Apply style transfer if stylePath is provided
-    // 5. Save the edited images as a new batch
-
-    return {
-      content: [
-        {
+    // Check if config exists
+    const configExists = await configManager.exists();
+    if (!configExists) {
+      return {
+        content: [{
           type: 'text' as const,
           text: [
-            'Edit functionality is not yet implemented.',
+            '★ Pictura not configured ────────────────────────────────────',
             '',
-            'Requested edit:',
-            `  Slug: ${slug}`,
-            `  Prompt: ${prompt}`,
-            mask ? `  Mask: ${mask}` : null,
-            extend ? `  Extend: ${extend}` : null,
-            stylePath ? `  Style: ${stylePath}` : null,
+            'Run /pictura:setup to configure Pictura before editing images.',
             '',
-            'TODO: Implement edit operations including:',
-            '  - Inpainting with mask',
-            '  - Outpainting/extending images',
-            '  - Style transfer from reference',
-          ].filter(Boolean).join('\n'),
-        },
-      ],
+            '─────────────────────────────────────────────────────────────',
+          ].join('\n'),
+        }],
+        isError: true,
+      };
+    }
+
+    // Load config
+    let config: PicturaConfig;
+    try {
+      config = await configManager.load();
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to load config: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+
+    // Find batch by slug
+    const outputManager = new OutputManager(config.outputDir);
+    const batch = await outputManager.loadBatch(slug);
+
+    if (!batch) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Batch not found: ${slug}\n\nUse pictura_list to see available batches.`,
+        }],
+        isError: true,
+      };
+    }
+
+    // Load style reference if provided
+    let styleRef: Buffer | undefined;
+    if (stylePath) {
+      const normalizedPath = path.normalize(stylePath);
+      const resolvedPath = path.resolve(stylePath);
+      const cwd = process.cwd();
+
+      // Reject explicit path traversal sequences
+      if (normalizedPath.includes('..')) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Invalid style path: path traversal not allowed',
+          }],
+          isError: true,
+        };
+      }
+
+      // Ensure resolved path is within the current working directory
+      if (!resolvedPath.startsWith(cwd + path.sep) && resolvedPath !== cwd) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Invalid style path: must be within project directory',
+          }],
+          isError: true,
+        };
+      }
+
+      try {
+        styleRef = await fs.readFile(resolvedPath);
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Failed to read style image: ${stylePath}\nError: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    }
+
+    // Determine operation type
+    let operation: EditOperation = 'refine';
+    if (mask) {
+      operation = 'inpaint';
+    } else if (extend) {
+      operation = 'outpaint';
+    } else if (stylePath) {
+      operation = 'restyle';
+    }
+
+    // Get provider and model
+    const providerName = config.providers.generation.default;
+    const providerConfig = configManager.getProviderConfig('generation', providerName);
+    const model = providerName === 'gemini' ? gemini('pro') : openai('gpt-image-1.5');
+
+    // Generate new slug and timestamp for edited batch
+    const newSlug = `${slug}-edited`;
+    const timestamp = generateTimestamp();
+
+    // Process each image in the batch
+    const editedImages: { ratio: string; path: string; width: number; height: number }[] = [];
+    const errors: string[] = [];
+
+    for (const img of batch.images) {
+      try {
+        // Read the source image
+        const imageBuffer = await fs.readFile(img.path);
+
+        // Edit the image
+        const result = await editImage({
+          model,
+          image: imageBuffer,
+          prompt,
+          operation,
+          mask,
+          direction: extend,
+          styleRef,
+          config: providerConfig,
+        });
+
+        // Save the edited image
+        const savedPath = await outputManager.saveImage(result, newSlug, timestamp);
+        editedImages.push({
+          ratio: img.ratio,
+          path: savedPath,
+          width: result.width,
+          height: result.height,
+        });
+      } catch (error) {
+        errors.push(`${img.ratio}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Build response
+    if (editedImages.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            'Edit failed for all images:',
+            '',
+            ...errors.map((e) => `  - ${e}`),
+          ].join('\n'),
+        }],
+        isError: true,
+      };
+    }
+
+    const summary = [
+      `★ Edited ${editedImages.length} image(s) ════════════════════════════`,
+      '',
+      `Source batch: ${slug}`,
+      `New batch: ${newSlug}`,
+      `Timestamp: ${timestamp}`,
+      `Operation: ${operation}`,
+      `Provider: ${providerName}`,
+      '',
+      'Edited images:',
+      ...editedImages.map((img) => `  - ${img.ratio}: ${img.path} (${img.width}x${img.height})`),
+    ];
+
+    if (errors.length > 0) {
+      summary.push('', 'Warnings (some images failed):', ...errors.map((e) => `  - ${e}`));
+    }
+
+    summary.push('', '════════════════════════════════════════════════════════════');
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: summary.join('\n'),
+      }],
     };
   }
 );
