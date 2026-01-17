@@ -168,20 +168,73 @@ server.tool(
       enhanceStyle,
     } = params;
 
-    // Load config with defaults
+    // Check if config exists (first-run detection)
+    const configExists = await configManager.exists();
+    if (!configExists) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: [
+              '★ Welcome to Pictura! ────────────────────────────────────',
+              '',
+              'Pictura needs to be configured before generating images.',
+              '',
+              'Quick Setup:',
+              '  Run: /pictura:setup',
+              '',
+              'This will guide you through:',
+              '  1. Selecting image providers (Gemini, OpenAI)',
+              '  2. Entering your API keys',
+              '  3. Setting default preferences',
+              '',
+              'Get a free Gemini API key at:',
+              '  https://aistudio.google.com/apikey',
+              '',
+              '─────────────────────────────────────────────────────────────',
+            ].join('\n'),
+          },
+        ],
+        isError: false, // Not an error, just needs setup
+      };
+    }
+
+    // Load config
     let config: PicturaConfig;
     try {
-      if (await configManager.exists()) {
-        config = await configManager.load();
-      } else {
-        config = getDefaultConfig();
-      }
+      config = await configManager.load();
     } catch (error) {
       return {
         content: [
           {
             type: 'text' as const,
             text: `Failed to load config: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Check if any generation provider is configured with API keys
+    const hasGemini = config.providers?.generation?.gemini?.apiKey;
+    const hasOpenai = config.providers?.generation?.openai?.apiKey;
+
+    if (!hasGemini && !hasOpenai) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: [
+              '⚠ No generation provider configured',
+              '',
+              'Your config file exists but has no API keys for image generation.',
+              '',
+              'To add a provider:',
+              '  Run: /pictura:setup --provider gemini',
+              '',
+              'Or manually edit: ' + configPath,
+              '',
+            ].join('\n'),
           },
         ],
         isError: true,
