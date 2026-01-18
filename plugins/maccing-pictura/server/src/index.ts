@@ -993,6 +993,9 @@ server.tool(
       // Set secure permissions (user-only read/write)
       await fs.chmod(configPath, 0o600);
 
+      // Clear the config cache so subsequent tool calls read the updated config
+      configManager.clearCache();
+
       // Build summary of what was configured
       const configured: string[] = [];
       if (parsed.providers.generation?.gemini) {
