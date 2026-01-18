@@ -1,6 +1,6 @@
 {
   "name": "maccing-pictura",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Provider-agnostic multi-ratio image generation with automatic prompt enhancement and premium upscaling",
   "author": {
     "name": "Andre Dezzy",
