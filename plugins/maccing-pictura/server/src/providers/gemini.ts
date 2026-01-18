@@ -1,3 +1,4 @@
+import { GoogleGenAI } from '@google/genai';
 import {
   createImageProvider,
   getDimensionsForRatio,
@@ -6,15 +7,59 @@ import {
   type GenerateImageParams,
   type EditImageParams,
   type ImageResult,
+  type SupportedRatio,
 } from '../provider-spec/factory.js';
 
 export const GEMINI_MODELS = ['flash', 'pro'] as const;
-export type GeminiModel = typeof GEMINI_MODELS[number];
+export type GeminiModel = (typeof GEMINI_MODELS)[number];
 
 const MODEL_IDS: Record<GeminiModel, string> = {
-  flash: 'gemini-2.5-flash-image',
-  pro: 'gemini-3-pro-image-preview',
+  flash: 'gemini-2.5-flash-preview-05-20',
+  pro: 'gemini-2.5-pro-preview-05-06',
 };
+
+// Gemini native image generation uses these aspect ratio values
+const ASPECT_RATIO_MAP: Record<SupportedRatio, string> = {
+  '1:1': '1:1',
+  '2:3': '2:3',
+  '3:2': '3:2',
+  '3:4': '3:4',
+  '4:3': '4:3',
+  '4:5': '4:5',
+  '5:4': '5:4',
+  '9:16': '9:16',
+  '16:9': '16:9',
+  '21:9': '16:9', // Gemini doesn't support 21:9, fallback to 16:9
+};
+
+/**
+ * Extract base64 image data from Gemini response parts
+ */
+function extractImageFromResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  response: any
+): { data: Buffer; mimeType: string } | null {
+  const candidates = response.candidates;
+  if (!candidates || candidates.length === 0) {
+    return null;
+  }
+
+  const parts = candidates[0].content?.parts;
+  if (!parts) {
+    return null;
+  }
+
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      return {
+        data: Buffer.from(part.inlineData.data, 'base64'),
+        mimeType: part.inlineData.mimeType || 'image/png',
+      };
+    }
+  }
+
+  return null;
+}
 
 const geminiSpec: ImageProviderSpec = {
   name: 'gemini',
@@ -55,13 +100,46 @@ const geminiSpec: ImageProviderSpec = {
 
     const fullModelId = MODEL_IDS[modelId as GeminiModel];
     const dimensions = getDimensionsForRatio(params.ratio, params.size);
+    const aspectRatio = ASPECT_RATIO_MAP[params.ratio];
 
-    // TODO: Implement actual Gemini API call
-    // Stub for development
-    const stubData = Buffer.from(`gemini-${modelId}-${params.ratio}-${Date.now()}`);
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Build the content parts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contentParts: any[] = [{ text: params.prompt }];
+
+    // Add reference image if provided
+    if (params.reference) {
+      contentParts.push({
+        inlineData: {
+          mimeType: 'image/png',
+          data: params.reference.toString('base64'),
+        },
+      });
+    }
+
+    // Cast config to any to support image generation config which may not be in SDK types yet
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const generateConfig: any = {
+      responseModalities: ['TEXT', 'IMAGE'],
+      imageGenerationConfig: {
+        aspectRatio,
+      },
+    };
+
+    const response = await ai.models.generateContent({
+      model: fullModelId,
+      contents: [{ parts: contentParts }],
+      config: generateConfig,
+    });
+
+    const imageData = extractImageFromResponse(response);
+    if (!imageData) {
+      throw new Error('No image was generated in the response');
+    }
 
     return {
-      data: stubData,
+      data: imageData.data,
       ratio: params.ratio,
       width: dimensions.width,
       height: dimensions.height,
@@ -80,16 +158,56 @@ const geminiSpec: ImageProviderSpec = {
       throw new Error('Gemini API key is required');
     }
 
-    // TODO: Implement actual Gemini edit API
-    const stubData = Buffer.from(`gemini-edit-${modelId}-${Date.now()}`);
+    const fullModelId = MODEL_IDS[modelId as GeminiModel];
 
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Build content with the source image and edit prompt
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contentParts: any[] = [];
+
+    // Add the edit instruction
+    contentParts.push({ text: params.prompt });
+
+    // Add the source image to edit
+    contentParts.push({
+      inlineData: {
+        mimeType: 'image/png',
+        data: params.image.toString('base64'),
+      },
+    });
+
+    // Add style reference if provided
+    if (params.style) {
+      contentParts.push({
+        inlineData: {
+          mimeType: 'image/png',
+          data: Buffer.from(params.style).toString('base64'),
+        },
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: fullModelId,
+      contents: [{ parts: contentParts }],
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
+    });
+
+    const imageData = extractImageFromResponse(response);
+    if (!imageData) {
+      throw new Error('No image was generated in the edit response');
+    }
+
+    // Preserve original dimensions for edits
     return {
-      data: stubData,
-      ratio: '16:9',
+      data: imageData.data,
+      ratio: '16:9', // Default ratio for edits
       width: 2048,
       height: 1152,
       provider: 'gemini',
-      model: MODEL_IDS[modelId as GeminiModel],
+      model: fullModelId,
     };
   },
 };
