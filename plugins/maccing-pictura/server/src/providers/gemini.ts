@@ -14,8 +14,8 @@ export const GEMINI_MODELS = ['flash', 'pro'] as const;
 export type GeminiModel = (typeof GEMINI_MODELS)[number];
 
 const MODEL_IDS: Record<GeminiModel, string> = {
-  flash: 'gemini-2.0-flash-exp-image-generation',
-  pro: 'gemini-2.0-flash-exp-image-generation', // Using same model, no separate pro image gen model available yet
+  flash: 'gemini-2.5-flash-image', // Fast, efficient model for high-volume tasks
+  pro: 'gemini-3-pro-image-preview', // Professional quality with advanced reasoning, supports up to 4K
 };
 
 // Gemini native image generation uses these aspect ratio values
@@ -67,7 +67,7 @@ const geminiSpec: ImageProviderSpec = {
     flash: {
       id: MODEL_IDS.flash,
       capabilities: {
-        maxResolution: '1K',
+        maxResolution: '1K', // gemini-2.5-flash-image generates up to 1024px
         supportedRatios: [...SUPPORTED_RATIOS],
         supportsReference: true,
         supportsEdit: true,
@@ -78,7 +78,7 @@ const geminiSpec: ImageProviderSpec = {
     pro: {
       id: MODEL_IDS.pro,
       capabilities: {
-        maxResolution: '4K',
+        maxResolution: '4K', // gemini-3-pro-image-preview supports 1K, 2K, 4K output
         supportedRatios: [...SUPPORTED_RATIOS],
         supportsReference: true,
         supportsEdit: true,
@@ -118,12 +118,17 @@ const geminiSpec: ImageProviderSpec = {
       });
     }
 
-    // Cast config to any to support image generation config which may not be in SDK types yet
+    // Determine imageSize based on params.size (must be uppercase K)
+    // gemini-2.5-flash-image only supports 1K, gemini-3-pro-image-preview supports 1K, 2K, 4K
+    const imageSize = params.size || '2K';
+
+    // Use imageConfig for the new Gemini SDK (replaces deprecated imageGenerationConfig)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const generateConfig: any = {
       responseModalities: ['TEXT', 'IMAGE'],
-      imageGenerationConfig: {
+      imageConfig: {
         aspectRatio,
+        imageSize,
       },
     };
 
@@ -192,6 +197,9 @@ const geminiSpec: ImageProviderSpec = {
       contents: [{ parts: contentParts }],
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
+        imageConfig: {
+          imageSize: '2K', // Default to 2K for edits
+        },
       },
     });
 
