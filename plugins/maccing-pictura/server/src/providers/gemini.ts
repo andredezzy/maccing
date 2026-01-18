@@ -14,8 +14,8 @@ export const GEMINI_MODELS = ['flash', 'pro'] as const;
 export type GeminiModel = (typeof GEMINI_MODELS)[number];
 
 const MODEL_IDS: Record<GeminiModel, string> = {
-  flash: 'gemini-2.5-flash-preview-image-generation',
-  pro: 'gemini-2.5-pro-preview-06-05',
+  flash: 'gemini-2.0-flash-exp-image-generation',
+  pro: 'gemini-2.0-flash-exp-image-generation', // Using same model, no separate pro image gen model available yet
 };
 
 // Gemini native image generation uses these aspect ratio values
