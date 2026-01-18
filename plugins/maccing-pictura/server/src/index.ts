@@ -42,6 +42,57 @@ registerUpscaleProvider(topaz);
 const configPath = process.env.PICTURA_CONFIG || '.claude/plugins/maccing/pictura/config.json';
 const configManager = new ConfigManager(configPath);
 
+// Config file pattern to add to .gitignore (contains API keys)
+const GITIGNORE_PATTERN = '.claude/plugins/maccing/pictura/config.json';
+
+/**
+ * Ensures the pictura config file is in .gitignore to prevent
+ * accidental commits of API keys.
+ *
+ * @returns true if .gitignore was updated, false if pattern already exists
+ */
+async function ensureGitignore(): Promise<{ updated: boolean; created: boolean }> {
+  const gitignorePath = '.gitignore';
+
+  try {
+    // Try to read existing .gitignore
+    let content: string;
+    let fileExists = true;
+
+    try {
+      content = await fs.readFile(gitignorePath, 'utf-8');
+    } catch {
+      // .gitignore doesn't exist
+      content = '';
+      fileExists = false;
+    }
+
+    // Check if pattern is already present
+    const lines = content.split('\n');
+    const hasPattern = lines.some(line => {
+      const trimmed = line.trim();
+      return trimmed === GITIGNORE_PATTERN ||
+             trimmed === `/${GITIGNORE_PATTERN}`;
+    });
+
+    if (hasPattern) {
+      return { updated: false, created: false };
+    }
+
+    // Add pattern to .gitignore
+    const newContent = content.endsWith('\n') || content === ''
+      ? `${content}# Pictura plugin config (contains API keys)\n${GITIGNORE_PATTERN}\n`
+      : `${content}\n\n# Pictura plugin config (contains API keys)\n${GITIGNORE_PATTERN}\n`;
+
+    await fs.writeFile(gitignorePath, newContent, 'utf-8');
+    return { updated: true, created: !fileExists };
+  } catch (error) {
+    // Non-fatal: log but don't fail setup if gitignore update fails
+    console.error('Warning: Could not update .gitignore:', error);
+    return { updated: false, created: false };
+  }
+}
+
 // ============================================================================
 // Default Configuration
 // ============================================================================
@@ -996,6 +1047,9 @@ server.tool(
       // Clear the config cache so subsequent tool calls read the updated config
       configManager.clearCache();
 
+      // Ensure config directory is in .gitignore to protect API keys
+      const gitignoreResult = await ensureGitignore();
+
       // Build summary of what was configured
       const configured: string[] = [];
       if (parsed.providers.generation?.gemini) {
@@ -1008,11 +1062,22 @@ server.tool(
         configured.push('Topaz Labs (upscale)');
       }
 
+      // Build gitignore status message
+      let gitignoreStatus: string;
+      if (gitignoreResult.created) {
+        gitignoreStatus = '✓ Created .gitignore with config exclusion';
+      } else if (gitignoreResult.updated) {
+        gitignoreStatus = '✓ Updated .gitignore to exclude config';
+      } else {
+        gitignoreStatus = '✓ Config already excluded in .gitignore';
+      }
+
       const summary = [
         '✓ Configuration saved successfully',
         '',
         `Location: ${configPath}`,
         `Permissions: 600 (user-only)`,
+        gitignoreStatus,
         '',
         'Configured providers:',
         ...configured.map(p => `  - ${p}`),
