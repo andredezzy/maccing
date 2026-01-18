@@ -23,7 +23,9 @@ import { SUPPORTED_RATIOS, type SupportedRatio, type ImageSize } from './provide
 import { generateSlug, generateTimestamp } from './utils/slug.js';
 import { gemini } from './providers/gemini.js';
 import { openai } from './providers/openai.js';
+import { topaz } from './providers/topaz.js';
 import { runValidation, formatReport } from './validation/index.js';
+import { upscaleImage, registerUpscaleProvider } from './upscale.js';
 
 // ============================================================================
 // Provider Registration
@@ -31,6 +33,7 @@ import { runValidation, formatReport } from './validation/index.js';
 
 registerProvider(gemini);
 registerProvider(openai);
+registerUpscaleProvider(topaz);
 
 // ============================================================================
 // Configuration
@@ -642,7 +645,7 @@ server.tool(
 );
 
 // ============================================================================
-// Tool: pictura_upscale (Stub)
+// Tool: pictura_upscale
 // ============================================================================
 
 server.tool(
@@ -652,34 +655,173 @@ server.tool(
   async (params) => {
     const { slug, topazModel = 'standard-max', upscaler = 'topaz', skipTopaz } = params;
 
-    // TODO: Implement actual upscale functionality
-    // This would:
-    // 1. Load the batch by slug
-    // 2. For each image in the batch:
-    //    - If Topaz: submit to Topaz API, poll for completion
-    //    - If Replicate: submit to Replicate API
-    // 3. Save upscaled images as a new batch with "_upscaled" suffix
-
-    return {
-      content: [
-        {
+    // Check if config exists
+    const configExists = await configManager.exists();
+    if (!configExists) {
+      return {
+        content: [{
           type: 'text' as const,
           text: [
-            'Upscale functionality is not yet implemented.',
+            '★ Pictura not configured ────────────────────────────────────',
             '',
-            'Requested upscale:',
-            `  Slug: ${slug}`,
-            `  Upscaler: ${skipTopaz ? 'replicate' : upscaler}`,
-            `  Model: ${topazModel}`,
+            'Run /pictura:setup to configure Pictura before upscaling images.',
             '',
-            'TODO: Implement two-turn premium upscale workflow:',
-            '  1. Load batch images',
-            '  2. Submit to upscale provider (Topaz or Replicate)',
-            '  3. Poll for completion (generative models are async)',
-            '  4. Save upscaled images',
+            '─────────────────────────────────────────────────────────────',
           ].join('\n'),
-        },
-      ],
+        }],
+        isError: true,
+      };
+    }
+
+    // Load config
+    let config: PicturaConfig;
+    try {
+      config = await configManager.load();
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to load config: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+
+    // Check if Topaz is configured (unless skipTopaz)
+    const providerName = skipTopaz ? 'replicate' : upscaler;
+    if (!skipTopaz && providerName === 'topaz') {
+      const topazConfig = config.providers?.upscale?.topaz;
+      if (!topazConfig?.apiKey) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: [
+              '⚠ Topaz not configured',
+              '',
+              'To use Topaz upscaling, add your API key:',
+              '  Run: /pictura:setup with Topaz credentials',
+              '',
+              'Or use --skipTopaz to skip upscaling.',
+            ].join('\n'),
+          }],
+          isError: true,
+        };
+      }
+    }
+
+    // Find batch by slug
+    const outputManager = new OutputManager(config.outputDir);
+    const batch = await outputManager.loadBatch(slug);
+
+    if (!batch) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Batch not found: ${slug}\n\nUse pictura_list to see available batches.`,
+        }],
+        isError: true,
+      };
+    }
+
+    // If skipTopaz, return the existing images (no upscaling performed)
+    if (skipTopaz) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            '★ Upscale skipped ════════════════════════════════════════════',
+            '',
+            `Source batch: ${slug}`,
+            'Mode: skipTopaz (no upscaling performed)',
+            '',
+            'Original images:',
+            ...batch.images.map((img) => `  - ${img.ratio}: ${img.path}`),
+            '',
+            '════════════════════════════════════════════════════════════════',
+          ].join('\n'),
+        }],
+      };
+    }
+
+    // Get upscale provider config
+    const providerConfig = configManager.getProviderConfig('upscale', providerName);
+
+    // Generate new slug and timestamp for upscaled batch
+    const scale = 4; // Default scale for Topaz
+    const newSlug = `${slug}-${scale}x`;
+    const timestamp = generateTimestamp();
+
+    // Process each image in the batch
+    const upscaledImages: { ratio: string; path: string; width: number; height: number }[] = [];
+    const errors: string[] = [];
+
+    for (const img of batch.images) {
+      try {
+        // Read the source image
+        const imageBuffer = await fs.readFile(img.path);
+
+        // Upscale the image
+        const result = await upscaleImage({
+          image: imageBuffer,
+          scale,
+          model: topazModel,
+          provider: providerName,
+          config: providerConfig,
+        });
+
+        // Save the upscaled image
+        const savedPath = await outputManager.saveImage(result, newSlug, timestamp);
+        upscaledImages.push({
+          ratio: img.ratio,
+          path: savedPath,
+          width: result.width,
+          height: result.height,
+        });
+      } catch (error) {
+        errors.push(`${img.ratio}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Build response
+    if (upscaledImages.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            'Upscale failed for all images:',
+            '',
+            ...errors.map((e) => `  - ${e}`),
+          ].join('\n'),
+        }],
+        isError: true,
+      };
+    }
+
+    const summary = [
+      `★ Upscaled ${upscaledImages.length} image(s) ════════════════════════`,
+      '',
+      `Source batch: ${slug}`,
+      `New batch: ${newSlug}`,
+      `Timestamp: ${timestamp}`,
+      `Provider: ${providerName}`,
+      `Model: ${topazModel}`,
+      `Scale: ${scale}x`,
+      '',
+      'Upscaled images:',
+      ...upscaledImages.map((img) => `  - ${img.ratio}: ${img.path} (${img.width}x${img.height})`),
+    ];
+
+    if (errors.length > 0) {
+      summary.push('', 'Warnings (some images failed):', ...errors.map((e) => `  - ${e}`));
+    }
+
+    summary.push('', '════════════════════════════════════════════════════════════════');
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: summary.join('\n'),
+      }],
     };
   }
 );
