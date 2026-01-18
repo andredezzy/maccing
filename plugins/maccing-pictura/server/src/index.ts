@@ -633,6 +633,7 @@ server.tool(
           image: imageBuffer,
           prompt,
           operation,
+          ratio: img.ratio,
           mask,
           direction: extend,
           styleRef,

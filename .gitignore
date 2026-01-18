@@ -1,1 +1,4 @@
 .worktrees/
+
+# Pictura plugin config (contains API keys)
+.claude/plugins/maccing/pictura/config.json

@@ -71,6 +71,8 @@ export interface GenerateImageParams {
 export interface EditImageParams {
   image: Buffer;
   prompt: string;
+  ratio?: SupportedRatio;
+  size?: ImageSize;
   mask?: string;
   extend?: 'top' | 'bottom' | 'left' | 'right';
   style?: Buffer;

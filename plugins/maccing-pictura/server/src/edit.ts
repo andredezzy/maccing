@@ -3,6 +3,8 @@ import {
   type ModelWithFallbacks,
   type EditImageParams,
   type ImageResult,
+  type SupportedRatio,
+  type ImageSize,
 } from './provider-spec/factory.js';
 import { getProvider } from './generate.js';
 
@@ -13,6 +15,8 @@ export interface EditImageOptions {
   image: Buffer;
   prompt: string;
   operation: EditOperation;
+  ratio?: SupportedRatio;
+  size?: ImageSize;
   mask?: string;
   direction?: 'top' | 'bottom' | 'left' | 'right';
   styleRef?: Buffer;
@@ -23,7 +27,7 @@ export interface EditImageOptions {
  * Edit an image using the specified model or fallback chain.
  */
 export async function editImage(options: EditImageOptions): Promise<ImageResult> {
-  const { model, image, prompt, operation, mask, direction, styleRef, config } = options;
+  const { model, image, prompt, operation, ratio, size, mask, direction, styleRef, config } = options;
 
   const models = Array.isArray(model) ? model : [model];
   const errors: Error[] = [];
@@ -44,6 +48,8 @@ export async function editImage(options: EditImageOptions): Promise<ImageResult>
       const editParams: EditImageParams = {
         image,
         prompt: buildEditPrompt(prompt, operation, mask),
+        ratio,
+        size,
         mask: operation === 'inpaint' ? mask : undefined,
         extend: operation === 'outpaint' ? direction : undefined,
         style: operation === 'restyle' ? styleRef : undefined,
