@@ -8,19 +8,25 @@ import {
 // Standard models: synchronous, fast
 // Generative models: async only, higher quality
 export const TOPAZ_MODELS = [
+  // Enhance Standard
   'Standard V2', // Standard: fast general-purpose
-  'Standard MAX', // Generative: photorealistic detail (ASYNC)
-  'Recovery V2', // Generative: max enhancement for low-res (ASYNC)
   'High Fidelity V2', // Standard: preserves fine details
-  'Redefine', // Generative: creative upscaling (ASYNC)
   'Low Resolution V2', // Standard: optimized for web graphics
   'CGI', // Standard: for computer-generated imagery
+  'Text Refine', // Standard: for text-heavy images
+  // Enhance Generative (async)
+  'Standard MAX', // Generative: photorealistic detail
+  'Recovery V2', // Generative: max enhancement for low-res
+  'Redefine', // Generative: creative upscaling
+  'Wonder', // Generative: newest creative model
+  // Sharpen Generative (async)
+  'Super Focus V2', // Generative: fixes blur, extracts detail
 ] as const;
 
 export type TopazModel = (typeof TOPAZ_MODELS)[number];
 
 // Generative models require async polling
-const ASYNC_MODELS: TopazModel[] = ['Standard MAX', 'Recovery V2', 'Redefine'];
+const ASYNC_MODELS: TopazModel[] = ['Standard MAX', 'Recovery V2', 'Redefine', 'Wonder', 'Super Focus V2'];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
