@@ -167,6 +167,12 @@ const geminiSpec: ImageProviderSpec = {
 
     const ai = new GoogleGenAI({ apiKey });
 
+    // Use provided ratio or default to 16:9
+    const ratio = params.ratio || '16:9';
+    const size = params.size || '2K';
+    const dimensions = getDimensionsForRatio(ratio, size);
+    const aspectRatio = ASPECT_RATIO_MAP[ratio];
+
     // Build content with the source image and edit prompt
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contentParts: any[] = [];
@@ -198,7 +204,8 @@ const geminiSpec: ImageProviderSpec = {
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
         imageConfig: {
-          imageSize: '2K', // Default to 2K for edits
+          aspectRatio,
+          imageSize: size,
         },
       },
     });
@@ -208,12 +215,11 @@ const geminiSpec: ImageProviderSpec = {
       throw new Error('No image was generated in the edit response');
     }
 
-    // Preserve original dimensions for edits
     return {
       data: imageData.data,
-      ratio: '16:9', // Default ratio for edits
-      width: 2048,
-      height: 1152,
+      ratio,
+      width: dimensions.width,
+      height: dimensions.height,
       provider: 'gemini',
       model: fullModelId,
     };
