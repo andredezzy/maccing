@@ -44,7 +44,7 @@
       "name": "maccing-pictura",
       "source": "./plugins/maccing-pictura",
       "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Andre Dezzy"
       },
