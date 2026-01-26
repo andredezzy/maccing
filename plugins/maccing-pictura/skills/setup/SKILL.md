@@ -117,3 +117,5 @@ pictura_config({
 | project | `.claude/plugins/maccing/pictura/config.json` | Project-specific overrides |
 
 Precedence: Environment variables > Project scope > User scope > Defaults
+
+**Note:** Generated images always output to `.claude/plugins/maccing/pictura/output/` in the project directory, regardless of config scope. This ensures images are project-local assets.

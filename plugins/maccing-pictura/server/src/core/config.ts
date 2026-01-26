@@ -314,6 +314,11 @@ export class ScopedConfigManager {
     // Validate the merged config
     const validated = ConfigSchema.parse(merged);
 
+    // Force outputDir to always be project-local (never from user scope)
+    // Generated images are project assets, not shared across projects
+    validated.outputDir = '.claude/plugins/maccing/pictura/output';
+    sources['outputDir'] = 'default';
+
     this.cachedMerged = { config: validated, sources };
     return this.cachedMerged;
   }
