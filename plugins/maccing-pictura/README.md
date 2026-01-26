@@ -109,6 +109,8 @@ Pictura supports dual-scope configuration with the following precedence:
 | 2 | Project | `.claude/plugins/maccing/pictura/config.json` | Project-specific overrides |
 | 3 | User | `~/.claude/plugins/maccing/pictura/config.json` | Shared API keys across projects |
 
+**Note:** Generated images always output to `.claude/plugins/maccing/pictura/output/` in the project directory, regardless of config scope.
+
 ### First-Time Setup
 
 Configuration happens automatically on first use. When you run any pictura command without configuration, Claude will:

@@ -1062,14 +1062,20 @@ server.tool(
       const scope: ConfigScope = parsed.scope || 'user';
 
       // Build config object
-      const config = {
+      // Note: outputDir is only included for project scope since generated
+      // images are always project-local assets
+      const config: Record<string, unknown> = {
         providers: parsed.providers,
         defaultRatio: parsed.defaults?.ratio || '16:9',
         defaultQuality: parsed.defaults?.quality || 'pro',
         imageSize: parsed.defaults?.size || '2K',
         retryAttempts: 3,
-        outputDir: '.claude/plugins/maccing/pictura/output',
       };
+
+      // Only include outputDir for project scope
+      if (scope === 'project') {
+        config.outputDir = '.claude/plugins/maccing/pictura/output';
+      }
 
       // Determine config path based on scope
       const configPathForScope = scope === 'user'
