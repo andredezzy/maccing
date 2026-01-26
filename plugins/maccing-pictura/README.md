@@ -164,7 +164,7 @@ See [design document](../../docs/plans/2026-01-17-pictura-design.md) for full de
 
 ## Troubleshooting
 
-**Expected version:** 1.1.0
+**Expected version:** 1.1.1
 
 If commands are not available, ensure:
 1. Plugin is installed: `claude plugin list`
