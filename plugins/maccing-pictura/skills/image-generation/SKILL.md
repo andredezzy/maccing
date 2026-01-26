@@ -37,10 +37,46 @@ After `pictura_generate` completes:
 
 The gallery is for browsing and should only open when the user uses `/pictura:gallery` or explicitly asks to "open the gallery" or "browse images".
 
+## CRITICAL: Using Reference Images for Changes
+
+**Always use the last generated image as a reference when the user requests changes, modifications, or variations.**
+
+When the user asks for changes (e.g., "make it more organic", "less circle", "different colors", "add more X"):
+
+1. **Identify the last generated image path** from the previous generation output
+2. **Use `consistency: "reference"` and `ref: "<last-image-path>"`** in the new generation call
+3. This ensures visual consistency while applying the requested changes
+
+**Example flow:**
+```
+User: "Generate a blue sky with doodles"
+→ pictura_generate(prompt: "...", ratios: ["16:9"])
+→ Output: /path/to/output/2026-01-26-153835/blue-sky/16x9.png
+
+User: "The doodles are too circular, make them more organic"
+→ pictura_generate(
+    prompt: "... doodles scattered organically, NOT in a circle ...",
+    ratios: ["16:9"],
+    consistency: "reference",
+    ref: "/path/to/output/2026-01-26-153835/blue-sky/16x9.png"  ← ALWAYS use the last image
+  )
+```
+
+**When NOT to use reference:**
+- User explicitly asks for "something completely different"
+- User says "start fresh" or "new concept"
+- User provides a different reference image themselves
+
 ## Example Usage
 
 **User:** "Generate social media images of a coffee shop"
 **Action:** Call pictura_generate with preset: "social", then Read the generated image paths to display them
+
+**User:** "Make the lighting warmer" (after previous generation)
+**Action:** Call pictura_generate with the same ratios, updated prompt, and `consistency: "reference"` with `ref` set to the previous image path
+
+**User:** "The colors are too muted, make them more vibrant"
+**Action:** Call pictura_generate with updated prompt and `ref` pointing to the last generated image
 
 **User:** "Open the gallery"
 **Action:** Call pictura_gallery
