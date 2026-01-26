@@ -404,12 +404,12 @@ server.tool(
       const outputManager = new OutputManager(config.outputDir);
       const savedPaths = await outputManager.saveBatch(results, slug, timestamp);
 
-      // Build response
+      // Build response with absolute paths
       const summary = results.map((result, i) => ({
         ratio: result.ratio,
         width: result.width,
         height: result.height,
-        path: savedPaths[i],
+        path: path.resolve(savedPaths[i]),
       }));
 
       return {
@@ -427,8 +427,8 @@ server.tool(
               ref ? `Reference image: ${ref}` : '',
               consistency ? `Consistency mode: ${consistency}` : '',
               '',
-              'Images:',
-              ...summary.map((s) => `  - ${s.ratio}: ${s.path} (${s.width}x${s.height})`),
+              'Images (use Read tool to view):',
+              ...summary.map((s) => `  ${s.ratio}: ${s.path}`),
             ].filter(Boolean).join('\n'),
           },
         ],
@@ -658,7 +658,7 @@ server.tool(
         const savedPath = await outputManager.saveImage(result, newSlug, timestamp);
         editedImages.push({
           ratio: img.ratio,
-          path: savedPath,
+          path: path.resolve(savedPath),
           width: result.width,
           height: result.height,
         });
@@ -841,7 +841,7 @@ server.tool(
         const savedPath = await outputManager.saveImage(result, newSlug, timestamp);
         upscaledImages.push({
           ratio: img.ratio,
-          path: savedPath,
+          path: path.resolve(savedPath),
           width: result.width,
           height: result.height,
         });
