@@ -1,124 +1,119 @@
 ---
 name: pictura-setup
-description: Use when user wants to configure, set up, or initialize pictura. Also triggers when user mentions API keys for image generation, or when first-time setup is needed.
+description: Use when pictura returns PICTURA_SETUP_REQUIRED or PICTURA_API_KEY_REQUIRED. Guides inline configuration during first use.
 ---
 
-# Pictura Setup Skill
+# Pictura Inline Setup Skill
 
-This skill guides users through configuring the pictura plugin for first-time use.
+This skill handles inline configuration when pictura tools detect missing configuration.
 
 ## Triggers
 
-- "Set up pictura"
-- "Configure image generation"
-- "Add my Gemini API key"
-- "How do I use pictura?"
-- "pictura is not configured"
-- Config missing errors from other tools
+- `PICTURA_SETUP_REQUIRED` returned from pictura_generate, pictura_edit, or pictura_upscale
+- `PICTURA_API_KEY_REQUIRED` returned when config exists but API keys are missing
+- User asks to configure or reconfigure pictura
 
-## Setup Process
+## Inline Setup Flow
 
-### Step 1: Check Current State
+When a pictura tool returns a setup required message, guide the user through configuration inline.
 
-Use `pictura_validate` with mode "quick" to check if configuration exists:
+### Step 1: Provider Selection
 
-```
-pictura_validate({ mode: "quick" })
-```
+Ask the user which provider they want to use:
 
-**If config exists:**
-- Show current configuration status
-- Ask if user wants to reconfigure
+"I need to configure Pictura before generating images. Which provider would you like to use?
 
-**If config missing:**
-- Proceed with setup flow
+| Provider | Pros | API Key |
+|----------|------|---------|
+| **Gemini** (Recommended) | Free tier available, supports all 10 aspect ratios | [Get key](https://aistudio.google.com/apikey) |
+| **OpenAI** | Fast, reliable, limited to 3 sizes | [Get key](https://platform.openai.com/api-keys) |
 
-### Step 2: Guide Provider Selection
+Which provider would you like to use?"
 
-Present provider options clearly:
+### Step 2: Collect API Key
 
-**Generation Providers (choose at least one):**
+After provider selection, ask for the API key:
 
-| Provider | Pros | Cons | API Key URL |
-|----------|------|------|-------------|
-| Gemini | Free tier, all 10 ratios, best quality | Rate limits on free tier | https://aistudio.google.com/apikey |
-| OpenAI | Fast, reliable | Only 3 sizes, paid only | https://platform.openai.com/api-keys |
+"Please paste your [Provider] API key.
 
-**Upscale Providers (optional):**
+Get one at: [provider URL]
 
-| Provider | Pros | Cons | API Key URL |
-|----------|------|------|-------------|
-| Topaz Labs | Best quality, up to 8x | Paid only, async for some models | https://www.topazlabs.com/api |
+(The key will be stored securely with 600 permissions)"
 
-### Step 3: Collect Configuration
+**Important:** Never echo back or display the API key in responses.
 
-For each selected provider:
-1. Ask for API key
-2. Confirm receipt (never echo the key)
-3. Ask for provider-specific defaults
+### Step 3: Save Configuration
 
-For general settings:
-1. Default aspect ratio (recommend 16:9)
-2. Default quality (recommend pro)
-3. Image size (recommend 2K)
-
-### Step 4: Write Configuration
-
-Use the `pictura_setup` MCP tool to write configuration:
+Call `pictura_config` with the collected information:
 
 ```
-pictura_setup({
+pictura_config({
   providers: {
     generation: {
       default: "gemini",
-      gemini: { apiKey: "..." }
-    },
-    upscale: {
-      default: "topaz",
-      topaz: { apiKey: "..." }
+      gemini: { apiKey: "user-provided-key" }
     }
   },
-  defaults: {
-    ratio: "16:9",
-    quality: "pro",
-    size: "2K"
-  }
+  scope: "user"
 })
 ```
 
-### Step 5: Validate and Confirm
+**Scope selection:**
+- Default to `user` scope (shared across projects, recommended for API keys)
+- Use `project` scope only if user explicitly requests project-specific config
 
-Run full validation:
+### Step 4: Retry Original Request
+
+After successful configuration, automatically retry the original pictura tool call that triggered setup.
+
+## Example Flow
 
 ```
-pictura_validate({ mode: "full" })
+User: Generate an image of a sunset
+
+Claude: [calls pictura_generate]
+
+Tool returns: PICTURA_SETUP_REQUIRED
+
+Claude: I need to configure Pictura first. Which provider would you like to use?
+- Gemini (recommended, free tier)
+- OpenAI
+
+User: Gemini
+
+Claude: Please paste your Gemini API key.
+Get one at: https://aistudio.google.com/apikey
+
+User: [pastes API key]
+
+Claude: [calls pictura_config with the key]
+
+Claude: Configuration saved. Now generating your image...
+
+Claude: [calls pictura_generate again with original prompt]
 ```
 
-Show success message with next steps:
+## Reconfiguration
 
+If user wants to reconfigure or add additional providers:
+
+1. Ask what they want to change (provider, API key, defaults)
+2. Collect the new information
+3. Call `pictura_config` with the updates
+
+For project-specific overrides:
 ```
-Pictura configured successfully!
-
-Your setup:
-- Generation: Gemini (pro mode)
-- Upscale: Topaz Labs
-- Default ratio: 16:9
-
-Try it out:
-/pictura:generate "a cozy coffee shop" --social
+pictura_config({
+  defaults: { quality: "draft", ratio: "1:1" },
+  scope: "project"
+})
 ```
 
-## Error Recovery
+## Configuration Scopes
 
-**Invalid API key:**
-1. Explain the error clearly
-2. Provide link to get new key
-3. Offer to retry
+| Scope | Path | Purpose |
+|-------|------|---------|
+| user | `~/.claude/plugins/maccing/pictura/config.json` | API keys, shared across projects |
+| project | `.claude/plugins/maccing/pictura/config.json` | Project-specific overrides |
 
-**Network issues:**
-1. Suggest checking internet connection
-2. Offer to save config anyway (will validate later)
-
-**Permission denied:**
-1. Explain the issue
-2. Provide fix command: `mkdir -p .claude/plugins/maccing/pictura`
+Precedence: Environment variables > Project scope > User scope > Defaults

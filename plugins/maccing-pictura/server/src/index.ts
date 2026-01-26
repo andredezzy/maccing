@@ -14,7 +14,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import open from 'open';
 
-import { ConfigManager, PRESET_BUNDLES, type PresetBundle, type PicturaConfig } from './core/config.js';
+import { ConfigManager, ScopedConfigManager, PRESET_BUNDLES, type PresetBundle, type PicturaConfig, type ConfigScope } from './core/config.js';
 import { OutputManager, type BatchInfo } from './core/output.js';
 import { PromptEnhancer, type StyleType } from './core/prompt-enhancer.js';
 import { generateImages, registerProvider } from './generate.js';
@@ -39,10 +39,14 @@ registerUpscaleProvider(topaz);
 // Configuration
 // ============================================================================
 
-const configPath = process.env.PICTURA_CONFIG || '.claude/plugins/maccing/pictura/config.json';
-const configManager = new ConfigManager(configPath);
+// ScopedConfigManager handles both user (~/.claude/) and project (.claude/) scopes
+const scopedConfigManager = new ScopedConfigManager(process.cwd());
 
-// Config file pattern to add to .gitignore (contains API keys)
+// Legacy single-path config manager for backward compatibility with validation
+const legacyConfigPath = process.env.PICTURA_CONFIG || '.claude/plugins/maccing/pictura/config.json';
+const configManager = new ConfigManager(legacyConfigPath);
+
+// Config file pattern to add to .gitignore (contains API keys, project scope only)
 const GITIGNORE_PATTERN = '.claude/plugins/maccing/pictura/config.json';
 
 /**
@@ -204,6 +208,8 @@ const SetupParamsSchema = z.object({
     quality: z.enum(['draft', 'pro']).optional().default('pro'),
     size: z.enum(['1K', '2K', '4K']).optional().default('2K'),
   }).optional(),
+  scope: z.enum(['user', 'project']).optional().default('user')
+    .describe('Config scope: user (~/.claude/) for shared API keys, project (.claude/) for project-specific overrides'),
 });
 
 // ============================================================================
@@ -228,41 +234,41 @@ server.tool(
       consistency,
     } = params;
 
-    // Check if config exists (first-run detection)
-    const configExists = await configManager.exists();
+    // Check if config exists in any scope (first-run detection)
+    const configExists = await scopedConfigManager.existsAny();
     if (!configExists) {
       return {
         content: [
           {
             type: 'text' as const,
             text: [
-              '★ Welcome to Pictura! ────────────────────────────────────',
+              'PICTURA_SETUP_REQUIRED',
               '',
               'Pictura needs to be configured before generating images.',
               '',
-              'Quick Setup:',
-              '  Run: /pictura:setup',
+              'Claude should now:',
+              '1. Ask the user which provider they want to use (Gemini recommended, free tier available)',
+              '2. Ask for their API key',
+              '3. Call pictura_config with the collected information',
               '',
-              'This will guide you through:',
-              '  1. Selecting image providers (Gemini, OpenAI)',
-              '  2. Entering your API keys',
-              '  3. Setting default preferences',
+              'Provider options:',
+              '- Gemini (recommended): Free tier, all 10 aspect ratios, get key at https://aistudio.google.com/apikey',
+              '- OpenAI: Paid, limited sizes, get key at https://platform.openai.com/api-keys',
               '',
-              'Get a free Gemini API key at:',
-              '  https://aistudio.google.com/apikey',
-              '',
-              '─────────────────────────────────────────────────────────────',
+              'Example pictura_config call after collecting API key:',
+              'pictura_config({ providers: { generation: { default: "gemini", gemini: { apiKey: "user-key" } } }, scope: "user" })',
             ].join('\n'),
           },
         ],
-        isError: false, // Not an error, just needs setup
+        isError: false, // Not an error, triggers inline setup flow
       };
     }
 
-    // Load config
+    // Load merged config from all scopes
     let config: PicturaConfig;
     try {
-      config = await configManager.load();
+      const scopedConfig = await scopedConfigManager.loadMerged();
+      config = scopedConfig.config;
     } catch (error) {
       return {
         content: [
@@ -285,19 +291,25 @@ server.tool(
           {
             type: 'text' as const,
             text: [
-              '⚠ No generation provider configured',
+              'PICTURA_API_KEY_REQUIRED',
               '',
-              'Your config file exists but has no API keys for image generation.',
+              'Config exists but no API keys for image generation.',
               '',
-              'To add a provider:',
-              '  Run: /pictura:setup --provider gemini',
+              'Claude should now:',
+              '1. Ask the user for their preferred provider API key',
+              '2. Call pictura_config to add the API key',
               '',
-              'Or manually edit: ' + configPath,
+              'Provider options:',
+              '- Gemini: https://aistudio.google.com/apikey',
+              '- OpenAI: https://platform.openai.com/api-keys',
               '',
+              'Config locations:',
+              `  User:    ${scopedConfigManager.getUserConfigPath()}`,
+              `  Project: ${scopedConfigManager.getProjectConfigPath()}`,
             ].join('\n'),
           },
         ],
-        isError: true,
+        isError: false, // Triggers inline setup, not a hard error
       };
     }
 
@@ -313,7 +325,7 @@ server.tool(
 
     // Determine provider
     const providerName = inputProvider || config.providers.generation.default;
-    const providerConfig = configManager.getProviderConfig('generation', providerName);
+    const providerConfig = scopedConfigManager.getProviderConfig('generation', providerName);
 
     // Enhance prompt if requested
     let finalPrompt = prompt;
@@ -511,28 +523,30 @@ server.tool(
   async (params) => {
     const { slug, prompt, mask, extend, stylePath } = params;
 
-    // Check if config exists
-    const configExists = await configManager.exists();
+    // Check if config exists in any scope
+    const configExists = await scopedConfigManager.existsAny();
     if (!configExists) {
       return {
         content: [{
           type: 'text' as const,
           text: [
-            '★ Pictura not configured ────────────────────────────────────',
+            'PICTURA_SETUP_REQUIRED',
             '',
-            'Run /pictura:setup to configure Pictura before editing images.',
+            'Pictura needs to be configured before editing images.',
             '',
-            '─────────────────────────────────────────────────────────────',
+            'Claude should ask for the user\'s API key and call pictura_config.',
+            'See pictura_generate for detailed setup instructions.',
           ].join('\n'),
         }],
-        isError: true,
+        isError: false,
       };
     }
 
-    // Load config
+    // Load merged config from all scopes
     let config: PicturaConfig;
     try {
-      config = await configManager.load();
+      const scopedConfig = await scopedConfigManager.loadMerged();
+      config = scopedConfig.config;
     } catch (error) {
       return {
         content: [{
@@ -611,7 +625,7 @@ server.tool(
 
     // Get provider and model
     const providerName = config.providers.generation.default;
-    const providerConfig = configManager.getProviderConfig('generation', providerName);
+    const providerConfig = scopedConfigManager.getProviderConfig('generation', providerName);
     const model = providerName === 'gemini' ? gemini('pro') : openai('gpt-image-1.5');
 
     // Generate new slug and timestamp for edited batch
@@ -707,28 +721,30 @@ server.tool(
   async (params) => {
     const { slug, topazModel = 'standard-max', upscaler = 'topaz', skipTopaz } = params;
 
-    // Check if config exists
-    const configExists = await configManager.exists();
+    // Check if config exists in any scope
+    const configExists = await scopedConfigManager.existsAny();
     if (!configExists) {
       return {
         content: [{
           type: 'text' as const,
           text: [
-            '★ Pictura not configured ────────────────────────────────────',
+            'PICTURA_SETUP_REQUIRED',
             '',
-            'Run /pictura:setup to configure Pictura before upscaling images.',
+            'Pictura needs to be configured before upscaling images.',
             '',
-            '─────────────────────────────────────────────────────────────',
+            'Claude should ask for the user\'s API key and call pictura_config.',
+            'See pictura_generate for detailed setup instructions.',
           ].join('\n'),
         }],
-        isError: true,
+        isError: false,
       };
     }
 
-    // Load config
+    // Load merged config from all scopes
     let config: PicturaConfig;
     try {
-      config = await configManager.load();
+      const scopedConfig = await scopedConfigManager.loadMerged();
+      config = scopedConfig.config;
     } catch (error) {
       return {
         content: [{
@@ -796,7 +812,7 @@ server.tool(
     }
 
     // Get upscale provider config
-    const providerConfig = configManager.getProviderConfig('upscale', providerName);
+    const providerConfig = scopedConfigManager.getProviderConfig('upscale', providerName);
 
     // Generate new slug and timestamp for upscaled batch
     const scale = 4; // Default scale for Topaz
@@ -975,14 +991,33 @@ server.tool(
       const { mode } = params;
       const modeValue = mode || 'full';
 
+      // Check which config scopes exist
+      const [userExists, projectExists] = await Promise.all([
+        scopedConfigManager.existsInScope('user'),
+        scopedConfigManager.existsInScope('project'),
+      ]);
+
+      const scopeInfo = [
+        '**Configuration Scopes:**',
+        `  User:    ${userExists ? '✓ configured' : '✗ not configured'} (${scopedConfigManager.getUserConfigPath()})`,
+        `  Project: ${projectExists ? '✓ configured' : '✗ not configured'} (${scopedConfigManager.getProjectConfigPath()})`,
+      ];
+
       const options = {
         skipProviders: modeValue === 'quick',
         skipSmokeTests: modeValue === 'quick',
       };
 
-      const report = await runValidation(configPath, options);
+      // For validation, use merged config path if either exists, otherwise use legacy path
+      const validationConfigPath = (userExists || projectExists)
+        ? (projectExists ? scopedConfigManager.getProjectConfigPath() : scopedConfigManager.getUserConfigPath())
+        : legacyConfigPath;
+
+      const report = await runValidation(validationConfigPath, options);
 
       const summary = [
+        ...scopeInfo,
+        '',
         formatReport(report),
         '',
         '---',
@@ -1014,16 +1049,17 @@ server.tool(
 );
 
 // ============================================================================
-// Tool: pictura_setup
+// Tool: pictura_config
 // ============================================================================
 
 server.tool(
-  'pictura_setup',
-  'Create or update pictura configuration with API keys and preferences',
+  'pictura_config',
+  'Create or update pictura configuration with API keys and preferences. Used for initial setup and reconfiguration.',
   SetupParamsSchema.shape,
   async (params) => {
     try {
       const parsed = SetupParamsSchema.parse(params);
+      const scope: ConfigScope = parsed.scope || 'user';
 
       // Build config object
       const config = {
@@ -1035,21 +1071,39 @@ server.tool(
         outputDir: '.claude/plugins/maccing/pictura/output',
       };
 
+      // Determine config path based on scope
+      const configPathForScope = scope === 'user'
+        ? scopedConfigManager.getUserConfigPath()
+        : scopedConfigManager.getProjectConfigPath();
+
       // Create directory if needed
-      const configDir = path.dirname(configPath);
+      const configDir = path.dirname(configPathForScope);
       await fs.mkdir(configDir, { recursive: true });
 
       // Write config file
-      await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      await fs.writeFile(configPathForScope, JSON.stringify(config, null, 2), 'utf-8');
 
       // Set secure permissions (user-only read/write)
-      await fs.chmod(configPath, 0o600);
+      await fs.chmod(configPathForScope, 0o600);
 
       // Clear the config cache so subsequent tool calls read the updated config
+      scopedConfigManager.clearCache();
       configManager.clearCache();
 
-      // Ensure config directory is in .gitignore to protect API keys
-      const gitignoreResult = await ensureGitignore();
+      // Ensure config directory is in .gitignore to protect API keys (project scope only)
+      let gitignoreStatus: string;
+      if (scope === 'project') {
+        const gitignoreResult = await ensureGitignore();
+        if (gitignoreResult.created) {
+          gitignoreStatus = '✓ Created .gitignore with config exclusion';
+        } else if (gitignoreResult.updated) {
+          gitignoreStatus = '✓ Updated .gitignore to exclude config';
+        } else {
+          gitignoreStatus = '✓ Config already excluded in .gitignore';
+        }
+      } else {
+        gitignoreStatus = '✓ User scope config stored outside project directory';
+      }
 
       // Build summary of what was configured
       const configured: string[] = [];
@@ -1063,20 +1117,15 @@ server.tool(
         configured.push('Topaz Labs (upscale)');
       }
 
-      // Build gitignore status message
-      let gitignoreStatus: string;
-      if (gitignoreResult.created) {
-        gitignoreStatus = '✓ Created .gitignore with config exclusion';
-      } else if (gitignoreResult.updated) {
-        gitignoreStatus = '✓ Updated .gitignore to exclude config';
-      } else {
-        gitignoreStatus = '✓ Config already excluded in .gitignore';
-      }
+      const scopeDescription = scope === 'user'
+        ? 'User scope (shared across projects)'
+        : 'Project scope (project-specific overrides)';
 
       const summary = [
         '✓ Configuration saved successfully',
         '',
-        `Location: ${configPath}`,
+        `Scope: ${scopeDescription}`,
+        `Location: ${configPathForScope}`,
         `Permissions: 600 (user-only)`,
         gitignoreStatus,
         '',
@@ -1087,8 +1136,6 @@ server.tool(
         `  - Ratio: ${config.defaultRatio}`,
         `  - Quality: ${config.defaultQuality}`,
         `  - Size: ${config.imageSize}`,
-        '',
-        'Next: Run /pictura:validate to verify configuration',
       ];
 
       return {

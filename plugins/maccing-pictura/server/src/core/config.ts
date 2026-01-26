@@ -1,7 +1,19 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import { z } from 'zod';
 import { RatioSchema } from '../provider-spec/factory.js';
+
+// ============================================================================
+// Scoped Configuration Types
+// ============================================================================
+
+export type ConfigScope = 'user' | 'project';
+
+export interface ScopedConfig {
+  config: PicturaConfig;
+  sources: Record<string, ConfigScope | 'default' | 'env'>;
+}
 
 // ============================================================================
 // Provider Config Schemas
@@ -177,5 +189,298 @@ export class ConfigManager {
     } catch {
       // File doesn't exist yet, permissions will be set on save
     }
+  }
+
+  /**
+   * Get the path to the config file
+   */
+  getConfigPath(): string {
+    return this.configPath;
+  }
+}
+
+// ============================================================================
+// Scoped Config Manager
+// ============================================================================
+
+/**
+ * ScopedConfigManager manages configuration across user and project scopes.
+ *
+ * Scope Locations:
+ * - User scope: ~/.claude/plugins/maccing/pictura/config.json
+ * - Project scope: .claude/plugins/maccing/pictura/config.json
+ *
+ * Precedence (highest to lowest):
+ * 1. Environment variables (PICTURA_*_API_KEY)
+ * 2. Project scope config
+ * 3. User scope config
+ * 4. Schema defaults
+ */
+export class ScopedConfigManager {
+  private userConfigPath: string;
+  private projectConfigPath: string;
+  private userManager: ConfigManager;
+  private projectManager: ConfigManager;
+  private cachedMerged: ScopedConfig | null = null;
+
+  constructor(projectRoot: string = process.cwd()) {
+    this.userConfigPath = path.join(
+      os.homedir(),
+      '.claude/plugins/maccing/pictura/config.json'
+    );
+    this.projectConfigPath = path.join(
+      projectRoot,
+      '.claude/plugins/maccing/pictura/config.json'
+    );
+    this.userManager = new ConfigManager(this.userConfigPath);
+    this.projectManager = new ConfigManager(this.projectConfigPath);
+  }
+
+  /**
+   * Get the user scope config path
+   */
+  getUserConfigPath(): string {
+    return this.userConfigPath;
+  }
+
+  /**
+   * Get the project scope config path
+   */
+  getProjectConfigPath(): string {
+    return this.projectConfigPath;
+  }
+
+  /**
+   * Check if any config exists (user or project)
+   */
+  async existsAny(): Promise<boolean> {
+    const [userExists, projectExists] = await Promise.all([
+      this.userManager.exists(),
+      this.projectManager.exists(),
+    ]);
+    return userExists || projectExists;
+  }
+
+  /**
+   * Check if config exists for a specific scope
+   */
+  async existsInScope(scope: ConfigScope): Promise<boolean> {
+    const manager = scope === 'user' ? this.userManager : this.projectManager;
+    return manager.exists();
+  }
+
+  /**
+   * Load and merge configs from all scopes with proper precedence.
+   * Returns the merged config along with source tracking for each key.
+   */
+  async loadMerged(): Promise<ScopedConfig> {
+    if (this.cachedMerged) {
+      return this.cachedMerged;
+    }
+
+    const sources: Record<string, ConfigScope | 'default' | 'env'> = {};
+
+    // Start with defaults
+    const defaultConfig = this.getDefaults();
+    Object.keys(defaultConfig).forEach((key) => {
+      sources[key] = 'default';
+    });
+
+    let merged = { ...defaultConfig };
+
+    // Layer user config if exists
+    if (await this.userManager.exists()) {
+      try {
+        const userConfig = await this.userManager.load();
+        merged = this.deepMerge(merged, userConfig, sources, 'user');
+      } catch {
+        // User config exists but is invalid, skip it
+      }
+    }
+
+    // Layer project config if exists (higher precedence)
+    if (await this.projectManager.exists()) {
+      try {
+        const projectConfig = await this.projectManager.load();
+        merged = this.deepMerge(merged, projectConfig, sources, 'project');
+      } catch {
+        // Project config exists but is invalid, skip it
+      }
+    }
+
+    // Apply environment variable overrides (highest precedence)
+    this.applyEnvOverrides(merged, sources);
+
+    // Validate the merged config
+    const validated = ConfigSchema.parse(merged);
+
+    this.cachedMerged = { config: validated, sources };
+    return this.cachedMerged;
+  }
+
+  /**
+   * Save configuration to a specific scope
+   */
+  async saveToScope(scope: ConfigScope, config: Partial<PicturaConfig>): Promise<void> {
+    const manager = scope === 'user' ? this.userManager : this.projectManager;
+    await manager.save(config as PicturaConfig);
+    this.clearCache();
+  }
+
+  /**
+   * Get provider-specific config with environment variable overrides.
+   * Must call loadMerged() first.
+   */
+  getProviderConfig(type: 'generation' | 'upscale', name: string): Record<string, unknown> {
+    if (!this.cachedMerged) {
+      throw new Error('Config not loaded. Call loadMerged() first.');
+    }
+
+    const providers = this.cachedMerged.config.providers[type] as Record<string, unknown>;
+    const providerConfig = providers[name];
+    const config = (providerConfig as Record<string, unknown>) || {};
+
+    // Environment variables take precedence
+    const envKey = this.getEnvKeyForProvider(name);
+    if (envKey && process.env[envKey]) {
+      return { ...config, apiKey: process.env[envKey] };
+    }
+
+    return config;
+  }
+
+  /**
+   * Clear the cached merged config
+   */
+  clearCache(): void {
+    this.cachedMerged = null;
+    this.userManager.clearCache();
+    this.projectManager.clearCache();
+  }
+
+  /**
+   * Get default configuration
+   */
+  private getDefaults(): PicturaConfig {
+    return {
+      providers: {
+        generation: { default: 'gemini' as const },
+        upscale: { default: 'topaz' as const },
+      },
+      defaultRatio: '16:9' as const,
+      defaultQuality: 'pro' as const,
+      imageSize: '2K' as const,
+      defaultConsistency: 'generate' as const,
+      retryAttempts: 3,
+      outputDir: '.claude/plugins/maccing/pictura/output',
+    };
+  }
+
+  /**
+   * Deep merge source config into target, tracking sources
+   */
+  private deepMerge(
+    target: PicturaConfig,
+    source: Partial<PicturaConfig>,
+    sources: Record<string, ConfigScope | 'default' | 'env'>,
+    scope: ConfigScope
+  ): PicturaConfig {
+    const result = { ...target };
+
+    for (const key of Object.keys(source) as (keyof PicturaConfig)[]) {
+      const sourceValue = source[key];
+      if (sourceValue === undefined) continue;
+
+      if (key === 'providers' && typeof sourceValue === 'object') {
+        // Deep merge providers
+        result.providers = this.mergeProviders(
+          result.providers,
+          sourceValue as typeof result.providers,
+          sources,
+          scope
+        );
+        sources['providers'] = scope;
+      } else {
+        (result as Record<string, unknown>)[key] = sourceValue;
+        sources[key] = scope;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Merge provider configurations
+   */
+  private mergeProviders(
+    target: PicturaConfig['providers'],
+    source: Partial<PicturaConfig['providers']>,
+    sources: Record<string, ConfigScope | 'default' | 'env'>,
+    scope: ConfigScope
+  ): PicturaConfig['providers'] {
+    const result = { ...target };
+
+    if (source.generation) {
+      result.generation = { ...result.generation, ...source.generation };
+      sources['providers.generation'] = scope;
+    }
+
+    if (source.upscale) {
+      result.upscale = { ...result.upscale, ...source.upscale };
+      sources['providers.upscale'] = scope;
+    }
+
+    return result;
+  }
+
+  /**
+   * Apply environment variable overrides to config
+   */
+  private applyEnvOverrides(
+    config: PicturaConfig,
+    sources: Record<string, ConfigScope | 'default' | 'env'>
+  ): void {
+    const envMappings = [
+      { env: 'PICTURA_GEMINI_API_KEY', path: ['providers', 'generation', 'gemini', 'apiKey'] },
+      { env: 'PICTURA_OPENAI_API_KEY', path: ['providers', 'generation', 'openai', 'apiKey'] },
+      { env: 'PICTURA_TOPAZ_API_KEY', path: ['providers', 'upscale', 'topaz', 'apiKey'] },
+      { env: 'PICTURA_REPLICATE_API_KEY', path: ['providers', 'upscale', 'replicate', 'apiKey'] },
+    ];
+
+    for (const { env, path: keyPath } of envMappings) {
+      const value = process.env[env];
+      if (value) {
+        this.setNestedValue(config, keyPath, value);
+        sources[keyPath.join('.')] = 'env';
+      }
+    }
+  }
+
+  /**
+   * Set a nested value in an object by path
+   */
+  private setNestedValue(obj: Record<string, unknown>, path: string[], value: unknown): void {
+    let current = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+      const key = path[i];
+      if (!(key in current) || typeof current[key] !== 'object') {
+        current[key] = {};
+      }
+      current = current[key] as Record<string, unknown>;
+    }
+    current[path[path.length - 1]] = value;
+  }
+
+  /**
+   * Map provider name to environment variable key
+   */
+  private getEnvKeyForProvider(name: string): string | null {
+    const envMap: Record<string, string> = {
+      gemini: 'PICTURA_GEMINI_API_KEY',
+      openai: 'PICTURA_OPENAI_API_KEY',
+      topaz: 'PICTURA_TOPAZ_API_KEY',
+      replicate: 'PICTURA_REPLICATE_API_KEY',
+    };
+    return envMap[name] || null;
   }
 }

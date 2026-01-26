@@ -20,15 +20,14 @@ claude plugin install maccing-pictura@maccing
 ## Quick Start
 
 ```bash
-# Initial setup
-/pictura:setup
-
-# Generate images
+# Generate images (will prompt for API key on first use)
 /pictura:generate "a majestic mountain landscape" --ratios 16:9,1:1
 
 # View recent generations
 /pictura:gallery --since 24h
 ```
+
+On first use, Pictura will automatically guide you through configuration by asking for your preferred provider and API key.
 
 ## Commands
 
@@ -102,15 +101,45 @@ Shows recent generation batches with IDs for use with edit/upscale commands.
 
 ## Configuration
 
-Config file: `.claude/plugins/maccing/pictura/config.json`
+Pictura supports dual-scope configuration with the following precedence:
+
+| Priority | Scope | Path | Purpose |
+|----------|-------|------|---------|
+| 1 | Environment | `PICTURA_*_API_KEY` | Override API keys via environment |
+| 2 | Project | `.claude/plugins/maccing/pictura/config.json` | Project-specific overrides |
+| 3 | User | `~/.claude/plugins/maccing/pictura/config.json` | Shared API keys across projects |
+
+### First-Time Setup
+
+Configuration happens automatically on first use. When you run any pictura command without configuration, Claude will:
+
+1. Ask which provider you want to use (Gemini recommended, free tier available)
+2. Ask for your API key
+3. Save configuration to user scope (shared across projects)
+
+**Get API keys:**
+- Gemini: https://aistudio.google.com/apikey
+- OpenAI: https://platform.openai.com/api-keys
+
+### Config Structure
 
 ```json
 {
-  "defaultProvider": "gpt-image-1",
-  "outputDir": "./pictura-output",
-  "defaultRatios": ["16:9", "1:1", "9:16"],
-  "enhancePrompts": true,
-  "topazApiKey": "your-topaz-api-key"
+  "providers": {
+    "generation": {
+      "default": "gemini",
+      "gemini": { "apiKey": "your-key", "defaultModel": "pro" },
+      "openai": { "apiKey": "your-key" }
+    },
+    "upscale": {
+      "default": "topaz",
+      "topaz": { "apiKey": "your-key" }
+    }
+  },
+  "defaultRatio": "16:9",
+  "defaultQuality": "pro",
+  "imageSize": "2K",
+  "outputDir": ".claude/plugins/maccing/pictura/output"
 }
 ```
 
@@ -133,7 +162,7 @@ See [design document](../../docs/plans/2026-01-17-pictura-design.md) for full de
 
 ## Troubleshooting
 
-**Expected version:** 1.0.6
+**Expected version:** 1.1.0
 
 If commands are not available, ensure:
 1. Plugin is installed: `claude plugin list`
