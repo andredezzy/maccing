@@ -156,6 +156,62 @@ Works with Claude Code, Cursor, and 26 other agents.
 
 ---
 
+## Final Post
+
+```
+Made an agent skill for perfect Unicode box drawings.
+
+No more broken ASCII.
+No more alignment issues.
+No more wasted time.
+
+npx skills add andredezzy/maccing -s unicode-box-drawing
+```
+
+---
+
+## Carbon.sh Image Assets
+
+**BROKEN (for comparison):**
+
+```
+┌────────────────────────────┐
+│        AGENT FLOW            │
+├──────────────────────────┤
+│                           │
+│   ┌───────┐    ┌───────┐    │
+│   │ INPUT │───▶│ THINK │  │
+│   └───┬───┘    └───┬───┘  │
+│       │            │        │
+│       ▼            ▼       │
+│   ┌───────┐    ┌───────┐ │
+│   │  ACT  │    │VERIFY │   │
+│   └───────┘    └───────┘  │
+│                          │
+└──────────────────────────┘
+```
+
+**CORRECT (proper alignment):**
+
+```
+┌────────────────────────────┐
+│        AGENT FLOW          │
+├────────────────────────────┤
+│                            │
+│   ┌───────┐    ┌───────┐   │
+│   │ INPUT │───▶│ THINK │   │
+│   └───┬───┘    └───┬───┘   │
+│       │            │       │
+│       ▼            ▼       │
+│   ┌───────┐    ┌───────┐   │
+│   │  ACT  │    │VERIFY │   │
+│   └───────┘    └───────┘   │
+│                            │
+└────────────────────────────┘
+```
+
+---
+
 ## Hashtags (optional, use sparingly)
 
 #DevTools #AI #CodingAgents #OpenSource #ClaudeCode
