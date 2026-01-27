@@ -1,1 +1,1 @@
-rules/BASE.md
+rules/base.md
