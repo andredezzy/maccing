@@ -1,3 +1,3 @@
 # maccing
 
-Read and follow all rules in: [rules/BASE.md](rules/BASE.md)
+Read and follow all rules in: [rules/base.md](rules/base.md)
