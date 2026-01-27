@@ -1,8 +1,6 @@
 # maccing
 
-*Maxxing plugins and skills for coding agents*
-
-Plugins and skills for coding agents.
+*Maxxing plugins and skills for coding agents.*
 
 ## Quick Start
 
