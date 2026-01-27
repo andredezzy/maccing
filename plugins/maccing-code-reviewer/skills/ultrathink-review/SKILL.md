@@ -5,6 +5,8 @@ description: |
   ONLY use when user explicitly invokes /maccing-code-reviewer:review command.
   Do NOT use for generic "code review" or "review code" requests.
   This skill uses 6 parallel agents with pattern discovery.
+metadata:
+  internal: true
 ---
 
 <first_action>

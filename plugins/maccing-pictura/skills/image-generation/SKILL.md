@@ -1,6 +1,8 @@
 ---
 name: image-generation
 description: Use when user wants to generate, create, or make images in multiple formats or aspect ratios. Also triggers for editing, upscaling, or managing generated images.
+metadata:
+  internal: true
 ---
 
 # Image Generation Skill
