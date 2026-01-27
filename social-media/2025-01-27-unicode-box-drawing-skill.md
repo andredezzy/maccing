@@ -158,6 +158,7 @@ Works with Claude Code, Cursor, and 26 other agents.
 
 ## Final Post
 
+**Main Tweet:**
 ```
 Made an agent skill for perfect unicode box drawings.
 
@@ -167,6 +168,15 @@ No more wasted time.
 
 npx skills add andredezzy/maccing -s unicode-box-drawing
 ```
+
+**Reply (post immediately after):**
+```
+Check: github.com/andredezzy/maccing
+
+Works with Claude Code, Cursor, Windsurf, and 25+ more agents.
+```
+
+**Why reply?** X deprioritizes posts with external links. Keep main post clean, add link in reply for better reach.
 
 ---
 
