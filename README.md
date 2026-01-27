@@ -1,6 +1,6 @@
 # maccing
 
-*maxxing + claude code + agents*
+*Maxxing plugins and skills for coding agents*
 
 Plugins and skills for coding agents.
 
