@@ -25,7 +25,7 @@ plugins/<plugin-name>/
 ├── commands/
 │   └── <command>.md          # Slash commands
 ├── examples/                 # Optional rule templates
-│   └── *.md                  # UPPERCASE filenames
+│   └── *.md                  # lowercase kebab-case filenames
 └── README.md                 # Plugin documentation
 ```
 </directory-structure>
@@ -48,8 +48,9 @@ Every `plugin.json` must include:
 |---------|------------|---------|
 | Plugin name | `maccing-<name>` | `maccing-code-reviewer` |
 | Skill files | `SKILL.md` | `skills/code-review/SKILL.md` |
-| Example files | UPPERCASE | `examples/NAMING.md` |
-| Commands | lowercase | `commands/review.md` |
+| Example files | lowercase kebab-case | `examples/naming.md` |
+| Commands | lowercase kebab-case | `commands/review.md` |
+| Documentation | lowercase kebab-case | `production-checklist.md` |
 </naming-conventions>
 
 </plugin-development-standards>
@@ -63,7 +64,7 @@ Every `plugin.json` must include:
 <documentation-files>
 ### Documentation Files
 
-- **Filenames MUST be UPPERCASE**: all `.md` files use UPPERCASE names (except README.md)
+- **Filenames use lowercase kebab-case**: all `.md` files use lowercase with hyphens (exceptions: README.md, SKILL.md)
 - **No emojis in documentation**: use ASCII characters and symbols only
 - **Use code blocks**: for commands, examples, and file structures
 </documentation-files>

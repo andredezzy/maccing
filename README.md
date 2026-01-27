@@ -1,365 +1,55 @@
 # maccing
 
-Claude Code plugins built for developers who care about code quality.
+*maxxing + claude code*
 
----
+Plugins and skills for coding agents.
 
-## Installation
+## Quick Start
 
-    /plugin marketplace add andredezzy/maccing
-
----
-
-## Updating Plugins
-
-**Manual update:**
-
-    /plugin marketplace update maccing
-
-**Enable auto-update:**
-
-1. Run `/plugin`
-2. Select **Marketplaces** tab
-3. Select `maccing`
-4. Select **Enable auto-update**
-
-**Reinstall to get latest:**
-
-    /plugin install maccing-code-reviewer@maccing
-
----
-
-## Available Plugins
-
-### maccing-code-reviewer
-
-Multi-agent code review with automatic pattern discovery.
-
-    /plugin install maccing-code-reviewer@maccing
-
-**Features:**
-
-- Automatic pattern discovery from YOUR codebase
-- 6 specialized review agents running in parallel
-- ULTRATHINK methodology for deep analysis
-- Persistent reports in docs/code-reviews/
-
-**Quick start:**
-
-    /maccing-code-reviewer:review
-
-[View full documentation](plugins/maccing-code-reviewer/README.md)
-
-### maccing-monorepo
-
-Monorepo workflow assistance with auto-detection and smart reminders.
-
-    /plugin install maccing-monorepo@maccing
-
-**Features:**
-
-- Auto-detects Turborepo, Nx, pnpm, npm, yarn workspaces
-- Reminds to run scripts from root with filters
-- Comprehensive monorepo-workflows skill
-- Commands: `/maccing-monorepo:info`, `/maccing-monorepo:run`
-
-**Quick start:**
-
-    /maccing-monorepo:info
-
-[View full documentation](plugins/maccing-monorepo/README.md)
-
-### maccing-rules-enforcer
-
-Enforces project rules by injecting them at every prompt. Combats instruction decay.
-
-    /plugin install maccing-rules-enforcer@maccing
-
-**Features:**
-
-- Injects full rules at session start, every prompt, and before stopping
-- Survives context compression via PreCompact hook
-- Forces rule verification before task completion
-- Auto-detects rules/RULES.md, CLAUDE.md, or .claude/rules/*.md
-
-**Quick start:**
-
-Just install and place your rules file. Works automatically.
-
-    /maccing-rules-enforcer:rules
-
-[View full documentation](plugins/maccing-rules-enforcer/README.md)
-
----
-
-## Plugin Output
-
-### maccing-monorepo
-
-**Monorepo Info**
+**Claude Code Plugins**
 
 ```
-★ monorepo ───────────────────────────────────────────
-
-Tool:     Turborepo
-Root:     /Users/dev/my-project
-
-Packages:
-
-  apps/web (web)
-  └─ dev, build, test, lint
-
-  apps/docs (docs)
-  └─ dev, build
-
-  packages/ui (@repo/ui)
-  └─ build, test
-
-  packages/config (@repo/config)
-  └─ lint
-
-Dependency Flow:
-
-┌──────────────────────────────────────────────────────────────────────┐
-│                            APPLICATIONS                              │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌─────────────────────────────┐  ┌─────────────────────────────┐    │
-│  │          @repo/web          │  │         @repo/docs          │    │
-│  │      Frontend :3000         │  │     Documentation :3001     │    │
-│  └──────────────┬──────────────┘  └──────────────┬──────────────┘    │
-│                 │                                │                   │
-└─────────────────┼────────────────────────────────┼───────────────────┘
-                  │                                │
-                  ▼                                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                              PACKAGES                                │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌─────────────────────────────┐  ┌─────────────────────────────┐    │
-│  │          @repo/ui           │  │        @repo/config         │    │
-│  │    Shared UI Components     │  │    Shared Configuration     │    │
-│  └─────────────────────────────┘  └─────────────────────────────┘    │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
-
-web  → ui, config
-docs → ui
-
-Filter syntax:
-  turbo run <task> --filter=<package>
-
-───────────────────────────────────────────────────────
+/plugin marketplace add andredezzy/maccing
 ```
 
-**Run Command**
+**Agent Skills** ([skills.sh](https://skills.sh/))
 
 ```
-★ monorepo:run ────────────────────────────────────────
-
-Task:    build
-Package: web
-Tool:    Turborepo
-
-Command:
-turbo run build --filter=web
-
-────────────────────────────────────────────────────────
+npx skills add andredezzy/maccing
 ```
 
-**PostToolUse Reminder** (context injection, not visual banner)
+## Plugins
+
+| Plugin | Description | Install |
+|--------|-------------|---------|
+| [code-reviewer](plugins/maccing-code-reviewer/README.md) | Multi-agent code review with pattern discovery | `/plugin install maccing-code-reviewer@maccing` |
+| [monorepo](plugins/maccing-monorepo/README.md) | Monorepo workflow assistance | `/plugin install maccing-monorepo@maccing` |
+| [rules-enforcer](plugins/maccing-rules-enforcer/README.md) | Project rules injection at every prompt | `/plugin install maccing-rules-enforcer@maccing` |
+| [pictura](plugins/maccing-pictura/README.md) | AI image generation in multiple aspect ratios | `/plugin install maccing-pictura@maccing` |
+
+## Skills
+
+| Skill | Description | Install |
+|-------|-------------|---------|
+| [unicode-box-drawing](skills/unicode-box-drawing/SKILL.md) | Box drawing patterns for ASCII diagrams | `npx skills add andredezzy/maccing -s unicode-box-drawing` |
+
+## Updating
 
 ```
-You ran `npm run dev` from apps/web/. For better caching and
-consistency, run from monorepo root: `turbo run dev --filter=web`
+/plugin marketplace update maccing
 ```
 
----
-
-### maccing-code-reviewer
-
-**Initial**
-
-```
-⚠ maccing-code-reviewer v1.1.0
-
-Scope: Full Codebase
-
-────────────────────────────────────────────────────────
-```
-
-**First-Time Setup**
-
-```
-◆ maccing-code-reviewer: First-time Setup ──────────────
-
-Scanning for project rules...
-```
-
-**Setup Complete**
-
-```
-✓ maccing-code-reviewer: Setup Complete ────────────────
-
-Config: .claude/plugins/maccing/code-reviewer.json
-Rules:  CLAUDE.md
-Agents: naming, code-style, clean-code, architecture, security
-
-────────────────────────────────────────────────────────
-```
-
-**Pattern Discovery**
-
-```
-◎ maccing-code-reviewer: Pattern Discovery ─────────────
-
-Scanning codebase for implicit conventions...
-
-naming patterns discovered:
-
-  Boolean Prefixes
-  ├─ is*  → 73%
-  ├─ has* → 18%
-  └─ can* →  5%
-  ✓ Adopted
-
-  Function Naming
-  ├─ verb-first → 91%
-  └─ noun-first →  9%
-  ✓ Adopted
-
-────────────────────────────────────────────────────────
-```
-
-**Final Report**
-
-```
-★ maccing-code-reviewer: Code Review Report ────────────
-
-Date:     2025-12-31 14:30
-Branch:   feature/auth
-Files:    12
-Issues:   7
-
-Summary:
-- CRITICAL: 1
-- HIGH: 3
-- MEDIUM: 2
-- LOW: 1
-
-Verdict: REQUEST CHANGES
-
-─────────────────────────────────────────────────────────
-
-Issues:
-
-✖ CRITICAL: src/auth.ts:42
-Agent: security-agent
-Issue: Tenant ID accepted from request body
-Pattern: Never accept tenantId from frontend
-
-▲ HIGH: src/utils/helpers.ts:15
-Agent: naming-agent
-Issue: Boolean variable missing prefix
-Pattern: Discovered: 96% of booleans use is/has/can prefix
-
-────────────────────────────────────────────────────────
-```
-
----
-
-### maccing-rules-enforcer
-
-**Rules Status** (via `/maccing-rules-enforcer:rules`)
-
-```
-★ rules-enforcer ─────────────────────────────────
-
-Status: ACTIVE
-
-Rules Source:
-  • rules/RULES.md (primary)
-  • .claude/rules/*.md (supplementary)
-
-Hooks Enabled:
-  ✓ SessionStart     (full rules at session start)
-  ✓ UserPromptSubmit (full rules every prompt)
-  ✓ PreCompact       (re-inject after compression)
-  ✓ Stop             (verification before stopping)
-
-Token Cost: ~800 tokens per injection
-
-─────────────────────────────────────────────────
-```
-
-**SessionStart Injection** (automatic, not visible in UI)
-
-```
-「PROJECT RULES ACTIVE」
-
-# Agent Rules
-<core>
-  ...your full rules content...
-</core>
-
-「YOU MUST follow ALL rules above throughout this session. No exceptions.」
-```
-
-**Stop Verification** (blocks until acknowledged)
-
-```
-「STOP BLOCKED: Rule Verification Required」
-
-Before stopping, verify your work against ALL project rules:
-...full rules...
-
-「VERIFICATION CHECKLIST」
-1. Review each rule section above
-2. Confirm no violations in your changes
-3. If any rule was violated, fix it now
-4. Run required quality checks (lint, typecheck, etc.)
-5. Only then may you complete the task
-```
-
----
-
-## Philosophy
-
-- **Discovery-first**: Learn from YOUR codebase, not generic rules
-- **Thorough over fast**: Deep multi-pass analysis
-- **Evidence over claims**: Every issue includes file:line reference
-- **Transparent**: See what was discovered and why
-
----
+Or enable auto-update: `/plugin` > Marketplaces > maccing > Enable auto-update
 
 ## Troubleshooting
 
-### Plugin not updating
-
-Clear cache and reinstall:
+**Clear cache and reinstall:**
 
 ```bash
 rm -rf ~/.claude/plugins/cache/maccing
 rm -rf ~/.claude/plugins/marketplaces/maccing
 /plugin marketplace add andredezzy/maccing
-/plugin install <plugin-name>@maccing
 ```
-
-### Check installed version
-
-```bash
-cat ~/.claude/plugins/marketplaces/maccing/plugins/<plugin-name>/.claude-plugin/plugin.json | grep version
-```
-
-### Plugin-specific issues
-
-For detailed troubleshooting guides:
-
-- [maccing-code-reviewer troubleshooting](plugins/maccing-code-reviewer/README.md#troubleshooting)
-- [maccing-monorepo troubleshooting](plugins/maccing-monorepo/README.md#troubleshooting)
-- [maccing-rules-enforcer troubleshooting](plugins/maccing-rules-enforcer/README.md#troubleshooting)
-
----
 
 ## License
 
