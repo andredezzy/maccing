@@ -1,6 +1,8 @@
 ---
 name: pictura-validation
 description: Use when user wants to verify, validate, test, or check if pictura is working correctly. Also triggers for troubleshooting, debugging, or diagnosing pictura issues.
+metadata:
+  internal: true
 ---
 
 # Pictura Validation Skill

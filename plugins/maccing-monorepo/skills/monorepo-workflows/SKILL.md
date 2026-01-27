@@ -7,6 +7,8 @@ description: |
   - Adding dependencies to specific packages
   - Understanding build order and caching
   - Troubleshooting common monorepo issues
+metadata:
+  internal: true
 ---
 
 # Monorepo Workflows

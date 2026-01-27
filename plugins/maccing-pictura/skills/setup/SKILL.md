@@ -1,6 +1,8 @@
 ---
 name: pictura-setup
 description: Use when pictura returns PICTURA_SETUP_REQUIRED or PICTURA_API_KEY_REQUIRED. Guides inline configuration during first use.
+metadata:
+  internal: true
 ---
 
 # Pictura Inline Setup Skill
