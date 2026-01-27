@@ -159,7 +159,7 @@ Works with Claude Code, Cursor, and 26 other agents.
 ## Final Post
 
 ```
-Made an agent skill for perfect Unicode box drawings.
+Made an agent skill for perfect unicode box drawings.
 
 No more broken ASCII.
 No more alignment issues.
