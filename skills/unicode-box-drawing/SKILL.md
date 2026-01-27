@@ -1,9 +1,7 @@
-| Property | Value |
-|----------|-------|
-| name | `unicode-box-drawing` |
-| description | Unicode box drawing patterns for ASCII diagrams, flow charts, and structured text layouts in documentation and code comments |
-| license | MIT |
-| metadata | author: andredezzy, version: 1.0.0 |
+---
+name: unicode-box-drawing
+description: Unicode box drawing patterns for ASCII diagrams, flow charts, and structured text layouts in documentation and code comments.
+---
 
 # Unicode Box Drawing Patterns
 
