@@ -64,7 +64,7 @@ export const ConfigSchema = z.object({
       default: z.enum(['topaz', 'replicate']).default('topaz'),
       topaz: TopazConfigSchema.optional(),
       replicate: ReplicateConfigSchema.optional(),
-    }),
+    }).default({ default: 'topaz' }),
     stock: z.object({
       default: z.enum(['unsplash', 'pexels', 'pixabay']).default('unsplash'),
       unsplash: UnsplashConfigSchema.optional(),
