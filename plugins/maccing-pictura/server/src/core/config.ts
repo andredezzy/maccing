@@ -37,6 +37,18 @@ const ReplicateConfigSchema = z.object({
   apiKey: z.string(),
 });
 
+const UnsplashConfigSchema = z.object({
+  apiKey: z.string(),
+});
+
+const PexelsConfigSchema = z.object({
+  apiKey: z.string(),
+});
+
+const PixabayConfigSchema = z.object({
+  apiKey: z.string(),
+});
+
 // ============================================================================
 // Main Config Schema
 // ============================================================================
@@ -53,6 +65,12 @@ export const ConfigSchema = z.object({
       topaz: TopazConfigSchema.optional(),
       replicate: ReplicateConfigSchema.optional(),
     }),
+    stock: z.object({
+      default: z.enum(['unsplash', 'pexels', 'pixabay']).default('unsplash'),
+      unsplash: UnsplashConfigSchema.optional(),
+      pexels: PexelsConfigSchema.optional(),
+      pixabay: PixabayConfigSchema.optional(),
+    }).optional(),
   }),
   defaultRatio: RatioSchema.default('16:9'),
   defaultQuality: z.enum(['draft', 'pro']).default('pro'),
@@ -142,13 +160,13 @@ export class ConfigManager {
    * Get provider-specific config, with environment variable overrides.
    * Must call load() first.
    */
-  getProviderConfig(type: 'generation' | 'upscale', name: string): Record<string, unknown> {
+  getProviderConfig(type: 'generation' | 'upscale' | 'stock', name: string): Record<string, unknown> {
     if (!this.cachedConfig) {
       throw new Error('Config not loaded');
     }
 
-    const providers = this.cachedConfig.providers[type] as Record<string, unknown>;
-    const providerConfig = providers[name];
+    const providers = this.cachedConfig.providers[type] as Record<string, unknown> | undefined;
+    const providerConfig = providers?.[name];
     const config = (providerConfig as Record<string, unknown>) || {};
 
     // Environment variables take precedence over config file
@@ -169,6 +187,9 @@ export class ConfigManager {
       openai: 'PICTURA_OPENAI_API_KEY',
       topaz: 'PICTURA_TOPAZ_API_KEY',
       replicate: 'PICTURA_REPLICATE_API_KEY',
+      unsplash: 'PICTURA_UNSPLASH_API_KEY',
+      pexels: 'PICTURA_PEXELS_API_KEY',
+      pixabay: 'PICTURA_PIXABAY_API_KEY',
     };
     return envMap[name] || null;
   }
@@ -336,13 +357,13 @@ export class ScopedConfigManager {
    * Get provider-specific config with environment variable overrides.
    * Must call loadMerged() first.
    */
-  getProviderConfig(type: 'generation' | 'upscale', name: string): Record<string, unknown> {
+  getProviderConfig(type: 'generation' | 'upscale' | 'stock', name: string): Record<string, unknown> {
     if (!this.cachedMerged) {
       throw new Error('Config not loaded. Call loadMerged() first.');
     }
 
-    const providers = this.cachedMerged.config.providers[type] as Record<string, unknown>;
-    const providerConfig = providers[name];
+    const providers = this.cachedMerged.config.providers[type] as Record<string, unknown> | undefined;
+    const providerConfig = providers?.[name];
     const config = (providerConfig as Record<string, unknown>) || {};
 
     // Environment variables take precedence
@@ -435,6 +456,11 @@ export class ScopedConfigManager {
       sources['providers.upscale'] = scope;
     }
 
+    if (source.stock) {
+      result.stock = { ...(result.stock || { default: 'unsplash' as const }), ...source.stock };
+      sources['providers.stock'] = scope;
+    }
+
     return result;
   }
 
@@ -450,6 +476,9 @@ export class ScopedConfigManager {
       { env: 'PICTURA_OPENAI_API_KEY', path: ['providers', 'generation', 'openai', 'apiKey'] },
       { env: 'PICTURA_TOPAZ_API_KEY', path: ['providers', 'upscale', 'topaz', 'apiKey'] },
       { env: 'PICTURA_REPLICATE_API_KEY', path: ['providers', 'upscale', 'replicate', 'apiKey'] },
+      { env: 'PICTURA_UNSPLASH_API_KEY', path: ['providers', 'stock', 'unsplash', 'apiKey'] },
+      { env: 'PICTURA_PEXELS_API_KEY', path: ['providers', 'stock', 'pexels', 'apiKey'] },
+      { env: 'PICTURA_PIXABAY_API_KEY', path: ['providers', 'stock', 'pixabay', 'apiKey'] },
     ];
 
     for (const { env, path: keyPath } of envMappings) {
@@ -485,6 +514,9 @@ export class ScopedConfigManager {
       openai: 'PICTURA_OPENAI_API_KEY',
       topaz: 'PICTURA_TOPAZ_API_KEY',
       replicate: 'PICTURA_REPLICATE_API_KEY',
+      unsplash: 'PICTURA_UNSPLASH_API_KEY',
+      pexels: 'PICTURA_PEXELS_API_KEY',
+      pixabay: 'PICTURA_PIXABAY_API_KEY',
     };
     return envMap[name] || null;
   }

@@ -6,6 +6,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ratioToFilename, filenameToRatio } from '../utils/slug.js';
 import type { ImageResult, SupportedRatio } from '../provider-spec/factory.js';
+import type { StockAttribution } from '../provider-spec/stock.js';
 
 /**
  * Metadata for a batch of generated images
@@ -110,8 +111,8 @@ export class OutputManager {
           const images: Array<{ ratio: SupportedRatio; path: string }> = [];
 
           for (const file of files) {
-            if (file.endsWith('.png')) {
-              const ratioStr = filenameToRatio(file);
+            if (/\.(png|jpe?g|webp)$/i.test(file)) {
+              const ratioStr = filenameToRatio(file.replace(/\.(jpe?g|webp)$/i, '.png'));
               images.push({
                 ratio: ratioStr as SupportedRatio,
                 path: path.join(slugDir, file),
@@ -187,5 +188,54 @@ export class OutputManager {
   getImagePath(slug: string, timestamp: string, ratio: SupportedRatio): string {
     const filename = `${ratioToFilename(ratio)}.png`;
     return path.join(this.baseDir, timestamp, slug, filename);
+  }
+
+  /**
+   * Saves a stock image to disk with an arbitrary filename
+   * @param data The image buffer
+   * @param filename The filename (e.g., "unsplash-abc123.jpg")
+   * @param slug The batch slug
+   * @param timestamp The batch timestamp
+   * @returns The absolute path where the image was saved
+   */
+  async saveStockImage(data: Buffer, filename: string, slug: string, timestamp: string): Promise<string> {
+    const dir = path.join(this.baseDir, timestamp, slug);
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, filename);
+    await fs.writeFile(filePath, data);
+    return filePath;
+  }
+
+  /**
+   * Saves an ATTRIBUTION.md file for stock images
+   * @param attributions Array of attribution records
+   * @param slug The batch slug
+   * @param timestamp The batch timestamp
+   * @returns The absolute path where the attribution file was saved
+   */
+  async saveAttribution(attributions: StockAttribution[], slug: string, timestamp: string): Promise<string> {
+    const dir = path.join(this.baseDir, timestamp, slug);
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, 'ATTRIBUTION.md');
+
+    const lines: string[] = [
+      '# Image Attribution',
+      '',
+    ];
+
+    for (const attr of attributions) {
+      lines.push(`## ${attr.provider}`);
+      lines.push('');
+      lines.push(`- **Photographer**: [${attr.photographer}](${attr.photographerUrl})`);
+      lines.push(`- **Source**: [View on ${attr.provider}](${attr.sourceUrl})`);
+      lines.push(`- **License**: ${attr.license}`);
+      if (attr.attributionRequired) {
+        lines.push(`- **Attribution required**: Yes`);
+      }
+      lines.push('');
+    }
+
+    await fs.writeFile(filePath, lines.join('\n'));
+    return filePath;
   }
 }

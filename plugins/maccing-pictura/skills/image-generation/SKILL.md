@@ -28,6 +28,9 @@ List recent generations.
 ### pictura_gallery
 Open HTML gallery in browser. **Only call when user explicitly requests it.**
 
+### pictura_stock_search / pictura_stock_download
+For free stock photography instead of AI generation, use `pictura_stock_search` and `pictura_stock_download`. See the stock-search skill for details.
+
 ## CRITICAL: Post-Generation Behavior
 
 After `pictura_generate` completes:

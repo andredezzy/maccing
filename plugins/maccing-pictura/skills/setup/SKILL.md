@@ -12,6 +12,7 @@ This skill handles inline configuration when pictura tools detect missing config
 ## Triggers
 
 - `PICTURA_SETUP_REQUIRED` returned from pictura_generate, pictura_edit, or pictura_upscale
+- `PICTURA_STOCK_SETUP_REQUIRED` returned from pictura_stock_search
 - `PICTURA_API_KEY_REQUIRED` returned when config exists but API keys are missing
 - User asks to configure or reconfigure pictura
 
@@ -121,3 +122,32 @@ pictura_config({
 Precedence: Environment variables > Project scope > User scope > Defaults
 
 **Note:** Generated images always output to `.claude/plugins/maccing/pictura/output/` in the project directory, regardless of config scope. This ensures images are project-local assets.
+
+## Stock Provider Setup
+
+When `PICTURA_STOCK_SETUP_REQUIRED` is returned, guide the user through stock provider configuration:
+
+### Stock Provider Selection
+
+| Provider | Pros | API Key |
+|----------|------|---------|
+| **Unsplash** (Recommended) | Highest quality, free tier | [Get key](https://unsplash.com/developers) |
+| **Pexels** | Free, no attribution required | [Get key](https://www.pexels.com/api/) |
+| **Pixabay** | Free, large library | [Get key](https://pixabay.com/api/docs/) |
+
+### Stock Config Example
+
+```
+pictura_config({
+  providers: {
+    generation: { default: "gemini" },
+    stock: {
+      default: "unsplash",
+      unsplash: { apiKey: "user-key" }
+    }
+  },
+  scope: "user"
+})
+```
+
+Multiple stock providers can be configured at once for cross-provider search.

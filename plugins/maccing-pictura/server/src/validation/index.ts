@@ -13,6 +13,9 @@ import {
   checkGeminiConnection,
   checkOpenAIConnection,
   checkTopazConnection,
+  checkUnsplashConnection,
+  checkPexelsConnection,
+  checkPixabayConnection,
   smokeTestPromptEnhancement,
   smokeTestRetryLogic,
   smokeTestOutputManager,
@@ -133,6 +136,15 @@ async function buildValidationContext(configPath: string): Promise<ValidationCon
     if (config.providers?.topaz?.apiKey) {
       ctx.providers.topaz = { apiKey: config.providers.topaz.apiKey };
     }
+    if (config.providers?.stock?.unsplash?.apiKey) {
+      ctx.providers.unsplash = { apiKey: config.providers.stock.unsplash.apiKey };
+    }
+    if (config.providers?.stock?.pexels?.apiKey) {
+      ctx.providers.pexels = { apiKey: config.providers.stock.pexels.apiKey };
+    }
+    if (config.providers?.stock?.pixabay?.apiKey) {
+      ctx.providers.pixabay = { apiKey: config.providers.stock.pixabay.apiKey };
+    }
     if (config.output?.directory) {
       ctx.outputDir = config.output.directory;
     }
@@ -164,6 +176,9 @@ async function runProviderHealthChecks(ctx: ValidationContext): Promise<Validati
     checkGeminiConnection(ctx),
     checkOpenAIConnection(ctx),
     checkTopazConnection(ctx),
+    checkUnsplashConnection(ctx),
+    checkPexelsConnection(ctx),
+    checkPixabayConnection(ctx),
   ]);
 }
 
@@ -358,6 +373,9 @@ export {
   checkGeminiConnection,
   checkOpenAIConnection,
   checkTopazConnection,
+  checkUnsplashConnection,
+  checkPexelsConnection,
+  checkPixabayConnection,
   smokeTestPromptEnhancement,
   smokeTestRetryLogic,
   smokeTestOutputManager,

@@ -1,6 +1,6 @@
 # maccing-pictura
 
-Provider-agnostic multi-ratio image generation plugin for Claude Code.
+Provider-agnostic multi-ratio image generation plugin for Claude Code with free stock image search.
 
 ## Features
 
@@ -9,6 +9,7 @@ Provider-agnostic multi-ratio image generation plugin for Claude Code.
 - Automatic prompt enhancement via Claude
 - Two-turn premium upscaling (Gemini 4K + Topaz Labs)
 - Full editing suite: refine, inpaint, outpaint, restyle
+- Free stock image search from Unsplash, Pexels, and Pixabay
 - Unified API with provider fallback chains
 
 ## Installation
@@ -22,6 +23,9 @@ claude plugin install maccing-pictura@maccing
 ```bash
 # Generate images (will prompt for API key on first use)
 /pictura:generate "a majestic mountain landscape" --ratios 16:9,1:1
+
+# Search stock photos
+/pictura:stock-search "mountain sunset" --provider unsplash
 
 # View recent generations
 /pictura:gallery --since 24h
@@ -48,6 +52,29 @@ On first use, Pictura will automatically guide you through configuration by aski
 - `generate`: Use first generated image as reference for subsequent ratios
 - `reference`: Use provided `--ref` image as reference for all generations
 - `multiturn`: Claude describes each image before generation for consistency
+
+### Search Stock Photos
+
+```bash
+/pictura:stock-search "coffee shop" --provider unsplash --orientation landscape
+```
+
+**Flags:**
+- `--provider`: Stock provider: unsplash, pexels, pixabay, or all (default: config default)
+- `--orientation`: Filter by orientation: landscape, portrait, or squarish
+- `--color`: Filter by color (provider-specific values)
+- `--page`: Page number for pagination (default: 1)
+- `--per-page`: Results per page (default: 10, max: 30)
+
+### Download Stock Photo
+
+```bash
+/pictura:stock-download abc123 --provider unsplash --size large
+```
+
+**Flags:**
+- `--provider`: Stock provider: unsplash, pexels, or pixabay (required)
+- `--size`: Download size: small, medium, large, or original (default: large)
 
 ### Edit Images
 
@@ -120,8 +147,27 @@ Configuration happens automatically on first use. When you run any pictura comma
 3. Save configuration to user scope (shared across projects)
 
 **Get API keys:**
+
+Generation:
 - Gemini: https://aistudio.google.com/apikey
 - OpenAI: https://platform.openai.com/api-keys
+
+Stock photos:
+- Unsplash: https://unsplash.com/developers
+- Pexels: https://www.pexels.com/api/
+- Pixabay: https://pixabay.com/api/docs/
+
+### Environment Variables
+
+| Variable | Provider |
+|----------|----------|
+| `PICTURA_GEMINI_API_KEY` | Gemini (generation) |
+| `PICTURA_OPENAI_API_KEY` | OpenAI (generation) |
+| `PICTURA_TOPAZ_API_KEY` | Topaz Labs (upscale) |
+| `PICTURA_REPLICATE_API_KEY` | Replicate (upscale) |
+| `PICTURA_UNSPLASH_API_KEY` | Unsplash (stock) |
+| `PICTURA_PEXELS_API_KEY` | Pexels (stock) |
+| `PICTURA_PIXABAY_API_KEY` | Pixabay (stock) |
 
 ### Config Structure
 
@@ -136,6 +182,12 @@ Configuration happens automatically on first use. When you run any pictura comma
     "upscale": {
       "default": "topaz",
       "topaz": { "apiKey": "your-key" }
+    },
+    "stock": {
+      "default": "unsplash",
+      "unsplash": { "apiKey": "your-key" },
+      "pexels": { "apiKey": "your-key" },
+      "pixabay": { "apiKey": "your-key" }
     }
   },
   "defaultRatio": "16:9",
@@ -148,23 +200,30 @@ Configuration happens automatically on first use. When you run any pictura comma
 ## Providers
 
 ### Generation Providers
-- **gpt-image-1**: OpenAI DALL-E (default)
-- **gemini**: Google Gemini Imagen
-- **replicate**: Replicate models (Flux, SDXL)
+- **gemini**: Google Gemini Imagen (recommended, free tier)
+- **openai**: OpenAI DALL-E
 
 ### Upscale Providers
 - **topaz**: Topaz Labs AI upscaling (requires API key)
 - **replicate**: Replicate upscale models
 
+### Stock Photo Providers
+
+| Provider | Attribution | Quality | Rate Limit |
+|----------|------------|---------|------------|
+| **Unsplash** | Required | High | 50 req/hour (free) |
+| **Pexels** | Optional | High | 200 req/hour |
+| **Pixabay** | Optional | Good | 100 req/min |
+
 ## Architecture
 
-The plugin uses a provider-agnostic architecture with separate registries for generation and upscale providers. Each operation (generate, edit, upscale) supports provider fallback chains for reliability.
+The plugin uses a provider-agnostic architecture with separate registries for generation, upscale, and stock providers. Each operation (generate, edit, upscale, stock search) supports provider fallback chains for reliability.
 
 See [design document](../../docs/plans/2026-01-17-pictura-design.md) for full details.
 
 ## Troubleshooting
 
-**Expected version:** 1.1.3
+**Expected version:** 1.2.0
 
 If commands are not available, ensure:
 1. Plugin is installed: `claude plugin list`

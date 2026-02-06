@@ -25,6 +25,9 @@ export interface ValidationContext {
     gemini?: { apiKey: string };
     openai?: { apiKey: string };
     topaz?: { apiKey: string };
+    unsplash?: { apiKey: string };
+    pexels?: { apiKey: string };
+    pixabay?: { apiKey: string };
   };
 }
 
@@ -360,6 +363,173 @@ export async function checkTopazConnection(ctx: ValidationContext): Promise<Vali
       status: 'fail',
       message: `Connection failed: ${error}`,
       duration: Date.now() - start,
+    };
+  }
+}
+
+/**
+ * Check Unsplash API connectivity and authentication
+ */
+export async function checkUnsplashConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.unsplash?.apiKey) {
+    return {
+      name: 'Unsplash API Connection',
+      status: 'skip',
+      message: 'Unsplash API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.unsplash.com/search/photos?query=test&per_page=1',
+      { headers: { Authorization: `Client-ID ${ctx.providers.unsplash.apiKey}` } }
+    );
+
+    if (response.status === 200) {
+      return {
+        name: 'Unsplash API Connection',
+        status: 'pass',
+        message: 'Connected to Unsplash API',
+        duration: Date.now() - start,
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        name: 'Unsplash API Connection',
+        status: 'fail',
+        message: 'Invalid or expired API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://unsplash.com/developers',
+      };
+    }
+
+    return {
+      name: 'Unsplash API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Unsplash API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+      remediation: 'Check network connectivity',
+    };
+  }
+}
+
+/**
+ * Check Pexels API connectivity and authentication
+ */
+export async function checkPexelsConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.pexels?.apiKey) {
+    return {
+      name: 'Pexels API Connection',
+      status: 'skip',
+      message: 'Pexels API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.pexels.com/v1/search?query=test&per_page=1',
+      { headers: { Authorization: ctx.providers.pexels.apiKey } }
+    );
+
+    if (response.status === 200) {
+      return {
+        name: 'Pexels API Connection',
+        status: 'pass',
+        message: 'Connected to Pexels API',
+        duration: Date.now() - start,
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        name: 'Pexels API Connection',
+        status: 'fail',
+        message: 'Invalid or expired API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://www.pexels.com/api/',
+      };
+    }
+
+    return {
+      name: 'Pexels API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Pexels API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+      remediation: 'Check network connectivity',
+    };
+  }
+}
+
+/**
+ * Check Pixabay API connectivity and authentication
+ */
+export async function checkPixabayConnection(ctx: ValidationContext): Promise<ValidationResult> {
+  const start = Date.now();
+  if (!ctx.providers.pixabay?.apiKey) {
+    return {
+      name: 'Pixabay API Connection',
+      status: 'skip',
+      message: 'Pixabay API key not configured',
+      duration: Date.now() - start,
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `https://pixabay.com/api/?key=${ctx.providers.pixabay.apiKey}&q=test&per_page=3`
+    );
+
+    if (response.status === 200) {
+      return {
+        name: 'Pixabay API Connection',
+        status: 'pass',
+        message: 'Connected to Pixabay API',
+        duration: Date.now() - start,
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        name: 'Pixabay API Connection',
+        status: 'fail',
+        message: 'Invalid or expired API key',
+        duration: Date.now() - start,
+        remediation: 'Verify API key at https://pixabay.com/api/docs/',
+      };
+    }
+
+    return {
+      name: 'Pixabay API Connection',
+      status: 'fail',
+      message: `Unexpected response: ${response.status}`,
+      duration: Date.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'Pixabay API Connection',
+      status: 'fail',
+      message: `Connection failed: ${error}`,
+      duration: Date.now() - start,
+      remediation: 'Check network connectivity',
     };
   }
 }

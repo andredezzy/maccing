@@ -24,8 +24,12 @@ import { generateSlug, generateTimestamp } from './utils/slug.js';
 import { gemini } from './providers/gemini.js';
 import { openai } from './providers/openai.js';
 import { topaz } from './providers/topaz.js';
+import { unsplash } from './providers/unsplash.js';
+import { pexels } from './providers/pexels.js';
+import { pixabay } from './providers/pixabay.js';
 import { runValidation, formatReport } from './validation/index.js';
 import { upscaleImage, registerUpscaleProvider } from './upscale.js';
+import { searchStock, downloadStock, registerStockProvider } from './stock.js';
 
 // ============================================================================
 // Provider Registration
@@ -34,6 +38,9 @@ import { upscaleImage, registerUpscaleProvider } from './upscale.js';
 registerProvider(gemini);
 registerProvider(openai);
 registerUpscaleProvider(topaz);
+registerStockProvider(unsplash);
+registerStockProvider(pexels);
+registerStockProvider(pixabay);
 
 // ============================================================================
 // Configuration
@@ -176,7 +183,7 @@ const GalleryParamsSchema = z.object({
 const ValidateParamsSchema = z.object({
   mode: z.enum(['full', 'quick', 'provider']).optional().default('full')
     .describe('Validation mode: full (all checks), quick (pre-flight only), provider (specific provider)'),
-  provider: z.enum(['gemini', 'openai', 'topaz']).optional()
+  provider: z.enum(['gemini', 'openai', 'topaz', 'unsplash', 'pexels', 'pixabay']).optional()
     .describe('Specific provider to test (only with mode=provider)'),
 });
 
@@ -199,6 +206,18 @@ const SetupParamsSchema = z.object({
         defaultModel: z.string().optional().default('standard-max'),
       }).optional(),
       replicate: z.object({
+        apiKey: z.string(),
+      }).optional(),
+    }).optional(),
+    stock: z.object({
+      default: z.enum(['unsplash', 'pexels', 'pixabay']).default('unsplash'),
+      unsplash: z.object({
+        apiKey: z.string(),
+      }).optional(),
+      pexels: z.object({
+        apiKey: z.string(),
+      }).optional(),
+      pixabay: z.object({
         apiKey: z.string(),
       }).optional(),
     }).optional(),
@@ -895,6 +914,282 @@ server.tool(
 );
 
 // ============================================================================
+// Zod Schemas for Stock Tools
+// ============================================================================
+
+const StockSearchParamsSchema = z.object({
+  query: z.string().describe('Search query for stock photos'),
+  provider: z.enum(['unsplash', 'pexels', 'pixabay', 'all']).optional()
+    .describe('Stock photo provider (default: config default, "all" searches all configured)'),
+  page: z.number().min(1).optional().describe('Page number (default: 1)'),
+  perPage: z.number().min(1).max(30).optional().describe('Results per page (default: 10, max: 30)'),
+  orientation: z.enum(['landscape', 'portrait', 'squarish']).optional()
+    .describe('Filter by orientation'),
+  color: z.string().optional().describe('Filter by color (provider-specific values)'),
+});
+
+const StockDownloadParamsSchema = z.object({
+  provider: z.enum(['unsplash', 'pexels', 'pixabay']).describe('Stock photo provider'),
+  photoId: z.string().describe('Photo ID from search results'),
+  size: z.enum(['small', 'medium', 'large', 'original']).optional()
+    .describe('Download size (default: large)'),
+  query: z.string().optional().describe('Original search query, used for output folder naming'),
+});
+
+// ============================================================================
+// Tool: pictura_stock_search
+// ============================================================================
+
+server.tool(
+  'pictura_stock_search',
+  'Search free stock photos from Unsplash, Pexels, or Pixabay',
+  StockSearchParamsSchema.shape,
+  async (params) => {
+    const { query, provider: inputProvider, page, perPage, orientation, color } = params;
+
+    // Check if config exists in any scope
+    const configExists = await scopedConfigManager.existsAny();
+    if (!configExists) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            'PICTURA_STOCK_SETUP_REQUIRED',
+            '',
+            'Stock image search requires at least one provider API key.',
+            '',
+            'Claude should now:',
+            '1. Ask the user which stock provider they want to use',
+            '2. Ask for their API key',
+            '3. Call pictura_config with the collected information',
+            '',
+            'Provider options:',
+            '- Unsplash (recommended): Free, high quality, attribution required. Get key at https://unsplash.com/developers',
+            '- Pexels: Free, no attribution required. Get key at https://www.pexels.com/api/',
+            '- Pixabay: Free, no attribution required. Get key at https://pixabay.com/api/docs/',
+          ].join('\n'),
+        }],
+        isError: false,
+      };
+    }
+
+    // Load merged config
+    let config: PicturaConfig;
+    try {
+      const scopedConfig = await scopedConfigManager.loadMerged();
+      config = scopedConfig.config;
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to load config: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+
+    // Check if any stock provider is configured
+    const stockConfig = config.providers?.stock;
+    const hasUnsplash = stockConfig?.unsplash?.apiKey;
+    const hasPexels = stockConfig?.pexels?.apiKey;
+    const hasPixabay = stockConfig?.pixabay?.apiKey;
+
+    if (!hasUnsplash && !hasPexels && !hasPixabay) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            'PICTURA_STOCK_SETUP_REQUIRED',
+            '',
+            'No stock photo providers configured.',
+            '',
+            'Claude should now:',
+            '1. Ask the user which stock provider they want to use',
+            '2. Ask for their API key',
+            '3. Call pictura_config with the stock provider info',
+            '',
+            'Provider options:',
+            '- Unsplash (recommended): Free, high quality. Get key at https://unsplash.com/developers',
+            '- Pexels: Free, no attribution. Get key at https://www.pexels.com/api/',
+            '- Pixabay: Free, no attribution. Get key at https://pixabay.com/api/docs/',
+            '',
+            'Example pictura_config call:',
+            'pictura_config({ providers: { generation: { default: "gemini" }, stock: { default: "unsplash", unsplash: { apiKey: "user-key" } } }, scope: "user" })',
+          ].join('\n'),
+        }],
+        isError: false,
+      };
+    }
+
+    // Determine provider
+    const providerName = inputProvider || stockConfig?.default || 'unsplash';
+
+    // Build configs map for all providers
+    const configs: Record<string, Record<string, unknown>> = {};
+    for (const name of ['unsplash', 'pexels', 'pixabay']) {
+      configs[name] = scopedConfigManager.getProviderConfig('stock', name);
+    }
+
+    try {
+      const result = await searchStock({
+        query,
+        provider: providerName,
+        page,
+        perPage,
+        orientation,
+        color,
+        configs,
+      });
+
+      if (result.photos.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `No photos found for "${query}". Try a different search term.`,
+          }],
+        };
+      }
+
+      // Format results as a numbered list
+      const photoList = result.photos.map((photo, i) => [
+        `${i + 1}. **${photo.description || 'Untitled'}**`,
+        `   Provider: ${photo.provider} | ID: ${photo.id}`,
+        `   Photographer: ${photo.photographer}`,
+        `   Dimensions: ${photo.width}x${photo.height}`,
+        photo.attributionRequired ? '   Attribution: Required' : '',
+      ].filter(Boolean).join('\n')).join('\n\n');
+
+      const summary = [
+        `Found ${result.totalResults} photos for "${query}" (showing ${result.photos.length}, page ${result.page}/${result.totalPages})`,
+        '',
+        photoList,
+        '',
+        'To download a photo, use pictura_stock_download with the provider and photo ID.',
+      ];
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: summary.join('\n'),
+        }],
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Stock search failed: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ============================================================================
+// Tool: pictura_stock_download
+// ============================================================================
+
+server.tool(
+  'pictura_stock_download',
+  'Download a stock photo from search results',
+  StockDownloadParamsSchema.shape,
+  async (params) => {
+    const { provider: providerName, photoId, size = 'large', query } = params;
+
+    // Load config
+    let config: PicturaConfig;
+    try {
+      const scopedConfig = await scopedConfigManager.loadMerged();
+      config = scopedConfig.config;
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Failed to load config: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+
+    const providerConfig = scopedConfigManager.getProviderConfig('stock', providerName);
+
+    if (!(providerConfig as Record<string, unknown>).apiKey) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `${providerName} API key not configured. Use pictura_config to add it.`,
+        }],
+        isError: true,
+      };
+    }
+
+    try {
+      const result = await downloadStock({
+        provider: providerName,
+        photoId,
+        size,
+        config: providerConfig,
+      });
+
+      // Generate slug and timestamp
+      const slug = generateSlug(query || `stock-${providerName}`);
+      const timestamp = generateTimestamp();
+
+      // Save the image
+      const outputManager = new OutputManager(config.outputDir);
+      const savedPath = await outputManager.saveStockImage(
+        result.data,
+        result.filename,
+        slug,
+        timestamp
+      );
+
+      // Save attribution
+      const attrPath = await outputManager.saveAttribution(
+        [result.attribution],
+        slug,
+        timestamp
+      );
+
+      // Build attribution text
+      const attrLines = [
+        `Photo by [${result.attribution.photographer}](${result.attribution.photographerUrl})`,
+        `on [${result.attribution.provider}](${result.attribution.sourceUrl})`,
+      ];
+      if (result.attribution.attributionRequired) {
+        attrLines.push('(Attribution required when using this image)');
+      }
+
+      const summary = [
+        `Downloaded ${providerName} photo ${photoId}`,
+        '',
+        `Image: ${path.resolve(savedPath)}`,
+        `Attribution: ${path.resolve(attrPath)}`,
+        `Size: ${size}`,
+        '',
+        'Attribution:',
+        ...attrLines,
+      ];
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: summary.join('\n'),
+        }],
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Download failed: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ============================================================================
 // Tool: pictura_gallery
 // ============================================================================
 
@@ -1121,6 +1416,15 @@ server.tool(
       }
       if (parsed.providers.upscale?.topaz) {
         configured.push('Topaz Labs (upscale)');
+      }
+      if (parsed.providers.stock?.unsplash) {
+        configured.push('Unsplash (stock)');
+      }
+      if (parsed.providers.stock?.pexels) {
+        configured.push('Pexels (stock)');
+      }
+      if (parsed.providers.stock?.pixabay) {
+        configured.push('Pixabay (stock)');
       }
 
       const scopeDescription = scope === 'user'
