@@ -1,5 +1,5 @@
 ---
-description: Search free stock photos from Unsplash, Pexels, or Pixabay
+description: Search free stock photographs only (not fonts, music, icons, or videos) from Unsplash, Pexels, or Pixabay
 ---
 
 # Stock Photo Search

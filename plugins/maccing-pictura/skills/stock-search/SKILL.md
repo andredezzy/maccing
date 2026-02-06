@@ -1,6 +1,6 @@
 ---
 name: stock-search
-description: Use when user wants to search for, find, or download free stock photos or images from Unsplash, Pexels, or Pixabay.
+description: Use ONLY when user wants to search for, find, or download free stock PHOTOGRAPHS. Searches Unsplash, Pexels, or Pixabay. NOT for fonts, music, audio, videos, icons, vectors, or any non-photo media.
 metadata:
   internal: true
 ---
@@ -15,6 +15,14 @@ This skill handles searching and downloading free stock photos using Pictura MCP
 - Download free images/photos
 - Find photos of [subject]
 - Need a photo for [purpose]
+
+## NOT for
+
+- Fonts, typography, or typefaces
+- Music, audio, or sound effects
+- Videos or video clips
+- Icons, vectors, or SVGs
+- Any non-photograph media
 
 ## Available Tools
 
