@@ -43,12 +43,12 @@
     {
       "name": "maccing-pictura",
       "source": "./plugins/maccing-pictura",
-      "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern",
-      "version": "1.1.3",
+      "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern and free stock image search",
+      "version": "1.2.0",
       "author": {
         "name": "Andre Dezzy"
       },
-      "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio"],
+      "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio", "stock-images", "unsplash", "pexels", "pixabay"],
       "license": "MIT"
     }
   ]
