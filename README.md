@@ -20,16 +20,8 @@ npx skills add andredezzy/maccing
 
 | Plugin | Description | Install |
 |--------|-------------|---------|
-| [code-reviewer](plugins/maccing-code-reviewer/README.md) | Multi-agent code review with pattern discovery | `/plugin install maccing-code-reviewer@maccing` |
-| [monorepo](plugins/maccing-monorepo/README.md) | Monorepo workflow assistance | `/plugin install maccing-monorepo@maccing` |
-| [rules-enforcer](plugins/maccing-rules-enforcer/README.md) | Project rules injection at every prompt | `/plugin install maccing-rules-enforcer@maccing` |
 | [pictura](plugins/maccing-pictura/README.md) | AI image generation in multiple aspect ratios | `/plugin install maccing-pictura@maccing` |
-
-## Skills
-
-| Skill | Description | Install |
-|-------|-------------|---------|
-| [unicode-box-drawing](skills/unicode-box-drawing/SKILL.md) | Box drawing patterns for ASCII diagrams | `npx skills add andredezzy/maccing -s unicode-box-drawing` |
+| [growth](plugins/maccing-growth/README.md) | Paid acquisition + WhatsApp messaging knowledge base | `/plugin install maccing-growth@maccing` |
 
 ## Updating
 
