@@ -2231,6 +2231,8 @@ For operators using unofficial APIs (Evolution API, WPPConnect, WasenderAPI) on 
 
 #### Verified vs Practitioner Lore (2026 deep-research, primary-sourced)
 
+**Maintenance principle: this skill is ALWAYS retro-fed and corrected from our own live runs.** Every step actually executed gets documented here, and every claim is tagged by provenance, "observed live" (first-party from a real run), "primary-sourced" (Meta/BSP docs), or "practitioner lore" (community convention, unverified). When a real run contradicts the skill, fix the skill in the SAME session. Live observation outranks blog lore and overrides stale claims.
+
 A 2026 multi-source verification pass (23 sources, 25 claims adversarially voted, 11 confirmed / 14 killed) separated what Meta actually documents from widely-repeated community lore. Treat the two differently.
 
 **Confirmed (primary sources, survived adversarial review):**
@@ -2240,7 +2242,7 @@ A 2026 multi-source verification pass (23 sources, 25 claims adversarially voted
 - **A temporary restriction right after Embedded Signup is NORMAL, not a burn.** Meta auto-reviews business info, website, display name, and Commerce Policy after signup, during which "messaging may be limited" and "the account could appear temporarily restricted." Do not panic-diagnose this as a dead BM, it is expected onboarding. Source: docs.360dialog.com (3-0).
 
 **NOT primary-sourced (practitioner lore, plausible but unverified):**
-- What the Nome/Sobrenome + "Email comercial" fields at invite acceptance actually control. All blog claims were refuted 0-3. Low stakes regardless: enter the profile's name, leave the disposable email.
+- The Nome/Sobrenome + "Email comercial" fields: the research found NO doc on this (blog claims refuted 0-3), but the accept wizard's own Step 3 answers it FIRST-PARTY (observed live 2026): your name/email and the actions you take on behalf of the BM are visible to other managers of that business, and "actions on behalf of the business are NOT shared on your personal profile." So the name is the work-display identity and the personal profile is insulated from business-side actions. Full walkthrough in the "BM Invite Acceptance Wizard" section below.
 - Why some accepts skip the name wizard (link vs in-app vs direct-provisioning). Open question, no primary source.
 - The exact Account Quality UI (color codes, tabs, navigation). All refuted 0-3, trust the LIVE screen, not blog screenshots. Meta renamed "Business Manager" to "Business Portfolio" in 2024, so older guides are stale.
 - The gray-market accept hygiene itself (consistent proxy/antidetect IP at accept, the 24h BM rest, the "balao" workflow). No primary sourcing, these are sensible community conventions, undocumented by Meta.
@@ -2261,6 +2263,22 @@ The only warmup that matters for WhatsApp dispatch is the **gradual message volu
 7. Check Account Status immediately. **Path: profile photo (top-right) → Ajuda e suporte / Help & support → Status da Conta / Account Status.** It is NOT under Settings or the settings search (not indexed there). Direct URLs: `facebook.com/account_status` or `facebook.com/profile_status/<profile-id>`. Clean = "Sem restrições / Tudo certo com sua conta" (bonus health signal: Marketplace "Ativo"). Any restriction, limited feature, or pending "Confirmação de identidade" demand: do NOT accept the BM, invoke the supplier guarantee.
 8. Accept BM invite link in same antidetect session (within supplier deadline!). VERIFY the granted role is **Admin / full control**, NOT "Employee" (an Employee cannot run the later BSP Embedded Signup, confirmed 3-0, see Verified Findings above). The invite-link wizard may ask for a display name + a notification email, this is standard for joining a portfolio, enter the profile's name and leave the supplier's disposable email.
 9. Do NOT touch the BM for 24 hours (let Meta's systems settle)
+
+#### BM Invite Acceptance Wizard (Business Portfolio, observed live 2026)
+
+The invite-link accept (`business.facebook.com/invitation/?token=...`) is a 3-step wizard. Meta does not document it publicly, this is first-party observation, an in-app accept via Business Suite notifications may differ.
+
+**Step 1 of 3, "Você recebeu um convite para participar de [BM]":** enter Nome + Sobrenome ("como você quer que apareça neste portfólio empresarial", your display identity inside the portfolio) and a notification "Email comercial" (pre-filled, fine to leave the supplier's disposable one). Optional Meta-marketing checkbox, leave it unchecked. Use the profile's own name for consistency, and NEVER an email that links to the real brand.
+
+**Step 2 of 3, "Analisar informações da empresa" (the burn-check surface):** shows the BM display name, creation date, and **business verification status** (Verificada / Não verificada). "Verificada" is the key win, it means Tier 2 (2000/day) from day one with no document submission. Also shows Razão social + CNPJ, País, and the registered Site (LOCKED on a verified BM, NEVER change it), plus whether the portfolio already has a Page/Instagram/WhatsApp with >1000 followers (a fresh balloon shows none). A fresh, verified, empty, no-violation BR portfolio is the healthy case, pre-existing assets or restriction notices here are the burn signal.
+
+**Step 3 of 3, "Leia e aceite o convite" (first-party answer to the name/insulation question):** re-shows your Nome + Email, then states verbatim:
+1. "Seu nome, email e ações que você realiza em nome de [BM] ficarão visíveis para outras pessoas que gerenciam esta empresa." (the name IS the work-display identity, visible to co-managers).
+2. "As ações que você realizar em nome dessa empresa NÃO serão compartilhadas no seu perfil pessoal." (Meta's own UI confirms the personal profile is insulated from business-side actions, corroborating the system-user finding).
+3. People with full control of the portfolio can see whether you enabled 2FA.
+Accepting joins the portfolio and agrees to Meta ToS + Commercial Terms. Click "Aceitar convite".
+
+**The wizard does NOT show or set your ROLE.** Admin vs Employee is whatever the inviter granted, verify it AFTER accepting at `business.facebook.com → Configurações → Pessoas` (your access level). Admin / full control is required for the later BSP Embedded Signup, if it is Employee, ask the supplier to re-grant as Admin.
 
 **Phase 3: Security Hardening + WABA Setup (Day 2, split sessions)**
 
