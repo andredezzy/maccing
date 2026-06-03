@@ -2080,6 +2080,31 @@ The term "balão" (balloon) in Brazilian gray-market WhatsApp circles refers to 
 - NEVER use personal profile as admin
 - NEVER reuse a card that was on a banned BM (dirty-list persists 6-12 months)
 - Treat as disposable from day 1
+- **Proxy is a PRECONDITION of opening the antidetect profile, NOT a per-step check.** The profile is NEVER opened without its proxy already attached, so once it is open the proxy is a given. Never re-verify "is the proxy on?" mid-flow, opening the profile already implies it.
+- **Between balloons, isolate the IP FAMILY, not just the IP.** Parallel balloons use different proxies AND ideally different IP families (e.g. balloon #1 on IPv6, balloon #2 on IPv4), so Meta cannot graph-link them by adjacent range. Same for card and number: one per balloon.
+
+### Running Balloons in Parallel (Second Balloon)
+
+Running a 2nd (or Nth) balloon in parallel buys redundancy (one falls, the others keep warming) and multiplies daily capacity. The learnings transfer (approved template copy, the warming ramp, the recent-signups nurture pool), only the infrastructure is new.
+
+- **Full isolation BETWEEN balloons**, not just versus the company: separate antidetect profile, separate proxy on a different IP family/range, separate virtual card, separate number. Anything shared lets Meta graph-link them, and one ban then cascades to all.
+- **Templates are per-WABA.** Reuse the exact approved copy, but each WABA submits its own templates (approval does not transfer between WABAs).
+- **BSP account decision:** the same YCloud account can host a 2nd channel (Free plan allows 2 channels), but that links the two WABAs at the BSP level. A separate YCloud account (different email) is fully isolated. BSP-level linking is far lower risk than Meta-level (proxy/card/pixel) linking, choose by how disposable vs long-lived the balloons are.
+- **Split the contact lists.** The renewable recent-signups pool can feed all balloons, but never message the same lead from two numbers (looks like spam, and the per-user marketing cap, error 131049, applies across senders).
+- **Stagger the sends.** Avoid broadcasting from both numbers in the same window, spacing keeps the footprints distinct and avoids a correlated quality dip.
+
+### Proxy Selection (which product for a dispatch BM)
+
+Hard requirements, the proxy must be:
+- **Dedicated/static**, NEVER rotating. Warming needs one consistent IP, a changing IP reads as account-takeover/bot. Avoid "alta rotacao" / high-rotation / web-scraping proxies.
+- **SOCKS5** (full tunnel for the antidetect browser), not HTTP.
+- **BR**, matching the operation's country.
+
+Choosing within a provider's catalog (within a provider's catalog):
+- **Prefer the "Facebook/Google"-tuned line** (if the vendor tags tiers by target platform): those IPs keep a clean Meta reputation, which matters more than anything else for a WABA. Proven in production.
+- **IPv4 vs IPv6:** IPv6-only SOCKS5 is an uncommon residential fingerprint in BR (mild AdsPower detection risk), IPv4 looks more like a real home connection. For a SECOND balloon, picking the opposite family from balloon #1 doubles as cross-balloon isolation.
+- **Residential** is the best anti-detection ONLY if static/dedicated. "Turbo"/rotating residential changes IP, bad for warming, confirm it is fixed before buying.
+- **Avoid:** rotating/high-rotation, HTTP-only, and any IP flagged for scraping/abuse.
 
 ### Tier System (Current State, Oct 2025 Onward)
 
@@ -2217,7 +2242,7 @@ The only warmup that matters for WhatsApp dispatch is the **gradual message volu
 **Phase 2: Profile Login + BM Accept (Day 1)**
 5. Import profile cookies into antidetect
 6. Open facebook.com — should land logged in via cookies
-7. Check Account Quality immediately (Settings → Account Quality)
+7. Check Account Status immediately. **Path: profile photo (top-right) → Ajuda e suporte / Help & support → Status da Conta / Account Status.** It is NOT under Settings or the settings search (not indexed there). Direct URLs: `facebook.com/account_status` or `facebook.com/profile_status/<profile-id>`. Clean = "Sem restrições / Tudo certo com sua conta" (bonus health signal: Marketplace "Ativo"). Any restriction, limited feature, or pending "Confirmação de identidade" demand: do NOT accept the BM, invoke the supplier guarantee.
 8. Accept BM invite link in same antidetect session (within supplier deadline!)
 9. Do NOT touch the BM for 24 hours (let Meta's systems settle)
 
