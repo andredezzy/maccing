@@ -2229,6 +2229,25 @@ For operators using unofficial APIs (Evolution API, WPPConnect, WasenderAPI) on 
 
 ### Setup Sequence (Detailed)
 
+#### Operator Data-Request Protocol (MANDATORY)
+
+The operator drives the browser, the agent drives the data collection. At every gate the agent MUST proactively REQUEST the specific screenshot or value from the operator, verify it, and record it into project state BEFORE advancing. NEVER passively wait for the operator to volunteer it, never assume, never skip a check. At minimum, request and record each of these:
+
+| Gate | Request from the operator | Record / verify |
+|------|---------------------------|-----------------|
+| Profile open | Print of the FB profile (name, ID, friends count) | Profile identity |
+| Proxy | Print of the AdsPower profile list showing the IP | Proxy IP + family, isolation vs the other balloons |
+| Account status | Print of `facebook.com/account_status` (and `/profile_status/<id>`) | "Sem restrições" vs any restriction, this GATES the BM accept |
+| Central de Contas | Print of profile + contact email + DOB | Single-profile isolation, disposable email, DOB |
+| BM accept step 1 | Print of the name/email wizard | Name entered, notification email |
+| BM accept step 2 | Print of "Analisar informações da empresa" | Verification status, Razão social + CNPJ, site, whether assets already exist (burn-check) |
+| BM accept step 3 | Print of "Leia e aceite o convite" | Disclosures + ToS |
+| Post-accept home | Print of `business_home` | BM ID (from the URL), alerts, empty portfolio |
+| BM settings | Print/text of Configurações portfolio info | Full BM data: CNPJ, address, phone, verification date, ad-account limit, 2FA, admin contact |
+| Role | Print of `Configurações → Pessoas` | Role label = Admin / full control (required for Embedded Signup) |
+
+After each gate, write the confirmed values into the project state README in the SAME session. This protocol is how the skill stays retro-fed: every print the operator sends becomes documented state.
+
 #### Verified vs Practitioner Lore (2026 deep-research, primary-sourced)
 
 **Maintenance principle: this skill is ALWAYS retro-fed and corrected from our own live runs.** Every step actually executed gets documented here, and every claim is tagged by provenance, "observed live" (first-party from a real run), "primary-sourced" (Meta/BSP docs), or "practitioner lore" (community convention, unverified). When a real run contradicts the skill, fix the skill in the SAME session. Live observation outranks blog lore and overrides stale claims.
