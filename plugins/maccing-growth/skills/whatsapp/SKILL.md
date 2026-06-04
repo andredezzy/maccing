@@ -1575,8 +1575,8 @@ WEBHOOK_VERIFY_TOKEN=        # Your custom token for webhook verification
 | 131049 | "Not delivered to maintain healthy ecosystem engagement" | Meta's marketing-message throttle / per-user frequency cap. Common on NEW numbers (low trust) and recipients with marketing fatigue. NOT a block/report and NOT a hard penalty — it eases as the number's quality/engagement builds. Mitigate with high engagement (warm contacts) + slow ramp, not by resending. |
 
 **Real-world broadcast baselines** (illustrative, directional):
-- An AGED / demo list: a large share fails with 131026 plus some 131049 throttle, so delivery lands well below a fresh list.
-- A FRESH list of recent signups: the 131026 failures essentially vanish and delivery jumps well above the aged list.
+- An AGED / demo list: a large share fails with 131026 ("not on WhatsApp") plus some 131049 throttle, so delivery lands well below a fresh list and read rates are weaker.
+- A FRESH list of RECENT signups (registered hours/days before): the 131026 "not on WhatsApp" failures essentially vanish, delivery jumps well above the aged list, and only mild 131049 throttle remains.
 - **LESSON — list FRESHNESS dominates deliverability:** recently-registered leads (fresh, active numbers) deliver far better than an aged/demo list (the 131026 "not on WhatsApp" failures vanish). And the 131049 throttle eases as the number earns trust (Green). A renewable stream of recent signups is the best warming/nurture pool when you lack internal seeds — and the prospecting "welcome" template fits them (vs established customers, where it mismatches + risks alarming your best relationships).
 - **Opt-out via the Quick-Reply button is HEALTHY and DISTINCT from blocks/reports.** A "Parar mensagens" / "Stop" button diverts annoyed recipients into a clean unsubscribe (auto-removed, compliant) instead of a block/report. So a 10-12% button-opt-out is NOT the same as the block-rate thresholds (<0.5% healthy / >2% red), which track blocks+reports and drive quality. Always include an opt-out Quick Reply — it protects the number. Watch button-opt-out as a soft audience-fit signal (climbing → message/audience mismatch), but it doesn't tank quality the way blocks do.
 - Inbound replies open a 24h free-form session window = the best warm conversion path. URL-CTA button clicks are NOT reliably reported by BSP analytics — measure conversion at the destination (e.g. WhatsApp group member count), not the BSP click metric.
@@ -2068,7 +2068,7 @@ A **disposable BM** is a throwaway, pre-verified Business Manager bought from th
 | BM Disparo | Purchased with WABA + dispatch tier | R$100-350 (or $19-59 USD international) |
 | Profile (primary admin) | BR 2025-2026 / 1-3 Fanpages | ~R$216 |
 | Profile (backup admin) | Mix antigo / Sem Fanpages | ~R$18 |
-| Proxy | Dedicated SOCKS5 (country-matched) | ~R$30/mês |
+| Proxy | Dedicated SOCKS5, country-matched (see Proxy Selection below) | ~R$30/mês |
 | Antidetect browser | AdsPower (free tier, 2 profiles) | R$0 |
 | Virtual card | Wise/Revolut (separate from other BMs) | R$0 |
 | Total initial | — | ~R$370-620 + ~R$30/mês |
@@ -2101,8 +2101,8 @@ Hard requirements, the proxy must be:
 - **SOCKS5** (full tunnel for the antidetect browser), not HTTP.
 - **BR**, matching the operation's country.
 
-Choosing within a provider's catalog (within a provider's catalog):
-- **Prefer the "Facebook/Google"-tuned line** (if the vendor tags tiers by target platform): those IPs keep a clean Meta reputation, which matters more than anything else for a WABA. Proven in production.
+Choosing within a provider's catalog:
+- **Prefer the "Facebook/Google"-tuned line** if the vendor segments its catalog by target platform: those IPs keep a cleaner Meta reputation, which matters more than anything else for a WABA.
 - **IPv4 vs IPv6:** IPv6-only SOCKS5 is an uncommon residential fingerprint in BR (mild AdsPower detection risk), IPv4 looks more like a real home connection. For a SECOND disposable BM, picking the opposite family from disposable BM #1 doubles as cross-BM isolation.
 - **Residential** is the best anti-detection ONLY if static/dedicated. "Turbo"/rotating residential changes IP, bad for warming, confirm it is fixed before buying.
 - **Avoid:** rotating/high-rotation, HTTP-only, and any IP flagged for scraping/abuse.

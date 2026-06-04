@@ -1,6 +1,6 @@
 # YCloud v2 REST API Reference
 
-YCloud is a BSP (Business Solution Provider) that wraps Meta's WhatsApp Business API and exposes a unified REST interface at `https://api.ycloud.com/v2`. This document merges live-probe ground truth (June 2026) against the YCloud documentation catalog for the account using WABA `WABA_ID` and phone number ID `PHONE_NUMBER_ID` (+15551234567, display name "My Brand").
+YCloud is a BSP (Business Solution Provider) that wraps Meta's WhatsApp Business API and exposes a unified REST interface at `https://api.ycloud.com/v2`. This document merges live-probe ground truth (confirmed June 2026 against a live YCloud account) with the YCloud documentation catalog. Behaviors tagged [verified live 2026-06] were confirmed empirically; every identifier shown (`WABA_ID`, `PHONE_NUMBER_ID`, +15551234567, display name "My Brand") is a placeholder standing in for a real value.
 
 ---
 
@@ -37,8 +37,8 @@ Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to 
 |---|---|---|---|
 | Phone quality rating (GREEN/YELLOW/RED) | Yes | GET /v2/whatsapp/phoneNumbers, field `qualityRating` | [verified live 2026-06] current value GREEN |
 | Messaging tier / limit | Yes | GET /v2/whatsapp/phoneNumbers, fields `messagingLimit` + `whatsappBusinessManagerMessagingLimit` | [verified live 2026-06] current TIER_2K |
-| Wallet / credit balance | Yes | GET /v2/balance | [verified live 2026-06] $25.00 USD; always USD regardless of WABA billing currency |
-| Template approval status | Yes | GET /v2/whatsapp/templates, field `status` | [verified live 2026-06] both templates APPROVED |
+| Wallet / credit balance | Yes | GET /v2/balance | [verified live 2026-06] always denominated in USD regardless of the WABA billing currency |
+| Template approval status | Yes | GET /v2/whatsapp/templates, field `status` | [verified live 2026-06] returns APPROVED / PENDING / IN_APPEAL / REJECTED per template |
 | Template quality score | Partially | GET /v2/whatsapp/templates, field `qualityRating` | [verified live 2026-06] returns UNKNOWN until sufficient send volume; GREEN/YELLOW/RED once scored by Meta |
 | Per-template send / deliver / read counts | No dedicated endpoint | Self-computed: paginate GET /v2/whatsapp/messages, group by `template.name`, aggregate `status` | [verified live 2026-06] all filter params except `filter.to` and `filter.wabaId` are silently ignored server-side |
 | Per-message delivery funnel | Yes | GET /v2/whatsapp/messages, fields `sendTime`, `deliverTime`, `readTime`, `status` | [verified live 2026-06] |
@@ -131,7 +131,7 @@ Response shape:
 
 ### List Messages (GET /v2/whatsapp/messages)
 
-[verified live 2026-06] Pagination is offset-based (`page` + `limit`). The account has 200 total messages across template campaigns (illustrative figures). Default sort: newest-first by `createTime`.
+[verified live 2026-06] Pagination is offset-based (`page` + `limit`). Default sort: newest-first by `createTime`.
 
 Critical live behavior deviation from docs: `filter.status`, `filter.from`, and `filter.type` query params are silently IGNORED by the server. Passing `filter.status=sent` returns all messages regardless. Only `filter.wabaId` and `filter.to` are applied server-side. Client-side post-filtering is required for all other dimensions. [verified live 2026-06]
 
@@ -223,14 +223,14 @@ Algorithm:
 3. Count: `attempted` = total records per template; `failed` = status `failed`; `delivered` = status `delivered` + `read`; `read` = status `read`.
 4. Compute rates: `delivered_pct = delivered / attempted`, `read_pct = read / attempted`.
 
-Illustrative example (fictional values): [verified live 2026-06]
+Illustrative example (fictional values):
 
 | Template | Attempted | Failed | Delivered+Read | Read | Deliver% | Read% |
 |---|---|---|---|---|---|---|
 | welcome_template | 200 | 20 (10.0%) | 180 | 120 | 90.0% | 60.0% |
 | invite_template | 200 | 16 (8.0%) | 184 | 128 | 92.0% | 64.0% |
 
-Sample size (~200 sends) is below the ~200 threshold needed for 95% CI on a 5pp difference. Score formula: `score = delivered_pct * 0.4 + read_pct * 0.4 - optout_pct * 0.2`. On current data `invite_template` leads on delivery rate.
+When the sample size is below the ~200 threshold needed for a 95% CI on a 5pp difference, treat any gap as directional only. Score formula: `score = delivered_pct * 0.4 + read_pct * 0.4 - optout_pct * 0.2`. In this example `invite_template` leads on delivery rate.
 
 ---
 
@@ -447,8 +447,8 @@ Single WABA response (flat object, not wrapped in `items`): [verified live 2026-
 
 Notes on specific fields: [verified live 2026-06]
 
-- `currency`: billing currency set at WABA creation time (set per account). This is separate from the YCloud wallet currency (USD).
-- `timezoneId`: a numeric string corresponding to Meta's internal timezone list, not an IANA timezone name. `"1"` maps to a specific UTC offset. A lookup table is required to convert to human-readable timezone names.
+- `currency`: billing currency set at WABA creation time (e.g. USD, BRL, EUR). This is separate from the YCloud wallet currency (always USD).
+- `timezoneId`: a numeric string corresponding to Meta's internal timezone list, not an IANA timezone name (e.g. `"1"` maps to a specific UTC offset). A lookup table is required to convert to human-readable timezone names.
 - `accountReviewStatus`: APPROVED means Meta has reviewed and approved the WABA.
 - `businessVerificationStatus`: `verified` means the underlying Facebook Business Manager has completed business verification.
 - `paymentMethodAttached`: true means a payment method is on file with Meta.
@@ -483,9 +483,9 @@ Response:
 }
 ```
 
-The balance is always denominated in USD regardless of the WABA billing currency (set per WABA). This is the YCloud prepaid credit account, separate from any Meta billing. [verified live 2026-06]
+The balance is always denominated in USD regardless of the WABA billing currency (which is set per WABA). This is the YCloud prepaid credit account, separate from any Meta billing. [verified live 2026-06]
 
-Example balance: $25.00 USD, which is low relative to a campaign cost of $0.0625 per marketing message (monitor before bulk sends). Monitor this before launching bulk campaigns. [verified live 2026-06]
+At roughly $0.0625 per marketing message, a low prepaid balance can interrupt a send mid-campaign. Always check the balance before launching a bulk campaign. [verified live 2026-06]
 
 No billing history, transaction log, or low-balance webhook threshold exists in the API. [verified live 2026-06]
 
@@ -705,7 +705,7 @@ These are cases where live behavior diverges from documentation or expected REST
 | Phone number ID path returns 404 | GET /v2/whatsapp/phoneNumbers/PHONE_NUMBER_ID (numeric ID) returns 404. Use the list endpoint or the two-segment path /{wabaId}/{phoneNumber}. |
 | Template PATCH is full replacement | PATCH on a template replaces the entire `components` array. Include all components in every request even when only one is changing. |
 | WABA timezone is numeric, not IANA | The `timezoneId` field is a number string (e.g. "1") from Meta's internal list. Requires a lookup table. |
-| Balance currency vs. WABA billing currency differ | GET /v2/balance always returns USD. WABA billing may be in a different currency (set per account). |
+| Balance currency vs. WABA billing currency differ | GET /v2/balance always returns USD. WABA billing may be in a different currency, set per account. |
 | Pagination capped at offset 990 | `page` max is 100, `limit` max is 100. Max reachable offset: `(100-1) * 10 = 990`. Accounts with >990 messages cannot access older records via this API. |
 | Unsubscribers endpoint has cursor AND offset | GET /v2/unsubscribers is the only list endpoint that includes a `cursor` object alongside standard offset pagination. |
 | Single WABA endpoint returns flat object | GET /v2/whatsapp/businessAccounts/{id} returns a flat JSON object, not an `{items: [...]}` envelope. |
