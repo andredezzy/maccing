@@ -21,7 +21,7 @@
       "name": "maccing-growth",
       "source": "./plugins/maccing-growth",
       "description": "Growth toolkit: paid acquisition (Google/Meta/TikTok Ads) + owned messaging (WhatsApp Business Platform)",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": ["growth", "ads", "whatsapp", "marketing"],
       "license": "MIT"

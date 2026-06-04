@@ -1763,7 +1763,7 @@ Understanding the black hat Meta ecosystem in Brazil is defensive knowledge for 
 |---|---|
 | BM | Business Manager (Meta Business Suite) |
 | CA250, CA1500 | Ad account tier by daily spend limit (R$250, R$1500) |
-| BM Balão | Disposable BM, run aggressively until inevitable ban |
+| Disposable BM | Throwaway BM bought from the gray market, run aggressively until inevitable ban (also called "BM balão" in Brazilian dispatch circles) |
 | Capitão / Soldado | Hierarchical BM structure: Captain holds pixel, Soldiers absorb bans |
 | Aquecer | Warming: simulating organic behavior for weeks before advertising |
 | Contingência | Rotating stock of profiles, BMs, pages, pixels ready to replace banned ones |
@@ -1953,7 +1953,7 @@ A legitimate operator in the White category (e.g. a regulated financial-services
 - **Financial identity verification (March 2026):** Meta now requires identity verification for financial product advertisers (banking, lending, fintech, crypto) as additional compliance layer.
 - **Regulatory convergence:** CVM, Banco Central, Senacon, ANPD increasingly monitoring digital advertising in sensitive niches. Receita Federal cross-referencing Pix transactions with tax returns.
 - **Meta ML detection rate:** reportedly detects 95% of traditional proxy connections, VPNs, shared residential IPs. Only mobile proxies remain effective.
-- **BM supply chain scale:** npprteam.shop's top product (Verified BM with Balloons, $59) has 1,713 orders — thousands of disposable BMs in active circulation.
+- **BM supply chain scale:** npprteam.shop's top product (Verified BM with WABAs, $59) has 1,713 orders — thousands of disposable BMs in active circulation.
 
 ---
 
@@ -2010,7 +2010,7 @@ If BM falls → WABA and phone number are lost (non-transferable)
 | BM verificada | Business Verification done | R$90-250 | Medium |
 | BM ilimitada | High-score creator profile | R$400-1500 | Medium |
 | BM agência | Agency-allocated shared access | % of spend + fee | Low-medium |
-| BM balão | Disposable, burn after use | R$80-300 total setup | Expected to die |
+| Disposable BM | Disposable, burn after use | R$80-300 total setup | Expected to die |
 | BM reativada | Recovered from ban via appeal | Variable | Paradoxically stable |
 | BM com linha de crédito | Monthly billing unlocked | Premium | High (heavily monitored) |
 | BM disparo | Set up for WhatsApp dispatch | Variable | Depends on tier |

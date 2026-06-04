@@ -2030,13 +2030,11 @@ Effective Rate = Marketing >> Utility > Authentication >> Service (free)
 
 ---
 
-## Dispatch Infrastructure (BM Balão Strategy)
+## Dispatch Infrastructure (Disposable BM Strategy)
 
 ### Overview
 
-"BM Balão" = disposable BM purchased from the parallel market, used to validate WhatsApp broadcast channel before investing in permanent infrastructure. Expected lifecycle: weeks to months. When it falls, the validated learnings (template performance, block rates, conversion data) transfer to the permanent BM.
-
-The term "balão" (balloon) in Brazilian gray-market WhatsApp circles refers to a pre-verified Business Manager with WhatsApp Business API already approved and a phone number "inflated" (connected) to a WABA, ready for immediate dispatch without full Meta verification from scratch.
+A **disposable BM** is a throwaway, pre-verified Business Manager bought from the parallel/gray market, used to validate the WhatsApp broadcast channel before investing in permanent infrastructure. Expected lifecycle: weeks to months. When it falls, the validated learnings (template performance, block rates, conversion data) transfer to the permanent BM. (In Brazilian black-hat / gray-market dispatch circles this is called a "BM balão" or "balloon" — this skill deliberately uses the neutral term "disposable BM".)
 
 ### Full Pipeline Architecture
 
@@ -2075,22 +2073,22 @@ The term "balão" (balloon) in Brazilian gray-market WhatsApp circles refers to 
 | Total initial | — | ~R$370-620 + ~R$30/mês |
 
 **Isolation rules:**
-- NEVER link company domain to balão BM
+- NEVER link company domain to disposable BM
 - NEVER share proxy/card with other BMs
 - NEVER use personal profile as admin
 - NEVER reuse a card that was on a banned BM (dirty-list persists 6-12 months)
 - Treat as disposable from day 1
 - **Proxy is a PRECONDITION of opening the antidetect profile, NOT a per-step check.** The profile is NEVER opened without its proxy already attached, so once it is open the proxy is a given. Never re-verify "is the proxy on?" mid-flow, opening the profile already implies it.
-- **Between balloons, isolate the IP FAMILY, not just the IP.** Parallel balloons use different proxies AND ideally different IP families (e.g. balloon #1 on IPv6, balloon #2 on IPv4), so Meta cannot graph-link them by adjacent range. Same for card and number: one per balloon.
+- **Between disposable BMs, isolate the IP FAMILY, not just the IP.** Parallel disposable BMs use different proxies AND ideally different IP families (e.g. disposable BM #1 on IPv6, disposable BM #2 on IPv4), so Meta cannot graph-link them by adjacent range. Same for card and number: one per disposable BM.
 
-### Running Balloons in Parallel (Second Balloon)
+### Running Disposable BMs in Parallel (Second Disposable BM)
 
-Running a 2nd (or Nth) balloon in parallel buys redundancy (one falls, the others keep warming) and multiplies daily capacity. The learnings transfer (approved template copy, the warming ramp, the recent-signups nurture pool), only the infrastructure is new.
+Running a 2nd (or Nth) disposable BM in parallel buys redundancy (one falls, the others keep warming) and multiplies daily capacity. The learnings transfer (approved template copy, the warming ramp, the recent-signups nurture pool), only the infrastructure is new.
 
-- **Full isolation BETWEEN balloons**, not just versus the company: separate antidetect profile, separate proxy on a different IP family/range, separate virtual card, separate number. Anything shared lets Meta graph-link them, and one ban then cascades to all.
+- **Full isolation BETWEEN disposable BMs**, not just versus the company: separate antidetect profile, separate proxy on a different IP family/range, separate virtual card, separate number. Anything shared lets Meta graph-link them, and one ban then cascades to all.
 - **Templates are per-WABA.** Reuse the exact approved copy, but each WABA submits its own templates (approval does not transfer between WABAs).
-- **One BSP account per balloon (RULE, operator policy 2026-06).** Each profile gets its OWN YCloud (BSP) account with its own email, NEVER a shared YCloud account running a 2nd channel for the second balloon (even though the Free plan technically allows 2 channels). Rationale, learned from our own run: YCloud false-positive-suspended balloon #1's account once, and if both balloons shared that account the suspension would have taken down BOTH at once. A separate BSP account makes a suspension hit only that one balloon and keeps each balloon independent end to end: proxy, card, number AND BSP account. BSP-level linking is lower risk than Meta-level (proxy/card/pixel) linking, but a separate account removes the single point of failure entirely.
-- **Split the contact lists.** The renewable recent-signups pool can feed all balloons, but never message the same lead from two numbers (looks like spam, and the per-user marketing cap, error 131049, applies across senders).
+- **One BSP account per disposable BM (RULE, operator policy 2026-06).** Each profile gets its OWN YCloud (BSP) account with its own email, NEVER a shared YCloud account running a 2nd channel for the second disposable BM (even though the Free plan technically allows 2 channels). Rationale, learned from our own run: YCloud false-positive-suspended disposable BM #1's account once, and if both disposable BMs shared that account the suspension would have taken down BOTH at once. A separate BSP account makes a suspension hit only that one disposable BM and keeps each disposable BM independent end to end: proxy, card, number AND BSP account. BSP-level linking is lower risk than Meta-level (proxy/card/pixel) linking, but a separate account removes the single point of failure entirely.
+- **Split the contact lists.** The renewable recent-signups pool can feed all disposable BMs, but never message the same lead from two numbers (looks like spam, and the per-user marketing cap, error 131049, applies across senders).
 - **Stagger the sends.** Avoid broadcasting from both numbers in the same window, spacing keeps the footprints distinct and avoids a correlated quality dip.
 
 ### Proxy Selection (which product for a dispatch BM)
@@ -2102,7 +2100,7 @@ Hard requirements, the proxy must be:
 
 Choosing within a provider's catalog (within a provider's catalog):
 - **Prefer the "Facebook/Google"-tuned line** (if the vendor tags tiers by target platform): those IPs keep a clean Meta reputation, which matters more than anything else for a WABA. Proven in production.
-- **IPv4 vs IPv6:** IPv6-only SOCKS5 is an uncommon residential fingerprint in BR (mild AdsPower detection risk), IPv4 looks more like a real home connection. For a SECOND balloon, picking the opposite family from balloon #1 doubles as cross-balloon isolation.
+- **IPv4 vs IPv6:** IPv6-only SOCKS5 is an uncommon residential fingerprint in BR (mild AdsPower detection risk), IPv4 looks more like a real home connection. For a SECOND disposable BM, picking the opposite family from disposable BM #1 doubles as cross-BM isolation.
 - **Residential** is the best anti-detection ONLY if static/dedicated. "Turbo"/rotating residential changes IP, bad for warming, confirm it is fixed before buying.
 - **Avoid:** rotating/high-rotation, HTTP-only, and any IP flagged for scraping/abuse.
 
@@ -2139,7 +2137,7 @@ The earlier claim that "Verified BM → direct jump to 100,000/day" was **dispro
 | Vendor | Product | Price |
 |---|---|---|
 | npprteam.shop | Brazil Verified BM $50 limit, WABA-eligible | $19 USD |
-| npprteam.shop | Verified BM with Balloons, $250 limit, 1k-2k msg/day, 2 numbers | $59 USD |
+| npprteam.shop | Verified BM with WABAs, $250 limit, 1k-2k msg/day, 2 numbers | $59 USD |
 | verifiedbm.shop | Verified BM + WhatsApp API | Variable |
 | dhaka-bm.com | WhatsApp API BM, 250 or 2000 msg/day | Negotiable |
 
@@ -2236,7 +2234,7 @@ The operator drives the browser, the agent drives the data collection. At every 
 | Gate | Request from the operator | Record / verify |
 |------|---------------------------|-----------------|
 | Profile open | Print of the FB profile (name, ID, friends count) | Profile identity |
-| Proxy | Print of the AdsPower profile list showing the IP | Proxy IP + family, isolation vs the other balloons |
+| Proxy | Print of the AdsPower profile list showing the IP | Proxy IP + family, isolation vs the other disposable BMs |
 | Account status | Print of `facebook.com/account_status` (and `/profile_status/<id>`) | "Sem restrições" vs any restriction, this GATES the BM accept |
 | Central de Contas | Print of profile + contact email + DOB | Single-profile isolation, disposable email, DOB |
 | BM accept step 1 | Print of the name/email wizard | Name entered, notification email |
@@ -2257,15 +2255,15 @@ A 2026 multi-source verification pass (23 sources, 25 claims adversarially voted
 **Confirmed (primary sources, survived adversarial review):**
 - **Admin role is required to complete BSP Embedded Signup.** Only the owner/Admin of the Business Portfolio can run the flow, an "Employee" cannot even select the portfolio, and the BSP cannot navigate it for you (you authenticate with your own Facebook Login). When accepting a purchased BM, VERIFY the granted role is Admin / full control, otherwise WABA setup is blocked later. Sources: docs.360dialog.com, docs.gupshup.io (3-0).
 - **The system user, not the human admin, is the API identity for dispatch.** WhatsApp API tokens are generated by the BM's system user (a server/software credential that does NOT go through Facebook Login OAuth), which insulates the human profile from API-level actions. The human admin is needed only to start Embedded Signup and assign assets. Personal-user tokens are technically valid but impractical (~24h expiry). Source: developers.facebook.com (2-1).
-- **Ban-cascade enforcement is OWNER-based.** Meta's Account Integrity policy disables assets "owned by the same person or entity as an account that has been disabled." This is exactly why per-balloon isolation (separate profile, proxy, card, number) works: it denies Meta the same-owner signal. The stronger "mere network proximity / shared admin also cascades" claim was REFUTED (1-2), and whether simply being admin of a burned BM contaminates your own assets is unverified. Source: transparency.meta.com (3-0).
+- **Ban-cascade enforcement is OWNER-based.** Meta's Account Integrity policy disables assets "owned by the same person or entity as an account that has been disabled." This is exactly why per-disposable-BM isolation (separate profile, proxy, card, number) works: it denies Meta the same-owner signal. The stronger "mere network proximity / shared admin also cascades" claim was REFUTED (1-2), and whether simply being admin of a burned BM contaminates your own assets is unverified. Source: transparency.meta.com (3-0).
 - **A temporary restriction right after Embedded Signup is NORMAL, not a burn.** Meta auto-reviews business info, website, display name, and Commerce Policy after signup, during which "messaging may be limited" and "the account could appear temporarily restricted." Do not panic-diagnose this as a dead BM, it is expected onboarding. Source: docs.360dialog.com (3-0).
-- **Reusing the SAME display name across multiple WABAs/BMs is ALLOWED and is not a known linking signal.** WhatsApp display names are NOT globally unique (no anti-duplication rule across 360dialog/Gupshup/WATI/GoHighLevel, 3-0). Approval checks brand-to-website-to-legal-name correlation, and reusing an established brand can actually HELP approval. The impersonation rule targets third-party brands, not reusing your OWN brand. Meta's association detection is opaque but focuses on ORGANIZATIONAL signals (same BM, phone reuse, business details), not the display-name text, and the "name reuse = evasion signal" theory was refuted (1-2). So the same brand on a second balloon is safe for approval; the cross-balloon risk is the same-owner cascade, addressed by the isolation stack (separate profile/proxy/BSP/card/number/CNPJ), NOT the name. Caveat: no primary Meta source (Help Center is JS-rendered/unfetchable) and no BR-community source confirmed this, so "name is not a signal" is absence-of-evidence, not positive proof, treat conservatively. Source: 360dialog/Gupshup/WATI docs + transparency.meta.com (2026 deep-research). NB: 2026 @usernames ARE globally unique, that is a different field from the display name.
+- **Reusing the SAME display name across multiple WABAs/BMs is ALLOWED and is not a known linking signal.** WhatsApp display names are NOT globally unique (no anti-duplication rule across 360dialog/Gupshup/WATI/GoHighLevel, 3-0). Approval checks brand-to-website-to-legal-name correlation, and reusing an established brand can actually HELP approval. The impersonation rule targets third-party brands, not reusing your OWN brand. Meta's association detection is opaque but focuses on ORGANIZATIONAL signals (same BM, phone reuse, business details), not the display-name text, and the "name reuse = evasion signal" theory was refuted (1-2). So the same brand on a second disposable BM is safe for approval; the cross-BM risk is the same-owner cascade, addressed by the isolation stack (separate profile/proxy/BSP/card/number/CNPJ), NOT the name. Caveat: no primary Meta source (Help Center is JS-rendered/unfetchable) and no BR-community source confirmed this, so "name is not a signal" is absence-of-evidence, not positive proof, treat conservatively. Source: 360dialog/Gupshup/WATI docs + transparency.meta.com (2026 deep-research). NB: 2026 @usernames ARE globally unique, that is a different field from the display name.
 
 **NOT primary-sourced (practitioner lore, plausible but unverified):**
 - The Nome/Sobrenome + "Email comercial" fields: the research found NO doc on this (blog claims refuted 0-3), but the accept wizard's own Step 3 answers it FIRST-PARTY (observed live 2026): your name/email and the actions you take on behalf of the BM are visible to other managers of that business, and "actions on behalf of the business are NOT shared on your personal profile." So the name is the work-display identity and the personal profile is insulated from business-side actions. Full walkthrough in the "BM Invite Acceptance Wizard" section below.
 - Why some accepts skip the name wizard (link vs in-app vs direct-provisioning). Open question, no primary source.
 - The exact Account Quality UI (color codes, tabs, navigation). All refuted 0-3, trust the LIVE screen, not blog screenshots. Meta renamed "Business Manager" to "Business Portfolio" in 2024, so older guides are stale.
-- The gray-market accept hygiene itself (consistent proxy/antidetect IP at accept, the 24h BM rest, the "balao" workflow). No primary sourcing, these are sensible community conventions, undocumented by Meta.
+- The gray-market accept hygiene itself (consistent proxy/antidetect IP at accept, the 24h BM rest, the disposable BM workflow). No primary sourcing, these are sensible community conventions, undocumented by Meta.
 
 **BM de disparo (WABA-only) does NOT require profile warmup.** Profile warmup (browsing, liking posts, joining groups) protects Facebook ad accounts from Meta's Ads algorithm trust checks. WABA trust is evaluated through Business Portfolio verification + phone number quality rating, which are completely separate systems. A freshly acquired profile can immediately set up WABA without triggering ad-related trust checks because WABA setup involves zero ad account activity.
 
@@ -2290,7 +2288,7 @@ The invite-link accept (`business.facebook.com/invitation/?token=...`) is a 3-st
 
 **Step 1 of 3, "Você recebeu um convite para participar de [BM]":** enter Nome + Sobrenome ("como você quer que apareça neste portfólio empresarial", your display identity inside the portfolio) and a notification "Email comercial" (pre-filled, fine to leave the supplier's disposable one). Optional Meta-marketing checkbox, leave it unchecked. Use the profile's own name for consistency, and NEVER an email that links to the real brand.
 
-**Step 2 of 3, "Analisar informações da empresa" (the burn-check surface):** shows the BM display name, creation date, and **business verification status** (Verificada / Não verificada). "Verificada" is the key win, it means Tier 2 (2000/day) from day one with no document submission. Also shows Razão social + CNPJ, País, and the registered Site (LOCKED on a verified BM, NEVER change it), plus whether the portfolio already has a Page/Instagram/WhatsApp with >1000 followers (a fresh balloon shows none). A fresh, verified, empty, no-violation BR portfolio is the healthy case, pre-existing assets or restriction notices here are the burn signal.
+**Step 2 of 3, "Analisar informações da empresa" (the burn-check surface):** shows the BM display name, creation date, and **business verification status** (Verificada / Não verificada). "Verificada" is the key win, it means Tier 2 (2000/day) from day one with no document submission. Also shows Razão social + CNPJ, País, and the registered Site (LOCKED on a verified BM, NEVER change it), plus whether the portfolio already has a Page/Instagram/WhatsApp with >1000 followers (a fresh disposable BM shows none). A fresh, verified, empty, no-violation BR portfolio is the healthy case, pre-existing assets or restriction notices here are the burn signal.
 
 **Step 3 of 3, "Leia e aceite o convite" (first-party answer to the name/insulation question):** re-shows your Nome + Email, then states verbatim:
 1. "Seu nome, email e ações que você realiza em nome de [BM] ficarão visíveis para outras pessoas que gerenciam esta empresa." (the name IS the work-display identity, visible to co-managers).
@@ -2400,9 +2398,9 @@ After business verification, core fields (legal name, website, country, phone, t
 - For purchased BMs: identity inconsistency is a red flag → BM suspension risk
 - NEVER change the website field on a verified BM
 
-**Implication for BM balão with brand mismatch:**
+**Implication for disposable BM with brand mismatch:**
 If the purchased BM's website doesn't mention your brand, you cannot use your brand as the display name. Options:
-1. Use the existing BM entity name as display name (e.g., the balloon BM identity name or a variant of it)
+1. Use the existing BM entity name as display name (e.g., the disposable BM identity name or a variant of it)
 2. Check if the existing website has any editable section to add your brand name
 3. Create a separate, unverified BM with your own website (loses verified tier benefits)
 
@@ -2428,11 +2426,11 @@ If the purchased BM's website doesn't mention your brand, you cannot use your br
 
 **Domain requirement:** Meta requires domain verification in the Business Portfolio (DNS TXT record). Free subdomains (vercel.app, netlify.app, github.io) do NOT work because you can't verify a root domain you don't own. Must buy a custom domain.
 
-**Cheap disposable domains (for BM balão, expected to die in 30 days):**
+**Cheap disposable domains (for disposable BM, expected to die in 30 days):**
 - `.site`, `.store`, `.online`: ~$0.98/yr first year (Namecheap promo)
 - `.xyz`: ~$1.58/yr first year (Namecheap)
 - ⚠️ Promo price is ONE per TLD per account. Second `.site` on same account costs $1.98. Rotate TLDs across purchases (.site → .store → .online → .xyz) to always get the lowest promo
-- Renewal jumps to $20-30+/yr — irrelevant for disposable BMs
+- Renewal jumps to $20-30+/yr — irrelevant for disposable BM setups
 - Buy on Namecheap, host on Vercel free tier with custom domain (free SSL)
 - Check availability from CLI: `whois <domain>` or `npx domain-check <name> site online xyz store`
 - Total cost for disposable WABA website: ~$1 domain + $0 hosting = ~$1
@@ -2540,7 +2538,7 @@ If the purchased BM's website doesn't mention your brand, you cannot use your br
 - Email: use domain email, NOT Gmail (raises trust questions)
 - Address: city/state or "Brasil" is enough — fill it, don't leave empty
 
-**The "surface area" myth:** more profile info = more consistency signals, not more attack surface. The real risk in a BM balão is messaging behavior (spam, opt-ins, volume), not profile text. Write clean copy, don't leave fields empty.
+**The "surface area" myth:** more profile info = more consistency signals, not more attack surface. The real risk in a disposable BM is messaging behavior (spam, opt-ins, volume), not profile text. Write clean copy, don't leave fields empty.
 
 **Website field is CRITICAL for display name approval (not optional):**
 - Meta requires a working website to approve a display name (confirmed across 12+ BSP sources)
@@ -2852,7 +2850,7 @@ A WABA lives in the BM, NOT in the BSP. The BSP is just a connected partner (sys
 
 | Item | Cost |
 |---|---|
-| New balloon BM | $19-59 USD |
+| New disposable BM | $19-59 USD |
 | New profile (primary) | R$216 |
 | New profile (backup) | R$18 |
 | Proxy (ongoing) | ~R$30/mês |
@@ -2862,8 +2860,8 @@ A WABA lives in the BM, NOT in the BSP. The BSP is just a connected partner (sys
 ### Burn and Replace Pattern
 
 1. BM banned → all WABA numbers under it deactivated simultaneously
-2. Discard banned BM (non-recoverable in balão strategy)
-3. Buy new balloon BM ($19-59)
+2. Discard banned BM (non-recoverable in disposable BM strategy)
+3. Buy new disposable BM ($19-59)
 4. If profile survived: reuse with new BM. If not: buy new profile, rewarm
 5. Reattach warmed profile to new BM
 6. Transfer learnings (template text, contact segments, timing data)
