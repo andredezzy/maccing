@@ -20,7 +20,6 @@ npx skills add andredezzy/maccing
 
 | Plugin | Description | Install |
 |--------|-------------|---------|
-| [pictura](plugins/maccing-pictura/README.md) | AI image generation in multiple aspect ratios | `/plugin install maccing-pictura@maccing` |
 | [growth](plugins/maccing-growth/README.md) | Paid acquisition + WhatsApp messaging knowledge base | `/plugin install maccing-growth@maccing` |
 
 ## Updating
