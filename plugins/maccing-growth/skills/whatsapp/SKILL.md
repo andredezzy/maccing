@@ -2872,3 +2872,35 @@ A WABA lives in the BM, NOT in the BSP. The BSP is just a connected partner (sys
 7. Restart from Phase 3 in setup sequence
 
 **Key insight:** Template performance data, contact segment insights, and timing optimizations survive the burn. Only the infrastructure dies.
+
+### Number Longevity & Cold Lists (preserve over burn)
+
+"Disposable" means ISOLATED (a ban cannot cascade to the real business or to other disposable BMs), NOT
+"burn fast". With the same discipline as a primary number, a disposable-isolated number is a long-lived
+asset, burn-and-replace above is the FALLBACK when one dies, not the goal. Longevity reduces to one
+thing: keeping the rolling 7-day block + report rate low.
+
+**Recovery timelines (rule of thumb):** Yellow to Green in ~48-72h, Red to Green in ~7-14 days, IF you
+stop marketing and resume only to engaged opt-ins. Quality held low for 7 straight days can cut the
+messaging limit.
+
+**Cold lists vs longevity, the WARM-FIRST rule.** Marketing to cold (non-opted-in) numbers is
+incompatible with preserving quality: cold blocks at ~15-40% vs ~2-5% for opted-in signups, which
+directly degrades the per-number quality window. No "dilution" fixes this on a number you want to keep,
+mixing cold into warm only lowers the AGGREGATE rate while still adding absolute blocks to the rolling
+7-day window, a slow tax on the asset. To use a cold list WITHOUT killing a preserved number:
+1. **Validate first (HLR / carrier lookup)** before any send: confirms each number is active/reachable
+   WITHOUT messaging it, stripping dead/disconnected numbers. Repeated delivery failures (131026) read
+   to anti-spam like a dictionary-style attack, so this step is not optional for cold data.
+2. **Warm cold to engaged BEFORE marketing.** The only quality-safe entry: get the prospect to message
+   YOU first (CTWA / click-to-WhatsApp ads, or a link), which opens a 24h window and makes them warm; or
+   a soft, personal, non-marketing first touch in small rolling batches (the cold ceiling is
+   ~50/number/day) to elicit a reply. A reply opens the 24h service window, making later marketing both
+   quality-safe AND exempt from the per-user marketing cap (131049).
+3. **Reply = warm.** Only then send marketing templates. Numbers that never engage are discarded.
+4. **Bulk cold blasting is a job for a dedicated worker number you accept will burn**, never the
+   preserved asset. Rotate worker numbers to distribute ban risk.
+
+Cold numbers also carry no first name, so a personalized template (`{{1}}` = name) renders broken on
+them, use a no-variable template or a generic greeting for any cold / un-named send. (Researched 2025-06
+across Meta docs + BSP deliverability guidance.)
