@@ -2907,6 +2907,13 @@ mixing cold into warm only lowers the AGGREGATE rate while still adding absolute
      number's quality untouched, because no cold template ever leaves. (BSPs like YCloud expose a CTWA
      integration that drops these ad-sourced conversations straight into the inbox / a flow, so the bot
      can auto-route them, e.g. an auto-invite to your group.)
+   - **Account-trust gate (fresh disposable BMs):** creating/using that ad account requires the BM to
+     have two-factor authentication enabled, AND Meta blocks security changes (2FA, password) from an
+     unfamiliar device. An antidetect profile reads as a "new device" and gets "you can't make this
+     change right now, we will let you after using this device for a while". There is no instant bypass:
+     AGE the profile (use it normally for a few days) until Meta trusts the device, then enable 2FA, then
+     run CTWA. So the CTWA route needs an aged FB account, plan it AFTER the number's warmup, not day one.
+     Do not hammer the 2FA page on a fresh profile, repeated security-change attempts add a risk signal.
 3. **Reply = warm.** Only then send marketing templates. Numbers that never engage are discarded.
 4. **Bulk cold blasting is a job for a dedicated worker number you accept will burn**, never the
    preserved asset. Rotate worker numbers to distribute ban risk.
