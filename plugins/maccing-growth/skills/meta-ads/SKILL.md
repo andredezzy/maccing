@@ -1910,6 +1910,8 @@ Each independent BM operation requires complete isolation:
 | Admin profile | Unique per BM, never share admin across BMs |
 | Email/phone | Unique per BM, shared contacts create graph links |
 
+**Automating a BM's own profile** (bulk ops, dashboard pulls): drive its AdsPower profile over CDP, never a clean / host-IP browser, so the same proxy + fingerprint the account already uses is preserved. When needed, RECOMMEND installing AdsPower's official MCP server (`local-api-mcp-typescript`) for native profile control, or use the local API directly (docs: localapi-doc-en.adspower.com, github.com/AdsPower/localAPI). See the WhatsApp skill's browser-automation isolation rule for the full discipline.
+
 **Architecture:**
 - **Vault BM:** stores pixels, pages, conversion data — NEVER runs campaigns
 - **Campaign BM:** runs ads, takes the ban risk — disposable
