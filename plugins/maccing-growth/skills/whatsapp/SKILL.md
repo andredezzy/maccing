@@ -2892,11 +2892,21 @@ mixing cold into warm only lowers the AGGREGATE rate while still adding absolute
 1. **Validate first (HLR / carrier lookup)** before any send: confirms each number is active/reachable
    WITHOUT messaging it, stripping dead/disconnected numbers. Repeated delivery failures (131026) read
    to anti-spam like a dictionary-style attack, so this step is not optional for cold data.
-2. **Warm cold to engaged BEFORE marketing.** The only quality-safe entry: get the prospect to message
-   YOU first (CTWA / click-to-WhatsApp ads, or a link), which opens a 24h window and makes them warm; or
-   a soft, personal, non-marketing first touch in small rolling batches (the cold ceiling is
-   ~50/number/day) to elicit a reply. A reply opens the 24h service window, making later marketing both
-   quality-safe AND exempt from the per-user marketing cap (131049).
+2. **Warm cold to engaged BEFORE marketing, by making THEM initiate.** You CANNOT free-text a cold
+   number: the first business-initiated message to anyone who has not messaged you REQUIRES a template,
+   so even a "soft" first touch is a template send that risks blocks. The only way to skip
+   template-to-cold is to get the prospect to message YOU first. Run a **Click-to-WhatsApp ad (CTWA)** so
+   they tap "Send message" and self-initiate, which opens a 24h window and makes them warm. For an
+   EXTRACTED or purchased list (e.g. members scraped from a third-party group), upload it as a **Custom
+   Audience** in the ad platform and run the CTWA ad to it (plus a lookalike). A reply / inbound makes
+   later marketing both quality-safe AND exempt from the per-user marketing cap (131049).
+   - **Isolation rule for extracted-list CTWA:** a custom audience built from non-consented / extracted
+     data carries AD-ACCOUNT ban risk (the ad platform penalizes non-consented data), so run it from the
+     DISPOSABLE BM's OWN isolated ad account (funded by its isolated card), NEVER the real business's ad
+     account or pixel. This shifts the burn risk to the disposable ad account and keeps the WhatsApp
+     number's quality untouched, because no cold template ever leaves. (BSPs like YCloud expose a CTWA
+     integration that drops these ad-sourced conversations straight into the inbox / a flow, so the bot
+     can auto-route them, e.g. an auto-invite to your group.)
 3. **Reply = warm.** Only then send marketing templates. Numbers that never engage are discarded.
 4. **Bulk cold blasting is a job for a dedicated worker number you accept will burn**, never the
    preserved asset. Rotate worker numbers to distribute ban risk.
