@@ -45,7 +45,7 @@ Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to 
 | Per-message cost | Yes | GET /v2/whatsapp/messages, fields `totalPrice`, `pricingCategory`, `currency` | [verified live 2026-06] `marketing_lite` at $0.0625/message |
 | URL button click tracking | No | Not present in message objects | [verified live 2026-06] no `clicked` field exists |
 | Opt-out list (queryable) | Yes | GET /v2/unsubscribers, field `customer` per record | [verified live 2026-06] 0 current records; no template-level attribution, requires correlating timestamp + phone against your own send log |
-| Opt-out attribution to a template | No | [UNAVAILABLE] | No template name field on unsubscriber records |
+| Opt-out attribution to a template | Yes, via the DASHBOARD backend (not the public API) | `POST www.ycloud.com/api/whatsapp/batch/search` gives per-campaign `unsubscribeNums` + `templateName`; `GET /batch/activity/analytics` gives `buttons[].count` | [verified live 2026-06] session-cookie auth only, reached from inside the AdsPower profile (see "Dashboard Backend API" at the end) |
 | Inbound messages (queryable list) | No | [UNAVAILABLE] | GET /v2/whatsapp/inboundMessages returns 404; inbound is webhook-only [verified live 2026-06] |
 | Aggregate analytics (bulk stats) | No | [UNAVAILABLE] | No /analytics, /insights, /stats paths exist; all return 404 [verified live 2026-06] |
 | WABA business verification status | Yes | GET /v2/whatsapp/businessAccounts/{id}, field `businessVerificationStatus` | [verified live 2026-06] value: `verified` |
@@ -712,28 +712,78 @@ These are cases where live behavior diverges from documentation or expected REST
 
 ---
 
-## Live Account State (June 2026)
+## Dashboard Backend API (session-cookie, reached via the AdsPower profile over CDP)
 
-For reference, example fields you can read live (placeholder values shown):
+A SEPARATE, undocumented API from the public `api.ycloud.com/v2` one. It lives at
+`https://www.ycloud.com/api/...`, powers the dashboard UI, and exposes the per-campaign analytics,
+the opt-out button counts, and per-campaign message search that the public API does NOT (the public
+API has no campaign/activity concept). [verified live 2026-06]
 
-| Property | Value |
-|---|---|
-| WABA ID | WABA_ID [verified live 2026-06] |
-| Phone Number ID | PHONE_NUMBER_ID [verified live 2026-06] |
-| Phone Number | +15551234567 [verified live 2026-06] |
-| Display Name | My Brand [verified live 2026-06] |
-| Quality Rating | GREEN [verified live 2026-06] |
-| Messaging Tier | TIER_2K (2,000 business-initiated conversations per 24h) [verified live 2026-06] |
-| Phone Status | CONNECTED [verified live 2026-06] |
-| Name Status | APPROVED [verified live 2026-06] |
-| WABA Account Review | APPROVED [verified live 2026-06] |
-| Business Verification | verified [verified live 2026-06] |
-| Payment Method | Attached [verified live 2026-06] |
-| Billing Currency | USD [verified live 2026-06] |
-| Wallet Balance | $25.00 USD (low, monitor before campaigns) [verified live 2026-06] |
-| Templates | 2 APPROVED (MARKETING, pt_BR): welcome_template, invite_template [verified live 2026-06] |
-| Template Quality Scores | Both UNKNOWN (insufficient send volume for Meta scoring) [verified live 2026-06] |
-| Webhooks Configured | 0 [verified live 2026-06] |
-| Contacts | auto-created from inbound messages [verified live 2026-06] |
-| Unsubscribers | 0 [verified live 2026-06] |
-| Total Messages Sent | (illustrative) [verified live 2026-06] |
+### Auth: the SESSION cookie, NOT the API key
+
+These endpoints reject the public `X-API-Key` (also Bearer and no-auth) with
+`{"code":10001,"msg":"login please."}`. They authenticate with the dashboard `SESSION` cookie (httpOnly,
+plus `remember-me`), which only exists inside a logged-in browser session.
+
+### Access method (MANDATORY): run from inside the disposable BM's AdsPower profile
+
+Per the browser-automation isolation rule, NEVER replay the cookie from a host-IP curl (hitting the
+dashboard from a different IP than the account normally uses is a risk-control trigger, and this BSP
+account was already false-positive-suspended once). Instead drive the SAME AdsPower profile that
+operates the disposable BM, where YCloud is already logged in on the correct proxy, and call the
+endpoints from inside that page (same origin, the cookie and proxy are applied automatically, nothing
+to extract or store):
+
+```python
+import json, urllib.request
+from playwright.sync_api import sync_playwright
+
+ADS = "http://local.adspower.net:50325"
+ws = json.load(urllib.request.urlopen(
+    f"{ADS}/api/v1/browser/start?user_id=<PROFILE_ID>&headless=0"))["data"]["ws"]["puppeteer"]
+with sync_playwright() as p:
+    page = p.chromium.connect_over_cdp(ws).contexts[0].pages[0]
+    if "ycloud.com" not in page.url:
+        page.goto("https://www.ycloud.com/", wait_until="domcontentloaded")
+    data = page.evaluate("""async () => {
+        const r = await fetch('/api/whatsapp/batch/search', {method:'POST', credentials:'include',
+            headers:{'Content-Type':'application/json'}, body: JSON.stringify({pageNo:1, pageSize:50})});
+        return await r.json();
+    }""")
+```
+
+The `SESSION` cookie expires, so the AdsPower profile must stay logged in (re-login inside the profile
+when it does). The endpoints are undocumented and can change without notice. Read-only evaluation only,
+never send through these.
+
+### Endpoints (all under `https://www.ycloud.com/api`)
+
+**1. Campaign list: `POST /whatsapp/batch/search`**, body `{pageNo, pageSize}` (optional `to`/`status`).
+Returns `data.records[]`, one per campaign. The record `id` IS the `activityId`. Fields [verified live
+2026-06]: `id`, `name`, `templateName`, `language`, `wabaId`, `fromPhone`, `status`, `sendType`,
+`createTime`, `sendTime`, `endTime`, `updateTime`, `cost`, `currency`, `totalPhoneNums`,
+`validPhoneNums`, `invalidPhoneNums`, `duplicatePhoneNums`, `blockedNums`, `destinationNums`,
+`destinationList`, **`unsubscribeNums`** (per-campaign opt-out count), `paramJson`, `fileKey`,
+`validPhoneKey`, `tenantId`, `puid`, `suid`.
+
+**2. Per-campaign analytics: `GET /whatsapp/batch/activity/analytics?activityId=<id>`.** Returns `data`:
+`totalNums`, `sentNums`, `deliveredNums`, `readNums`, `failedNums`, `repliedNums`, `flowReplyNums`,
+**`buttons: [{key, count}]`** (per-button clicks, e.g. `{"key":"Parar mensagens","count":2}` is the
+opt-out count), and **`failedDetail: [{code, message, count}]`** (failure breakdown by error code, e.g.
+131049 throttle and 130472 holdout). [verified live 2026-06]
+
+**3. Per-campaign message search: `POST /whatsapp/message/search`**, body `{activityId, to, status,
+pageNo, pageSize}`. Returns `data.records[]`, one per recipient: `id`, `wabaId`, `from`, `to`, `status`
+(sent/delivered/read/failed), `templateName`, `language`, `message` (rendered body), `createTime`,
+`sendTime`, `deliverTime`, `readTime`, `errorCode`, `errorMessage`, `toRegionCode`, `contactName`. The
+`to`/`status` filters ARE applied here (unlike the public `/v2/whatsapp/messages`). [verified live 2026-06]
+
+### Automation loop (closes the template A/B decision)
+
+This makes the DECISIVE metric, per-template opt-out, fully automatable on the correct proxy:
+1. `batch/search` to list campaigns, each with `templateName`, `unsubscribeNums`, and counts.
+2. `batch/activity/analytics` per campaign for the exact funnel plus `buttons[]` opt-out.
+3. Group by `templateName`, sum sent / delivered / read / failed / opt-out per template, compute
+   opt-out% = opt-outs / sent, and prefer the lower-opt-out template (audience friction is the #1
+   quality-rating driver). For example, a template at 6% opt-out beats one at 18% even when their
+   delivery and read rates are near-tied.
