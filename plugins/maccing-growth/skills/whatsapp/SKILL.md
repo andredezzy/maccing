@@ -739,7 +739,7 @@ Key distinction: pacing drops queued messages silently within the first 30 minut
 | Indonesia | $0.0283 | $0.022 | $0.022 |
 | Brazil | $0.0625 (base; some sources show ~$0.0719 effective April 2026 — verify against current Meta rate card) | $0.0068 (Tier 1/base; volume discounts reduce incrementally) | $0.0068 (Tier 1/base) |
 | Mexico | $0.0305 | $0.004–$0.0085 | $0.0085 |
-| United States | $0.025–$0.0150 | $0.004–$0.0088 | $0.004–$0.0088 |
+| United States | $0.025–$0.029 | $0.004–$0.0088 | $0.004–$0.0088 |
 | United Kingdom | $0.0382–$0.048 | $0.020 | $0.020 |
 | Germany | $0.1131–$0.1365 | $0.0456–$0.050 | $0.0456–$0.050 |
 | UAE | $0.0499 | $0.0157 | $0.0157 |
@@ -870,7 +870,7 @@ async function sendBulkMessages(recipients: string[], template: TemplateMessage)
 
 ### What Are Flows
 
-WhatsApp Flows are native, app-like interactive experiences embedded directly in a WhatsApp conversation. Users complete multi-step forms, appointments, surveys, or purchases without leaving the chat. Results: 8x+ higher conversion vs. redirecting to a website.
+WhatsApp Flows are native, app-like interactive experiences embedded directly in a WhatsApp conversation. Users complete multi-step forms, appointments, surveys, or purchases without leaving the chat. Results: 8x+ higher conversion vs. redirecting to a website (vendor-claimed, not independently verified).
 
 **Available in:** WhatsApp Manager (no-code builder) or via API (JSON definition).
 
@@ -1729,7 +1729,7 @@ Voice calls directly within WhatsApp conversations. GA on July 15, 2025.
 
 ### Results
 
-Early adopters: conversion rate from 2% to 45% when adding calling to the conversation flow.
+Early adopters: conversion rate from 2% to 45% when adding calling to the conversation flow (vendor/early-adopter-claimed, not independently verified).
 
 ---
 
@@ -1844,7 +1844,7 @@ Timeline: 2-10 business days.
 - Display name approved and matching external branding
 - Business must be "notable" — significant organic media coverage (not paid PR)
 - Submit up to 5 supporting links from reputable sources
-- Application via BSP only (not self-service)
+- OBA badge application via BSP only (not self-service via WhatsApp Manager — unlike standard WABA setup which is self-service)
 - Rejection: must wait 30 days before reapplying
 - **Note:** As of mid-2024 (announced at Meta Conversations Conference, June 2024; rolled out through 2024-2025), the OBA badge is blue (not green), aligning with Facebook and Instagram verification symbols. Existing green badges converted automatically.
 
@@ -2112,7 +2112,7 @@ Choosing within a provider's catalog (within a provider's catalog):
 
 | Status | Daily Limit | How to Reach |
 |---|---|---|
-| Unverified BM | 250 unique conversations/day | Starting point |
+| Unverified BM | 250 unique users/day | Starting point |
 | Verified BM (initial) | 2,000/day (Tier 1 per Oct 2025 schema) | Business verification approved |
 | Tier 2 | 10,000/day | Auto-scale: 50% of 2,000 limit used in 7 days at Green/Yellow quality |
 | Tier 3 | 100,000/day | Auto-scale |
@@ -2305,53 +2305,53 @@ Accepting joins the portfolio and agrees to Meta ToS + Commercial Terms. Click "
 Hardening and WABA setup can happen on the same day (different entities: profile vs BM), but must NOT happen in the same 2-hour window. The cluster of password change + 2FA + admin changes + asset creation resembles an account takeover to Meta's automated systems. Split into two sessions with a 2-4h rest. **Hardening ALWAYS before WABA** — security changes after WABA is live can trigger re-verification.
 
 **Morning session: Profile Hardening**
-9. Change Facebook password, enable 2FA (authenticator app)
-10. Add backup profile as second BM admin
-11. ⏸ **REST 2-4 hours** — do not perform any BM operations
+10. Change Facebook password, enable 2FA (authenticator app)
+11. Add backup profile as second BM admin
+12. ⏸ **REST 2-4 hours** — do not perform any BM operations
 
 Note: purchased profiles typically come with temporary/disposable emails (tuamaeaquelaursa.com, mail.tm, tempail, etc.). No need to secure those — just change Facebook password + 2FA. The temp email becomes irrelevant once Facebook credentials are yours.
 
 **Afternoon session: WABA Setup**
-14. Fill out Business Information in BM (legal name, address, website, email — must be complete BEFORE Embedded Signup)
-15. Choose BSP and initiate Embedded Signup (360dialog, WATI, Disparo Pro, etc.)
-16. Create WABA + set display name (Meta reviews display name: 1-3 days)
-17. Register phone number via OTP (SMS or voice call)
-18. Number active within 60-120 min post-verification
-19. Attach virtual card to BM for billing
-20. Set WhatsApp profile: picture, business description, category
+13. Fill out Business Information in BM (legal name, address, website, email — must be complete BEFORE Embedded Signup)
+14. Choose BSP and initiate Embedded Signup (360dialog, WATI, Disparo Pro, etc.)
+15. Create WABA + set display name (Meta reviews display name: 1-3 days)
+16. Register phone number via OTP (SMS or voice call)
+17. Number active within 60-120 min post-verification
+18. Attach virtual card to BM for billing
+19. Set WhatsApp profile: picture, business description, category
 
 **Deferred: Remove supplier admin (Day 8+)**
-21. Facebook enforces a 7-day restriction: new admins cannot remove other admins for 7 days after accepting the BM invite
-22. Do NOT attempt removal before the 7-day window — the blocked attempt itself registers as a BM-level security event
-23. Sequence: add backup admin first (Phase 3) → confirm backup has access → remove supplier admin (Day 8+)
+20. Facebook enforces a 7-day restriction: new admins cannot remove other admins for 7 days after accepting the BM invite
+21. Do NOT attempt removal before the 7-day window — the blocked attempt itself registers as a BM-level security event
+22. Sequence: add backup admin first (Phase 3) → confirm backup has access → remove supplier admin (Day 8+)
 
-**Phone number requirements:**
+**Phase 4: Phone Number Requirements**
 - Never previously registered on any WhatsApp product (consumer, Business App, or API)
 - Must receive SMS or voice calls (no IVR-only, no short codes)
 - If migrating from Business App: delete that account first, wait up to 30 days
 - Max 2 numbers on unverified BM; 20 after business verification
 
 **Phase 5: Templates (Day 2-3)**
-21. Create marketing templates and submit for approval
-22. Approval timeline: minutes to 4h (ML-automated), up to 24h if flagged for manual review
-23. Pre-design templates before submitting (see Template Strategy below)
+23. Create marketing templates and submit for approval
+24. Approval timeline: minutes to 4h (ML-automated), up to 24h if flagged for manual review
+25. Pre-design templates before submitting (see Template Strategy below)
 
 **Phase 6: Testing (Day 3-4)**
-24. Test broadcast: 50-100 opted-in contacts
-25. Measure: delivery rate, read rate, block rate
-26. If block rate >2%: stop, review template content
-27. If green: proceed to number warmup ramp
+26. Test broadcast: 50-100 opted-in contacts
+27. Measure: delivery rate, read rate, block rate
+28. If block rate >2%: stop, review template content
+29. If green: proceed to number warmup ramp
 
 **Phase 7: Number Warmup + Scale (Day 4+)**
-28. Follow Number Warming Protocol above (50→100→250→500→1,000/day over 15 days)
-29. Wait for tier evaluation (every 6 hours)
-30. Monitor quality rating daily
-31. Scale horizontally by adding numbers under same portfolio (inherit tier)
+30. Follow Number Warming Protocol above (50→100→250→500→1,000/day over 15 days)
+31. Wait for tier evaluation (every 6 hours)
+32. Monitor quality rating daily
+33. Scale horizontally by adding numbers under same portfolio (inherit tier)
 
 **Phase 8: Business Verification (submit Day 1, approval 1-14 days)**
-32. Submit verification documents simultaneously with setup
-33. Verification unlocks: 2,000 conversations/day (Tier 1 per Oct 2025 schema) + up to 20 phone numbers
-34. Since Oct 2025: messaging limits are per Business Portfolio, not per number — new numbers added to a verified portfolio inherit the tier immediately
+34. Submit verification documents simultaneously with setup
+35. Verification unlocks: 2,000 conversations/day (Tier 1 per Oct 2025 schema) + up to 20 phone numbers
+36. Since Oct 2025: messaging limits are per Business Portfolio, not per number — new numbers added to a verified portfolio inherit the tier immediately
 
 **Timeline: BM purchased → first message sent in 3-5 days** (1 day BM rest + hardening + WABA setup + display name review + template approval). No profile warmup days wasted.
 

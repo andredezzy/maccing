@@ -187,7 +187,7 @@ Kill underperforming campaigns within 72 hours. Scale winners by max 20% every 5
 | X (Twitter) | Cultural moments, SaaS | News-aware | $6-10 | Declining ROI |
 | CTV/OTT | Broad consumer awareness | TV viewers | Varies | $5,000+ |
 
-**Rule:** Advertisers running 3+ platforms outperform single-platform by 25-35%.
+**Rule:** Advertisers running 3+ platforms outperform single-platform by 25-35% (unverified benchmark).
 
 **Starter stack:** Google Search (demand capture) + Meta (demand generation). Add TikTok or LinkedIn based on audience.
 
@@ -380,7 +380,7 @@ Google removed First Click, Linear, Time Decay, Position-Based in Oct 2023. Choi
 
 **Critical warning:** Platform-native attribution is biased. Every platform over-credits itself. Always compare platform ROAS vs blended MER (total revenue / total ad spend).
 
-TikTok is undervalued by last-click by up to 10.7x due to halo effect on Google search volume.
+TikTok is undervalued by last-click by up to 10.7x due to halo effect on Google search volume (vendor-claimed, not independently verified).
 
 ## Quality Score / Relevance
 
@@ -411,7 +411,7 @@ High relevance = lower CPM, better delivery, 5-12% cost reduction.
 2. State primary value proposition
 3. Clear CTA
 
-CTAs above the fold: +317% conversion lift.
+CTAs above the fold: +317% conversion lift (unverified benchmark).
 
 ### Speed Benchmarks
 - Target: <2 seconds load
@@ -444,7 +444,7 @@ Ad headline and page H1 must use the same language. Disconnects are the #1 drive
 | LinkedIn | Conversions API |
 
 ### GA4 Measurement Protocol
-Server-side event tracking via GA4. Details and gotchas → `google-ads/SKILL.md`.
+Server-side event tracking via GA4. Details and gotchas → `../google-ads/SKILL.md`.
 
 ### Consent Mode V2 (mandatory EEA/UK)
 - Requires Google-certified CMP (Cookiebot, OneTrust, etc.)
@@ -556,7 +556,7 @@ Google removed 270.7 million gambling-related ads in 2025 alone.
 
 ## Click Fraud & Competitor Sabotage (Detection & Defense)
 
-Click bombing — repeatedly clicking competitor ads to exhaust their budget — is real and common. **Scale:** 15-30% of all ad clicks in competitive markets are fraudulent. H1 2025 global ad fraud rate: 39.7%.
+Click bombing — repeatedly clicking competitor ads to exhaust their budget — is real and common. **Scale:** 15-30% of all ad clicks in competitive markets are fraudulent. H1 2025 global ad fraud rate: 39.7% (unverified benchmark).
 
 ### Detection Signals in Your Own Campaigns
 
@@ -621,7 +621,7 @@ Affiliate fraud inflates reported conversions without real business value. Commo
 
 - 51%+ of internet traffic is automated
 - 37% classified as malicious bots
-- H1 2025 global ad fraud rate: 39.7%, peaked 49% in June
+- H1 2025 global ad fraud rate: 39.7%, peaked 49% in June (unverified benchmark)
 - SlopAds scheme (disrupted 2025): peaked at 2.3 billion bid requests/day via hidden WebViews in Android apps
 
 ---

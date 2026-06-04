@@ -380,11 +380,13 @@ Frontend (GA4 tag) ──cross-domain linker──▶ App (GA4 tag)
 
 ## Financial Services Policy Learnings
 
+> Note: the enforcement patterns below are practitioner-observed, not official Google policy. Verify against ads.google.com policy before acting.
+
 - "Binary" in investment context = permanent ban trigger (binary options are banned)
 - "Profit sharing" + "join/refer" = pyramid/MLM scheme flag
 - "Automated trading" triggers review for financial licensing
 - Landing page MUST have: legal business name, physical address, registration number, T&C, Privacy Policy, risk disclaimers
-- Google requires G2RS financial services verification for India, but NOT for PH/PK/BD
+- Google requires financial services verification for India, but NOT for PH/PK/BD (specific program name "G2RS" is a practitioner-observed term, not confirmed in official Google Ads documentation)
 - Safe ad copy pattern: focus on TOOL (platform, app), not OUTCOME (returns, profits)
 - Include "Capital at risk" in ad copy — Google favors ads with embedded disclaimers
 - Campaign with disapproval history should be abandoned — create new campaign with clean history

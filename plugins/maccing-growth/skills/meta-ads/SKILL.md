@@ -15,7 +15,7 @@ These contain current state: BM status, pipeline progress, pending actions.
 Without reading them, you WILL operate on stale data.
 ```
 
-**Related skill:** `whatsapp-api` — load when working with CTWA ads, WhatsApp message dispatch, template creation, bulk sending, or WhatsApp Flows. This skill covers the ad side (campaign setup, CAPI attribution, remarketing audiences); `whatsapp-api` covers the messaging side (Cloud API, templates, pricing, webhooks).
+**Related skill:** `whatsapp` — load when working with CTWA ads, WhatsApp message dispatch, template creation, bulk sending, or WhatsApp Flows. This skill covers the ad side (campaign setup, CAPI attribution, remarketing audiences); `whatsapp` covers the messaging side (Cloud API, templates, pricing, webhooks).
 
 **Current API version:** v25.0 (Feb 2026) — minimum supported: v22.0 (as of Sep 2025)
 
@@ -55,7 +55,7 @@ Without reading them, you WILL operate on stale data.
 
 **Breaking change in v24.0:** Facebook video feeds placement deprecated — migrate to Facebook Reels. Messenger lead ads creation blocked via API (still available in Ads Manager). Batch API payload limited to 30 MB.
 
-**Breaking change in v23.0:** Advantage+ Audience now default-enabled for new ad sets. `instagram_actor_id` replaced by `ig_user_id`.
+**Breaking change in v23.0:** Advantage+ Audience now default-enabled for new ad sets. `instagram_actor_id` replaced by `instagram_user_id`.
 
 **Breaking change in v22.0:** `instagram_actor_id` → migrate to `instagram_user_id`. `promotions` field → use `promotion_details`.
 
@@ -388,7 +388,7 @@ The paradigm has shifted fundamentally:
     "lookalike_audiences": [{"id": "{LOOKALIKE_AUDIENCE_ID}"}],
     "publisher_platforms": ["facebook", "instagram"],
     "facebook_positions": ["feed", "video_feeds", "reels"],
-    "instagram_positions": ["stream", "story", "reels", "explore"]
+    "instagram_positions": ["stream", "story", "reels"]
   }
 }
 ```
@@ -515,7 +515,8 @@ POST /act_{AD_ACCOUNT_ID}/customaudiences
 | Feed (FB+IG) | 1080×1350 (4:5) or 1080×1080 (1:1) | 15-60s optimal | 4 GB | H.264 + AAC |
 | Feed vertical | 1080×1920 (9:16) | 15-60s optimal | 4 GB | H.264 + AAC |
 | Stories | 1080×1920 (9:16) | Up to 15s per card | 4 GB | H.264 + AAC |
-| Reels | 1080×1920 (9:16) | Up to 30s | 4 GB | H.264 + AAC |
+| Facebook Reels | 1080×1920 (9:16) | No maximum limit | 4 GB | H.264 + AAC |
+| Instagram Reels | 1080×1920 (9:16) | Up to 15 min | 4 GB | H.264 + AAC |
 
 **Export settings:** MP4 or MOV, H.264 video, AAC audio at 128 kbps+, up to 30 fps, 5,000-10,000 kbps bitrate for 1080p. Audio required (even music-only).
 
@@ -818,6 +819,7 @@ POST https://graph.facebook.com/v25.0/{PIXEL_ID}/events?access_token={TOKEN}
 - `"app"` — mobile app event
 - `"email"` — email interaction
 - `"phone_call"` — phone conversion
+- `"business_messaging"` — WhatsApp / messaging channel conversion (use with `messaging_channel`)
 
 ### User Data Parameters (EMQ Impact)
 
@@ -1631,7 +1633,7 @@ ISSUES_ELECTIONS_POLITICS
 {
   "publisher_platforms": ["facebook", "instagram", "messenger", "audience_network"],
   "facebook_positions": ["feed", "reels", "right_hand_column", "marketplace", "search", "story"],
-  "instagram_positions": ["stream", "story", "reels", "explore"],
+  "instagram_positions": ["stream", "story", "reels"],
   "messenger_positions": ["messenger_home"],
   "audience_network_positions": ["classic", "rewarded_video"]
 }
@@ -1732,7 +1734,7 @@ Example calculations (Meta ad → WhatsApp chat initiated):
 | Malaysia | $4.80 | $0.55 | $0.92 | + $0 (72hr free) |
 | Brazil | $4.20 | $0.35 | $0.58 | + $0 (72hr free) |
 
-Follow-up marketing templates (after 72hr) add per-message costs (see `whatsapp-api` skill for rates).
+Follow-up marketing templates (after 72hr) add per-message costs (see `whatsapp` skill for rates).
 
 ### WhatsApp Marketing Messages in Ads Manager
 

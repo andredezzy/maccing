@@ -351,7 +351,7 @@ Sandbox available immediately. Production approval: 5-10 business days.
 
 - 1-minute sliding window
 - HTTP 429 when exceeded
-- `/v2/video/list/`: 600 requests/minute (known specific limit)
+- `/v2/video/list/`: 600 requests/minute — **Note: this endpoint belongs to the TikTok for Developers creator/content API (not the Marketing API; Marketing API endpoints use `/open_api/v1.x/` paths)**
 
 ## Comparison: TikTok vs Google Ads vs Meta
 
@@ -401,7 +401,7 @@ Always include a **verbal CTA inside the video** at 20-25 second mark. On-screen
 
 ### Low-Budget Optimization ($20/Day)
 
-At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Your $20 buys what $100-$200 buys in Western markets.
+At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Your $20 buys what $100-$200 buys in Western markets. **Note: this $0.20-$2.00 range reflects the lowest-cost markets in the region — specifically Philippines, Pakistan, and Bangladesh (see country benchmarks below). The broader SEA regional average CPM is ~$3.05 (see Regional Benchmarks above), driven by higher-cost markets like Singapore and Thailand.**
 
 **Rules:**
 1. One campaign, one ad group at minimum budget (never split across multiple ad groups)
@@ -415,7 +415,7 @@ At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Yo
 
 **Phase progression:**
 - Days 1-7: Traffic objective (conversions need 25+/week to exit learning)
-- Days 8-21: Optimize, kill hook rate <20% or CTR <0.5%
+- Days 8-21: Optimize, kill hook rate <20% or CTR <0.5% — **Note: the general hook-rate target is 30%+ (below 25% = failing per Ad Copy Best Practices above); the 20% kill threshold here is a lower floor specific to the low-budget phase, where limited data makes early cuts premature**
 - Day 21+: Scale winners, duplicate ad groups with slight targeting variations
 
 ### Country-Specific Benchmarks
