@@ -429,14 +429,19 @@ Or using a media ID (preferred for performance):
 
 ### Typing Indicator
 
+Standalone `typing_indicator` message type. Shows "typing…" for up to 25 seconds or until you send the reply; only works inside an active conversation (the recipient must have messaged you). `POST /<PHONE_NUMBER_ID>/messages`:
+
 ```json
 {
   "messaging_product": "whatsapp",
+  "recipient_type": "individual",
   "to": "15551234567",
-  "type": "reaction",
-  "status": "typing"
+  "type": "typing_indicator",
+  "typing_indicator": { "type": "text" }
 }
 ```
+
+Via a BSP, use its wrapper — e.g. YCloud exposes `POST /v2/whatsapp/inboundMessages/{id}/typingIndicator` (the inbound `wamid` in the path, no body).
 
 ### Read Receipt
 
@@ -2739,16 +2744,16 @@ The BSP uses THEIR developer app — you don't need one. You only need Facebook 
 **Broadcast-list storage hygiene (PII):** broadcast contact lists hold real recipient PII (phone + name). Store them in a dedicated per-number folder inside the project, e.g. `.../<profile>/<bm>/whatsapp/<number>/broadcasts/`, NEVER loose in `~/Downloads` or scattered across machines. **Gitignore the list data files** (`*.xlsx`, `*.csv`) so PII never enters git history, they are fully regenerable from the source DB. Keep one tracked `README.md` in the folder describing what each list is and the exclusion logic. Each day's pull EXCLUDES everyone already sent on prior days (matched by normalized E164), drops demo/invested/junk-name rows, and takes the freshest N un-messaged signups.
 
 **Monitoring sends via the YCloud API (polling — verified live 2026-06):** the dashboard Analytics/Logs are the GUI view, but per-message status is pullable programmatically. ⚠️ The published YCloud SDKs (Java/Python/PHP) claim there is NO list endpoint (only `retrieve`/`send`/`sendDirectly`) — that is **WRONG**; the live REST API DOES expose a paginated list. Trust the live API over the SDK docs.
-- **List:** `GET https://api.ycloud.com/v2/whatsapp/messages?limit=100` (header `X-API-Key: <key>`) → `{offset, limit, length, items:[...]}`. ⚠️ **PAGINATION IS BROKEN/ABSENT (verified live 2026-06):** the `offset` param is **silently IGNORED** (offset=0 and offset=3 return identical rows), there is **no cursor** in the response, and `limit` is **capped at 100** (`limit>100` errors). So the endpoint returns ONLY the **newest 100 messages**, with no way to page beyond. → Fetch ONE `limit=100` page and **dedup by `id`** (do NOT loop offsets — that returns the same page repeatedly and inflates counts ~Nx). `?includeTotal=true` returns the account `total` so you can detect how many older messages are NOT visible. This covers the most-recent campaign(s) (each new send is the newest, always in-window); for full history beyond 100 messages use the campaign UI Analytics. No server-side time/status/`to` filter works → filter client-side by `createTime`/`type`.
+- **List:** `GET https://api.ycloud.com/v2/whatsapp/messages?limit=100` (header `X-API-Key: <key>`) → `{offset, limit, length, items:[...]}`. ⚠️ **PAGINATION (verified live 2026-06):** the `offset` param is **silently IGNORED** (offset=0 and offset=3 return identical rows) and there is **no cursor** — BUT the **1-indexed `page` param DOES paginate** (`?page=1&limit=100`, `?page=2&limit=100`, …). `limit` is **capped at 100** (`limit>100` errors). → Page with **`page`** (NOT `offset` — looping offsets returns the same newest page repeatedly and inflates counts ~Nx), **dedup by `id`**, and stop when a page returns no new ids. `?includeTotal=true` returns the account `total` so you can detect how many older messages remain. For full history beyond the API's page ceiling, use the campaign UI Analytics. No server-side time/status/`to` filter works → filter client-side by `createTime`/`type`.
 - **Per-message fields:** `id`, `wamid`, `status`, `from`, `to`, `type` (text|template|…), `createTime`, `sendTime`, `deliverTime`, `readTime`, `totalPrice`, `pricingCategory` (`service`=free | `marketing` | `utility` | `authentication`); on failure `errorCode` + `whatsappApiError.{code,message}`.
 - **Status enum:** `accepted → sent → delivered → read`, or `failed`. (`read` only if the recipient has read receipts on — "delivered" is the reliable floor.)
 - **Single message:** `GET /v2/whatsapp/messages/{id}` (the YCloud `id`, NOT the `wamid`).
 - **Aggregate a broadcast:** paginate all → group by `(createTime[:10], type, status)`. A UI campaign = the batch of `type:"template"` messages on its send date; split failures by `errorCode` (131026 undeliverable→remove vs 131049 throttle→retryable).
   ```bash
-  curl -s "https://api.ycloud.com/v2/whatsapp/messages?limit=100&offset=0" -H "X-API-Key: <key>" \
+  curl -s "https://api.ycloud.com/v2/whatsapp/messages?limit=100&page=1" -H "X-API-Key: <key>" \
     | jq '[.items[]|{d:.createTime[0:10],type,status}]|group_by(.d+.type+.status)|map({k:(.[0].d+" "+.[0].type+" "+.[0].status),n:length})'
   ```
-- ⚠️ **Campaign-send LAG (critical — the `/messages` list is NOT real-time for campaigns):** messages sent via the console **campaign (bulk UI) do NOT appear in `/v2/whatsapp/messages` for HOURS** (likely a periodic sync, not minutes). Verified 2026-06: a Day-1 campaign was present in the list the next day, but a Day-2 campaign that showed **Completed and charged** was still entirely ABSENT from the list hours later. There is also **NO campaign/bulk API**: `GET /v2/whatsapp/bulkMessages/{id}` → 404, and the `?bulkMessageId=` query param is silently IGNORED (returns the full unfiltered list). **So `/messages` polling is real-time ONLY for API-direct (`sendDirectly`) sends** (those appear instantly). For **real-time CAMPAIGN monitoring use the campaign's UI Analytics/Logs tab** (immediate per-recipient status + the campaign ID is in the URL `…/bulkMessages/detail/…/{id}`) **OR subscribe to `whatsapp.message.updated` webhooks**. Use `/messages` polling for campaigns only as a delayed/next-day reconciliation, not for the freshly-sent batch.
+- ⚠️ **Campaign-send LAG (critical — the `/messages` list is NOT real-time for campaigns):** messages sent via the console **campaign (bulk UI) do NOT appear in `/v2/whatsapp/messages` for HOURS** (likely a periodic sync, not minutes). Verified live: a campaign can still be entirely ABSENT from the list hours after the console shows it **Completed and charged**, then appear the next day. There is also **NO campaign/bulk API**: `GET /v2/whatsapp/bulkMessages/{id}` → 404, and the `?bulkMessageId=` query param is silently IGNORED (returns the full unfiltered list). **So `/messages` polling is real-time ONLY for API-direct (`sendDirectly`) sends** (those appear instantly). For **real-time CAMPAIGN monitoring use the campaign's UI Analytics/Logs tab** (immediate per-recipient status + the campaign ID is in the URL `…/bulkMessages/detail/…/{id}`) **OR subscribe to `whatsapp.message.updated` webhooks**. Use `/messages` polling for campaigns only as a delayed/next-day reconciliation, not for the freshly-sent batch.
 - **Push alternative (better at scale):** subscribe to the `whatsapp.message.updated` webhook (`POST /v2/webhookEndpoints` with `enabledEvents:["whatsapp.message.updated"]`); tag each send with `externalId="<campaignId>:<recipientId>"` so events self-identify, and verify the `YCloud-Signature` HMAC (`t={ts},s={hex}`, signed payload `{t}.{body}.`). There is NO campaign-stats API — webhooks or list-polling are the only programmatic options; aggregate campaign numbers otherwise live only in the UI.
 - **Rate limits:** 200 rps / 10,000 rph on reads; the free plan has no extra read restriction.
 
