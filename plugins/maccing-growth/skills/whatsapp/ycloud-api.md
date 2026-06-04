@@ -380,7 +380,7 @@ Key field reference:
 | Field | Values | Meaning |
 |---|---|---|
 | qualityRating | GREEN, YELLOW, RED | Meta's per-number quality score based on opt-outs, blocks, and reports |
-| messagingLimit | TIER_1K, TIER_2K, TIER_10K, TIER_100K, TIER_UNLIMITED | Business-initiated conversations per rolling 24h window |
+| messagingLimit | TIER_1K (legacy, pre-Oct-2025), TIER_2K, TIER_10K, TIER_100K, TIER_UNLIMITED | Business-initiated conversations per rolling 24h window. New accounts start at TIER_2K. |
 | status | CONNECTED, DISCONNECTED, PENDING | API connection health |
 | nameStatus | APPROVED, PENDING, REJECTED | Display name approval by Meta |
 | isOfficialBusinessAccount | bool | Whether Meta has granted the green badge |
