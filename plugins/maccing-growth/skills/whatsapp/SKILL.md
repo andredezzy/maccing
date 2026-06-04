@@ -1529,7 +1529,7 @@ WEBHOOK_VERIFY_TOKEN=        # Your custom token for webhook verification
 |---|---|---|
 | 131021 | Recipient cannot be sender | Use separate test number |
 | 131026 | Message undeliverable | **4 possible causes (Meta does not identify which):** (1) Number not registered on WhatsApp; (2) Recipient has not accepted the latest WhatsApp ToS/Privacy Policy; (3) Recipient is using an outdated WhatsApp client; (4) Sending an authentication template to a +91 India number (not supported). Remove from list; do not retry. |
-| 131047 | 24-hour window expired | Use approved template instead |
+| 131047 | Re-engagement message: free-form (non-template) send attempted outside the 24h customer-service window | Use an approved template instead (templates are allowed any time; only free-form text is gated by the 24h window) |
 | 131049 | Per-user marketing frequency cap (also: US number marketing block since April 2025) | Recipient has hit Meta's per-user daily marketing cap across all businesses. Do NOT retry immediately — wait at least 24h. **Also** returned for ALL marketing template sends to US (+1) numbers since April 1, 2025 (permanent pause, still in effect mid-2026). Switch to utility template (exempt from cap) or wait 24h and retry. |
 | 131051 | Unsupported message type | Check API docs for supported types |
 | 131052 | Media download error | Verify media URL/ID accessibility |
