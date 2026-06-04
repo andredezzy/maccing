@@ -27,7 +27,7 @@ All responses are JSON. List endpoints return a standard envelope:
 
 `total` is only included when the request includes `includeTotal=true`. `length` is the count of items in the current page.
 
-Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to `offset = (page - 1) * limit`. The maximum reachable offset via this scheme is 990 (page=100, limit=10). Accounts with more than 990 messages cannot page beyond that boundary using the current API. [verified live 2026-06]
+Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to `offset = (page - 1) * limit`. The maximum reachable offset is `(page_max - 1) * limit_max = (100 - 1) * 100 = 9,900` — i.e. up to ~10,000 records. Accounts with more than ~10,000 messages cannot page beyond that boundary using the current API. [verified live 2026-06]
 
 ---
 
@@ -706,7 +706,7 @@ These are cases where live behavior diverges from documentation or expected REST
 | Template PATCH is full replacement | PATCH on a template replaces the entire `components` array. Include all components in every request even when only one is changing. |
 | WABA timezone is numeric, not IANA | The `timezoneId` field is a number string (e.g. "1") from Meta's internal list. Requires a lookup table. |
 | Balance currency vs. WABA billing currency differ | GET /v2/balance always returns USD. WABA billing may be in a different currency, set per account. |
-| Pagination capped at offset 990 | `page` max is 100, `limit` max is 100. Max reachable offset: `(100-1) * 10 = 990`. Accounts with >990 messages cannot access older records via this API. |
+| Pagination capped at offset ~9,900 | `page` max is 100, `limit` max is 100. Max reachable offset: `(100-1) * 100 = 9,900` (~10,000 records). Accounts with >~10,000 messages cannot access older records via this API. |
 | Unsubscribers endpoint has cursor AND offset | GET /v2/unsubscribers is the only list endpoint that includes a `cursor` object alongside standard offset pagination. |
 | Single WABA endpoint returns flat object | GET /v2/whatsapp/businessAccounts/{id} returns a flat JSON object, not an `{items: [...]}` envelope. |
 
