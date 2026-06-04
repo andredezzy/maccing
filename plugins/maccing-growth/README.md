@@ -1,6 +1,6 @@
 # maccing-growth
 
-Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API).
+Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API) — strategy, metrics, and platform references.
 
 ## Install
 
@@ -12,7 +12,7 @@ Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) an
 
 | Skill | Purpose |
 |-------|---------|
-| growth | Cross-channel strategy, metrics, funnel, attribution, defensive intelligence |
+| growth | Cross-channel strategy, metrics, funnel, attribution, competitive intelligence, defensive techniques |
 | google-ads | Google Ads production reference + scripts |
 | meta-ads | Meta (Facebook/Instagram) Ads production reference |
 | tiktok-ads | TikTok Ads production reference |
