@@ -131,7 +131,7 @@ Response shape:
 
 ### List Messages (GET /v2/whatsapp/messages)
 
-[verified live 2026-06] Pagination is offset-based (`page` + `limit`). Default sort: newest-first by `createTime`.
+[verified live 2026-06] Paginate via `page` (NOT `offset` — `?offset=N` is silently ignored; every offset returns the same newest page). `limit` max 100. Default sort: newest-first by `createTime`.
 
 Critical live behavior deviation from docs: `filter.status`, `filter.from`, and `filter.type` query params are silently IGNORED by the server. Passing `filter.status=sent` returns all messages regardless. Only `filter.wabaId` and `filter.to` are applied server-side. Client-side post-filtering is required for all other dimensions. [verified live 2026-06]
 
@@ -386,7 +386,7 @@ Key field reference:
 | isOfficialBusinessAccount | bool | Whether Meta has granted the green badge |
 | codeVerificationStatus | VERIFIED, UNVERIFIED | Phone verification state |
 
-Both `messagingLimit` and `whatsappBusinessManagerMessagingLimit` fields are present and typically the same value (e.g. TIER_2K). [verified live 2026-06] Tier upgrades automatically as send volume and quality rating remain healthy. Webhook `whatsapp.phone_number.quality_updated` fires on tier or quality changes. [from docs]
+Both `messagingLimit` and `whatsappBusinessManagerMessagingLimit` fields are present and typically return the same tier value (e.g. TIER_2K); they can diverge if the number limit differs from the portfolio limit. [verified live 2026-06] Tier upgrades automatically as send volume and quality rating remain healthy. Webhook `whatsapp.phone_number.quality_updated` fires on tier or quality changes. [from docs]
 
 No per-number throughput statistics, rate-per-second, or current-window conversation count fields exist on this object. To check whether the tier limit is being approached, count recent messages in GET /v2/whatsapp/messages client-side.
 
@@ -558,7 +558,7 @@ Note: the path prefix is `/v2/contact/contacts` (contact singular in the prefix,
 
 ### List Contacts (GET /v2/contact/contacts)
 
-[verified live 2026-06] Contacts are auto-created when users send inbound WhatsApp messages to your number. 
+[verified live 2026-06] Contacts are auto-created when users send inbound WhatsApp messages to your number.
 
 ```bash
 curl -s "https://api.ycloud.com/v2/contact/contacts?page=1&limit=20" \
@@ -583,7 +583,7 @@ Each contact item: [verified live 2026-06]
 }
 ```
 
-`lastMessageToPhoneNumber` is the YCloud sender number that last reached this contact. Custom contact attributes may be unavailable (GET /v2/contact/attributes returns 404). [verified live 2026-06]
+`lastMessageToPhoneNumber` is the YCloud sender number that last reached this contact. Custom contact attributes may be unavailable (GET /v2/contact/attributes returns 404 when the feature is not active). [verified live 2026-06]
 
 ---
 
