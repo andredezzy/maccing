@@ -7,17 +7,6 @@
   },
   "plugins": [
     {
-      "name": "maccing-pictura",
-      "source": "./plugins/maccing-pictura",
-      "description": "Provider-agnostic multi-ratio image generation with AI SDK pattern and free stock image search",
-      "version": "1.2.2",
-      "author": {
-        "name": "Andre Dezzy"
-      },
-      "keywords": ["image-generation", "gemini", "openai", "topaz", "aspect-ratio", "stock-images", "unsplash", "pexels", "pixabay"],
-      "license": "MIT"
-    },
-    {
       "name": "maccing-growth",
       "source": "./plugins/maccing-growth",
       "description": "Growth toolkit: paid acquisition (Google/Meta/TikTok Ads) + owned messaging (WhatsApp Business Platform)",
