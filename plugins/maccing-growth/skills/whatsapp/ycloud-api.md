@@ -787,3 +787,45 @@ This makes the DECISIVE metric, per-template opt-out, fully automatable on the c
    opt-out% = opt-outs / sent, and prefer the lower-opt-out template (audience friction is the #1
    quality-rating driver). For example, a template at 6% opt-out beats one at 18% even when their
    delivery and read rates are near-tied.
+
+---
+
+## Auto-unsubscribe chatbot (keyword opt-out, dashboard UI only)
+
+A custom opt-out quick-reply button on a broadcast template (e.g. a "stop messages" button) does NOT
+auto-add the clicker to the unsubscribe list, and the click is invisible to the public API (it appears
+only as a `buttons[].count` in the dashboard per-campaign analytics). To actually suppress opt-outs you
+build a keyword-triggered RULE-BASED chatbot whose flow ends in an Unsubscribe component, AND assign
+that chatbot to the number. This is dashboard-UI only, there is no public API for it.
+
+Exact steps [verified live 2026-06]:
+1. AI Agent (left menu), Create Agent, **Rule-based Agent** (the deterministic one; "AI Agent" and
+   "Responsive AI Agent" are LLM-based). Name it, Create.
+2. The agent opens on **Profile**. Leave defaults: Welcome Message off, and "What should the agent do
+   when it doesn't understand the user's intent" = **Remain without responding** (so the bot stays
+   silent on everything except the opt-out keywords).
+3. **Flows** tab, **Create a flow** (or open the auto-created one), **Build** canvas, **Add a trigger**.
+4. Choose **Keyword trigger**, set **Keywords matching rule = Exact matching** (safer than Contains,
+   which false-triggers on phrases like "I do not want to stop"), then **+ Keyword** for the exact
+   button label plus common typed variants, one keyword each. **Save** with the node panel's Save
+   button, NOT the X (the X discards the config).
+5. Connect the next node by **dragging** from the Trigger node's right-edge handle onto the new node.
+   Clicking the handle only re-opens the node editor; you must DRAG to create the link.
+6. In the **Tool box**, click **Unsubscribe** to add the node. In its panel turn **Auto-reply = On** and
+   write the confirmation message, then **Save** (node panel).
+7. Drag-connect Trigger to Unsubscribe so an arrow links them.
+8. **Save the flow** (top-right), and in the "Save the flow" dialog flip **Set up flow status = Active**,
+   then Save. There are TWO save levels: each node panel AND the flow.
+9. **MANDATORY: assign the chatbot to the number.** WhatsApp accounts, the number's gear (Settings),
+   **Inbox > Assignment**, **Priority 3 "Assign to" -> AI Agent ->** select your rule-based agent,
+   **Save**. The active flow alone never fires without this: the agent's "Associated" count stays 0 and
+   the chatbot receives nothing. [deep-research + live verified]
+
+Gotchas:
+- Flow Active is not enough; the assignment in step 9 is what routes the number's messages to the bot.
+- Assignment routes conversations as they are handled. A PRE-EXISTING or auto-closed conversation may
+  not route to a chatbot you assigned afterwards, so test from a number that has NEVER contacted the
+  business (a fresh conversation). The 24h window does NOT block this: an inbound message reopens the
+  window, and the Unsubscribe action needs no window.
+- For a template quick-reply button specifically, "Click button trigger" is the alternative to the
+  keyword trigger.
