@@ -823,9 +823,13 @@ Exact steps [verified live 2026-06]:
 
 Gotchas:
 - Flow Active is not enough; the assignment in step 9 is what routes the number's messages to the bot.
-- Assignment routes conversations as they are handled. A PRE-EXISTING or auto-closed conversation may
-  not route to a chatbot you assigned afterwards, so test from a number that has NEVER contacted the
-  business (a fresh conversation). The 24h window does NOT block this: an inbound message reopens the
-  window, and the Unsubscribe action needs no window.
+- Assignment fires only at conversation CREATION [verified live + docs]. A NEW conversation (a number
+  that never messaged before) IS auto-assigned to the Priority-3 chatbot and the flow runs; a
+  PRE-EXISTING conversation NEVER re-routes on later inbound messages (the inbox "Assigned to bot" stays
+  empty for old conversations, and the per-conversation manual-assign menu lists only human agents, not
+  the bot). So always test from a brand-new number, and for the EXISTING audience rely on a separate
+  suppression (e.g. exclude prior recipients at send time) since their opt-out clicks will not auto-fire
+  the bot. The 24h window does NOT block any of this: an inbound message reopens the window, and the
+  Unsubscribe action needs no window.
 - For a template quick-reply button specifically, "Click button trigger" is the alternative to the
   keyword trigger.
