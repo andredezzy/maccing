@@ -1,6 +1,6 @@
 ---
 name: growth
-description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to platform skills (google-ads, meta-ads, tiktok-ads, whatsapp) over the shared `meta` substrate and the `ycloud`/`ycloud-api` BSP skills. Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach", "automation", "adspower", "undetectable", "human-like".
+description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to platform skills (google-ads, meta-ads, tiktok-ads, whatsapp) over the shared `meta` substrate and the `ycloud`/`ycloud-api` BSP skills. Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach", "automation", "adspower", "undetectable", "human-like", "cost", "budget", "wallet", "spend", "optimize", "CPDM".
 ---
 
 # Paid Advertising: Master Skill
@@ -102,11 +102,16 @@ Kill underperforming campaigns within 72 hours. Scale winners by max 20% every 5
 
 Automation discipline (official-surface-first, antidetect browser, human-like): see `reference/automation.md`.
 
+### 7. Cost Discipline
+
+Cost discipline (ledger-in-place, present-before-spend, always optimize): see `reference/cost-tracking.md`.
+
 ## Intent → Reference Routing Table
 
 | Intent | Reference | Use for |
 |---|---|---|
 | Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `reference/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
+| Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `reference/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
 
 ## Core Metrics
 
