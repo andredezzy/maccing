@@ -55,26 +55,18 @@ plus `remember-me`), which only exists inside a logged-in browser session.
 Per the browser-automation isolation rule, NEVER replay the cookie from a host-IP curl (hitting the
 dashboard from a different IP than the account normally uses is a risk-control trigger, and BSP accounts have been
 false-positive-suspended this way). Instead drive the SAME AdsPower profile that
-operates the disposable BM, where YCloud is already logged in on the correct proxy, and call the
-endpoints from inside that page (same origin, the cookie and proxy are applied automatically, nothing
-to extract or store):
+operates the disposable BM, where YCloud is already logged in on the correct proxy.
 
-```python
-import json, urllib.request
-from playwright.sync_api import sync_playwright
+**How to connect and execute the read:** Follow the global MCP read recipe (§6 of `../../../../growth/reference/automation.md`), using `https://www.ycloud.com/` as the `<dashboard-url>`. The profile's SESSION cookie is applied automatically — nothing to extract or store.
 
-ADS = "http://local.adspower.net:50325"
-ws = json.load(urllib.request.urlopen(
-    f"{ADS}/api/v1/browser/start?user_id=<PROFILE_ID>&headless=0"))["data"]["ws"]["puppeteer"]
-with sync_playwright() as p:
-    page = p.chromium.connect_over_cdp(ws).contexts[0].pages[0]
-    if "ycloud.com" not in page.url:
-        page.goto("https://www.ycloud.com/", wait_until="domcontentloaded")
-    data = page.evaluate("""async () => {
-        const r = await fetch('/api/whatsapp/batch/search', {method:'POST', credentials:'include',
-            headers:{'Content-Type':'application/json'}, body: JSON.stringify({pageNo:1, pageSize:50})});
-        return await r.json();
-    }""")
+**YCloud-specific `evaluate-script` payload** for the campaign analytics endpoint:
+```javascript
+(async () => {
+  const r = await fetch('/api/whatsapp/batch/activity/analytics?activityId=<id>', {
+    credentials: 'include'
+  });
+  return await r.json();
+})()
 ```
 
 The `SESSION` cookie expires, so the AdsPower profile must stay logged in (re-login inside the profile

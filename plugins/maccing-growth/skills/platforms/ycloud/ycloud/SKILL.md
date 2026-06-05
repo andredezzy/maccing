@@ -56,26 +56,13 @@ YCloud exposes two separate APIs:
 **Dashboard backend** (`www.ycloud.com/api/...`, SESSION cookie):
 - Per-campaign `unsubscribeNums`, per-button click counts, per-recipient search within a campaign
 - Undocumented, SESSION-cookie only (rejects the public API key)
-- MUST be reached from inside the disposable BM's AdsPower profile (see automation-pattern.md)
+- MUST be reached from inside the disposable BM's AdsPower profile (see automation.md)
 
 Campaign-send LAG is critical: after a campaign completes and the wallet is charged, the messages may
 not appear in `/v2/whatsapp/messages` for hours (sometimes next-day). Use the campaign's
 Analytics/Logs tab or `whatsapp.message.updated` webhooks for real-time monitoring.
 
-## Read-Only Automation Pattern
-
-For evaluation/monitoring that the agent drives without human interaction:
-
-1. **Monitor** — use the public REST API (`X-API-Key`) to poll quality rating, tier, wallet balance,
-   and template approval status.
-2. **Evaluate** — use the dashboard backend (`batch/search` + `batch/activity/analytics`) via
-   `page.evaluate()` inside the AdsPower profile's browser page to retrieve per-campaign opt-out counts
-   and button-click funnels.
-3. **Report** — the agent reports findings; the operator or a separate API-direct send acts.
-
-The agent NEVER sends through the dashboard backend (read-only). Sends go through `POST /v2/whatsapp/messages`
-(API-direct, real-time) or the campaign UI (bulk, laggy). See automation-pattern.md for the full
-AdsPower-CDP setup code.
+For the read-only automation discipline (CDP connect, the MCP read recipe, undetectability), see `reference/automation.md`.
 
 ## Routing Table
 
@@ -87,6 +74,6 @@ AdsPower-CDP setup code.
 | BSP comparison table, pricing model, YCloud plans | reference/console-and-operations.md | Choosing or justifying BSP selection |
 | Auto-unsubscribe chatbot setup, exact UI steps, gotchas | reference/console-and-operations.md | Building keyword opt-out flows |
 | Dashboard backend endpoints, SESSION cookie auth | reference/console-and-operations.md | Pulling per-campaign analytics |
-| AdsPower-CDP access pattern, automation loop code | reference/automation-pattern.md | Automating dashboard backend reads |
-| Three-tool monitor/evaluate/dashboard split | reference/automation-pattern.md | Architecture of read-only automation |
-| Isolation rule (AdsPower profile, proxy, BSP-per-BM) | reference/automation-pattern.md | Safe automation without ban risk |
+| AdsPower MCP read recipe, automation loop code | reference/automation.md | Automating dashboard backend reads |
+| Read/commit split, rung assignment for YCloud tasks | reference/automation.md | Architecture of read-only automation |
+| Isolation rule (AdsPower profile, proxy, BSP-per-BM) | reference/automation.md | Safe automation without ban risk |
