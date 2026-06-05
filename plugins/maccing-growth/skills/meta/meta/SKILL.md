@@ -82,9 +82,9 @@ Full trigger table, cascade mechanics, appeal tiers: `reference/disposable-bm-st
 
 One proxy IP, one payment card, one admin profile, one antidetect browser profile — per BM, never shared. Parallel disposable BMs must also isolate the **IP family** (IPv4 vs IPv6) to prevent Meta graph-linking adjacent ranges.
 
-**Browser automation rule:** Any automation touching a BM's accounts (Meta Business Manager, BSP dashboard) MUST run through that BM's own AdsPower profile via CDP (`connect_over_cdp`), never a clean host-IP browser. An IP or fingerprint mismatch is a textbook risk-control trigger. Install AdsPower's official MCP server (`local-api-mcp-typescript`) for native profile control.
+**Browser automation rule:** Any automation touching a BM's accounts (Business Manager, BSP dashboard) MUST run through that BM's own AdsPower profile — same proxy/fingerprint, never a clean host-IP browser. Install the official AdsPower **skill** (`npx skills add AdsPower/adspower-browser`), **MCP** (`local-api-mcp-typescript`), and **CLI**. Full doctrine (undetectable behavior, keep-open, Hybrid agent-vs-operator split, the MCP read recipe, fallback ladder): `reference/automation.md`.
 
-Full isolation table + CDP automation rule: `reference/asset-isolation-infrastructure.md`
+Full isolation table: `reference/asset-isolation-infrastructure.md`
 
 ---
 
@@ -139,6 +139,7 @@ Full verification requirements + OBA badge: `reference/business-verification.md`
 | Intent | Reference | Use for |
 |---|---|---|
 | Brazilian classifier, niche classification, defense playbook, payment hygiene, profile survival rates, 2025-2026 trends, ban triggers/cascade/appeal, WhatsApp profile compliance (financial niche) | `reference/brazilian-classifier-defense.md` | Understanding why legitimate operators get flagged; defense playbook; WABA profile language risk |
-| Asset isolation rules, proxy types + full provider table, antidetect browsers, BM architecture for WABA, BM types, browser automation / AdsPower CDP rule | `reference/asset-isolation-infrastructure.md` | Setting up isolated BM infrastructure; choosing a proxy; automating over CDP |
+| Asset isolation rules, proxy types + full provider table, antidetect browsers, BM architecture for WABA, BM types | `reference/asset-isolation-infrastructure.md` | Setting up isolated BM infrastructure; choosing a proxy |
+| Browser automation for Meta properties (BM management, BSP/WhatsApp dashboard reads) | `reference/automation.md` | When any task on a Meta surface requires a browser — BM, BSP dashboard, WhatsApp Manager |
 | Disposable BM pipeline, setup sequence, Operator Data-Request Protocol, BM Invite Acceptance Wizard, verified-vs-lore findings, tier system, BM sources + survival rates, number warming, chip warming, Display Name Strategy, phone number strategy, virtual numbers, burn-replace, number longevity + cold lists | `reference/disposable-bm-strategy.md` | Running a disposable BM end-to-end; WhatsApp dispatch warmup; number strategy |
 | Business verification (WhatsApp), Official Business Account (blue badge), BM verification (ads defense note) | `reference/business-verification.md` | Verification requirements; OBA badge eligibility and process |

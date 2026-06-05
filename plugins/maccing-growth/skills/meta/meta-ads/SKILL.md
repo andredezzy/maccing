@@ -63,6 +63,7 @@ Base URL: `https://graph.facebook.com/v25.0/`
 | Special ad categories, finance/housing/employment restrictions, restricted content, ad review, creative fatigue; Python automation scripts, creative rotation | reference/compliance-automation.md | Financial services compliance, policy review, building automation scripts, creative rotation |
 | 2026 best practices, account structure, CAPI checklist, creative guidelines, scaling checklist, attribution strategy; API quick reference, common gotchas | reference/best-practices.md | Account setup decisions, pre-launch checklists, debugging common mistakes, quick API lookups |
 | Click-to-WhatsApp ads, ctwa_clid attribution, 72h free window, remarketing via WhatsApp contacts | reference/ctwa.md | CTWA campaign setup, attributing WhatsApp conversions via CAPI, CTWA vs landing page decisions |
+| AdsPower browser automation, antidetect doctrine, official-surface-first decision tree | ../meta/reference/automation.md | When an ads task needs the browser / antidetect discipline |
 
 ---
 

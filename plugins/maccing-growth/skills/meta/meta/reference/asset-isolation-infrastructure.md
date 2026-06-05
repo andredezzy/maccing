@@ -8,7 +8,6 @@
    - [BM Types (Market Reference)](#bm-types-market-reference)
 3. [Proxy Selection (which product for a dispatch BM)](#proxy-selection-which-product-for-a-dispatch-bm)
    - [Provider comparison (market survey, 2026 pricing)](#provider-comparison-market-survey-2026-pricing)
-4. [Browser Automation Isolation Rule (AdsPower/CDP)](#browser-automation-isolation-rule-adspower--cdp)
 
 ---
 
@@ -24,7 +23,7 @@ Each independent BM operation requires complete isolation:
 | Admin profile | Unique per BM, never share admin across BMs |
 | Email/phone | Unique per BM, shared contacts create graph links |
 
-**Automating a BM's own profile** (bulk ops, dashboard pulls): drive its AdsPower profile over CDP, never a clean / host-IP browser, so the same proxy + fingerprint the account already uses is preserved. When needed, RECOMMEND installing AdsPower's official MCP server (`local-api-mcp-typescript`) for native profile control, or use the local API directly (docs: localapi-doc-en.adspower.com, github.com/AdsPower/localAPI). See the WhatsApp skill's browser-automation isolation rule for the full discipline.
+**Automating a BM's own profile:** see `meta/meta/reference/automation.md`.
 
 **Architecture:**
 - **Vault BM:** stores pixels, pages, conversion data — NEVER runs campaigns
@@ -152,6 +151,4 @@ _Sources: vendor pricing pages, [AdsPower's recommended-proxy list](https://help
 
 ## Browser Automation Isolation Rule (AdsPower / CDP)
 
-**Browser automation MUST drive the disposable BM's OWN AdsPower profile, NEVER a clean / host-IP browser.** Any automation that touches the disposable BM's accounts (Meta Business Manager, the BSP dashboard such as YCloud) has to run through the SAME AdsPower antidetect profile that operates that disposable BM: the SAME proxy exit IP, the SAME fingerprint, ideally the SAME already-logged-in session. Start the profile via the AdsPower local API (`GET http://local.adspower.net:50325/api/v1/browser/start?user_id=<id>` returns a CDP `ws.puppeteer` endpoint plus a `debug_port`) and connect the automation to THAT browser over CDP (Playwright `connect_over_cdp`), never launch a fresh Playwright / host browser. Rationale: logging into a sensitive dispatch account from a different IP or fingerprint than it normally uses is a textbook risk-control trigger (BSP accounts have been false-positive-suspended this way), an IP mismatch is a self-inflicted ban signal. This is also the only safe way to reach the dashboard-backend endpoints that reject the public API key: replay the session cookie from inside the correct profile. When this automation is needed, RECOMMEND installing AdsPower's official MCP server for native profile control (`claude mcp add adspower-local-api -e PORT=50325 -- npx -y local-api-mcp-typescript`, repo `AdsPower/local-api-mcp-typescript`); otherwise drive the local API directly. Do not re-document the API surface, the official docs are the source of truth: localapi-doc-en.adspower.com and github.com/AdsPower/localAPI.
-
-**Agent-automation vs operator-interactive (visibility gotcha).** A profile the agent opens via the local API is an automation-only context, NOT a window the operator can see or click. Decide the mode up front. For READS (data pulls, analytics), the agent starts the profile, drives it over CDP, and reports the RESULT (values or screenshots), the operator never needs the window. For CONFIG or judgment tasks, the operator opens the profile from the AdsPower GUI and acts themselves, the agent only guides. NEVER hand off "I opened the page, now you act on it" through an API-launched instance, it is not surfaced on the operator's desktop (it runs in the background or a sandboxed display). The agent shares screenshots for visibility, but the operator cannot interact with an instance only the agent can reach.
+See `meta/meta/reference/automation.md` for the browser-automation discipline (own-profile rule, visibility gotcha, MCP recipe, undetectability).

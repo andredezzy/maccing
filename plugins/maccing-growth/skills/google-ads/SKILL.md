@@ -1,6 +1,6 @@
 ---
 name: google-ads
-description: Use when managing Google Ads campaigns, creating ads, optimizing campaigns, checking metrics, or automating Google Ads via Scripts. Triggers on "google ads", "google ads campaign", "create campaign", "ad campaign", "google ads scripts", "check google ads", "google ads metrics", "campaign performance", "AdsApp".
+description: Use when managing Google Ads campaigns, creating ads, optimizing campaigns, checking metrics, or automating Google Ads via Scripts. Triggers on "google ads", "google ads campaign", "create campaign", "ad campaign", "google ads scripts", "check google ads", "google ads metrics", "campaign performance", "AdsApp", "automation", "adspower".
 ---
 
 # Google Ads Management
@@ -485,6 +485,12 @@ Base: `https://ads.google.com` — replace `<ocid>` with the account's Customer 
 | Pakistan | 2586 |
 | Philippines | 2608 |
 | Thailand | 2764 |
+
+## Intent → Reference Routing Table
+
+| Intent | Reference | Use for |
+|---|---|---|
+| Automating Google Ads: Scripts/API-first, the narrow UI carve-out, official-surface decision tree | `reference/automation.md` | Choosing API vs browser vs operator for Google Ads tasks; staying undetectable when browser is needed |
 
 ## Available Script Templates
 
