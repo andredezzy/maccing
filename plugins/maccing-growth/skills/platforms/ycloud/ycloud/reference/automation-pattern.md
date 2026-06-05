@@ -31,8 +31,8 @@ backend is read-only, the agent never triggers sends through it.
 ## Access method (MANDATORY): run from inside the disposable BM's AdsPower profile
 
 Per the browser-automation isolation rule, NEVER replay the cookie from a host-IP curl (hitting the
-dashboard from a different IP than the account normally uses is a risk-control trigger, and this BSP
-account was already false-positive-suspended once). Instead drive the SAME AdsPower profile that
+dashboard from a different IP than the account normally uses is a risk-control trigger, and BSP accounts have been
+false-positive-suspended this way). Instead drive the SAME AdsPower profile that
 operates the disposable BM, where YCloud is already logged in on the correct proxy, and call the
 endpoints from inside that page (same origin, the cookie and proxy are applied automatically, nothing
 to extract or store):

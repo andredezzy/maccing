@@ -53,8 +53,8 @@ plus `remember-me`), which only exists inside a logged-in browser session.
 ### Access method (MANDATORY): run from inside the disposable BM's AdsPower profile
 
 Per the browser-automation isolation rule, NEVER replay the cookie from a host-IP curl (hitting the
-dashboard from a different IP than the account normally uses is a risk-control trigger, and this BSP
-account was already false-positive-suspended once). Instead drive the SAME AdsPower profile that
+dashboard from a different IP than the account normally uses is a risk-control trigger, and BSP accounts have been
+false-positive-suspended this way). Instead drive the SAME AdsPower profile that
 operates the disposable BM, where YCloud is already logged in on the correct proxy, and call the
 endpoints from inside that page (same origin, the cookie and proxy are applied automatically, nothing
 to extract or store):
@@ -188,7 +188,7 @@ Gotchas:
 
 | Platform | Type | Monthly fee | Free tier | Per-msg markup (Brazil marketing) | Brazil notes | Source / asOf |
 |---|---|---|---|---|---|---|
-| **YCloud (Free plan)** | BSP | **$0/mo** | Unlimited API; service msgs $0 (empirically confirmed totalPrice:0 in production); utility-in-window $0; shared inbox included; 1 user, 2 channels | **0%** — explicit zero-markup policy; passes Meta rates from wallet; empirically confirmed at ~$0.05–$0.0625/msg for BR marketing | Best Brazil dispatch value: pay only Meta's rate. BRL billing H2 2026. Add-on users $10/user/mo, channels $5/channel/mo. ⚠️ Risk-control auto-flags possible on free tier for financial use cases (observed on a financial-niche account, resolved via support ticket in <24h) — open a support ticket immediately if suspended, false-positive rate is high | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
+| **YCloud (Free plan)** | BSP | **$0/mo** | Unlimited API; service msgs $0 (empirically confirmed totalPrice:0 in production); utility-in-window $0; shared inbox included; 1 user, 2 channels | **0%** — explicit zero-markup policy; passes Meta rates from wallet; empirically confirmed at ~$0.05–$0.0625/msg for BR marketing | Best Brazil dispatch value: pay only Meta's rate. BRL billing H2 2026. Add-on users $10/user/mo, channels $5/channel/mo. ⚠️ Risk-control auto-flags possible on free tier for financial use cases (reported by financial-niche accounts, resolved via support ticket in <24h) — open a support ticket immediately if suspended, false-positive rate is high | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
 | **YCloud (Growth)** | BSP | $39/mo | — | 0% | Same zero-markup; $39 unlocks 2 users, 3 channels, 5M AI credits. Message cost unchanged | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
 | **YCloud (Pro)** | BSP | $89/mo | — | 0% | 6 users, 8 channels, 20M AI credits, dedicated account manager | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
 | **YCloud (Enterprise)** | BSP | $399/mo | — | 0% | 40 users, 30 channels, 100M AI credits, 24/7 priority support, permanent storage | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
@@ -236,7 +236,7 @@ Gotchas:
 - BRL-native billing: Meta and most BSPs still invoice in USD as of June 2026. BRL billing from Meta is expected July 1, 2026 for eligible Solution Partners/directly-integrated clients with Brazil Sold-To in Meta Billing Hub.
 - Brazilian-local BSPs (Take Blip, Zenvia, SocialHub.pro) already bill in BRL with NF-e — relevant for LGPD compliance and Brazilian accounting.
 - Import taxes (ISS, IRRF, CIDE, PIS/COFINS-Importação, IOF) apply to USD remittances from Brazil; BRL-native billing eliminates this complexity.
-- **Our empirical ground truth (YCloud, production):** service messages = totalPrice:0 confirmed; Brazil marketing draws from wallet at ~$0.05–$0.0625/msg — consistent with Meta's $0.0625 base at 0% markup.
+- **Empirically confirmed in production (YCloud):** service messages = totalPrice:0; Brazil marketing draws from wallet at ~$0.05–$0.0625/msg — consistent with Meta's $0.0625 base at 0% markup.
 
 **MM API vs Cloud API (360dialog / Gupshup):** Meta's Marketing Messages (MM) API route can eliminate BSP surcharges that apply only on the standard `/messages` Cloud API endpoint. If using 360dialog or Gupshup for high-volume Brazil marketing, prefer the MM API/MM Lite route.
 

@@ -9,7 +9,7 @@ description: WhatsApp Business Platform (Cloud API) production reference for the
 
 > **Depends on:** the `meta` skill (BM health, verification, account quality/classifier, proxy/isolation, disposable-BM strategy, ban mechanics). ALWAYS load `meta` first. Do NOT load `meta-ads` unless doing CTWA.
 
-> **Related:** `meta-ads` (CTWA campaign setup + CAPI attribution); `ycloud` (our BSP platform) + `ycloud-api` (YCloud v2 REST API).
+> **Related:** `meta-ads` (CTWA campaign setup + CAPI attribution); `ycloud` (the YCloud BSP platform) + `ycloud-api` (YCloud v2 REST API).
 
 ---
 
@@ -42,7 +42,7 @@ Without reading them, you WILL operate on stale data.
 
 **Integration paths:**
 1. **Direct Cloud API** — REST against Meta directly. Full control, requires engineering effort.
-2. **BSP (Business Solution Provider)** — managed infrastructure with inbox, automation, analytics UI. Our BSP: YCloud (see `ycloud` skill).
+2. **BSP (Business Solution Provider)** — managed infrastructure with inbox, automation, analytics UI. Recommended BSP: YCloud (see `ycloud` skill).
 
 ---
 

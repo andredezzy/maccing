@@ -27,7 +27,7 @@ Upgrade is automatic (takes ~1 minute) and triggers a `THROUGHPUT_UPGRADE` webho
 | 3 | 100,000 | Established brands |
 | 4 | Unlimited | Enterprise |
 
-**Upcoming (Q1-Q2 2026 rollout, not yet universal):** Meta announced removal of the 2K and 10K intermediate tiers for verified businesses. Once fully deployed, business verification would jump a portfolio directly to 100K/day. Our own WABA (verified BM, May 2026) was at 2,000/day — treat as a pending rollout, not a completed change.
+**Upcoming (Q1-Q2 2026 rollout, not yet universal):** Meta announced removal of the 2K and 10K intermediate tiers for verified businesses. Once fully deployed, business verification would jump a portfolio directly to 100K/day. A verified-BM WABA observed in production (May 2026) was still at 2,000/day — treat as a pending rollout, not a completed change.
 
 **Tier upgrade logic:**
 - Meta evaluates every **6 hours** (changed from 24-48h in 2025)

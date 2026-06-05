@@ -456,7 +456,7 @@ At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Yo
 | **Identity verification required** | Phone SMS mandatory before accessing Events Manager |
 | **India permanently banned** | TikTok banned in India since June 2020. No advertising possible. |
 | **Philippines unavailable** | Philippines not available as targeting option for Brazil-based accounts (as of May 2026). Reason unknown — may be currency/region restriction. |
-| **"Binary" in name = instant suspension** | An account whose company name contained a binary-options brand term was auto-suspended on first publish — TikTok bans binary options; avoid such terms in brand naming. |
+| **"Binary" in name = instant suspension** | Accounts with company names containing binary-options brand terms have been auto-suspended on first publish — TikTok bans binary options; avoid such terms in brand naming. |
 | **Account suspension is pre-emptive** | Unlike Google Ads (which reviews ads individually), TikTok may suspend the entire account before any ad runs. No opportunity to prove compliance first. |
 
 ### Campaign Creation

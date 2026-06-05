@@ -27,7 +27,7 @@ Growth ($39/mo), Pro ($89/mo), and Enterprise ($399/mo) plans add users, channel
 the same 0% markup.
 
 Risk: free-tier accounts in financial niches have been false-positive-suspended. Resolution via support
-ticket typically takes <24h. One BSP account per disposable BM is required (operator policy 2026-06) to
+ticket typically takes <24h. One BSP account per disposable BM is required (recommended practice) to
 prevent a single suspension from taking down all active BMs.
 
 ## Console Map

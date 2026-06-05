@@ -674,7 +674,7 @@ No public source publishes exact per-keyword CPC for "copy trading" / "earn mone
 | "trading platform" | $0.50–$2.00 | Most competitive finance keyword |
 | "invest online" / "investment app" | $0.30–$1.00 | Growing competition |
 
-**Warning:** "earn money online" / "online jobs" keywords in SEA attract extremely high bot/click-farm traffic. Our campaign experience (May 2026) confirms: high CTR, near-zero conversion quality. Heavy negatives required.
+**Warning:** "earn money online" / "online jobs" keywords in SEA attract extremely high bot/click-farm traffic. Production campaigns (May 2026) confirm: high CTR, near-zero conversion quality. Heavy negatives required.
 
 ### Financial Services Google Ads Benchmarks (Global, Finance & Insurance Category — WordStream 2025)
 
