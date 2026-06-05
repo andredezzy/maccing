@@ -1,21 +1,21 @@
 ---
 name: ycloud
 description: >
-  YCloud BSP platform operations knowledge for WhatsApp dispatch — console navigation, plans/pricing,
-  Embedded Signup, campaigns/inbox/journeys, auto-unsubscribe chatbot, the public-API-vs-dashboard-backend
-  distinction, BSP migration, and read-only CDP automation. Use when operating the YCloud BSP for WhatsApp
-  dispatch: plans, embedded signup, campaign sends, campaign analytics, inbox, auto-unsubscribe chatbot,
-  opt-out attribution, dashboard automation, or comparing YCloud to other BSPs. Triggers on: 'ycloud',
-  'BSP', 'bulk campaign', 'whatsapp dashboard', 'embedded signup', 'auto-unsubscribe', 'opt-out chatbot',
-  'campaign analytics', 'dispatch automation', 'bsp comparison', 'bsp pricing', 'ycloud free plan',
-  'zero markup'.
+  YCloud — a multi-channel communications provider (CPaaS: WhatsApp, SMS, Voice, Email), not a Meta-only BSP.
+  This skill covers its WhatsApp Business operations: console navigation, plans/pricing, Embedded Signup,
+  campaigns/inbox/journeys, auto-unsubscribe chatbot, the public-API-vs-dashboard-backend distinction, BSP
+  migration, and read-only CDP automation. Use when operating YCloud for WhatsApp dispatch: plans, embedded
+  signup, campaign sends, campaign analytics, inbox, auto-unsubscribe chatbot, opt-out attribution, dashboard
+  automation, or comparing YCloud to other providers. Triggers on: 'ycloud', 'CPaaS', 'BSP', 'bulk campaign',
+  'whatsapp dashboard', 'embedded signup', 'auto-unsubscribe', 'opt-out chatbot', 'campaign analytics',
+  'dispatch automation', 'provider comparison', 'ycloud free plan', 'zero markup'.
 ---
 
 > **Related:** `whatsapp` (Cloud API + dispatch), `ycloud-api` (the v2 REST API reference), `meta` (BM/isolation — the CDP automation MUST run inside the disposable BM's AdsPower profile).
 
 ## Overview
 
-YCloud is a Business Solution Provider (BSP) that wraps Meta's WhatsApp Business API. The Free plan has:
+YCloud is a multi-channel communications provider (CPaaS — WhatsApp, SMS, Voice, Email). This skill focuses on its WhatsApp Business Solution Provider (BSP) role, which wraps Meta's WhatsApp Business API. The Free plan has:
 
 - **$0/month** subscription, unlimited API access
 - **0% per-message markup** — wallet is debited at Meta's base rate (~$0.0625/msg for Brazil marketing)
