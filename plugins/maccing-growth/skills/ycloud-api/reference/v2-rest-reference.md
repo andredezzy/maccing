@@ -1,6 +1,46 @@
-# YCloud v2 REST API Reference
+## Contents
 
-YCloud is a BSP (Business Solution Provider) that wraps Meta's WhatsApp Business API and exposes a unified REST interface at `https://api.ycloud.com/v2`. This document merges live-probe ground truth (confirmed June 2026 against a live YCloud account) with the YCloud documentation catalog. Behaviors tagged [verified live 2026-06] were confirmed empirically; every identifier shown (`WABA_ID`, `PHONE_NUMBER_ID`, +15551234567, display name "My Brand") is a placeholder standing in for a real value.
+- [Overview and Auth](#overview-and-auth)
+- [Messages](#messages)
+  - [Endpoint Table](#endpoint-table)
+  - [Send a Message (POST /v2/whatsapp/messages)](#send-a-message-post-v2whatsappmessages)
+  - [List Messages (GET /v2/whatsapp/messages)](#list-messages-get-v2whatsappmessages)
+  - [Retrieve Single Message (GET /v2/whatsapp/messages/{id})](#retrieve-single-message-get-v2whatsappmessagesid)
+  - [Inbound Messages](#inbound-messages)
+  - [Computing Template Analytics (No Dedicated Endpoint)](#computing-template-analytics-no-dedicated-endpoint)
+- [Templates](#templates)
+  - [Endpoint Table](#endpoint-table-1)
+  - [List Templates (GET /v2/whatsapp/templates)](#list-templates-get-v2whatsapptemplates)
+  - [Retrieve Single Template (GET /v2/whatsapp/templates/{wabaId}/{name}/{language})](#retrieve-single-template-get-v2whatsapptemplateswabaidnamelanguage)
+  - [Create Template (POST /v2/whatsapp/templates)](#create-template-post-v2whatsapptemplates)
+  - [Edit Template (PATCH /v2/whatsapp/templates/{wabaId}/{name}/{language})](#edit-template-patch-v2whatsapptemplateswabaidnamelanguage)
+  - [Delete Template (DELETE /v2/whatsapp/templates/{wabaId}/{name}/{language})](#delete-template-delete-v2whatsapptemplateswabaidnamelanguage)
+- [Phone Numbers and WABA](#phone-numbers-and-waba)
+  - [Endpoint Table](#endpoint-table-2)
+  - [Phone Number: Known Limitation](#phone-number-known-limitation)
+  - [List Phone Numbers (GET /v2/whatsapp/phoneNumbers)](#list-phone-numbers-get-v2whatsappphonenumbers)
+  - [Retrieve Single Phone Number (GET /v2/whatsapp/phoneNumbers/{wabaId}/{phoneNumber})](#retrieve-single-phone-number-get-v2whatsappphonenumberswabaidphonenumber)
+  - [Update Profile (PATCH /v2/whatsapp/phoneNumbers/{wabaId}/{phoneNumber}/profile)](#update-profile-patch-v2whatsappphonenumberswabaidphonenumberprofile)
+  - [WABA (GET /v2/whatsapp/businessAccounts)](#waba-get-v2whatsappbusinessaccounts)
+- [Wallet and Billing](#wallet-and-billing)
+  - [Endpoint Table](#endpoint-table-3)
+  - [Check Balance (GET /v2/balance)](#check-balance-get-v2balance)
+- [Webhooks](#webhooks)
+  - [Endpoint Table](#endpoint-table-4)
+  - [List Webhooks (GET /v2/webhookEndpoints)](#list-webhooks-get-v2webhookendpoints)
+  - [Key Webhook Event Types](#key-webhook-event-types)
+- [Contacts](#contacts)
+  - [Endpoint Table](#endpoint-table-5)
+  - [List Contacts (GET /v2/contact/contacts)](#list-contacts-get-v2contactcontacts)
+- [Unsubscribers (Opt-Outs)](#unsubscribers-opt-outs)
+  - [Endpoint Table](#endpoint-table-6)
+  - [List Unsubscribers (GET /v2/unsubscribers)](#list-unsubscribers-get-v2unsubscribers)
+  - [Check Opt-Out Status (GET /v2/unsubscribers/{customer}/{channel})](#check-opt-out-status-get-v2unsubscriberscustomerchannel)
+- [Media](#media)
+  - [Endpoint Table](#endpoint-table-7)
+  - [Upload Media (POST /v2/whatsapp/media/{phoneNumber}/upload)](#upload-media-post-v2whatsappmediaphonenumberupload)
+- [Feature-Gated and Unavailable Endpoints](#feature-gated-and-unavailable-endpoints)
+- [Known API Behavior Deviations](#known-api-behavior-deviations)
 
 ---
 
@@ -28,33 +68,6 @@ All responses are JSON. List endpoints return a standard envelope:
 `total` is only included when the request includes `includeTotal=true`. `length` is the count of items in the current page.
 
 Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to `offset = (page - 1) * limit`. The maximum reachable offset is `(page_max - 1) * limit_max = (100 - 1) * 100 = 9,900` — i.e. up to ~10,000 records. Accounts with more than ~10,000 messages cannot page beyond that boundary using the current API. [verified live 2026-06]
-
----
-
-## What You Can and Cannot Automate
-
-| Evaluation need | Available via API | Method | Notes |
-|---|---|---|---|
-| Phone quality rating (GREEN/YELLOW/RED) | Yes | GET /v2/whatsapp/phoneNumbers, field `qualityRating` | [verified live 2026-06] returns GREEN / YELLOW / RED |
-| Messaging tier / limit | Yes | GET /v2/whatsapp/phoneNumbers, fields `messagingLimit` + `whatsappBusinessManagerMessagingLimit` | [verified live 2026-06] returns the current tier (e.g. TIER_2K) |
-| Wallet / credit balance | Yes | GET /v2/balance | [verified live 2026-06] always denominated in USD regardless of the WABA billing currency |
-| Template approval status | Yes | GET /v2/whatsapp/templates, field `status` | [verified live 2026-06] returns APPROVED / PENDING / IN_APPEAL / REJECTED per template |
-| Template quality score | Partially | GET /v2/whatsapp/templates, field `qualityRating` | [verified live 2026-06] returns UNKNOWN until sufficient send volume; GREEN/YELLOW/RED once scored by Meta |
-| Per-template send / deliver / read counts | No dedicated endpoint | Self-computed: paginate GET /v2/whatsapp/messages, group by `template.name`, aggregate `status` | [verified live 2026-06] all filter params except `filter.to` and `filter.wabaId` are silently ignored server-side |
-| Per-message delivery funnel | Yes | GET /v2/whatsapp/messages, fields `sendTime`, `deliverTime`, `readTime`, `status` | [verified live 2026-06] |
-| Per-message cost | Yes | GET /v2/whatsapp/messages, fields `totalPrice`, `pricingCategory`, `currency` | [verified live 2026-06] `marketing_lite` at $0.0625/message |
-| URL button click tracking | No | Not present in message objects | [verified live 2026-06] no `clicked` field exists |
-| Opt-out list (queryable) | Yes | GET /v2/unsubscribers, field `customer` per record | [verified live 2026-06] 0 current records; no template-level attribution, requires correlating timestamp + phone against your own send log |
-| Opt-out attribution to a template | Yes, via the DASHBOARD backend (not the public API) | `POST www.ycloud.com/api/whatsapp/batch/search` gives per-campaign `unsubscribeNums` + `templateName`; `GET /batch/activity/analytics` gives `buttons[].count` | [verified live 2026-06] session-cookie auth only, reached from inside the AdsPower profile (see "Dashboard Backend API" at the end) |
-| Inbound messages (queryable list) | No | [UNAVAILABLE] | GET /v2/whatsapp/inboundMessages returns 404; inbound is webhook-only [verified live 2026-06] |
-| Aggregate analytics (bulk stats) | No | [UNAVAILABLE] | No /analytics, /insights, /stats paths exist; all return 404 [verified live 2026-06] |
-| WABA business verification status | Yes | GET /v2/whatsapp/businessAccounts/{id}, field `businessVerificationStatus` | [verified live 2026-06] value: `verified` |
-| Contacts (CRM-style list) | Yes | GET /v2/contact/contacts | [from docs, verified live 2026-06] auto-created from inbound WhatsApp interactions |
-| Billing history / transaction log | No | [UNAVAILABLE] | No billing history endpoint exists |
-| Low-balance webhook | No | [UNAVAILABLE] | No threshold-alert or billing event in webhook catalog |
-| WhatsApp Flows | No (feature-gated) | Returns 403 for accounts without the feature, even with correct wabaId | [verified live 2026-06] |
-| WhatsApp Groups | No (feature-gated) | Returns 404 for accounts without the feature | [verified live 2026-06] |
-| SMS / Voice / Email | No (not enabled) | Returns 403 ACCOUNT_LIMITED | [verified live 2026-06] |
 
 ---
 
@@ -711,125 +724,3 @@ These are cases where live behavior diverges from documentation or expected REST
 | Single WABA endpoint returns flat object | GET /v2/whatsapp/businessAccounts/{id} returns a flat JSON object, not an `{items: [...]}` envelope. |
 
 ---
-
-## Dashboard Backend API (session-cookie, reached via the AdsPower profile over CDP)
-
-A SEPARATE, undocumented API from the public `api.ycloud.com/v2` one. It lives at
-`https://www.ycloud.com/api/...`, powers the dashboard UI, and exposes the per-campaign analytics,
-the opt-out button counts, and per-campaign message search that the public API does NOT (the public
-API has no campaign/activity concept). [verified live 2026-06]
-
-### Auth: the SESSION cookie, NOT the API key
-
-These endpoints reject the public `X-API-Key` (also Bearer and no-auth) with
-`{"code":10001,"msg":"login please."}`. They authenticate with the dashboard `SESSION` cookie (httpOnly,
-plus `remember-me`), which only exists inside a logged-in browser session.
-
-### Access method (MANDATORY): run from inside the disposable BM's AdsPower profile
-
-Per the browser-automation isolation rule, NEVER replay the cookie from a host-IP curl (hitting the
-dashboard from a different IP than the account normally uses is a risk-control trigger, and this BSP
-account was already false-positive-suspended once). Instead drive the SAME AdsPower profile that
-operates the disposable BM, where YCloud is already logged in on the correct proxy, and call the
-endpoints from inside that page (same origin, the cookie and proxy are applied automatically, nothing
-to extract or store):
-
-```python
-import json, urllib.request
-from playwright.sync_api import sync_playwright
-
-ADS = "http://local.adspower.net:50325"
-ws = json.load(urllib.request.urlopen(
-    f"{ADS}/api/v1/browser/start?user_id=<PROFILE_ID>&headless=0"))["data"]["ws"]["puppeteer"]
-with sync_playwright() as p:
-    page = p.chromium.connect_over_cdp(ws).contexts[0].pages[0]
-    if "ycloud.com" not in page.url:
-        page.goto("https://www.ycloud.com/", wait_until="domcontentloaded")
-    data = page.evaluate("""async () => {
-        const r = await fetch('/api/whatsapp/batch/search', {method:'POST', credentials:'include',
-            headers:{'Content-Type':'application/json'}, body: JSON.stringify({pageNo:1, pageSize:50})});
-        return await r.json();
-    }""")
-```
-
-The `SESSION` cookie expires, so the AdsPower profile must stay logged in (re-login inside the profile
-when it does). The endpoints are undocumented and can change without notice. Read-only evaluation only,
-never send through these.
-
-### Endpoints (all under `https://www.ycloud.com/api`)
-
-**1. Campaign list: `POST /whatsapp/batch/search`**, body `{pageNo, pageSize}` (optional `to`/`status`).
-Returns `data.records[]`, one per campaign. The record `id` IS the `activityId`. Fields [verified live
-2026-06]: `id`, `name`, `templateName`, `language`, `wabaId`, `fromPhone`, `status`, `sendType`,
-`createTime`, `sendTime`, `endTime`, `updateTime`, `cost`, `currency`, `totalPhoneNums`,
-`validPhoneNums`, `invalidPhoneNums`, `duplicatePhoneNums`, `blockedNums`, `destinationNums`,
-`destinationList`, **`unsubscribeNums`** (per-campaign opt-out count), `paramJson`, `fileKey`,
-`validPhoneKey`, `tenantId`, `puid`, `suid`.
-
-**2. Per-campaign analytics: `GET /whatsapp/batch/activity/analytics?activityId=<id>`.** Returns `data`:
-`totalNums`, `sentNums`, `deliveredNums`, `readNums`, `failedNums`, `repliedNums`, `flowReplyNums`,
-**`buttons: [{key, count}]`** (per-button clicks, e.g. `{"key":"Parar mensagens","count":2}` is the
-opt-out count), and **`failedDetail: [{code, message, count}]`** (failure breakdown by error code, e.g.
-131049 throttle and 130472 holdout). [verified live 2026-06]
-
-**3. Per-campaign message search: `POST /whatsapp/message/search`**, body `{activityId, to, status,
-pageNo, pageSize}`. Returns `data.records[]`, one per recipient: `id`, `wabaId`, `from`, `to`, `status`
-(sent/delivered/read/failed), `templateName`, `language`, `message` (rendered body), `createTime`,
-`sendTime`, `deliverTime`, `readTime`, `errorCode`, `errorMessage`, `toRegionCode`, `contactName`. The
-`to`/`status` filters ARE applied here (unlike the public `/v2/whatsapp/messages`). [verified live 2026-06]
-
-### Automation loop (closes the template A/B decision)
-
-This makes the DECISIVE metric, per-template opt-out, fully automatable on the correct proxy:
-1. `batch/search` to list campaigns, each with `templateName`, `unsubscribeNums`, and counts.
-2. `batch/activity/analytics` per campaign for the exact funnel plus `buttons[]` opt-out.
-3. Group by `templateName`, sum sent / delivered / read / failed / opt-out per template, compute
-   opt-out% = opt-outs / sent, and prefer the lower-opt-out template (audience friction is the #1
-   quality-rating driver). For example, a template at 6% opt-out beats one at 18% even when their
-   delivery and read rates are near-tied.
-
----
-
-## Auto-unsubscribe chatbot (keyword opt-out, dashboard UI only)
-
-A custom opt-out quick-reply button on a broadcast template (e.g. a "stop messages" button) does NOT
-auto-add the clicker to the unsubscribe list, and the click is invisible to the public API (it appears
-only as a `buttons[].count` in the dashboard per-campaign analytics). To actually suppress opt-outs you
-build a keyword-triggered RULE-BASED chatbot whose flow ends in an Unsubscribe component, AND assign
-that chatbot to the number. This is dashboard-UI only, there is no public API for it.
-
-Exact steps [verified live 2026-06]:
-1. AI Agent (left menu), Create Agent, **Rule-based Agent** (the deterministic one; "AI Agent" and
-   "Responsive AI Agent" are LLM-based). Name it, Create.
-2. The agent opens on **Profile**. Leave defaults: Welcome Message off, and "What should the agent do
-   when it doesn't understand the user's intent" = **Remain without responding** (so the bot stays
-   silent on everything except the opt-out keywords).
-3. **Flows** tab, **Create a flow** (or open the auto-created one), **Build** canvas, **Add a trigger**.
-4. Choose **Keyword trigger**, set **Keywords matching rule = Exact matching** (safer than Contains,
-   which false-triggers on phrases like "I do not want to stop"), then **+ Keyword** for the exact
-   button label plus common typed variants, one keyword each. **Save** with the node panel's Save
-   button, NOT the X (the X discards the config).
-5. Connect the next node by **dragging** from the Trigger node's right-edge handle onto the new node.
-   Clicking the handle only re-opens the node editor; you must DRAG to create the link.
-6. In the **Tool box**, click **Unsubscribe** to add the node. In its panel turn **Auto-reply = On** and
-   write the confirmation message, then **Save** (node panel).
-7. Drag-connect Trigger to Unsubscribe so an arrow links them.
-8. **Save the flow** (top-right), and in the "Save the flow" dialog flip **Set up flow status = Active**,
-   then Save. There are TWO save levels: each node panel AND the flow.
-9. **MANDATORY: assign the chatbot to the number.** WhatsApp accounts, the number's gear (Settings),
-   **Inbox > Assignment**, **Priority 3 "Assign to" -> AI Agent ->** select your rule-based agent,
-   **Save**. The active flow alone never fires without this: the agent's "Associated" count stays 0 and
-   the chatbot receives nothing. [deep-research + live verified]
-
-Gotchas:
-- Flow Active is not enough; the assignment in step 9 is what routes the number's messages to the bot.
-- Assignment fires only at conversation CREATION [verified live + docs]. A NEW conversation (a number
-  that never messaged before) IS auto-assigned to the Priority-3 chatbot and the flow runs; a
-  PRE-EXISTING conversation NEVER re-routes on later inbound messages (the inbox "Assigned to bot" stays
-  empty for old conversations, and the per-conversation manual-assign menu lists only human agents, not
-  the bot). So always test from a brand-new number, and for the EXISTING audience rely on a separate
-  suppression (e.g. exclude prior recipients at send time) since their opt-out clicks will not auto-fire
-  the bot. The 24h window does NOT block any of this: an inbound message reopens the window, and the
-  Unsubscribe action needs no window.
-- For a template quick-reply button specifically, "Click button trigger" is the alternative to the
-  keyword trigger.

@@ -1,6 +1,6 @@
 ---
 name: growth
-description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to channel skills (google-ads, meta-ads, tiktok-ads, whatsapp). Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach".
+description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to platform skills (google-ads, meta-ads, tiktok-ads, whatsapp) over the shared `meta` substrate and the `ycloud`/`ycloud-api` BSP skills. Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach".
 ---
 
 # Paid Advertising: Master Skill
@@ -40,6 +40,8 @@ Execution happens in platform-specific skills.
 - TikTok Ads execution → `tiktok-ads` skill (API + MCP)
 - Meta/Facebook/Instagram execution → `meta-ads` skill (Marketing API + CAPI + CTWA)
 - WhatsApp message dispatch → `whatsapp` skill (Cloud API, templates, bulk sending)
+- Meta platform substrate (BM, verification, account quality, classifier, asset isolation, disposable-BM, ban/appeal) → `meta` skill — **shared**, loaded first by both `meta-ads` and `whatsapp`
+- YCloud BSP (dispatch console, campaigns, opt-out automation) → `ycloud` skill; YCloud v2 REST API → `ycloud-api` skill
 - Other platforms → research + manual guidance
 
 **Project data:** `.maccing/growth/<vendor>/<account>/` — each project has its own README + platform subdirectories (git-tracked per Iron Law 0b).

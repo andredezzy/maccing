@@ -1,7 +1,7 @@
 {
   "name": "maccing-growth",
-  "version": "1.9.11",
-  "description": "Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API) — strategy, metrics, and platform references.",
+  "version": "1.10.0",
+  "description": "Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API). Platform-split skills (shared meta substrate + meta-ads/whatsapp children + ycloud/ycloud-api BSP) with progressive-disclosure references.",
   "author": {
     "name": "André \"Dezzy\" Victor",
     "email": "contact@andredezzy.com",
@@ -10,7 +10,7 @@
   "homepage": "https://github.com/andredezzy/maccing",
   "repository": "https://github.com/andredezzy/maccing",
   "license": "MIT",
-  "keywords": ["growth", "ads", "google-ads", "meta-ads", "tiktok-ads", "whatsapp", "cloud-api", "marketing", "performance-marketing"],
+  "keywords": ["growth", "ads", "google-ads", "meta", "meta-ads", "tiktok-ads", "whatsapp", "ycloud", "bsp", "cloud-api", "marketing", "performance-marketing"],
   "skills": "./skills/",
   "commands": ["./commands/"]
 }
