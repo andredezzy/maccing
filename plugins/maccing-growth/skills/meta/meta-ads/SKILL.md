@@ -16,11 +16,17 @@ Production reference for Meta Ads. Covers Marketing API, campaign types, targeti
 ## Project Context (MANDATORY)
 
 ```
-MANDATORY: Read project context BEFORE any action.
-ALWAYS read: .maccing/growth/README.md (if exists)
-             .maccing/growth/meta/<bm>/ads/<account>/README.md (if exists)
-These contain current state: BM status, pipeline progress, pending actions.
-Without reading them, you WILL operate on stale data.
+MANDATORY — read context AND report the full BM roster BEFORE any action
+(including before clarifying questions):
+1. READ `.maccing/growth/README.md` (the vendor/account index), if it exists.
+2. ENUMERATE every BM — never assume one. The path is `meta/<profile>/<bm>/`, so
+   list `.maccing/growth/meta/*/` (profiles) and `.maccing/growth/meta/*/*/` (BMs),
+   then READ the root README, EVERY profile README, and EVERY BM README found.
+3. Also READ EVERY ad-account README: `.maccing/growth/meta/*/*/ads/*/README.md`.
+4. TELL the operator a roster of ALL BMs up front — one line each
+   (profile · BM · verification/tier · ad account · status) —
+   INCLUDING BMs unrelated to the current task. Never silently narrow to one BM.
+Skipping this = operating on stale data and hiding live assets from the operator.
 ```
 
 ---

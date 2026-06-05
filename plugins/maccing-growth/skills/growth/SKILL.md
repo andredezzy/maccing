@@ -9,14 +9,17 @@ Platform-agnostic knowledge base for paid advertising. Covers strategy, metrics,
 
 ## Iron Laws
 
-### 0. MANDATORY: Read project context first
+### 0. MANDATORY: Read project context AND report the full account/BM roster first
 
-If you are operating inside a project repo, BEFORE any action read the project's growth state:
+If you are operating inside a project repo, BEFORE any action (including before clarifying questions):
 
-1. `.maccing/growth/README.md` — which vendors/accounts are live vs disposed.
-2. The relevant `<vendor>/<account>/README.md` (e.g. `meta/<bm>/README.md`, `meta/<bm>/whatsapp/<waba>/README.md`, `google-ads/<account>/README.md`).
+1. READ `.maccing/growth/README.md` — the index of which vendors/accounts are live vs disposed.
+2. ENUMERATE every account — never assume one. Glob the relevant vendor tree and read EVERY README found, not just the one the task names:
+   - Meta uses `meta/<profile>/<bm>/...`: read EVERY `meta/*/README.md` (profiles), EVERY `meta/*/*/README.md` (BMs), and the channel READMEs under them (`meta/*/*/whatsapp/*/README.md`, `meta/*/*/ads/*/README.md`).
+   - Other vendors: read EVERY `google-ads/*/README.md`, `tiktok-ads/*/README.md`, etc.
+3. TELL the operator a roster of ALL accounts/BMs up front — one line each (vendor/profile · account/BM · status · tier/quality) — INCLUDING ones unrelated to the current task. Never silently narrow to a single BM/account.
 
-These hold current state: account IDs, budgets, campaign history, template/quality status, pending actions. Without them you operate on stale assumptions.
+These hold current state: account IDs, budgets, campaign history, template/quality status, pending actions. Skipping this means operating on stale assumptions and hiding live assets from the operator.
 
 ### 0b. Persist project state under a git-tracked `.maccing/growth/`
 
@@ -58,12 +61,14 @@ Execution happens in platform-specific skills.
 │   └── <account>/
 │       └── README.md           # Pixel, account data, history
 ├── meta/
-│   └── <bm>/
-│       ├── README.md           # BM-level: identity, verification, ad accounts
-│       ├── site/               # Brand site (BM-level asset)
-│       └── whatsapp/
-│           └── <number>/
-│               └── README.md   # WABA, BSP, templates, quality, metrics
+│   └── <profile>/              # antidetect profile (owns one or more BMs)
+│       ├── README.md           # Profile-level: identity, proxy, account status
+│       └── <bm>/
+│           ├── README.md       # BM-level: identity, verification, ad accounts
+│           ├── site/           # Brand site (BM-level asset)
+│           └── whatsapp/
+│               └── <number>/
+│                   └── README.md   # WABA, BSP, templates, quality, metrics
 ```
 
 ### 2. Self-Improving Skill

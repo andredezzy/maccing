@@ -8,11 +8,17 @@ description: Parent skill for the Meta platform — Business Manager (BM) fundam
 Parent skill for the Meta platform; meta-ads and whatsapp depend on this.
 
 ```
-MANDATORY: Read project context BEFORE any action.
-ALWAYS read: .maccing/growth/README.md (if exists)
-             .maccing/growth/meta/<bm>/README.md (if exists)
-These contain current BM state: verification status, proxy/card/profile inventory,
-pipeline progress, pending actions. Without reading them, you WILL operate on stale data.
+MANDATORY — read context AND report the full BM roster BEFORE any action
+(including before clarifying questions):
+1. READ `.maccing/growth/README.md` (the vendor/account index), if it exists.
+2. ENUMERATE every BM — never assume one. The path is `meta/<profile>/<bm>/`, so
+   list `.maccing/growth/meta/*/` (profiles) and `.maccing/growth/meta/*/*/` (BMs),
+   then READ the root README, EVERY profile README, and EVERY BM README found.
+3. TELL the operator a roster of ALL BMs up front — one line each
+   (profile · BM · verification/tier · proxy/isolation · status) —
+   INCLUDING BMs unrelated to the current task. Never silently narrow to one BM.
+Each BM README holds verification status, proxy/card/profile inventory, pipeline
+progress, and pending actions. Skipping this = stale data + hidden live assets.
 ```
 
 **Child skills:** `meta-ads` and `whatsapp` both build on this. If working on ads only, load `meta-ads`. If working on WhatsApp dispatch, load `whatsapp`. Both share the BM infrastructure, isolation rules, and classifier defensive intelligence documented here.
