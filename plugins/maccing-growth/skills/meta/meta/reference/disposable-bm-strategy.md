@@ -221,7 +221,7 @@ The earlier claim that "Verified BM → direct jump to 100,000/day" was **dispro
 
 **Emergency stop signals:** quality → Red, Meta warning message, frequent error 131049, read rate <20%.
 
-**Billing before first send:** BSP platform may be free (YCloud), but Meta charges per message deducted from wallet. NO free marketing messages. Top up before Day 1.
+**Wallet funding — fund ONE DAY AT A TIME (never pre-fund the ramp):** BSP platform may be free (YCloud), but Meta charges per delivered message from a prepaid wallet — NO free marketing messages, so top up before Day 1. From then on, top up **only the current day's send budget plus a small buffer, every day, immediately before that day's send. NEVER bulk-fund multiple days ahead** — even when a ramp plan tempts a single larger top-up to "sustain the week". A disposable BSP account can be suspended or false-positive risk-flagged at ANY moment (observed repeatedly on free tiers for financial-niche accounts), and a large prepaid balance is then frozen, slow, or impossible to recover. Per-day funding caps the at-risk balance at one day's spend (~$10-15 for a few hundred BR marketing msgs) instead of a whole week's, and forces a daily go/no-go check on quality + account health before any money is committed.
 
 **Rules:**
 - Randomize send intervals (mimic human timing) (see `reference/automation.md` §3 message-dispatch axis)

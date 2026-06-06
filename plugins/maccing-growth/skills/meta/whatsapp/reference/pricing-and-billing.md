@@ -86,6 +86,7 @@ Tiers reset monthly. Discounts are applied automatically by Meta.
 4. **Segment and personalize:** Generic broadcasts drive block rates, which hurt quality rating, which limits throughput tiers.
 5. **Clean your contact list:** Charged per delivered message. Failed deliveries aren't charged, but sending to dead numbers wastes API calls and can hurt quality metrics.
 6. **Misclassification risk:** Meta can reclassify marketing content submitted as utility. Always match category to actual content.
+7. **Fund the wallet per-day, never bulk (disposable/free-tier BSP):** Top up only the current day's send budget plus a small buffer each day, immediately before sending — never pre-fund a multi-day ramp. A suspended or risk-flagged BSP account can freeze a large prepaid balance. Full doctrine: `meta` skill → `disposable-bm-strategy.md` (Number Warming Protocol → "Wallet funding").
 
 ---
 
