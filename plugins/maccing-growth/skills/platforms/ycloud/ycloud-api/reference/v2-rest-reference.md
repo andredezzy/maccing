@@ -85,6 +85,11 @@ Pagination is offset-based: `page` (1–100) and `limit` (1–100) translate to 
 
 ### Send a Message (POST /v2/whatsapp/messages)
 
+> ⚠️ **Operator-only for broadcasts.** This endpoint is fine for single transactional/inbox replies, but the
+> agent MUST NOT loop it (or `sendDirectly`) over a recipient list to fire a marketing campaign — the
+> campaign/broadcast send is ALWAYS operator-executed in the dashboard UI, never automated. See `ycloud-api`
+> SKILL doctrine note + `whatsapp` skill → `sending-and-scale.md` §6.
+
 Enqueues a message for async delivery. Returns immediately with a YCloud message ID. Actual delivery happens asynchronously; status updates arrive via webhook (`whatsapp.message.updated`). [from docs]
 
 Key request body fields:

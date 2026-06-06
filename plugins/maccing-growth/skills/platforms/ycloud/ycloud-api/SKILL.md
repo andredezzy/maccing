@@ -37,11 +37,20 @@ No OAuth, no Bearer token. One key grants full read/write access to all resource
 | Message filters mostly broken | `filter.status`, `filter.from`, `filter.type` on GET /v2/whatsapp/messages are silently ignored. Only `filter.wabaId` and `filter.to` work server-side. Post-filter client-side for everything else. |
 | Campaign→messages lag | Bulk campaign sends via the dashboard are not instantly reflected in GET /v2/whatsapp/messages; allow propagation time. |
 | No bulkMessages API | There is no bulk-send endpoint in the public v2 API. Campaign sends are dashboard-only. |
+| **Campaign send is OPERATOR-ONLY** | The agent NEVER auto-sends a marketing broadcast — no message-loop, no broadcast POST, no `sendDirectly` fan-out over a list. The human operator submits it in the dashboard UI. See the doctrine note below. |
 | `filterUnsubscribed` not on `sendDirectly` | Available on POST /v2/whatsapp/messages only, not on the sendDirectly variant. |
 | Template PATCH is full replacement | Every PATCH must include ALL components even when changing only one. |
 | Phone number ID path broken | GET /v2/whatsapp/phoneNumbers/{PHONE_NUMBER_ID} returns 404. Use `/{wabaId}/{phoneNumber}` instead. |
 | Unsubscribers has cursor + offset | The only endpoint returning both pagination styles simultaneously. |
 | Balance is always USD | GET /v2/balance returns USD regardless of WABA billing currency. |
+
+> ⚠️ **DOCTRINE — the campaign/broadcast SEND is ALWAYS operator-executed, NEVER automated by the agent.**
+> Use this API for reads (status, analytics, balance, templates), for single transactional/inbox replies
+> inside the 24h service window, and to build/validate lists — but the agent MUST NOT fire a marketing
+> broadcast programmatically (no `POST /v2/whatsapp/messages` loop over a list, no `sendDirectly` fan-out).
+> The human operator uploads the list and clicks Send in the dashboard UI. A broadcast is irreversible,
+> costs real money, and one bad send can crater quality or permanently ban the number — the human at the
+> trigger is the last safety gate. Full rationale: `whatsapp` skill → `sending-and-scale.md` §6.
 
 ## Endpoint Quick-Table
 

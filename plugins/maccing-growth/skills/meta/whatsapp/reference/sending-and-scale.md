@@ -1,5 +1,16 @@
 ## 6. Sending Messages at Scale
 
+> ⚠️ **DOCTRINE — the campaign/broadcast SEND is ALWAYS operator-executed, NEVER automated by the agent.**
+> The agent builds and validates the recipient list, runs the pre-send health gate, picks the template, and
+> reconciles results afterward — but the **human operator** is the one who uploads the list and clicks Send
+> in the BSP UI (e.g. YCloud → Campaigns → New campaign). The agent MUST NOT submit a marketing broadcast
+> programmatically: no `POST /v2/whatsapp/messages` loop over a list, no broadcast endpoint, no
+> `sendDirectly` fan-out. **Why:** a broadcast is irreversible, costs real money, reaches hundreds of real
+> people, and one mistake (wrong template, wrong list, wrong variable mapping) can crater a hard-won quality
+> rating or permanently ban the number — a human at the trigger is the last safety gate. Scope: this covers
+> **bulk campaign/broadcast sends**; single transactional/inbox replies inside the 24h service window are not
+> the target.
+
 ### Throughput Tiers
 
 | Level | Speed | Upgrade Trigger |
