@@ -2,13 +2,13 @@
 name: ycloud
 description: >
   YCloud — a multi-channel communications provider (CPaaS: WhatsApp, SMS, Voice, Email), not a Meta-only BSP.
-  This skill covers its WhatsApp Business operations: console navigation, plans/pricing, Embedded Signup,
+  This skill covers its WhatsApp Business operations: console navigation, plans/pricing, account creation/onboarding, Embedded Signup,
   campaigns/inbox/journeys, auto-unsubscribe chatbot, the public-API-vs-dashboard-backend distinction, BSP
   migration, and read-only CDP automation. Use when operating YCloud for WhatsApp dispatch: plans, embedded
   signup, campaign sends, campaign analytics, inbox, auto-unsubscribe chatbot, opt-out attribution, dashboard
   automation, or comparing YCloud to other providers. Triggers on: 'ycloud', 'CPaaS', 'BSP', 'bulk campaign',
   'whatsapp dashboard', 'embedded signup', 'auto-unsubscribe', 'opt-out chatbot', 'campaign analytics',
-  'dispatch automation', 'provider comparison', 'ycloud free plan', 'zero markup'.
+  'dispatch automation', 'provider comparison', 'ycloud free plan', 'zero markup', 'ycloud account creation', 'ycloud onboarding', 'ycloud signup code'.
 ---
 
 > **Related:** `whatsapp` (Cloud API + dispatch), `ycloud-api` (the v2 REST API reference), `meta` (BM/isolation — the CDP automation MUST run inside the disposable BM's AdsPower profile).
@@ -29,6 +29,13 @@ the same 0% markup.
 Risk: free-tier accounts in financial niches have been false-positive-suspended. Resolution via support
 ticket typically takes <24h. One BSP account per disposable BM is required (recommended practice) to
 prevent a single suspension from taking down all active BMs.
+
+**Account onboarding ≠ Embedded Signup.** Creating the YCloud *account* (a 5-step wizard) is separate
+from connecting a *WABA* (Embedded Signup). The account-signup verification **code is delivered via a
+WhatsApp message** (not email/SMS) — a non-obvious blocker on disposable-BM setups, since it can reuse
+neither another BM's WhatsApp nor the fresh WABA chip. Full per-BM onboarding flow + the burner-WhatsApp
+workaround + account email/domain + profiling-field guidance + the $0.50 signup credit:
+`reference/console-and-operations.md` → **Account Creation / Onboarding (per BM)**.
 
 ## Console Map
 
@@ -68,6 +75,7 @@ For the read-only automation discipline (CDP connect, the MCP read recipe, undet
 
 | Intent | Reference | Use for |
 |---|---|---|
+| Account signup wizard, WhatsApp-code gotcha + workaround, account email/domain, profiling fields, $0.50 credit | reference/console-and-operations.md | Creating a new YCloud account per BM |
 | Campaign send file format, `.xlsx` spec, Test-send button | reference/console-and-operations.md | Preparing and uploading campaign lists |
 | Campaign-API lag, `/messages` pagination gotcha, webhook setup | reference/console-and-operations.md | Monitoring sends programmatically |
 | What data is available via API vs dashboard only | reference/console-and-operations.md | Knowing which surface to query |

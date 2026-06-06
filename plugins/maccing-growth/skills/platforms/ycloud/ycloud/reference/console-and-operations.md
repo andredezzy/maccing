@@ -1,12 +1,34 @@
 ## Contents
 
-1. [What You Can and Cannot Automate](#what-you-can-and-cannot-automate)
-2. [Dashboard Backend API (session-cookie, reached via the AdsPower profile over CDP)](#dashboard-backend-api)
-3. [Auto-unsubscribe chatbot (keyword opt-out, dashboard UI only)](#auto-unsubscribe-chatbot)
-4. [BSP Options (if not using Direct API)](#bsp-options)
-5. [BSP / Platform Comparison](#bsp--platform-comparison)
-6. [Pricing Model Notes](#pricing-model-notes)
-7. [YCloud Campaign Send File Format and Campaign-API-Lag Gotchas](#ycloud-campaign-send-file-format-and-campaign-api-lag-gotchas)
+1. [Account Creation / Onboarding (per BM)](#account-creation--onboarding-per-bm)
+2. [What You Can and Cannot Automate](#what-you-can-and-cannot-automate)
+3. [Dashboard Backend API (session-cookie, reached via the AdsPower profile over CDP)](#dashboard-backend-api)
+4. [Auto-unsubscribe chatbot (keyword opt-out, dashboard UI only)](#auto-unsubscribe-chatbot)
+5. [BSP Options (if not using Direct API)](#bsp-options)
+6. [BSP / Platform Comparison](#bsp--platform-comparison)
+7. [Pricing Model Notes](#pricing-model-notes)
+8. [YCloud Campaign Send File Format and Campaign-API-Lag Gotchas](#ycloud-campaign-send-file-format-and-campaign-api-lag-gotchas)
+
+---
+
+## Account Creation / Onboarding (per BM)
+
+Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsApp **Embedded Signup** (connecting a WABA/number). One YCloud account **per disposable BM**, created **from that BM's own AdsPower profile** (its isolated proxy) — never a clean host browser, never shared across BMs (a shared account is a single point of failure; YCloud has false-positive-suspended financial-niche accounts).
+
+**Prereqs before the form**
+- **Account email — separate per BM; prefer a domain email.** Must differ from every other BM's YCloud account. Disposable temp inboxes (`*.justwork.email`, etc.) risk non-delivery or being rejected as disposable → register the BM's throwaway brand domain and use a forwarded address. Namecheap free **Email Forwarding** works well: catch-all `*@brand.tld` → a real inbox you control; **keep BasicDNS** so MX (email) coexists with the site's A/CNAME (web). Isolation-safe: the visible address is on the throwaway brand domain; the forwarding TARGET is invisible externally.
+- **A burner WhatsApp number** to receive the signup code — see step 2.
+
+**The signup wizard (5 steps, observed 2026-06)**
+1. **Create your free account** — Work email, First/Last name, Password, hCaptcha, accept Terms → Continue.
+2. **⚠️ The account-verification code is delivered as an in-app WhatsApp MESSAGE** (not email, not SMS). The receiving number must be a LIVE WhatsApp account you can read, and must be **neither** (a) any other BM's WhatsApp (reuse/linkage) **nor** (b) the fresh chip reserved for THIS BM's WABA — receiving any WhatsApp on a number permanently disqualifies it from WABA registration (a WABA number must never have been on WhatsApp). **Workaround (field-verified):** on a secondary handset, register a NEW disposable WhatsApp using a cheap **online SMS-activation** number (the OTP site catches WhatsApp's *registration* SMS), then read YCloud's signup code inside that disposable WhatsApp. Keeps both the other BMs' WhatsApp and the WABA chip pristine. (Online "receive-WhatsApp-OTP" rental sites alone do NOT solve it — they're built for WhatsApp *registration*, not for receiving the YCloud message; pairing one with a real handset is what works.)
+3. **"Tell us about your company"** — soft profiling (tunes recommendations, no compliance weight), but keep it coherent with the brand story: Company name = the brand; Company website = the brand domain; Country; **Industry = Education** for a financial-education niche (**never Finance** — niche trigger + contradicts the WhatsApp profile category); Role; Company size (small).
+4. **"How do you plan to use YCloud?"** — multi-select; for broadcast dispatch pick **Marketing Automation + Lead Generation**.
+5. **Console** — a **$0.50 USD free creation credit** lands in the wallet (one-time, on signup). The "Start to create channel" CTA is the WhatsApp Embedded Signup (next).
+
+> **Company-name reuse across two YCloud accounts is a WEAK link, not a cascade trigger.** YCloud disables accounts on message quality / policy / purchased-origin, and its documented cascade is "all WABAs under a BM" (within one BM), not across separate accounts — it even recommends a backup BM+WABA. The real cross-account links are shared **IP / payment / device**, not the company name (an invisible soft CRM field). The customer-facing WhatsApp **display name** reuse is separately validated-safe (see `meta`). Free hedge: vary the invisible Step-3 company name; don't change the display name.
+
+**Then: WhatsApp Embedded Signup (connect the WABA/number).** Uses YCloud's developer app — no Meta developer account, only Facebook login + BM **Admin**, run from the BM's AdsPower profile. Requires a **fresh WABA number** (BR eSIM/SIM never on WhatsApp) to register during the flow.
 
 ---
 
