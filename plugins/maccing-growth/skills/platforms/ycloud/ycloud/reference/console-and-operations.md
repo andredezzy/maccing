@@ -24,11 +24,22 @@ Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsA
 2. **⚠️ The account-verification code is delivered as an in-app WhatsApp MESSAGE** (not email, not SMS). The receiving number must be a LIVE WhatsApp account you can read, and must be **neither** (a) any other BM's WhatsApp (reuse/linkage) **nor** (b) the fresh chip reserved for THIS BM's WABA — receiving any WhatsApp on a number permanently disqualifies it from WABA registration (a WABA number must never have been on WhatsApp). **Workaround (field-verified):** on a secondary handset, register a NEW disposable WhatsApp using a cheap **online SMS-activation** number (the OTP site catches WhatsApp's *registration* SMS), then read YCloud's signup code inside that disposable WhatsApp. Keeps both the other BMs' WhatsApp and the WABA chip pristine. (Online "receive-WhatsApp-OTP" rental sites alone do NOT solve it — they're built for WhatsApp *registration*, not for receiving the YCloud message; pairing one with a real handset is what works.)
 3. **"Tell us about your company"** — soft profiling (tunes recommendations, no compliance weight), but keep it coherent with the brand story: Company name = the brand; Company website = the brand domain; Country; **Industry = Education** for a financial-education niche (**never Finance** — niche trigger + contradicts the WhatsApp profile category); Role; Company size (small).
 4. **"How do you plan to use YCloud?"** — multi-select; for broadcast dispatch pick **Marketing Automation + Lead Generation**.
-5. **Console** — a **$0.50 USD free creation credit** lands in the wallet (one-time, on signup). The "Start to create channel" CTA is the WhatsApp Embedded Signup (next).
+5. **Console** — a **$0.50 USD free creation credit** lands in the wallet (one-time, on signup). The "Start to create channel" CTA is the WhatsApp Embedded Signup — but do NOT click it yet (see the rest below).
+
+> ⏸ **MANDATORY: after creating the account, leave it idle ~24h before using it — keep it AFK (cooldown).**
+> Do NOT immediately start Embedded Signup, connect a WABA, add a payment method, or send anything on a
+> brand-new account. YCloud's free-tier risk-control has **false-positive-suspended financial-niche accounts
+> within hours of signup** (observed on multiple accounts) — and a fresh account that instantly wires up a
+> WABA and launches a campaign looks exactly like the automated-abuse pattern the screen is built to catch.
+> The 24h idle lets the account clear automated post-signup review before any assets are attached — same
+> logic as the 24h BM rest after accepting a disposable BM. During the window do nothing on the account (no
+> logins-and-clicking sprees, no WABA, no top-up beyond the auto $0.50 credit). If it suspends anyway (it can
+> trip even while idle), file the support ticket immediately (Education / BM legal-identity framing, never the
+> real business) and resume only once restored.
 
 > **Company-name reuse across two YCloud accounts is a WEAK link, not a cascade trigger.** YCloud disables accounts on message quality / policy / purchased-origin, and its documented cascade is "all WABAs under a BM" (within one BM), not across separate accounts — it even recommends a backup BM+WABA. The real cross-account links are shared **IP / payment / device**, not the company name (an invisible soft CRM field). The customer-facing WhatsApp **display name** reuse is separately validated-safe (see `meta`). Free hedge: vary the invisible Step-3 company name; don't change the display name.
 
-**Then: WhatsApp Embedded Signup (connect the WABA/number).** Uses YCloud's developer app — no Meta developer account, only Facebook login + BM **Admin**, run from the BM's AdsPower profile. Requires a **fresh WABA number** (BR eSIM/SIM never on WhatsApp) to register during the flow.
+**After the 24h rest: WhatsApp Embedded Signup (connect the WABA/number).** Uses YCloud's developer app — no Meta developer account, only Facebook login + BM **Admin**, run from the BM's AdsPower profile. Requires a **fresh WABA number** (BR eSIM/SIM never on WhatsApp) to register during the flow.
 
 ---
 
