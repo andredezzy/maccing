@@ -1,6 +1,6 @@
 {
   "name": "maccing-growth",
-  "version": "1.17.0",
+  "version": "1.17.1",
   "description": "Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API). Skills are organized into platform/provider groups (meta: shared substrate + meta-ads + whatsapp; platforms/ycloud: ycloud + ycloud-api) with progressive-disclosure references.",
   "author": {
     "name": "André \"Dezzy\" Victor",
