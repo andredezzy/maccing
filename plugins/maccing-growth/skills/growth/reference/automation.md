@@ -224,9 +224,26 @@ Step 2: connect-browser-with-ws                          ← REQUIRED
   └─ REQUIRED before any evaluate-script call.
      Skipping this step causes "Browser not connected" errors.
 
-Step 3: open-new-page
+Step 2.5: evaluate-script — reuse-in-place check        ← NEW: avoid tab churn
+  └─ Script: location.origin
+  └─ If it ALREADY equals <dashboard-origin> (the connected page is
+     already on the logged-in dashboard — e.g. a read tab still open
+     from earlier this session, or the operator is parked there):
+     SKIP steps 3–5 + 7, run the fetch (step 8) IN PLACE, and SKIP
+     step 9. This is the no-new-tab, no-navigation, no-disruption
+     path — PREFER it whenever the connected page is already on the
+     dashboard origin. Do NOT window.close() in this case: you did
+     not open this tab, it may be the operator's.
+  └─ Otherwise (current page is NOT the dashboard origin — e.g. the
+     AdsPower start page): fall through to step 3 and open your OWN tab.
+
+Step 3: open-new-page                                    ← only if step 2.5 fell through
   └─ Capture: the new page's tab id
-  └─ This creates a blank tab. Never reuse or hijack an existing tab.
+  └─ Creates a blank tab the AGENT owns (cleanly closable in step 9).
+     The MCP cannot reliably target the operator's specific existing
+     tab, so the agent works in its own tab rather than hijack one.
+     This is also why an extra tab may briefly appear during a read —
+     it self-closes in step 9.
 
 Step 4: evaluate-script — assert blank tab              ← Safety check
   └─ Script: location.href === 'about:blank'
@@ -266,12 +283,20 @@ Step 8: evaluate-script — in-page fetch                 ← The actual read
      This uses Chrome's native TLS stack (see §3f).
   └─ Capture the returned JSON for processing.
 
-Step 9: window.close()
+Step 9: window.close()   (ONLY the tab the agent opened in step 3)
   └─ evaluate-script: window.close()
-  └─ Closes the tab. Does NOT close the profile.
+  └─ Closes the AGENT's own tab. Does NOT close the profile.
+  └─ SKIP entirely if step 2.5 reused the operator's page — never
+     close a tab you did not open.
+  └─ Verify it closed: window.close() is silently blocked for contexts
+     the script did not open. Agent-opened pages normally close fine,
+     but confirm best-effort (a follow-up read should no longer target
+     it); if a stray tab lingered, surface a note so the operator can
+     close it rather than leaving silent clutter.
 
---- Repeat steps 3–9 for each additional read in the same session ---
---- Do NOT call close-browser between reads.                      ---
+--- Additional reads in the same session: if a dashboard read tab is  ---
+--- still open, REUSE it (step 2.5 path) instead of opening a new one  ---
+--- each time. Do NOT call close-browser between reads.                ---
 ```
 
 This recipe satisfies:
