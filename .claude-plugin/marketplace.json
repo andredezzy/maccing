@@ -10,7 +10,7 @@
       "name": "maccing-growth",
       "source": "./plugins/maccing-growth",
       "description": "Growth toolkit: paid acquisition (Google/Meta/TikTok Ads) + owned messaging (WhatsApp Business Platform), organized into platform/provider groups (meta + platforms/ycloud) with progressive-disclosure references",
-      "version": "1.14.0",
+      "version": "1.15.0",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": ["growth", "ads", "meta", "whatsapp", "ycloud", "bsp", "marketing"],
       "license": "MIT"
