@@ -83,5 +83,6 @@ For the read-only automation discipline (CDP connect, the MCP read recipe, undet
 | Auto-unsubscribe chatbot setup, exact UI steps, gotchas | reference/console-and-operations.md | Building keyword opt-out flows |
 | Dashboard backend endpoints, SESSION cookie auth | reference/console-and-operations.md | Pulling per-campaign analytics |
 | AdsPower MCP read recipe, automation loop code | reference/automation.md | Automating dashboard backend reads |
+| Reconciliation MUST also surface unanswered inbox replies (top priority) | reference/automation.md | Every YCloud reconcile: pull unanswered inbound + raise as #1 action |
 | Read/commit split, rung assignment for YCloud tasks | reference/automation.md | Architecture of read-only automation |
 | Isolation rule (AdsPower profile, proxy, BSP-per-BM) | reference/automation.md | Safe automation without ban risk |
