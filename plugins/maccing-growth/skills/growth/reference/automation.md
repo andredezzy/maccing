@@ -234,8 +234,16 @@ Step 2.5: evaluate-script — reuse-in-place check        ← NEW: avoid tab chu
      path — PREFER it whenever the connected page is already on the
      dashboard origin. Do NOT window.close() in this case: you did
      not open this tab, it may be the operator's.
-  └─ Otherwise (current page is NOT the dashboard origin — e.g. the
-     AdsPower start page): fall through to step 3 and open your OWN tab.
+  └─ Otherwise (current page is NOT the dashboard origin): fall through
+     to step 3 and open your OWN tab.
+  └─ ⚠️ The connected page is simply whatever tab was ACTIVE when CDP
+     attached — often an UNRELATED site the operator has focused (e.g.
+     another platform). A non-dashboard origin here does NOT mean no
+     dashboard tab exists; the operator may have one open in ANOTHER
+     tab. This MCP cannot enumerate or switch to those other tabs, so
+     do not try to "find" them — just open your own tab (step 3). The
+     read works regardless (see step 8: it is a backend `fetch()`, not
+     a DOM scrape, so it does not need the operator's rendered UI).
 
 Step 3: open-new-page                                    ← only if step 2.5 fell through
   └─ Capture: the new page's tab id
@@ -282,6 +290,14 @@ Step 8: evaluate-script — in-page fetch                 ← The actual read
   └─ evaluate-script both returns values AND awaits Promises.
      This uses Chrome's native TLS stack (see §3f).
   └─ Capture the returned JSON for processing.
+  └─ This is a BACKEND `fetch()`, NOT a DOM read — it works in ANY
+     logged-in tab on the dashboard origin, even one that rendered
+     blank/unhydrated (a freshly-opened background tab often does not
+     mount the SPA UI). So PREFER the backend endpoint over scraping
+     rendered elements; never block on the page's UI appearing. Probe
+     a few candidate endpoint paths (read-only GET/POST with
+     credentials) to find the one returning `code:0`/SUCCESS rather
+     than guessing blindly or relying on the DOM.
 
 Step 9: window.close()   (ONLY the tab the agent opened in step 3)
   └─ evaluate-script: window.close()

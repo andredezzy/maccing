@@ -17,7 +17,7 @@
 |---|---|---|
 | Phone quality rating, messaging tier, wallet balance, template approval | **Rung 1** | Public REST API (`api.ycloud.com/v2`, `X-API-Key`) |
 | Per-campaign opt-out counts, per-button click funnels, per-recipient search within a campaign | **Rung 2** | Dashboard backend (`www.ycloud.com/api/...`, SESSION cookie) via in-page `fetch()` inside the AdsPower profile |
-| **Unanswered inbound conversations (the Inbox)** | **Rung 2** | Dashboard **Inbox** (`#/app/inbox/chat`) — read the rendered list, or capture the list call the Inbox page fires; no public inbound-list endpoint exists (`/v2/whatsapp/inboundMessages` 404, inbound is webhook-only) |
+| **Unanswered inbound conversations (the Inbox)** | **Rung 2** | Dashboard backend **`POST /api/inbox/conversation/search`** (read "All" = no assignee filter; unreplied = `previewMessage.messageDirection===0`). No public inbound-list endpoint (`/v2/whatsapp/inboundMessages` 404, inbound is webhook-only) |
 | Sending messages, publishing campaigns, submitting forms | **Rung 3** | Operator only — no agent execution |
 
 The dashboard backend is **read-only** from the agent's perspective. The agent reads and reports; the operator (or a separate API-direct call) acts.
@@ -103,10 +103,14 @@ Execute each step as an in-page `fetch()` via `evaluate-script`, following the g
 - The reply itself is a **positive quality signal.** Phone-number quality is driven by blocks/spam-reports; a real two-way conversation pushes the opposite way. Answering inbound both converts AND helps protect/recover the number's quality rating — so it is never "later," it is first.
 - A person who reached out and got silence is the most likely to block/report — the exact signal that craters quality.
 
-**How to read it (Rung 2, dashboard Inbox — read-only):**
-- Follow the global MCP read recipe (global §6) into the BM's AdsPower profile, navigate to the dashboard **Inbox** (`#/app/inbox/chat`).
-- Identify **unanswered** conversations: the **last message is inbound** (from the customer, not the business) and/or the conversation carries an **unread** marker. Those are the ones needing a reply.
-- The Inbox conversation-list endpoint is undocumented — read the **rendered list** (page text) or capture the list call the Inbox page fires; there is no public inbound-list endpoint (`/v2/whatsapp/inboundMessages` 404). `repliedNums` from step 2 is the cross-check that replies exist at all.
+**How to read it (Rung 2, dashboard backend — read-only) — VERIFIED endpoint:**
+- Follow the global MCP read recipe (global §6); the read is a same-origin `fetch()` from any logged-in `www.ycloud.com` tab — it does NOT need the Inbox SPA to render (a freshly-opened tab is fine; do not DOM-scrape it).
+- **`POST /api/inbox/conversation/search`** body `{pageNo, pageSize}` [verified live 2026-06]. **Read from "All" by passing NO assignee filter** — the dashboard UI defaults to "Assigned to me" which typically shows **0** because conversations sit with the auto-unsubscribe **BOT / unassigned** (the assignment gap: assignment only fires at conversation creation, see console-and-operations). The "All" source = the unfiltered query.
+- Response: `data` is an **array, one entry per inbox**; each has `total` (conversation count) and `conversation[]`. Each conversation has `previewMessage` (the last message), `assigneeId`, `contactId`, `lastActivityAt` (epoch ms), `contactLastSeenAt`.
+- **Unanswered / "unreplied" = `previewMessage.messageDirection === 0`** (0 = inbound/customer was the last to speak; 1 = outbound/us). Phone = `previewMessage.from`; text = `previewMessage.content.text.body` (or `[<contentType>]` for media/button).
+- **24h window:** open iff the last inbound time (`contactLastSeenAt` / `lastActivityAt`) is `< 24h` ago → can reply free-form $0; older → only a template re-opens it.
+- **Names are NOT in this payload** (`previewMessage.contactName` is usually null) → resolve via the **public API** `GET /v2/whatsapp.../contact/contacts` (`X-API-Key`): each contact has `nickname` (the WhatsApp pushName) + `phoneNumber`; build a phone→nickname map and join. (`repliedNums` from step 2 is just the cross-check that replies exist.)
+- **Triage before surfacing:** exclude opt-outs from "needs a reply" — `Parar`/`Stop`/`Sair`/`Cancelar` text and opt-out `[button]` clicks are **suppress, never reply**; business auto-replies ("X agradece seu contato") are low/no priority. Surface the genuine inbound questions, window-open ones first.
 
 **How to surface it (every time):**
 - Report the unanswered conversations **at the top** of the reconciliation output: who replied, the last inbound message, and how long it has been waiting (flag any approaching the 24h window edge).
