@@ -85,6 +85,11 @@ Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsA
 
 → **Save**. The right-pane "Business profile preview" mirrors the customer view. Technique for the brand-site ↔ display-name relationship: `meta`.
 
+**Sequencing after the WABA is live — wait for display-name approval before templates/sending.** Post-connect the display name sits **"In review"** and a ~24h Commerce-Policy review runs on the fresh WABA. Default to **holding both template submission AND the first send until the display name shows "Approved":**
+- **The two reviews are independent pipelines** — submitting templates does NOT affect the name review. So holding templates is a *conservatism* choice, not a technical dependency. (If speed matters and you accept a small stacking risk, submitting templates in parallel is technically fine.)
+- **Why hold anyway:** (a) avoids stacking a likely **template rejection** (regulated/financial-niche copy) onto the fresh WABA's initial Commerce-Policy window; (b) the name approval is a clean "WABA passed identity/name review → healthy" checkpoint before adding more; (c) costs ~nothing when the number isn't time-critical.
+- **Sending is a FIRM gate (not optional):** never run a marketing/cold broadcast while the display name is "In review" — recipients see the **bare phone number** instead of the brand → "who is this?" reflex → blocks/reports = the fastest route to a **RED** quality rating on a fresh number. Sending on a same-day-created WABA is also the rush/abuse pattern. Send only after **display name Approved + WABA settled ~24h+ + templates Approved → then a low warm ramp.**
+
 ---
 
 ## What You Can and Cannot Automate
