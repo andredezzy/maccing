@@ -416,7 +416,7 @@ When the BM legal name differs from the desired brand, the website must show bot
 **"Brand (Entity)" format — CONFIRMED WORKING (with caveat):**
 - Parentheses are in the official forbidden character set, but Meta's policy explicitly states: "These formatting guidelines do not apply to businesses who already brand this way externally."
 - "Brand (Entity)" format was accepted during Embedded Signup (empirically confirmed in production, May 2026) — consistent with the external-branding exception (the disposable brand site footer showed the parenthetical format)
-- Real-world precedent: "a retailer support line (Company Ltda)" also approved
+- Real-world precedent: production WhatsApp display names using the "Service (Legal Entity)" parenthetical format have been approved (e.g. a retailer's support line shown as "&lt;Service&gt; (&lt;Company Ltda&gt;)")
 - Use "Brand (Entity)" only when your site already shows that exact parenthetical branding, not as a general-purpose pattern
 - **Rejection risk is LOW-consequence:** display name rejection doesn't ban BM or WABA, can resubmit up to 10x in 30 days
 
