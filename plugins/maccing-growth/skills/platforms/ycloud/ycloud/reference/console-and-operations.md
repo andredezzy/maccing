@@ -69,7 +69,21 @@ Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsA
 
 **Back in the YCloud console (WhatsApp accounts):** the channel card shows **WABA ID**, **Owned by BM**, **Message limit** (= tier, e.g. "2000 customers"), and the number row with **Status: Connected**, **Quality Rating: Unknown** (until sending), and the **display name "… is being reviewed"** (tooltip) — review takes minutes-to-hours; if rejected, resubmit ~10×/30d (low stakes). Card actions: WhatsApp Flows · Manage templates · + WhatsApp Business Number.
 
-**Step 6 — WhatsApp profile (NOT part of Embedded Signup, do it after):** ⚠️ the **Website field here is the display-name verification source — a DIFFERENT field from the locked WABA Site in Step 2.** Set it to the brand **homepage** (NOT /grupo); **Email empty** (isolation); category Education; about/description Education-framed. Technique: `meta`.
+**Step 6 — WhatsApp profile (NOT part of Embedded Signup, do it after).** YCloud console → **WhatsApp accounts** → the channel → **Business Profile** (left nav, under "WhatsApp Business Number settings"). Exact fields — YCloud UI label · char limit · what to fill (observed 2026-06):
+
+| Field (exact label) | Limit | Fill with |
+|---|---|---|
+| **Profile photo** ("Choose JPG or PNG File") | 640×640 px, <5MB, JPG/PNG | brand logo |
+| **Display name** ("Edit" button) | — | set in Embedded Signup; badge shows **"In review" → "Approved"** |
+| **About** | **139** chars | one-line brand + niche tagline |
+| **Category** (dropdown) | — | **Education** (financial-education niche; never Finance) |
+| **Description** ("What does your business do?") | **512** chars | brand story, Education-framed (no "gestão de capital" / regulated-activity wording) |
+| **Address** | **256** chars | e.g. just the country |
+| **Email** | **128** chars | ⚠️ **leave EMPTY** — a real email links the WABA to the real domain (isolation break) |
+| **Website1** | **255** chars | ⚠️ **brand homepage** (NOT /grupo) — the **display-name verification source**; must show the brand. DIFFERENT field from the locked WABA Site in Step 2 |
+| **Website2** | **255** chars | leave empty |
+
+→ **Save**. The right-pane "Business profile preview" mirrors the customer view. Technique for the brand-site ↔ display-name relationship: `meta`.
 
 ---
 
