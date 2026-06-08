@@ -120,7 +120,7 @@ A **disposable BM** is a throwaway, pre-verified Business Manager bought from th
 - Treat as disposable from day 1
 - **Proxy is a PRECONDITION of opening the antidetect profile, NOT a per-step check.** The profile is NEVER opened without its proxy already attached, so once it is open the proxy is a given. Never re-verify "is the proxy on?" mid-flow, opening the profile already implies it.
 - **Between disposable BMs, isolate the IP FAMILY, not just the IP.** Parallel disposable BMs use different proxies AND ideally different IP families (e.g. disposable BM #1 on IPv6, disposable BM #2 on IPv4), so Meta cannot graph-link them by adjacent range. Same for card and number: one per disposable BM.
-- **Browser automation discipline** (own-profile/CDP rule, agent-vs-operator visibility gotcha, undetectable behavior, the MCP read recipe): see `reference/automation.md`.
+- **Browser automation discipline** (own-profile/CDP rule, agent-vs-operator visibility gotcha, undetectable behavior, the MCP read recipe): see `reference/browser-automation.md`.
 
 ### Running Disposable BMs in Parallel (Second Disposable BM)
 
@@ -191,6 +191,19 @@ The earlier claim that "Verified BM → direct jump to 100,000/day" was **dispro
 
 **Industry reality:** Only 10-20% of purchased BMs survive the first 30 days under real advertising load.
 
+### BM Types (Market Reference)
+
+| Type | Description | Price Range | Risk |
+|---|---|---|---|
+| BM zerada | Fresh, no history | R$50-150 | High (no trust) |
+| BM verificada | Business Verification done | R$90-250 | Medium |
+| BM ilimitada | High-score creator profile | R$400-1500 | Medium |
+| BM agência | Agency-allocated shared access | % of spend + fee | Low-medium |
+| Disposable BM | Disposable, burn after use | R$80-300 total setup | Expected to die |
+| BM reativada | Recovered from ban via appeal | Variable | Paradoxically stable |
+| BM com linha de crédito | Monthly billing unlocked | Premium | High (heavily monitored) |
+| BM disparo | Set up for WhatsApp dispatch | Variable | Depends on tier |
+
 ### Number Warming Protocol (Official WABA)
 
 **Post-Oct 2025: new numbers inherit the portfolio's tier instantly** (e.g., verified BM at Tier 2 = 2000/day from day 1). BUT inheriting the LIMIT ≠ safe to use it. Quality rating + pacing system are per-number and built from real behavior. Hitting full limit on a new number looks like bot behavior.
@@ -224,7 +237,7 @@ The earlier claim that "Verified BM → direct jump to 100,000/day" was **dispro
 **Wallet funding — fund ONE DAY AT A TIME (never pre-fund the ramp):** BSP platform may be free (YCloud), but Meta charges per delivered message from a prepaid wallet — NO free marketing messages, so top up before Day 1. From then on, top up **only the current day's send budget plus a small buffer, every day, immediately before that day's send. NEVER bulk-fund multiple days ahead** — even when a ramp plan tempts a single larger top-up to "sustain the week". A disposable BSP account can be suspended or false-positive risk-flagged at ANY moment (observed repeatedly on free tiers for financial-niche accounts), and a large prepaid balance is then frozen, slow, or impossible to recover. Per-day funding caps the at-risk balance at one day's spend (~$10-15 for a few hundred BR marketing msgs) instead of a whole week's, and forces a daily go/no-go check on quality + account health before any money is committed.
 
 **Rules:**
-- Randomize send intervals (mimic human timing) (see `reference/automation.md` §3 message-dispatch axis)
+- Randomize send intervals (mimic human timing) (see `reference/browser-automation.md` §3 message-dispatch axis)
 - Monitor BOTH BSP dashboard (delivery/read) AND Meta Business Manager Quality Rating column after every batch
 - Financial niche + Brazil = recipients trigger-happy on "report spam" → warm harder
 

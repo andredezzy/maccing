@@ -1,38 +1,15 @@
 ## Contents
 
-- [Chip Warming (Unofficial API Route)](#chip-warming-unofficial-api-route)
+- [Chip Warming (Unofficial API Route) → see `disposable-bm-strategy.md`](../../meta/reference/disposable-bm-strategy.md#chip-warming-unofficial-api-route)
 - [Direct Cloud API Setup (No BSP)](#direct-cloud-api-setup-no-bsp)
 - [Switching BSP / Migrating an Existing WABA](#switching-bsp--migrating-an-existing-waba)
-- [Measuring Success](#measuring-success)
-- [Quality Rating Recovery Protocol](#quality-rating-recovery-protocol)
-- [Number Longevity & Cold Lists](#number-longevity--cold-lists-preserve-over-burn)
+- [Number Longevity & Cold Lists → see `disposable-bm-strategy.md`](../../meta/reference/disposable-bm-strategy.md#number-longevity--cold-lists-preserve-over-burn)
 
 > **Scope:** WA-specific dispatch operations only. For the full disposable-BM pipeline, proxy/isolation stack, profile acquisition, BM sources, Tier System, Number Warming Protocol (official WABA), Setup Sequence, Display Name Strategy, Business Profile Compliance, and Phone Number Strategy — see the `meta` skill.
 
 ### Chip Warming (Unofficial API Route)
 
-For operators using unofficial APIs (Evolution API, WPPConnect, WasenderAPI) on burner SIMs:
-
-| Period | Daily Limit | Content |
-|---|---|---|
-| Days 1-3 | Up to 20 messages | Text only, no links/media |
-| Days 4-7 | Up to 50 messages | Can add emojis |
-| Days 7-14 | Progressive increase | Media allowed |
-| Days 14-21 | Begin API automation | Links allowed |
-| Days 21-30 | Normal volume | Full content |
-
-**Critical:** Use 4G/5G exclusively during warming. Get inbound messages (sticker groups, contacts calling the number) before sending outbound. A receive-only account builds trust; a send-only account is definitionally a bot.
-
-**Anti-detection for unofficial API:**
-- Random delays: 15-45 seconds between each message
-- Rest periods: 10-15 minute breaks after every 50 messages
-- Spintax rotation: no two messages identical
-- Maintain positive sent/received ratio
-- Consistent IP: never login from multiple countries
-- Persistent session: frequent reconnections flagged as suspicious
-- Avoid shortened URLs (bit.ly etc.)
-
-**Risk:** Meta blocked ~7 million WhatsApp accounts in H1 2025. Financial keywords (boleto, PIX, cartão, investimento) trigger higher scrutiny.
+> Moved to canonical location — see [`disposable-bm-strategy.md` → Chip Warming (Unofficial API Route)](../../meta/reference/disposable-bm-strategy.md#chip-warming-unofficial-api-route).
 
 
 ---
@@ -140,86 +117,6 @@ A WABA lives in the BM, NOT in the BSP. The BSP is just a connected partner (sys
 
 ---
 
-### Measuring Success
-
-| Metric | Healthy | Warning | Critical |
-|---|---|---|---|
-| Delivery rate | >95% | 90-95% | <90% |
-| Read rate | >70% | 50-70% | <50% |
-| Block/report rate | <2% | 2-5% | >5% |
-| Quality rating | Green | Yellow | Red (tier downgrade) |
-| Open rate | >96% | 90-96% | <90% |
-| CTR (link in template) | >15% | 5-15% | <5% |
-
-**Industry benchmarks (2026):**
-- Open rate: 96.7-98.2% (well-optimized: ~99%)
-- CTR: 15-45% (well-optimized: 25-35%)
-- Conversion rate: 5-10% (top performers: up to 18%)
-- Delivery rate: 95-99% (well-optimized: 99%+)
-
-**If quality drops to yellow:** stop broadcast, review template content, reduce volume, wait 6h evaluation cycle.
-**If quality drops to red:** pause all marketing, switch to utility-only for 7+ days, may need to ramp up tier again.
-
-
----
-
-### Quality Rating Recovery Protocol
-
-1. Pause ALL broadcasts immediately
-2. Identify and disable poorly performing templates
-3. Clean contact list: remove non-engaged, non-opted-in
-4. Wait 7 days for quality score recalculation
-5. Resume gradually: best templates → most engaged contacts only
-6. If quality holds at Green/Yellow for 7 days: status returns to Connected
-
-
----
-
 ### Number Longevity & Cold Lists (preserve over burn)
 
-"Disposable" means ISOLATED (a ban cannot cascade to the real business or to other disposable BMs), NOT
-"burn fast". With the same discipline as a primary number, a disposable-isolated number is a long-lived
-asset, burn-and-replace above is the FALLBACK when one dies, not the goal. Longevity reduces to one
-thing: keeping the rolling 7-day block + report rate low.
-
-**Recovery timelines (rule of thumb):** Yellow to Green in ~48-72h, Red to Green in ~7-14 days, IF you
-stop marketing and resume only to engaged opt-ins. Quality held low for 7 straight days can cut the
-messaging limit.
-
-**Cold lists vs longevity, the WARM-FIRST rule.** Marketing to cold (non-opted-in) numbers is
-incompatible with preserving quality: cold blocks at ~15-40% vs ~2-5% for opted-in signups, which
-directly degrades the per-number quality window. No "dilution" fixes this on a number you want to keep,
-mixing cold into warm only lowers the AGGREGATE rate while still adding absolute blocks to the rolling
-7-day window, a slow tax on the asset. To use a cold list WITHOUT killing a preserved number:
-1. **Validate first (HLR / carrier lookup)** before any send: confirms each number is active/reachable
-   WITHOUT messaging it, stripping dead/disconnected numbers. Repeated delivery failures (131026) read
-   to anti-spam like a dictionary-style attack, so this step is not optional for cold data.
-2. **Warm cold to engaged BEFORE marketing, by making THEM initiate.** You CANNOT free-text a cold
-   number: the first business-initiated message to anyone who has not messaged you REQUIRES a template,
-   so even a "soft" first touch is a template send that risks blocks. The only way to skip
-   template-to-cold is to get the prospect to message YOU first. Run a **Click-to-WhatsApp ad (CTWA)** so
-   they tap "Send message" and self-initiate, which opens a 24h window and makes them warm. For an
-   EXTRACTED or purchased list (e.g. members scraped from a third-party group), upload it as a **Custom
-   Audience** in the ad platform and run the CTWA ad to it (plus a lookalike). A reply / inbound makes
-   later marketing both quality-safe AND exempt from the per-user marketing cap (131049).
-   - **Isolation rule for extracted-list CTWA:** a custom audience built from non-consented / extracted
-     data carries AD-ACCOUNT ban risk (the ad platform penalizes non-consented data), so run it from the
-     DISPOSABLE BM's OWN isolated ad account (funded by its isolated card), NEVER the real business's ad
-     account or pixel. This shifts the burn risk to the disposable ad account and keeps the WhatsApp
-     number's quality untouched, because no cold template ever leaves. (BSPs like YCloud expose a CTWA
-     integration that drops these ad-sourced conversations straight into the inbox / a flow, so the bot
-     can auto-route them, e.g. an auto-invite to your group.)
-   - **Account-trust gate (fresh disposable BMs):** creating/using that ad account requires the BM to
-     have two-factor authentication enabled, AND Meta blocks security changes (2FA, password) from an
-     unfamiliar device. An antidetect profile reads as a "new device" and gets "you can't make this
-     change right now, we will let you after using this device for a while". There is no instant bypass:
-     AGE the profile (use it normally for a few days) until Meta trusts the device, then enable 2FA, then
-     run CTWA. So the CTWA route needs an aged FB account, plan it AFTER the number's warmup, not day one.
-     Do not hammer the 2FA page on a fresh profile, repeated security-change attempts add a risk signal.
-3. **Reply = warm.** Only then send marketing templates. Numbers that never engage are discarded.
-4. **Bulk cold blasting is a job for a dedicated worker number you accept will burn**, never the
-   preserved asset. Rotate worker numbers to distribute ban risk.
-
-Cold numbers also carry no first name, so a personalized template (`{{1}}` = name) renders broken on
-them, use a no-variable template or a generic greeting for any cold / un-named send. (Researched 2025-06
-across Meta docs + BSP deliverability guidance.)
+> Moved to canonical location — see [`disposable-bm-strategy.md` → Number Longevity & Cold Lists (preserve over burn)](../../meta/reference/disposable-bm-strategy.md#number-longevity--cold-lists-preserve-over-burn).

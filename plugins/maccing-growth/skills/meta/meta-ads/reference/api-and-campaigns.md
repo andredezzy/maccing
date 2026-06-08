@@ -337,3 +337,217 @@ Goal: Video views / engagement?
 ```
 
 ---
+
+## API Quick Reference
+
+### Campaign Objectives (v21.0+ ODAX)
+
+```
+OUTCOME_AWARENESS
+OUTCOME_TRAFFIC
+OUTCOME_ENGAGEMENT
+OUTCOME_LEADS
+OUTCOME_APP_PROMOTION
+OUTCOME_SALES
+```
+
+### Optimization Goals
+
+```
+REACH, IMPRESSIONS, LINK_CLICKS, LANDING_PAGE_VIEWS,
+OFFSITE_CONVERSIONS, VALUE, APP_INSTALLS, APP_EVENTS,
+LEAD_GENERATION, QUALITY_LEAD, THRUPLAY, VIDEO_VIEWS,
+REPLIES, ENGAGED_USERS, POST_ENGAGEMENT
+```
+
+### Bid Strategies
+
+```
+LOWEST_COST_WITHOUT_CAP        # Highest Volume
+COST_CAP                       # Cost Cap
+LOWEST_COST_WITH_BID_CAP       # Bid Cap
+LOWEST_COST_WITH_MIN_ROAS      # ROAS Goal
+VALUE_BASED                    # Maximize Value / Maximize ROAS
+```
+
+### Status Values
+
+```
+ACTIVE, PAUSED, DELETED, ARCHIVED, IN_PROCESS, WITH_ISSUES
+```
+
+### Special Ad Categories
+
+```
+EMPLOYMENT
+HOUSING
+CREDIT (legacy)
+FINANCIAL_PRODUCTS_AND_SERVICES (2025+)
+ISSUES_ELECTIONS_POLITICS
+```
+
+### Placement Fields
+
+```json
+{
+  "publisher_platforms": ["facebook", "instagram", "messenger", "audience_network"],
+  "facebook_positions": ["feed", "reels", "right_hand_column", "marketplace", "search", "story"],
+  "instagram_positions": ["stream", "story", "reels"],
+  "messenger_positions": ["messenger_home"],
+  "audience_network_positions": ["classic", "rewarded_video"]
+}
+```
+
+### WhatsApp Marketing Messages in Ads Manager
+
+Since July 2025, WhatsApp marketing message campaigns can be managed from Ads Manager:
+- Placement: **WhatsApp Marketing Messages**
+- Audience: Custom audiences only (opted-in subscriber lists)
+- Meta AI optimizes which subscribers receive the message
+- **US pause:** Marketing templates to US +1 numbers paused since April 2025
+
+---
+
+## Automation Patterns
+
+### Marketing API Automation Patterns
+
+**Pattern 1: Daily performance monitor + auto-pause**
+```python
+import requests
+
+def check_and_pause_underperformers(ad_account_id, token, cpa_threshold):
+    # Get ad set performance (last 3 days)
+    url = f"https://graph.facebook.com/v25.0/act_{ad_account_id}/insights"
+    params = {
+        "level": "adset",
+        "date_preset": "last_3d",
+        "fields": "adset_id,adset_name,spend,cost_per_action_type,campaign_learning_stage_info",
+        "action_attribution_windows": '["7d_click","1d_view"]',
+        "access_token": token
+    }
+    data = requests.get(url, params=params).json()
+
+    for row in data.get("data", []):
+        # Skip ad sets still in learning phase
+        learning_stage = row.get("campaign_learning_stage_info", {})
+        if learning_stage.get("status") == "LEARNING":
+            continue
+
+        spend = float(row.get("spend", 0))
+        actions = row.get("cost_per_action_type", [])
+        purchase_cpa = next(
+            (float(a["value"]) for a in actions if a["action_type"] == "purchase"),
+            None
+        )
+
+        # Pause if spent 2x threshold with no purchase, or CPA > threshold
+        if spend > cpa_threshold * 2 and purchase_cpa is None:
+            pause_ad_set(row["adset_id"], token)
+        elif purchase_cpa and purchase_cpa > cpa_threshold * 1.5 and spend > cpa_threshold:
+            pause_ad_set(row["adset_id"], token)
+
+def pause_ad_set(adset_id, token):
+    url = f"https://graph.facebook.com/v25.0/{adset_id}"
+    requests.post(url, data={"status": "PAUSED", "access_token": token})
+```
+
+**Pattern 2: Budget scaling (winners)**
+```python
+def scale_winners(ad_account_id, token, roas_threshold, scale_percent=0.20):
+    url = f"https://graph.facebook.com/v25.0/act_{ad_account_id}/insights"
+    params = {
+        "level": "adset",
+        "date_preset": "last_7d",
+        "fields": "adset_id,spend,purchase_roas",
+        "access_token": token
+    }
+    data = requests.get(url, params=params).json()
+
+    for row in data.get("data", []):
+        roas_data = row.get("purchase_roas", [])
+        if not roas_data:
+            continue
+        roas = float(roas_data[0].get("value", 0))
+
+        if roas >= roas_threshold:
+            # Get current budget
+            adset_url = f"https://graph.facebook.com/v25.0/{row['adset_id']}"
+            adset = requests.get(adset_url, params={
+                "fields": "daily_budget",
+                "access_token": token
+            }).json()
+            current_budget = int(adset.get("daily_budget", 0))
+            new_budget = int(current_budget * (1 + scale_percent))
+            # POST new budget
+            requests.post(adset_url, data={
+                "daily_budget": new_budget,
+                "access_token": token
+            })
+```
+
+**Pattern 3: Batch campaign creation**
+```python
+import json, requests
+
+def batch_create_ad_sets(ad_account_id, token, ad_sets):
+    batch = []
+    for i, adset in enumerate(ad_sets):
+        batch.append({
+            "method": "POST",
+            "relative_url": f"act_{ad_account_id}/adsets",
+            "body": "&".join(f"{k}={v}" for k, v in adset.items()),
+            "name": f"create-adset-{i}"
+        })
+
+    # Batches of max 50
+    for chunk in [batch[i:i+50] for i in range(0, len(batch), 50)]:
+        response = requests.post(
+            f"https://graph.facebook.com/v25.0/",
+            data={
+                "batch": json.dumps(chunk),
+                "access_token": token,
+                "include_headers": "false"
+            }
+        )
+        results = response.json()
+        for result in results:
+            if result["code"] != 200:
+                print(f"Error: {result['body']}")
+```
+
+### Automated Rules via API
+
+```python
+def create_automation_rule(ad_account_id, token, rule_name, conditions, action):
+    url = f"https://graph.facebook.com/v25.0/act_{ad_account_id}/adrules_library"
+    rule_data = {
+        "name": rule_name,
+        "entity_type": "ADSET",
+        "evaluation_spec": {
+            "evaluation_type": "TRIGGER",
+            "filters": conditions,
+            "trigger": {"type": "TIME_SERIES", "field": "time"}
+        },
+        "execution_spec": {
+            "execution_type": action["type"],
+            "execution_options": action.get("options", {})
+        },
+        "schedule_spec": {
+            "schedule_type": "SEMI_HOURLY"
+        }
+    }
+    requests.post(url, json={"access_token": token, **rule_data})
+```
+
+### Creative Rotation Strategy
+
+1. Launch 3-5 creative concepts per ad set
+2. After 7 days or 50 optimization events per variant: identify winners
+3. Scale budget to top 2-3 performers; pause bottom performers
+4. Refresh creative every 2-3 weeks (before frequency hits 2.5)
+5. Never let creative library drop below 3 active assets per ad set
+
+**Creative testing velocity target (2026):** 15-50+ active creatives needed for Meta's algorithm to properly optimize. Aim for 10-30 new creatives/month in active accounts.
+
+---

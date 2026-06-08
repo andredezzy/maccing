@@ -233,22 +233,7 @@ Path param `id` accepts either YCloud's internal ID or the `wamid` from Meta. [f
 
 ### Computing Template Analytics (No Dedicated Endpoint)
 
-Since no per-template analytics endpoint exists, the only method is client-side aggregation over the full message log. [verified live 2026-06]
-
-Algorithm:
-1. Fetch all pages: `GET /v2/whatsapp/messages?page=1&limit=100&includeTotal=true`, then repeat for subsequent pages until `length < limit`.
-2. Group items by `template.name`.
-3. Count: `attempted` = total records per template; `failed` = status `failed`; `delivered` = status `delivered` + `read`; `read` = status `read`.
-4. Compute rates: `delivered_pct = delivered / attempted`, `read_pct = read / attempted`.
-
-Illustrative example (fictional values):
-
-| Template | Attempted | Failed | Delivered+Read | Read | Deliver% | Read% |
-|---|---|---|---|---|---|---|
-| welcome_template | 200 | 20 (10.0%) | 180 | 120 | 90.0% | 60.0% |
-| invite_template | 200 | 16 (8.0%) | 184 | 128 | 92.0% | 64.0% |
-
-When the sample size is below the ~200 threshold needed for a 95% CI on a 5pp difference, treat any gap as directional only. Score formula: `score = delivered_pct * 0.4 + read_pct * 0.4 - optout_pct * 0.2`. In this example `invite_template` leads on delivery rate.
+Moved to `../../ycloud/reference/api-automation.md` — see "Computing Template Analytics (No Dedicated Endpoint)" appended near the reconciliation-loop content.
 
 ---
 

@@ -128,4 +128,11 @@ POST /act_{AD_ACCOUNT_ID}/customaudiences
 - Detailed targeting exclusions removed from Ads Manager (March 2025)
 - Practical advice: use broad targeting + strong CAPI signal instead of interest stacking
 
+### Remarketing via WhatsApp Contacts
+
+1. Export opted-in WhatsApp contact list (phone numbers)
+2. SHA-256 hash all phones
+3. Upload as Custom Audience in Ads Manager
+4. Use for: CTWA retargeting on FB/IG, Lookalike creation (1-2%), re-engagement campaigns
+
 ---

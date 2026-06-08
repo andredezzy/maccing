@@ -8,9 +8,11 @@
 - [Volume Tier Discounts (Utility & Authentication only)](#volume-tier-discounts-utility--authentication-only)
 - [Cost Optimization Strategies](#cost-optimization-strategies)
 - [Meta Base Per-Message Rate Card (June 2026)](#meta-base-per-message-rate-card)
+- [BSP / Platform Comparison](#bsp--platform-comparison)
 - [Pricing Model Notes](#pricing-model-notes)
+- [Why BSP over Direct API / Direct Cloud API without your own dev account](#why-bsp-over-direct-api)
 
-> **Note:** BSP/platform comparison table rows live in the `ycloud` skill. This file covers Meta base rates, free windows, volume discounts, and cost optimization only.
+> **Note:** This file covers Meta base rates, free windows, volume discounts, cost optimization, BSP/platform comparison, and pricing model notes.
 
 ## 5. Conversation-Based Pricing → Per-Message Pricing (July 2025)
 
@@ -90,9 +92,6 @@ Tiers reset monthly. Discounts are applied automatically by Meta.
 
 ---
 
-
----
-
 ## WhatsApp Business API: Pricing Reference (June 2026)
 
 > Rates reflect Meta's per-message model (effective July 1, 2025). All BSP markups are layered on top of Meta's base rates. Verify live rates at [developers.facebook.com/documentation/business-messaging/whatsapp/pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing) — Meta updates quarterly (Jan 1, Apr 1, Jul 1, Oct 1).
@@ -110,8 +109,44 @@ Tiers reset monthly. Discounts are applied automatically by Meta.
 
 **Brazil rate notes:** Marketing rate of ~$0.0625 is among the highest globally — ~6x India, ~2.5x US. BRL-native billing (Meta invoicing in R$) expected H2 2026; Meta to publish official BRL rate card by Jul 1 2026. Until then all Brazil accounts billed in USD. April 2026 quarterly update primarily affected India, Saudi Arabia, Pakistan, and Turkey — Brazil marketing rate change in that update is disputed ($0.0625 per engagelab May 2026 vs $0.07188 per SleekFlow citing Apr 1 2026). Use $0.0625 as working baseline and flag for verification.
 
+### BSP / Platform Comparison
 
----
+> **Note:** Gupshup embedded signup only shows WABAs not already Connected to another BSP. If migrating a live WABA that is currently bound to a different BSP, the real WABA will not appear in the picker until released from the current BSP (see "Switching BSP / Migrating an Existing WABA" section).
+
+> **How to read this table:** "Per-msg markup" is what the BSP charges *on top of* Meta's base rate above. Total cost = Meta base rate + markup + monthly fee amortized per message. Sorted approximately cheapest-first for Brazil marketing dispatch at moderate volume.
+
+| Platform | Type | Monthly fee | Free tier | Per-msg markup (Brazil marketing) | Brazil notes | Source / asOf |
+|---|---|---|---|---|---|---|
+| **YCloud (Free plan)** | BSP | **$0/mo** | Unlimited API; service msgs $0 (empirically confirmed totalPrice:0 in production); utility-in-window $0; shared inbox included; 1 user, 2 channels | **0%** — explicit zero-markup policy; passes Meta rates from wallet; empirically confirmed at ~$0.05–$0.0625/msg for BR marketing | Best Brazil dispatch value: pay only Meta's rate. BRL billing H2 2026. Add-on users $10/user/mo, channels $5/channel/mo. ⚠️ Risk-control auto-flags possible on free tier for financial use cases (reported by financial-niche accounts, resolved via support ticket in <24h) — open a support ticket immediately if suspended, false-positive rate is high | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
+| **YCloud (Growth)** | BSP | $39/mo | — | 0% | Same zero-markup; $39 unlocks 2 users, 3 channels, 5M AI credits. Message cost unchanged | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
+| **YCloud (Pro)** | BSP | $89/mo | — | 0% | 6 users, 8 channels, 20M AI credits, dedicated account manager | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
+| **YCloud (Enterprise)** | BSP | $399/mo | — | 0% | 40 users, 30 channels, 100M AI credits, 24/7 priority support, permanent storage | ycloud.com/pricing — asOf 2026-06-03 (HIGH) |
+| **Bird (formerly MessageBird)** | BSP | $45–$49/mo (Pro); PAYG available | Free plan: 15 AI msgs/day; no WhatsApp free quota confirmed | ~$0.000001–$0.000005/msg processing fee (effectively $0 markup) — passes Meta rates at cost | Near-zero markup makes Bird cost-competitive for high-volume BR dispatch. No BRL billing. Annual contract discounts 10–35% (verify — secondary, asOf 2026-06-03, MEDIUM) | bird.com/en-us/pricing/whatsapp — asOf 2026-06-03 (MEDIUM) |
+| **AiSensy (Free)** | BSP | **$0/mo** | WhatsApp API access, live chat dashboard, 10 tags, 5 custom attributes, $1 wallet credit on signup; no time limit. Broadcasts PAYWALLED — free plan can't broadcast | Claimed 0% (verify — not independently confirmed) | India-primary; international USD pricing at $45/$99. No BRL billing. $1 credit = ~16 BR marketing msgs at $0.0625. Brazil customers pay Meta BR rates from wallet | aisensy.com/pricing/usd — asOf 2026-06 (HIGH on plan price; MEDIUM on 0% markup claim) |
+| **AiSensy (Basic)** | BSP | $45/mo ($40.50 annual) | — | Claimed 0% (verify) | 5 agents included. Chatbot flows add-on $80/mo. No BRL billing | aisensy.com/pricing/usd — asOf 2026-06 (HIGH) |
+| **AiSensy (Pro)** | BSP | $99/mo ($89.10 annual) | — | Claimed 0% (verify) | Additional agents $20/mo each | aisensy.com/pricing/usd — asOf 2026-06 (HIGH) |
+| **Respond.io (Starter)** | BSP | $79/mo (annual) / $99/mo (monthly) | 7-day trial; no permanent free plan | **0%** — explicit pass-through; wallet debited at Meta's rate | Unlimited MACs on Starter. Zero markup confirmed on official docs. No BR-specific pricing or BRL billing mentioned. Additional users $12/user/mo | respond.io/pricing — asOf 2026-06 (HIGH) |
+| **Respond.io (Growth)** | BSP | $159/mo (annual) / $199/mo (monthly) | 7-day trial | 0% | 1,000 MACs included; overage $12/100 MACs. +$20/user/mo beyond included seats | respond.io/pricing — asOf 2026-06 (HIGH) |
+| **Zoko (Starter)** | BSP | $49.99/mo | 7-day trial | +$0.015/conversation (Zoko markup on top of Meta) — only on Starter | Starter is the only Zoko plan with a markup. Not recommended for BR marketing at scale | zoko.io/pricing — asOf 2026-06 (HIGH) |
+| **Zoko (Plus)** | BSP | $79.99/mo | 7-day trial | **0%** — Plus/Elite/Max all pass Meta rates through; platform overages $0.002/conversation beyond 5k | D2C/Shopify-focused. Zero markup from Plus upward. No BRL billing | zoko.io/pricing — asOf 2026-06 (HIGH) |
+| **Zoko (Elite)** | BSP | $139.99/mo | — | 0% | 10 agents included; $0.001/conversation overage beyond 100k | zoko.io/pricing — asOf 2026-06 (HIGH) |
+| **Twilio WhatsApp** | CPaaS | **$0/mo** | $15 trial credit (~222 BR marketing msgs); no production free tier | **+$0.005/msg flat** on every message (sent or received); failed msg $0.001. Total BR marketing: ~$0.0675/msg | PAYG, no subscription. Service msgs cost $0.005 Twilio only (Meta fee waived). No BRL billing (USD invoicing). No PT-BR support. BRL billing expected ~Jul 2026. ⚠️ creates NEW WABA (templates re-reviewed). Best API/DX, curl-friendly | twilio.com/en-us/whatsapp/pricing — asOf 2026-05 (HIGH) |
+| **Wati (Growth)** | BSP | $59/mo USD / R$145/mo BRL (localized PT-BR pricing exists) | 7-day trial; no permanent free plan | **~+20%** over Meta base (multiple independent sources); BR marketing all-in ~$0.075/msg | Brazilian PT-BR support 24x5. Growth capped at 3 users (hard limit). Shopify add-on $4.99/mo. 15,000 marketing sends/mo included. Green Tick $50/country. No-code UI, asks to re-submit templates | wati.io/pricing — asOf 2026-05-07 (HIGH) |
+| **Wati (Pro)** | BSP | $119/mo USD / R$725/mo BRL | 7-day trial | ~+20% | 24x7 PT-BR support. Additional users R$145/mo | wati.io/pricing — asOf 2026-05-07 (HIGH) |
+| **Wati (Business)** | BSP | $279/mo USD / R$1,375/mo BRL | 7-day trial | ~+20% | Additional users R$275/mo | wati.io/pricing — asOf 2026-05-07 (HIGH) |
+| **Gupshup (self-serve)** | BSP | **$0/mo** | No free message quota; Meta service msg = $0 Meta charge but Gupshup still bills $0.001/msg on session msgs | **+$0.001/msg** on all message types + **+6% on marketing** via Cloud API (since Jan 1, 2026; avoidable via MM Lite route); MM Lite total: +$0.001 only. BR marketing all-in (Cloud API): ~$0.080/msg; (MM Lite): ~$0.073/msg | Previously cheapest BSP — now carries a 6% marketing surcharge via standard Cloud API since Jan 2026. Use MM Lite API to avoid the surcharge. For pure marketing Cloud API sends, YCloud (0% markup) is now cheaper. Migration via embedded signup only shows WABAs not already Connected to another BSP | gupshup.ai — asOf 2026-06 (MEDIUM) |
+| **WANotifier** | BSP | $69/mo (Essentials) | 7-day trial | 0% | Floor too high for testing. Migration to existing WABA supported | wanotifier.com — asOf 2026-06 (MEDIUM) |
+| **360dialog (Regular)** | BSP | **€49/mo** (~$59) per number/channel | No free tier; service msgs free per Meta policy | **0% via MM API** (no BSP surcharge); **+7% via standard Cloud API** for marketing (introduced Jan 1 2026). Utility/auth: pass-through at Meta rate | Pure API-access model. No built-in inbox. Best for high-volume developers who can use MM API. No BRL billing (EUR/USD invoicing). Infra-grade, reliable, won't police use case. Volume discounts 5–25% on utility/auth at 100k+/mo | 360dialog.com/pricing — asOf 2026-06-03 (HIGH) |
+| **360dialog (Premium)** | BSP | €99/mo (~$119) per number | No free tier | 0% via MM API; +7% via Cloud API for marketing | Higher throughput and support tier | 360dialog.com/pricing — asOf 2026-06-03 (HIGH) |
+| **360dialog (High Throughput)** | BSP | €249/mo (~$299) per number | No free tier | 0% via MM API; +7% via Cloud API | Up to 1,000 msg/sec vs 80 msg/sec standard | 360dialog.com/pricing — asOf 2026-06-03 (HIGH) |
+| **Trengo (Boost)** | Inbox tool | €299/mo (~$325) annual / €349/mo monthly | 7-day trial; no permanent free plan | **0%** — prepaid wallet debited at Meta's rate; no BSP per-msg markup | EU-based (EUR pricing). Wallet auto-tops up (up to €9,500/cycle for high volume). AI surcharge €0.25–0.30/conversation beyond free allowance. No BRL billing. Not optimized for BR-only broadcast | trengo.com/prices — asOf 2026-06 (HIGH) |
+| **Interakt (Starter)** | BSP | ~$12/mo USD / ₹999/mo INR | 14-day trial; no permanent free plan | **~+25%** on marketing (confirmed for India; BR rate not published — extrapolated) | India-primary. No PT-BR support. No BRL billing. Not recommended for BR-primary operations. India pricing, monthly commitment | asOf 2026-03 (MEDIUM) |
+| **SocialHub.pro (Start)** | SMB-tool (BR-local) | R$99/mo | Not confirmed | Near-zero BSP markup — platform fee is primary monetization; msgs at Meta base rate from wallet (verify — secondary, asOf 2026-05, MEDIUM) | Brazilian-founded, BRL-priced, PT-BR native. LGPD-aware. Transparent pricing. Good for BR SMB under ~50k msgs/mo | socialhub.pro — asOf 2026-05-19 (MEDIUM) |
+| **Zenvia Customer Cloud (Starter)** | Brazil-local CPaaS | $0/mo base + $137 WhatsApp setup in month 1 | 100 "Interactionz" included; effectively very limited for dispatch | **~30–150%+ markup** bundled into "Interactionz" quota model; overage $0.19–$1.00 each | Brazilian-headquartered. BRL billing available. PT-BR support. Opaque Interactionz overage is a cost trap for broadcast. Not recommended for high-volume dispatch | zenvia.com — asOf 2026-04/05 (MEDIUM) |
+| **Sinch Engage (Basics)** | BSP | $49/mo + $10/mo WhatsApp add-on | 14-day trial | +$0.003–$0.010/msg estimated (verify — secondary, asOf 2026-06, MEDIUM) | Strong Brazil/LATAM presence (acquired Wavy). WhatsApp requires Social Channels add-on (+$10/mo). Additional users $20/user/mo | sinch.com/engage — asOf 2026-06-03 (MEDIUM) |
+| **Infobip** | Enterprise CPaaS | No list price — enterprise contracts only | 60-day trial: 100 msgs each for WA/SMS/Email/Viber + 15 voice calls | Not disclosed; estimated ~25–50% above Meta base (verify — secondary, asOf 2026-06-03, MEDIUM) | Strong Brazil enterprise presence. LGPD tooling. Annual minimum commitments. Volume discounts 20–30% at 10M+/mo | infobip.com — asOf 2026-06-03 (MEDIUM) |
+| **Take Blip (blip.ai)** | Brazil-local enterprise | Not published — sales only | Free account: up to 2 agents, limited conversations (testing only) | Not disclosed; secondary: ~R$0.71 all-in vs Meta base ~R$0.31–0.35 (~100%+ markup at list — verify, LOW confidence) | Largest Brazilian WhatsApp BSP; dominant in enterprise. Deliberately opaque pricing. PT-BR support, LGPD-native. Not suitable for SMB or self-serve | blip.ai — asOf 2026-05-19 (LOW) |
+| **Meta Cloud API (self-integration)** | Direct | $0 | All service msgs free; utility-in-window free; FEP 72h free | **$0 markup** — you ARE at Meta's base rate; no BSP layer | Requires full in-house WhatsApp Business API integration. WABA registration free. No inbox/CRM tooling included. BRL billing for eligible accounts from Jul 1 2026 | developers.facebook.com — asOf 2026-06-03 (HIGH) |
 
 ### Pricing Model Notes
 
@@ -141,10 +176,16 @@ Tiers reset monthly. Discounts are applied automatically by Meta.
 - Gupshup: $1.46 / $31.75
 - Twilio: $1.55 / $33.75
 
+---
 
-
+### Why BSP over Direct API
 
 **Why BSP over Direct API:** BSP uses THEIR developer app — you never need a Meta developer account. This bypasses the SMS verification blocker that affects purchased/antidetect profiles. The Embedded Signup flow only requires Facebook login + BM admin access.
 
 **Direct Cloud API without your own dev account (workaround):** A SECOND Facebook account (contractor/employee with working phone) registers as developer → creates a "Business" Meta App → adds it to your BM → you (BM admin) create a System User → install the app → generate token with `whatsapp_business_messaging`. The token generation itself does NOT need dev SMS verification — only the app creation does, which the second account handles. Cheapest long-term (zero markup), keeps existing WABA, full script control.
 
+## WhatsApp Payments
+
+### Payment Flows
+
+WhatsApp Payments via Messages API is available in **Brazil** (Pix, Boleto, Payment Links) and **India**. Not yet globally available. Businesses receive payment confirmations via delivery reports/webhooks.

@@ -146,7 +146,7 @@ Meta sends POST requests to your `data_channel_uri` when screens require data, w
 
 ### Payment Flows
 
-WhatsApp Payments via Messages API is available in **Brazil** (Pix, Boleto, Payment Links) and **India**. Not yet globally available. Businesses receive payment confirmations via delivery reports/webhooks.
+See `pricing-and-billing.md` → **WhatsApp Payments** for Pix, Boleto, and Payment Links details.
 
 ---
 

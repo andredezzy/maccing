@@ -1,6 +1,6 @@
 # Global Automation Doctrine
 
-This is the canonical, platform-agnostic automation doctrine for the maccing-growth plugin. All platform-specific skills (`meta`, `google-ads`, `tiktok-ads`, `ycloud`, and others) have their own `reference/automation.md` that **defers to this file** for all cross-cutting automation rules. Read this document in full before executing any automation task. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
+This is the canonical, platform-agnostic automation doctrine for the maccing-growth plugin. All platform-specific skills defer to this file for all cross-cutting automation rules (`meta` via `reference/browser-automation.md`; `google-ads` and `tiktok-ads` via `reference/automation.md`; `ycloud` via `reference/api-automation.md`). Read this document in full before executing any automation task. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
 
 ---
 
@@ -370,7 +370,7 @@ Rung C: Raw local API (last resort)
 
 ## 8. Platform-Specific References
 
-Each platform skill maintains its own `reference/automation.md` that holds:
+Each platform skill maintains its own platform-specific automation reference that holds:
 
 - The platform's official surface (Rung 1) — API, SDK, or Scripts
 - Which tasks require Rung 2 (antidetect browser) and why
@@ -380,7 +380,7 @@ Each platform skill maintains its own `reference/automation.md` that holds:
 **These files defer to this global doctrine.** They do not repeat the universal rules — they extend them. When a platform rule conflicts with this document, this document governs unless the platform-specific file explicitly documents a justified exception.
 
 Platform reference locations:
-- `plugins/maccing-growth/skills/meta/reference/automation.md`
+- `plugins/maccing-growth/skills/meta/meta/reference/browser-automation.md`
 - `plugins/maccing-growth/skills/google-ads/reference/automation.md`
 - `plugins/maccing-growth/skills/tiktok-ads/reference/automation.md`
-- `plugins/maccing-growth/skills/ycloud/reference/automation.md`
+- `plugins/maccing-growth/skills/platforms/ycloud/ycloud/reference/api-automation.md`

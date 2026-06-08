@@ -90,18 +90,11 @@ Follow-up marketing templates (after 72hr) add per-message costs (see `whatsapp`
 
 ### WhatsApp Marketing Messages in Ads Manager
 
-Since July 2025, WhatsApp marketing message campaigns can be managed from Ads Manager:
-- Placement: **WhatsApp Marketing Messages**
-- Audience: Custom audiences only (opted-in subscriber lists)
-- Meta AI optimizes which subscribers receive the message
-- **US pause:** Marketing templates to US +1 numbers paused since April 2025
+→ Moved to `api-and-campaigns.md`.
 
 ### Remarketing via WhatsApp Contacts
 
-1. Export opted-in WhatsApp contact list (phone numbers)
-2. SHA-256 hash all phones
-3. Upload as Custom Audience in Ads Manager
-4. Use for: CTWA retargeting on FB/IG, Lookalike creation (1-2%), re-engagement campaigns
+→ Moved to `audiences.md`.
 
 ---
 

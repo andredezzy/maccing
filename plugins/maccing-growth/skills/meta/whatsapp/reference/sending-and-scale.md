@@ -90,9 +90,44 @@ async function sendBulkMessages(recipients: string[], template: TemplateMessage)
 2. **Test first:** Send to 50-100 internal contacts before full blast
 3. **Segment by relevance:** High-relevance sends → lower block rates → quality stays green
 4. **Monitor in real-time:** Watch delivery rates, read rates, and opt-out rates during sends
-   - **And ALWAYS surface unanswered inbound replies FIRST.** Every reconciliation/monitoring pass must also read the BSP Inbox for conversations where the customer replied and is waiting, and raise them as the **top-priority next action — above the funnel numbers**. An inbound reply opens the free 24h customer-service window (a $0, highest-converting warm path that closes in 24h) and is a positive quality signal; leaving it unanswered wastes the window and is the recipient most likely to block/report. For YCloud the exact read recipe is in the `ycloud` skill (`reference/automation.md` → "ALWAYS surface unanswered inbox replies").
+   - **And ALWAYS surface unanswered inbound replies FIRST.** Every reconciliation/monitoring pass must also read the BSP Inbox for conversations where the customer replied and is waiting, and raise them as the **top-priority next action — above the funnel numbers**. An inbound reply opens the free 24h customer-service window (a $0, highest-converting warm path that closes in 24h) and is a positive quality signal; leaving it unanswered wastes the window and is the recipient most likely to block/report. For YCloud the exact read recipe is in the `ycloud` skill (`reference/api-automation.md` → "ALWAYS surface unanswered inbox replies").
 5. **Respect user-level caps:** Meta limits each user to an undisclosed number of marketing messages per day across all businesses (commonly estimated at ~2/day, but Meta does not publish the exact threshold — it is dynamically adjusted). If your message is blocked by this cap, you get error **131049** (not 130472). Error 130472 is a separate mechanism: recipients in Meta's experiment holdout (~1% of users per region, ongoing since 2023) who cannot receive marketing templates unless a 24h CSW is open, a marketing conversation exists, or the user came via CTWA. These are two distinct errors.
 6. **Implement exponential backoff:** For 429/rate-limit errors, back off and retry
+
+---
+
+### Measuring Success
+
+| Metric | Healthy | Warning | Critical |
+|---|---|---|---|
+| Delivery rate | >95% | 90-95% | <90% |
+| Read rate | >70% | 50-70% | <50% |
+| Block/report rate | <2% | 2-5% | >5% |
+| Quality rating | Green | Yellow | Red (tier downgrade) |
+| Open rate | >96% | 90-96% | <90% |
+| CTR (link in template) | >15% | 5-15% | <5% |
+
+**Industry benchmarks (2026):**
+- Open rate: 96.7-98.2% (well-optimized: ~99%)
+- CTR: 15-45% (well-optimized: 25-35%)
+- Conversion rate: 5-10% (top performers: up to 18%)
+- Delivery rate: 95-99% (well-optimized: 99%+)
+
+**If quality drops to yellow:** stop broadcast, review template content, reduce volume, wait 6h evaluation cycle.
+**If quality drops to red:** pause all marketing, switch to utility-only for 7+ days, may need to ramp up tier again.
+
+
+---
+
+### Quality Rating Recovery Protocol
+
+1. Pause ALL broadcasts immediately
+2. Identify and disable poorly performing templates
+3. Clean contact list: remove non-engaged, non-opted-in
+4. Wait 7 days for quality score recalculation
+5. Resume gradually: best templates → most engaged contacts only
+6. If quality holds at Green/Yellow for 7 days: status returns to Connected
+
 
 ---
 

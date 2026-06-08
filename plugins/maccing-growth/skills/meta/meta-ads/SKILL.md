@@ -15,19 +15,7 @@ Production reference for Meta Ads. Covers Marketing API, campaign types, targeti
 
 ## Project Context (MANDATORY)
 
-```
-MANDATORY — read context AND report the full BM roster BEFORE any action
-(including before clarifying questions):
-1. READ `.maccing/growth/README.md` (the vendor/account index), if it exists.
-2. ENUMERATE every BM — never assume one. The path is `meta/<profile>/<bm>/`, so
-   list `.maccing/growth/meta/*/` (profiles) and `.maccing/growth/meta/*/*/` (BMs),
-   then READ the root README, EVERY profile README, and EVERY BM README found.
-3. Also READ EVERY ad-account README: `.maccing/growth/meta/*/*/ads/*/README.md`.
-4. TELL the operator a roster of ALL BMs up front — one line each
-   (profile · BM · verification/tier · ad account · status) —
-   INCLUDING BMs unrelated to the current task. Never silently narrow to one BM.
-Skipping this = operating on stale data and hiding live assets from the operator.
-```
+Follow the mandatory BM-roster protocol in the meta skill's Project Context block (it includes the ads ad-account README step).
 
 ---
 
@@ -60,24 +48,24 @@ Base URL: `https://graph.facebook.com/v25.0/`
 
 | Intent | Reference | Use for |
 |--------|-----------|---------|
-| API auth, tokens, CRUD endpoints, rate limits, batch, webhooks; campaign structure, ODAX objectives, Advantage+ campaigns | reference/api-and-campaigns.md | Setting up API access, creating/updating campaigns and ad sets, understanding Advantage+ levers, choosing objectives |
-| Audience targeting, custom audiences, lookalike audiences, geo, interests | reference/audiences.md | Building targeting specs, creating LLAs, configuring Advantage+ Audience, custom audience upload |
+| API auth, tokens, CRUD endpoints, rate limits, batch, webhooks; campaign structure, ODAX objectives, Advantage+ campaigns; Python automation scripts; API quick-reference enums; WhatsApp Marketing Messages | reference/api-and-campaigns.md | Setting up API access, creating/updating campaigns and ad sets, understanding Advantage+ levers, choosing objectives, building automation scripts, quick enum lookups |
+| Audience targeting, custom audiences, lookalike audiences, geo, interests; remarketing via WhatsApp contacts | reference/audiences.md | Building targeting specs, creating LLAs, configuring Advantage+ Audience, custom audience upload, CTWA-contact remarketing |
 | Ad formats, image/video specs, carousel, DCO, UGC, catalog/product feed | reference/creative.md | Producing or validating ad creative, enabling Advantage+ Creative, setting up catalog ads |
 | Bid strategies, budget types, CBO, learning phase, scaling | reference/bidding.md | Choosing bid strategy, setting budgets, exiting learning phase, scaling spend |
-| CAPI setup, EMQ, deduplication, standard events, Pixel, AEM, domain verification, iOS 14.5+ | reference/capi-pixel.md | Implementing conversion tracking, maximizing EMQ score, debugging CAPI, Pixel deduplication |
-| Insights API, attribution windows, key metrics, data retention, async reports; A/B testing, Creative Hub, automation rules | reference/reporting-and-tools.md | Pulling performance data, building reports, setting up automation rules, A/B tests |
-| Special ad categories, finance/housing/employment restrictions, restricted content, ad review, creative fatigue; Python automation scripts, creative rotation | reference/compliance-automation.md | Financial services compliance, policy review, building automation scripts, creative rotation |
-| 2026 best practices, account structure, CAPI checklist, creative guidelines, scaling checklist, attribution strategy; API quick reference, common gotchas | reference/best-practices.md | Account setup decisions, pre-launch checklists, debugging common mistakes, quick API lookups |
-| Click-to-WhatsApp ads, ctwa_clid attribution, 72h free window, remarketing via WhatsApp contacts | reference/ctwa.md | CTWA campaign setup, attributing WhatsApp conversions via CAPI, CTWA vs landing page decisions |
-| AdsPower browser automation, antidetect doctrine, official-surface-first decision tree | ../meta/reference/automation.md | When an ads task needs the browser / antidetect discipline |
+| CAPI setup, EMQ, deduplication, standard events, Pixel, AEM, domain verification, iOS 14.5+ | reference/capi-pixel.md | Implementing conversion tracking, maximising EMQ score, debugging CAPI, Pixel deduplication |
+| Insights API, attribution windows, key metrics, data retention, async reports; A/B testing, Creative Hub, automation rules | reference/reporting.md | Pulling performance data, building reports, setting up automation rules, A/B tests |
+| Special ad categories, finance/housing/employment restrictions, restricted content, ad review policy | reference/compliance.md | Financial services compliance, policy review, restricted-content decisions |
+| 2026 best practices, account structure, CAPI checklist, creative guidelines, scaling checklist, attribution strategy; creative rotation; ad fatigue management | reference/best-practices.md | Account setup decisions, pre-launch checklists, debugging common mistakes, managing creative refresh cycles |
+| Click-to-WhatsApp ads, ctwa_clid attribution, 72h free window | reference/ctwa.md | CTWA campaign setup, attributing WhatsApp conversions via CAPI, CTWA vs landing page decisions |
+| AdsPower browser automation, antidetect doctrine, official-surface-first decision tree | ../meta/reference/browser-automation.md | When an ads task needs the browser / antidetect discipline |
 
 ---
 
 ## Summary by Area
 
-**API & Campaigns:** System User tokens are the only viable production auth. Budget is always in cents. ODAX objectives required since v21.0. Advantage+ (3 levers: Budget + Audience + Placement) is the new default — legacy ASC/AAC APIs end May 19, 2026. Max 5 ad sets per campaign to concentrate learning signal.
+**API & Campaigns:** System User tokens are the only viable production auth. Budget is always in cents. ODAX objectives required since v21.0. Advantage+ (3 levers: Budget + Audience + Placement) is the new default — legacy ASC/AAC APIs end May 19, 2026. Max 5 ad sets per campaign to concentrate learning signal. Python automation scripts and API enums live in reference/api-and-campaigns.md.
 
-**Audiences:** Interest targeting is now suggestions-only in most objectives; detailed targeting exclusions removed March 2025. The creative IS the targeting signal. For scale: Advantage+ Audience + geo/age hard constraints only. Lookalike seeds from closed-won customers (not form fills) deliver 20-40% ROI improvement.
+**Audiences:** Interest targeting is now suggestions-only in most objectives; detailed targeting exclusions removed March 2025. The creative IS the targeting signal. For scale: Advantage+ Audience + geo/age hard constraints only. Lookalike seeds from closed-won customers (not form fills) deliver 20-40% ROI improvement. Remarketing via WhatsApp contacts is documented in reference/audiences.md.
 
 **Creative:** 9:16 vertical video first (Reels/Stories), then 4:5 image. First 3 seconds determine 80% of video outcome. UGC wins "9 out of 10 accounts." DCO via `asset_feed_spec` runs up to 10 images/videos × 5 headlines × 5 body variants. Catalog ads require Dynamic Media enforcement as of Oct 20, 2025.
 
@@ -85,8 +73,10 @@ Base URL: `https://graph.facebook.com/v25.0/`
 
 **CAPI:** Non-negotiable — pixel-only accounts lose 15-40% of conversion data to ad blockers. `fbp` and `fbc` must NOT be hashed. Target EMQ ≥ 8.8 for Purchase. Deduplication requires matching `event_id` across Pixel and CAPI. Store `fbclid` at lead creation; fire closed-won events via CAPI with original match keys.
 
-**Reporting:** Default attribution window: `7d_click` + `1d_view`. `7d_view` and `28d_view` REMOVED Jan 12, 2026 — they return empty data silently, not an error. Audit all pipelines. Unique-count fields expire after 13 months.
+**Reporting:** Default attribution window: `7d_click` + `1d_view`. `7d_view` and `28d_view` REMOVED Jan 12, 2026 — they return empty data silently, not an error. Audit all pipelines. Unique-count fields expire after 13 months. Full Insights API reference in reference/reporting.md.
 
-**Compliance:** Financial services ads require `FINANCIAL_PRODUCTS_AND_SERVICES` special ad category (expanded Jan 2025). Age locked to 18-65+, no ZIP targeting, no LLAs, no location exclusions.
+**Compliance:** Financial services ads require `FINANCIAL_PRODUCTS_AND_SERVICES` special ad category (expanded Jan 2025). Age locked to 18-65+, no ZIP targeting, no LLAs, no location exclusions. Policy-only details in reference/compliance.md.
 
 **CTWA:** CTWA ads get a 72-hour free messaging window. `ctwa_clid` from webhook referral is the attribution key — store it in Redis (90-day TTL) mapped to phone. Fire CAPI with `action_source: "business_messaging"` to close the attribution loop.
+
+**Creative Rotation & Ad Fatigue:** Rotation schedules, fatigue signals, and refresh checklists live in reference/best-practices.md.

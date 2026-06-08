@@ -7,9 +7,6 @@
    - [Defense Playbook for Legitimate Companies](#defense-playbook-for-legitimate-companies)
    - [Black Hat Infrastructure Overview (Know Your Enemy)](#black-hat-infrastructure-overview-know-your-enemy)
    - [Meta's AI Enforcement Classifier (Deep Intelligence)](#metas-ai-enforcement-classifier-deep-intelligence)
-   - [BM Ban Triggers (Confirmed 2025-2026)](#bm-ban-triggers-confirmed-2025-2026)
-   - [BM Ban Cascade (How It Propagates)](#bm-ban-cascade-how-it-propagates)
-   - [BM Appeal Process](#bm-appeal-process)
    - [Profile Types and Survival Rates](#profile-types-and-survival-rates)
    - [Niche Classification in Brazil](#niche-classification-in-brazil)
    - [2025-2026 Trends](#2025-2026-trends)
@@ -116,51 +113,7 @@ Regularly check Account Quality scores in Business Manager, ad feedback metrics 
 
 **False positive problem (documented):** May-June 2025 ML filter upgrade caused major wave of innocent content flagged. July 2025: Meta removed 135,000 accounts + 500,000 linked accounts as collateral from graph propagation. The system is acknowledged to be "too aggressive" in some areas.
 
-### BM Ban Triggers (Confirmed 2025-2026)
-
-| Category | Trigger | Severity |
-|---|---|---|
-| **Authenticity** | Creating BM with purchased/fake profile | Critical |
-| **Authenticity** | Profile registered on Windows (higher suspicion than mobile) | Medium |
-| **Authenticity** | Profile under 90 days creating a BM | High |
-| **Network** | Login from multiple IPs/geos in short windows | High |
-| **Network** | IP previously associated with banned BM ("dirty list") | Critical |
-| **Network** | Shared device fingerprint across multiple BMs | Critical |
-| **Financial** | Rapid budget scaling ($20 → $500 in <7 days) | High |
-| **Financial** | Card previously on banned BM (dirty-list 6-12 months) | Critical |
-| **Financial** | Payment geo mismatch vs declared business geo | Medium |
-| **Policy** | UBP (Unacceptable Business Practices): MLM, returns, health claims | Critical |
-| **Policy** | High chargeback rates on payment processor | High |
-| **Operational** | Adding admin profile under checkpoint/restriction | High |
-| **Operational** | Adding multiple ad accounts in first 7 days | Medium |
-| **Operational** | Creating BM immediately after profile creation | High |
-
-### BM Ban Cascade (How It Propagates)
-
-**BM restriction → All assets inside:** Instantaneous. Every user, ad account, page, pixel, WABA under that BM goes down simultaneously.
-
-**Admin profile ban → BM risk:** If sole admin is banned, BM becomes disabled. Mitigation: always 2+ admin profiles.
-
-**Cluster-linked BMs:** BMs sharing device fingerprint, proxy IP, or payment card get linked in Meta's graph. One ban cascades to ALL linked BMs within hours.
-
-**Cross-platform cascade (2025-2026):** Instagram + Facebook + WhatsApp + Threads are identity-linked. A flag on any platform can cascade across the entire identity graph.
-
-**Direction of BM-WABA cascade:**
-- BM disabled → ALL WABAs lose API access, numbers go to "Disabled" (catastrophic)
-- WABA/number banned → BM survives, other assets unaffected (granular, recoverable)
-- Phone number ban is the more recoverable event. BM ban is catastrophic.
-
-### BM Appeal Process
-
-**Tier 1 (Automated):** "Request Review" in Business Support Home. Resolves ~35% of false positives within 24h. No human involved.
-
-**Tier 2 (Human review):** Policy team review. 3-5 business days. Must provide specific compliance explanation, not generic denial.
-
-**Tier 3 (Policy Advisory Board):** Complex/high-value cases. 10-15 business days. Rare.
-
-**Critical deadline:** After 180 days disabled, reinstatement is not possible.
-
-**Recovery Action Plan (new 2026):** Complete compliance training → submit corrective action plan → pass re-certification → account reinstated with 30-day probation (all ads manually reviewed during probation).
+BM ban triggers, cascade mechanics, and appeal tiers: see `disposable-bm-strategy.md`.
 
 ### Profile Types and Survival Rates
 
@@ -204,48 +157,4 @@ A legitimate operator in the White category (e.g. a regulated financial-services
 
 ## Business Profile Compliance (financial niche) — WhatsApp
 
-### Business Profile Compliance (financial niche)
-
-**The profile IS reviewed by Meta** — reactively (when account is flagged for any reason: spam reports, volume spikes, blocks), not proactively like templates. Meta's terms: "WhatsApp may review, remove, or delete Company Content you share on your business profile." A profile that contradicts the WABA category becomes evidence of deception during review.
-
-**Category + About + Description must tell ONE coherent story.** Mismatch (e.g., category "Education" but description says "managed capital") is a compounding risk during review.
-
-**Profile risk spectrum (Brazil financial/investment):**
-| Phrase | Meta risk | CVM risk | Use? |
-|---|---|---|---|
-| "educação financeira" | None | None | ✅ Safe |
-| "comunidade de investidores" | None | None | ✅ Safe |
-| "mercado financeiro" / "mercado de capitais" | None | None | ✅ Safe |
-| "compartilhamos análises/estratégias" | None | None | ✅ Safe |
-| "gestão de capital" | Medium | High (CVM authorization required) | ❌ Avoid |
-| "gerenciamos seu capital" | High | Very High | ❌ Never |
-| "retorno garantido" / "rentabilidade garantida" | Instant flag | Criminal-level | ❌ Never |
-
-**Key distinction (Brazilian law):**
-- Educação financeira (teaching markets/strategies) = NO CVM authorization needed
-- Consultoria de investimentos (personalized advice) = CVM registration required
-- Gestão de carteiras (managing portfolios) = CVM authorization required
-- "Compartilhamos" (we share) is safe; "gerenciamos" (we manage) triggers regulation
-
-**CVM is aggressive (2025):** 24 platforms suspended, R$1k/day fines. Meta + CVM risk are independent but additive — "gestão de capital" hits both at once.
-
-**Complete profile is SAFER than minimal** (counterintuitive but consistent):
-- Quality rating depends on message reception, NOT profile completeness
-- Empty/sparse profile looks like scam → more blocks → worse quality rating
-- Complete + coherent profile looks legitimate during manual review
-- Website in profile must match WABA display name footprint (helps display name approval)
-- Email: use domain email, NOT Gmail (raises trust questions)
-- Address: city/state or "Brasil" is enough — fill it, don't leave empty
-
-**The "surface area" myth:** more profile info = more consistency signals, not more attack surface. The real risk in a disposable BM is messaging behavior (spam, opt-ins, volume), not profile text. Write clean copy, don't leave fields empty.
-
-**Website field is CRITICAL for display name approval (not optional):**
-- Meta requires a working website to approve a display name (confirmed across 12+ BSP sources)
-- The display name must literally APPEAR on the website
-- Meta primarily checks the BM-registered website; the profile website field is secondary but also checked
-- When brand name ≠ legal entity: the website must show BOTH — brand in header/body, legal entity + CNPJ in footer ("Brand powered by Legal Entity" pattern, recommended by 360dialog/Wati)
-- Empty website field = near-certain display name rejection
-- If the BM website is locked and doesn't show the brand, the profile website field pointing to a brand-showing site is your ONLY lever — fill it
-- Updating the website field during a pending review has no documented downside; reviewer may pick it up
-- Profile website field ≠ for isolation. Put the disposable brand site, NOT the real client domain
-- Email field: leave empty for isolation if you'd otherwise use the real domain (links WABA → real brand). Website (disposable site) is fine and necessary; email (real domain) is the actual isolation risk.
+Moved to `skills/meta/whatsapp/reference/compliance.md` — see "Business Profile Compliance (Financial Niche)".

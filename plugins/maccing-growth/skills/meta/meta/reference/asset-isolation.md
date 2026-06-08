@@ -23,7 +23,7 @@ Each independent BM operation requires complete isolation:
 | Admin profile | Unique per BM, never share admin across BMs |
 | Email/phone | Unique per BM, shared contacts create graph links |
 
-**Automating a BM's own profile:** see `meta/meta/reference/automation.md`.
+**Automating a BM's own profile:** see `meta/meta/reference/browser-automation.md`.
 
 **Architecture:**
 - **Vault BM:** stores pixels, pages, conversion data — NEVER runs campaigns
@@ -81,16 +81,7 @@ If BM falls → WABA and phone number are lost (non-transferable)
 
 ### BM Types (Market Reference)
 
-| Type | Description | Price Range | Risk |
-|---|---|---|---|
-| BM zerada | Fresh, no history | R$50-150 | High (no trust) |
-| BM verificada | Business Verification done | R$90-250 | Medium |
-| BM ilimitada | High-score creator profile | R$400-1500 | Medium |
-| BM agência | Agency-allocated shared access | % of spend + fee | Low-medium |
-| Disposable BM | Disposable, burn after use | R$80-300 total setup | Expected to die |
-| BM reativada | Recovered from ban via appeal | Variable | Paradoxically stable |
-| BM com linha de crédito | Monthly billing unlocked | Premium | High (heavily monitored) |
-| BM disparo | Set up for WhatsApp dispatch | Variable | Depends on tier |
+See `meta/meta/reference/disposable-bm-strategy.md` § BM Types (Market Reference).
 
 ---
 
@@ -147,8 +138,3 @@ A non-exhaustive market survey for the BR-first, static-dedicated-SOCKS5 use cas
 
 _Sources: vendor pricing pages, [AdsPower's recommended-proxy list](https://help.adspower.com/docs/recommended_proxy_providers), and 2026 BR proxy comparison reviews. Prices verified live in 2026 — re-check before buying._
 
----
-
-## Browser Automation Isolation Rule (AdsPower / CDP)
-
-See `meta/meta/reference/automation.md` for the browser-automation discipline (own-profile rule, visibility gotcha, MCP recipe, undetectability).

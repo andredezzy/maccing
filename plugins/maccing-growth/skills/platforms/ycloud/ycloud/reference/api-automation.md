@@ -116,3 +116,51 @@ Execute each step as an in-page `fetch()` via `evaluate-script`, following the g
 - Report the unanswered conversations **at the top** of the reconciliation output: who replied, the last inbound message, and how long it has been waiting (flag any approaching the 24h window edge).
 - Frame it as the operator's **next action**: these need a human reply now (Rung 3 — the agent never sends broadcasts; single inbox/service-window replies are operator-driven or the operator's explicit call). Drafting suggested replies is fine; **sending is the operator's**.
 - If the Inbox is empty / nothing unanswered, say so explicitly — don't silently omit it.
+
+---
+
+## What You Can and Cannot Automate
+
+| Evaluation need | Available via API | Method | Notes |
+|---|---|---|---|
+| Phone quality rating (GREEN/YELLOW/RED) | Yes | GET /v2/whatsapp/phoneNumbers, field `qualityRating` | [verified live 2026-06] returns GREEN / YELLOW / RED |
+| Messaging tier / limit | Yes | GET /v2/whatsapp/phoneNumbers, fields `messagingLimit` + `whatsappBusinessManagerMessagingLimit` | [verified live 2026-06] returns the current tier (e.g. TIER_2K) |
+| Wallet / credit balance | Yes | GET /v2/balance | [verified live 2026-06] always denominated in USD regardless of the WABA billing currency |
+| Template approval status | Yes | GET /v2/whatsapp/templates, field `status` | [verified live 2026-06] returns APPROVED / PENDING / IN_APPEAL / REJECTED per template |
+| Template quality score | Partially | GET /v2/whatsapp/templates, field `qualityRating` | [verified live 2026-06] returns UNKNOWN until sufficient send volume; GREEN/YELLOW/RED once scored by Meta |
+| Per-template send / deliver / read counts | No dedicated endpoint | Self-computed: paginate GET /v2/whatsapp/messages, group by `template.name`, aggregate `status` | [verified live 2026-06] all filter params except `filter.to` and `filter.wabaId` are silently ignored server-side |
+| Per-message delivery funnel | Yes | GET /v2/whatsapp/messages, fields `sendTime`, `deliverTime`, `readTime`, `status` | [verified live 2026-06] |
+| Per-message cost | Yes | GET /v2/whatsapp/messages, fields `totalPrice`, `pricingCategory`, `currency` | [verified live 2026-06] `marketing_lite` at $0.0625/message |
+| URL button click tracking | No | Not present in message objects | [verified live 2026-06] no `clicked` field exists |
+| Opt-out list (queryable) | Yes | GET /v2/unsubscribers, field `customer` per record | [verified live 2026-06] 0 current records; no template-level attribution, requires correlating timestamp + phone against your own send log |
+| Opt-out attribution to a template | Yes, via the DASHBOARD backend (not the public API) | `POST www.ycloud.com/api/whatsapp/batch/search` gives per-campaign `unsubscribeNums` + `templateName`; `GET /batch/activity/analytics` gives `buttons[].count` | [verified live 2026-06] session-cookie auth only, reached from inside the AdsPower profile (see "Dashboard Backend API" at the end) |
+| Inbound messages (queryable list) | No | [UNAVAILABLE] | GET /v2/whatsapp/inboundMessages returns 404; inbound is webhook-only [verified live 2026-06] |
+| Aggregate analytics (bulk stats) | No | [UNAVAILABLE] | No /analytics, /insights, /stats paths exist; all return 404 [verified live 2026-06] |
+| WABA business verification status | Yes | GET /v2/whatsapp/businessAccounts/{id}, field `businessVerificationStatus` | [verified live 2026-06] value: `verified` |
+| Contacts (CRM-style list) | Yes | GET /v2/contact/contacts | [from docs, verified live 2026-06] auto-created from inbound WhatsApp interactions |
+| Billing history / transaction log | No | [UNAVAILABLE] | No billing history endpoint exists |
+| Low-balance webhook | No | [UNAVAILABLE] | No threshold-alert or billing event in webhook catalog |
+| WhatsApp Flows | No (feature-gated) | Returns 403 for accounts without the feature, even with correct wabaId | [verified live 2026-06] |
+| WhatsApp Groups | No (feature-gated) | Returns 404 for accounts without the feature | [verified live 2026-06] |
+| SMS / Voice / Email | No (not enabled) | Returns 403 ACCOUNT_LIMITED | [verified live 2026-06] |
+
+---
+
+### Computing Template Analytics (No Dedicated Endpoint)
+
+Since no per-template analytics endpoint exists, the only method is client-side aggregation over the full message log. [verified live 2026-06]
+
+Algorithm:
+1. Fetch all pages: `GET /v2/whatsapp/messages?page=1&limit=100&includeTotal=true`, then repeat for subsequent pages until `length < limit`.
+2. Group items by `template.name`.
+3. Count: `attempted` = total records per template; `failed` = status `failed`; `delivered` = status `delivered` + `read`; `read` = status `read`.
+4. Compute rates: `delivered_pct = delivered / attempted`, `read_pct = read / attempted`.
+
+Illustrative example (fictional values):
+
+| Template | Attempted | Failed | Delivered+Read | Read | Deliver% | Read% |
+|---|---|---|---|---|---|---|
+| welcome_template | 200 | 20 (10.0%) | 180 | 120 | 90.0% | 60.0% |
+| invite_template | 200 | 16 (8.0%) | 184 | 128 | 92.0% | 64.0% |
+
+When the sample size is below the ~200 threshold needed for a 95% CI on a 5pp difference, treat any gap as directional only. Score formula: `score = delivered_pct * 0.4 + read_pct * 0.4 - optout_pct * 0.2`. In this example `invite_template` leads on delivery rate.

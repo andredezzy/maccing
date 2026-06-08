@@ -12,8 +12,7 @@
    - [Scaling Checklist](#scaling-checklist)
    - [Reporting & Decision Cadence](#reporting--decision-cadence)
    - [Attribution Strategy](#attribution-strategy)
-2. [API Quick Reference](#api-quick-reference)
-3. [Common Gotchas](#common-gotchas)
+2. [Common Gotchas](#common-gotchas)
 
 ---
 
@@ -189,67 +188,7 @@ Scaling approach:
 
 ---
 
-## API Quick Reference
-
-### Campaign Objectives (v21.0+ ODAX)
-
-```
-OUTCOME_AWARENESS
-OUTCOME_TRAFFIC
-OUTCOME_ENGAGEMENT
-OUTCOME_LEADS
-OUTCOME_APP_PROMOTION
-OUTCOME_SALES
-```
-
-### Optimization Goals
-
-```
-REACH, IMPRESSIONS, LINK_CLICKS, LANDING_PAGE_VIEWS,
-OFFSITE_CONVERSIONS, VALUE, APP_INSTALLS, APP_EVENTS,
-LEAD_GENERATION, QUALITY_LEAD, THRUPLAY, VIDEO_VIEWS,
-REPLIES, ENGAGED_USERS, POST_ENGAGEMENT
-```
-
-### Bid Strategies
-
-```
-LOWEST_COST_WITHOUT_CAP        # Highest Volume
-COST_CAP                       # Cost Cap
-LOWEST_COST_WITH_BID_CAP       # Bid Cap
-LOWEST_COST_WITH_MIN_ROAS      # ROAS Goal
-VALUE_BASED                    # Maximize Value / Maximize ROAS
-```
-
-### Status Values
-
-```
-ACTIVE, PAUSED, DELETED, ARCHIVED, IN_PROCESS, WITH_ISSUES
-```
-
-### Special Ad Categories
-
-```
-EMPLOYMENT
-HOUSING
-CREDIT (legacy)
-FINANCIAL_PRODUCTS_AND_SERVICES (2025+)
-ISSUES_ELECTIONS_POLITICS
-```
-
-### Placement Fields
-
-```json
-{
-  "publisher_platforms": ["facebook", "instagram", "messenger", "audience_network"],
-  "facebook_positions": ["feed", "reels", "right_hand_column", "marketplace", "search", "story"],
-  "instagram_positions": ["stream", "story", "reels"],
-  "messenger_positions": ["messenger_home"],
-  "audience_network_positions": ["classic", "rewarded_video"]
-}
-```
-
----
+> **API Quick Reference** (Campaign Objectives, Optimization Goals, Bid Strategies, Status Values, Special Ad Categories, Placement Fields) has moved to [api-and-campaigns.md](api-and-campaigns.md).
 
 ## Common Gotchas
 
@@ -267,6 +206,28 @@ ISSUES_ELECTIONS_POLITICS
 | Offline Conversions API shut down May 2025 | Use CAPI with `action_source: "physical_store"` |
 | Frequency >3.0 with no creative refresh plan | Webhook subscription to `creative_fatigue` for alerts |
 | Async Insights job returns null | Retry; check `async_percent_completion` before reading |
+
+---
+
+### Creative Rotation Strategy
+
+1. Launch 3-5 creative concepts per ad set
+2. After 7 days or 50 optimization events per variant: identify winners
+3. Scale budget to top 2-3 performers; pause bottom performers
+4. Refresh creative every 2-3 weeks (before frequency hits 2.5)
+5. Never let creative library drop below 3 active assets per ad set
+
+**Creative testing velocity target (2026):** 15-50+ active creatives needed for Meta's algorithm to properly optimize. Aim for 10-30 new creatives/month in active accounts.
+
+### Ad Fatigue & Creative Health
+
+Use the `creative_fatigue` webhook (see Section 1) to get real-time fatigue alerts. Meta provides three levels: Low, Medium, High.
+
+**Manual fatigue signals:**
+- Frequency > 2.5 (prospecting) → begin creative refresh
+- Frequency > 3.0 → urgent refresh
+- CTR decline > 20% over 7-14 days → replace creative
+- CPM increase > 50% while CTR flat → algorithm deprioritizing
 
 ---
 
