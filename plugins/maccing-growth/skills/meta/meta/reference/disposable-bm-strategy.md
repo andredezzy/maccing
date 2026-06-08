@@ -426,12 +426,12 @@ When the BM legal name differs from the desired brand, the website must show bot
 
 **Meta-official format for brand/entity mismatch: "Brand by [Entity]"** (e.g., "Fruit Snacks by Fresh Produce", "Delight Ice-creams by Fresh Dairy"). This is the officially documented and safest approach — uses no special characters, no auto-flag risk. Reserve the parenthetical format only when the site already shows that exact format externally.
 
-**"Brand (Entity)" format — CONFIRMED WORKING (with caveat):**
-- Parentheses are in the official forbidden character set, but Meta's policy explicitly states: "These formatting guidelines do not apply to businesses who already brand this way externally."
-- "Brand (Entity)" format was accepted during Embedded Signup (empirically confirmed in production, May 2026) — consistent with the external-branding exception (the disposable brand site footer showed the parenthetical format)
-- Real-world precedent: production WhatsApp display names using the "Service (Legal Entity)" parenthetical format have been approved (e.g. a retailer's support line shown as "&lt;Service&gt; (&lt;Company Ltda&gt;)")
-- Use "Brand (Entity)" only when your site already shows that exact parenthetical branding, not as a general-purpose pattern
-- **Rejection risk is LOW-consequence:** display name rejection doesn't ban BM or WABA, can resubmit up to 10x in 30 days
+**"Brand (Entity)" parenthetical format — AVOID** (parentheses are a prohibited character). [Corrected 2026-06 via deep research across 17 BSP sources: Gupshup, Wati, 360dialog, AiSensy, Infobip, Rasayel, Turn.io.]
+- **Parentheses `()` are in WhatsApp's prohibited special-character set.** No source lists a parenthetical format as accepted — the only documented brand≠entity bridging format is **"Brand by Entity"** (above). Use that.
+- ⚠️ **Mixed real-world evidence, leaning REJECT:** the parenthetical was approved ONCE in production (the external-branding exception — the site footer happened to show that entity) but **REJECTED** another time when the parenthetical entity did NOT match the verifiable legal entity. One approval + one rejection = unreliable; do not treat it as a working pattern.
+- **The entity placed in the name MUST be the verifiable LEGAL entity** (the BM's razão social / the name shown in the site footer) — NOT an arbitrary BM-portfolio label. A name that correlates with neither the legal entity nor the website is rejected.
+- **Two-axis review, BOTH required:** (a) the name/brand must appear on the official website, AND (b) the name must correlate with the legal business entity. Neither axis alone is sufficient.
+- **Rejection is scoped** (doesn't ban the BM/WABA — the number just shows the bare phone until approved), BUT the **resubmission limit is UNVERIFIED**: every specific numeric limit ("10 in 30 days", "3 in 30 days") was adversarially refuted across sources. Treat resubmit attempts as scarce — get the name right, don't guess.
 
 **Verified BMs: website field is LOCKED.**
 After business verification, core fields (legal name, website, country, phone, tax ID) become protected. Changing them:
@@ -458,7 +458,7 @@ If the purchased BM's website doesn't mention your brand, you cannot use your br
 **If rejected:**
 - Does NOT ban the BM or WABA (scoped to display name only)
 - Number still works but shows phone number instead of name
-- Can resubmit up to 10 times in 30 days
+- Resubmit limit is **unverified** (BSP sources conflict; all specific numeric limits were refuted in 2026-06 research) — treat attempts as scarce, not unlimited
 - Can appeal with website screenshot showing the footer connection
 - If appeal limit hit: 7-60 days locked from changing that name (not a ban)
 
