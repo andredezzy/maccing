@@ -401,6 +401,7 @@ When the BM legal name differs from the desired brand, the website must show bot
 
 **Display name rules:**
 - Must appear on a live, accessible website linked in BM settings
+- **Match the brand EXACTLY as written on the site — not an abbreviation or substring.** If the site shows "Acme Edu", submit "Acme Edu (Entity)", NOT "Acme (Entity)" — a shortened form risks a mismatch rejection even though the substring technically appears (live-confirmed 2026-06). The display-name field at WABA registration even states "deve ser igual ao nome comercial." Use the full brand string.
 - Cannot be a generic noun alone ("Trading", "Community", "Signals")
 - Cannot include "Oficial", "Verificado", or implied status words
 - Cannot be all caps unless branded that way everywhere

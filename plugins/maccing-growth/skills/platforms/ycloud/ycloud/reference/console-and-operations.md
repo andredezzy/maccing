@@ -41,6 +41,36 @@ Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsA
 
 **After the 24h rest: WhatsApp Embedded Signup (connect the WABA/number).** Uses YCloud's developer app — no Meta developer account, only Facebook login + BM **Admin**, run from the BM's AdsPower profile. Requires a **fresh WABA number** (BR eSIM/SIM never on WhatsApp) to register during the flow.
 
+**The Embedded Signup wizard — full screen-by-screen (observed 2026-06 on a verified BM).** Trigger: YCloud console → **"Start to create channel"** → opens the **"Login do Facebook para Empresas"** OAuth dialog (YCloud's own Meta app — no Meta developer account needed; you must already be logged into the BM's Facebook profile in that AdsPower session). A left-side 4-dot rail tracks progress.
+
+**Step 1 — "Selecione os ativos de negócios para compartilhar com o YCloud"**
+- *Portfólio empresarial:* select the disposable BM (its purchased identity name).
+- *Conta do WhatsApp Business:* the dropdown lists **"Criar uma conta do WhatsApp Business"** plus any existing WABA. ⚠️ **A pre-existing +1 555-xxx Meta test-number WABA auto-appears** (every BM ships with one). **Choose "Criar uma conta" — NEVER the +1 555 test number** (it can't broadcast and isn't your chip). The test WABA stays parked in the BM afterward — ignore it, don't delete. → Avançar.
+
+**Step 2 — "Insira os dados da empresa para os novos ativos"** (subtitle: "As alterações realizadas afetarão somente os novos ativos" → nothing here touches the BM's locked verified fields).
+- **Nome** (editable) = **the BM name** (the purchased BM's identity — a person/company name), **NOT the brand.** This is the internal WABA name; the customer-facing brand (your disposable brand) is the number's **display name**, set in Step 3.
+- **Categoria** (editable, required) = **Education** (financial-education niche; never Finance/Serviços financeiros — niche trigger + contradicts the WhatsApp profile category).
+- **País** ⚠️ **LOCKED** (greyed) on a verified BM — inherited, read-only.
+- **Site** ⚠️ **LOCKED** (greyed) on a verified BM — pre-filled with the BM's **verified domain** (the purchased BM's locked site). It shows an `n/512` char counter but is **read-only — do NOT try to change it here.** (The brand site goes in the *profile* Website field later — see Step 6.)
+- **Fuso horário** = America/Sao Paulo. "Mostrar mais opções" can be skipped (about/description live on the profile). → Avançar.
+
+**Step 3 — "Adicione seu número de telefone do WhatsApp"** — radio: **"Usar somente um nome de exibição"** vs **"Adicionar um novo número"**. ⚠️ Pick **"Adicionar um novo número"** ("A verificação é obrigatória"); "somente nome de exibição" is a name-only sender with **no registered number** = useless for broadcast. Reveals:
+- **Telefone:** the fresh WABA chip (BR eSIM, never on WhatsApp), e.g. BR +55 (11) 9xxxx-xxxx.
+- **Nome de exibição do WhatsApp Business** = the customer-facing **display name**. On-screen helper: *"deve ser igual ao nome comercial e cumprir as diretrizes."* ⚠️ **It must match the brand on the profile Website** (the verification source) — a shortened form risks a *mismatch* rejection (e.g. "Acme" alone fails when the site shows "Acme Edu"). Use **`Brand (BM entity)`** → "[Brand] ([BM entity])". Full technique: `meta`.
+- **Escolha como verificar: SMS** or **Ligação telefônica** — ⚠️ **NEVER WhatsApp** (receiving WhatsApp on the chip permanently disqualifies it as a WABA number). Mobile eSIM → SMS; landline → ligação. → Avançar → enter the OTP received on the chip.
+
+**Step 4 — "Reveja o que você vai compartilhar com YCloud"** (BSP consent) — YCloud requests access to the WhatsApp Business Account with 3 standard perms: *Gerenciar suas contas do WhatsApp* · *Gerenciar e acessar conversas* · *Registrar e enviar eventos para a Meta*. → **Confirmar**.
+
+**Step 5 — "Conectando sua conta…"** (brief spinner) → **"Sua conta está conectada a YCloud"** ("Assets successfully created: &lt;BM name&gt; — Conta do WhatsApp").
+- A **"we'll review your business within 24h if there's a problem"** notice — **standard for every new WABA** (Política Comercial), **not a flag**.
+- ⚠️ **"Melhore sua experiência" — 3 toggles, ALL pre-checked. Uncheck all 3** (insights / auto-identify order & lead events / share Cloud API events): unused on a broadcast-only BM (no ads/commerce), and each feeds Meta more signal on a disposable asset — the order/lead one is **Meta AI reading conversation content** (unwanted scrutiny in the financial niche). Reversible later in Configurações da empresa. → **Continuar para a configuração de recursos**.
+
+**Lands on WhatsApp Manager → "Orientação de configuração"** (`.../whatsapp_manager/setup_guidance`). The URL carries the ops IDs: **`business_id`** (BM) · **`asset_id` = the WABA ID** · **`phone_number_id`**. Header: number · Integração=YCloud · Nome=display name · "Conversas iniciadas pela empresa: 0 de N usadas" (N = tier, e.g. 2000). A checklist runs: **Conta conectada → Número de telefone conectado** (polls ~1 min — click **"Atualizar"**) **→ Sua conta está ativa → Sua empresa é verificada** (all auto-complete on a verified BM). The 3 remaining tasks (QR code, "send first message", "learn to send a template") are **optional onboarding — skip them** (ramp with real templates, not test sends).
+
+**Back in the YCloud console (WhatsApp accounts):** the channel card shows **WABA ID**, **Owned by BM**, **Message limit** (= tier, e.g. "2000 customers"), and the number row with **Status: Connected**, **Quality Rating: Unknown** (until sending), and the **display name "… is being reviewed"** (tooltip) — review takes minutes-to-hours; if rejected, resubmit ~10×/30d (low stakes). Card actions: WhatsApp Flows · Manage templates · + WhatsApp Business Number.
+
+**Step 6 — WhatsApp profile (NOT part of Embedded Signup, do it after):** ⚠️ the **Website field here is the display-name verification source — a DIFFERENT field from the locked WABA Site in Step 2.** Set it to the brand **homepage** (NOT /grupo); **Email empty** (isolation); category Education; about/description Education-framed. Technique: `meta`.
+
 ---
 
 ## What You Can and Cannot Automate
