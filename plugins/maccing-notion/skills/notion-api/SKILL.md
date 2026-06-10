@@ -293,19 +293,26 @@ POST /v1/pages
 - Use `\n` for newlines in JSON; use `<br>` for line breaks within a paragraph
 - `markdown` is mutually exclusive with `children` / `content`
 
-**Update page content:**
+**Update page content** — the body is a **discriminated union; the top-level `type` is MANDATORY** (omit it → 400 `body.type should be defined`). On `Notion-Version: 2026-03-11` the REST API accepts `insert_content`, `replace_content`, and `replace_content_range` — the `update_content` (`old_str`/`new_str`) shape is **rejected** here (400 lists the three valid types), even though Notion's guide still documents it. Empirically confirmed.
 ```json
+// insert_content — ADDITIVE: inserts without deleting/rewriting existing blocks (preferred for edits)
 PATCH /v1/pages/{id}/markdown
-{
-  "update_content": [
-    { "old_str": "old text", "new_str": "new text" }
-  ]
-}
-// OR replace entire content:
-{ "replace_content": "# New content\n\nFull replacement." }
+{ "type": "insert_content",
+  "insert_content": {
+    "content": "- new bullet\n## New section",    // markdown to insert
+    "after": "start text...end text"               // ellipsis selection — insert right AFTER this range
+} }
+// ...or place at top/bottom instead of `after`:
+{ "type": "insert_content", "insert_content": { "content": "...", "position": { "type": "end" } } }  // or "start"
+
+// replace_content — replaces ALL page content with new_str
+{ "type": "replace_content", "replace_content": { "new_str": "# Full replacement", "allow_deleting_content": false } }
+
+// replace_content_range — replaces a selected range (ellipsis selection); third valid type
 ```
-- `update_content`: search-and-replace array; fails if `old_str` matches multiple locations unless `replace_all_matches: true`; case-sensitive
-- `allow_deleting_content: true` required to delete child pages/databases
+- **Ellipsis selection** (`after`): three ASCII dots `...` — text before = start anchor, after = end anchor; content inserts right after the matched range. Pick clean anchors (avoid escaped `\[`, `\$`, bold markers).
+- Prefer **`insert_content`** for edits — it never rewrites untouched blocks. ⚠️ `replace_content` / `replace_content_range` **delete** anything not in the new string and **trash child pages/databases** unless guarded ([makenotion#171](https://github.com/makenotion/notion-mcp-server/issues/171)); `allow_deleting_content: true` is required to delete child pages/databases.
+- **Markdown round-trips are NOT byte-stable** — Notion normalizes between GET and PATCH (`_italic_`↔`*italic*`, escaping), so never diff page markdown to detect drift; compare blocks/values instead.
 - Cannot update synced pages or `meeting_notes` transcripts
 
 **Truncation for large pages:**
