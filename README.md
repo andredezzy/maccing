@@ -2,43 +2,83 @@
 
 *Maxxing plugins and skills for coding agents.*
 
-## Quick Start
+Two ways to install, depending on your agent:
 
-**Claude Code Plugins**
+- **[Claude Code plugins](#claude-code-plugins)** — full plugins: skills **+** slash commands **+** the bundled `notion` MCP server, with marketplace auto-update.
+- **[Agent skills via skills.sh](#agent-skills-skillssh)** — the `SKILL.md` files only, installable into 70+ coding agents (Cursor, Codex, Gemini CLI, Windsurf, Zed, …).
+
+## Claude Code plugins
+
+Add the marketplace once, then install the plugins you want:
 
 ```
 /plugin marketplace add andredezzy/maccing
+/plugin install maccing-growth@maccing
+/plugin install maccing-notion@maccing
 ```
 
-**Agent Skills** ([skills.sh](https://skills.sh/))
+| Plugin | What you get | Install |
+|--------|--------------|---------|
+| [growth](plugins/maccing-growth/README.md) | 8 skills (growth, google-ads, tiktok-ads, meta, meta-ads, whatsapp, ycloud, ycloud-api) + the `/growth` command | `/plugin install maccing-growth@maccing` |
+| [notion](plugins/maccing-notion/README.md) | `notion-api` skill + a bundled self-hosted `notion` MCP server (Bun, zero-dep) | `/plugin install maccing-notion@maccing` |
 
-```
-npx skills add andredezzy/maccing
-```
-
-## Plugins
-
-| Plugin | Description | Install |
-|--------|-------------|---------|
-| [growth](plugins/maccing-growth/README.md) | Paid acquisition + WhatsApp messaging knowledge base | `/plugin install maccing-growth@maccing` |
-| [notion](plugins/maccing-notion/README.md) | Notion API engineering reference (databases, formulas, rollups, relations, views/charts, blocks) + bundled self-hosted `notion` MCP server | `/plugin install maccing-notion@maccing` |
-
-## Updating
+**Update:**
 
 ```
 /plugin marketplace update maccing
 ```
 
-Or enable auto-update: `/plugin` > Marketplaces > maccing > Enable auto-update
+Or enable auto-update: `/plugin` > Marketplaces > maccing > Enable auto-update.
+
+> The `notion` MCP server needs a token — see the [notion plugin README](plugins/maccing-notion/README.md#mcp-server) for setup.
+
+## Agent skills (skills.sh)
+
+Install the skills into any supported agent with the [`skills`](https://skills.sh/) CLI. This installs the `SKILL.md` files only — **not** the slash commands or the MCP server (those are Claude Code plugin features).
+
+```bash
+# all 9 skills
+npx skills add andredezzy/maccing
+
+# preview what would install (no writes)
+npx skills add andredezzy/maccing --list
+
+# a single skill
+npx skills add andredezzy/maccing -s notion-api
+
+# install globally (user-level) instead of the current project
+npx skills add andredezzy/maccing -g
+```
+
+| Skill | From | Purpose |
+|-------|------|---------|
+| growth | growth | Cross-channel paid-acquisition + messaging orchestrator |
+| google-ads | growth | Google Ads production reference + scripts |
+| tiktok-ads | growth | TikTok Ads production reference |
+| meta | growth | Shared Meta platform substrate (BM, verification, enforcement) |
+| meta-ads | growth | Meta (Facebook/Instagram) Ads reference |
+| whatsapp | growth | WhatsApp Business Platform / Cloud API reference |
+| ycloud | growth | YCloud BSP operations |
+| ycloud-api | growth | YCloud v2 REST API reference |
+| notion-api | notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
+
+> **Using Claude Code via skills.sh?** Prefer `--copy`: `npx skills add andredezzy/maccing --copy`. The CLI's default symlink mode currently has a bug ([#851](https://github.com/vercel-labs/skills/issues/851), [#1355](https://github.com/vercel-labs/skills/issues/1355)) that can skip the `.claude/skills/` link. For the full Claude Code experience — commands + MCP — use the plugin install above instead.
 
 ## Troubleshooting
 
-**Clear cache and reinstall:**
+**Claude Code — clear cache and reinstall:**
 
 ```bash
 rm -rf ~/.claude/plugins/cache/maccing
 rm -rf ~/.claude/plugins/marketplaces/maccing
 /plugin marketplace add andredezzy/maccing
+```
+
+**skills.sh — list installed / remove:**
+
+```bash
+npx skills list
+npx skills remove <skill>
 ```
 
 ## License
