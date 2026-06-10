@@ -14,6 +14,15 @@
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": ["growth", "ads", "meta", "whatsapp", "ycloud", "bsp", "marketing"],
       "license": "MIT"
+    },
+    {
+      "name": "maccing-notion",
+      "source": "./plugins/maccing-notion",
+      "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, pt-BR number formatting, and debugging Notion API errors",
+      "version": "0.1.0",
+      "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
+      "keywords": ["notion", "notion-api", "data-sources", "formulas", "rollups", "relations", "views", "charts", "blocks", "mcp"],
+      "license": "MIT"
     }
   ]
 }
