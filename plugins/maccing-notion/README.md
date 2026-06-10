@@ -18,10 +18,7 @@ Notion API engineering reference for coding agents — the low-level details for
 
 The plugin bundles a zero-dependency [Bun](https://bun.sh) MCP server (`mcp/server.ts`) registered via `.mcp.json` as the `notion` server. It exposes one tool, `notion_request(method, path, body, query)`, a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` — unlocking the entire current surface (views, data sources, databases, pages, blocks, search, comments, file uploads).
 
-**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens). Either:
-
-- `export NOTION_TOKEN=ntn_...` in your shell (`.mcp.json` forwards it), **or**
-- copy `mcp/secrets.env.example` → `mcp/secrets.env` (gitignored) and fill it in.
+**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens) — either `export NOTION_TOKEN=ntn_...` in your shell (`.mcp.json` forwards it), or copy `mcp/secrets.env.example` → `mcp/secrets.env` (gitignored) and fill it in.
 
 The launcher (`mcp/start.sh`) resolves the token in order: plugin-local `mcp/secrets.env` → legacy `~/.claude/mcp/notion/secrets.env` → `NOTION_TOKEN` in the environment. The token is never committed. Requires `bun` on `PATH` (or `~/.bun/bin/bun`).
 
