@@ -1,0 +1,14 @@
+{
+  "name": "maccing-notion",
+  "version": "0.1.0",
+  "description": "Notion API engineering reference for coding agents: building/editing databases via the data_sources model, formulas (and their empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, multi-currency formatting, and debugging Notion API errors. Complements the official makenotion/claude-code-notion-plugin (high-level workflows) with the low-level API/formula details.",
+  "author": {
+    "name": "André \"Dezzy\" Victor",
+    "email": "contact@andredezzy.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "homepage": "https://github.com/andredezzy/maccing",
+  "repository": "https://github.com/andredezzy/maccing",
+  "license": "MIT",
+  "keywords": ["notion", "notion-api", "data-sources", "formulas", "rollups", "relations", "views", "charts", "blocks", "mcp"]
+}

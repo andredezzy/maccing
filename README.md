@@ -21,6 +21,7 @@ npx skills add andredezzy/maccing
 | Plugin | Description | Install |
 |--------|-------------|---------|
 | [growth](plugins/maccing-growth/README.md) | Paid acquisition + WhatsApp messaging knowledge base | `/plugin install maccing-growth@maccing` |
+| [notion](plugins/maccing-notion/README.md) | Notion API engineering reference (databases, formulas, rollups, relations, views/charts, blocks) | `/plugin install maccing-notion@maccing` |
 
 ## Updating
 
