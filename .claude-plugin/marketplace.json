@@ -13,7 +13,14 @@
       "version": "1.21.1",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": ["growth", "ads", "meta", "whatsapp", "ycloud", "bsp", "marketing"],
-      "license": "MIT"
+      "license": "MIT",
+      "skills": [
+        "./skills/meta/meta",
+        "./skills/meta/meta-ads",
+        "./skills/meta/whatsapp",
+        "./skills/platforms/ycloud/ycloud",
+        "./skills/platforms/ycloud/ycloud-api"
+      ]
     },
     {
       "name": "maccing-notion",
