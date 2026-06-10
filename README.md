@@ -2,10 +2,11 @@
 
 *Maxxing plugins and skills for coding agents.*
 
-Two ways to install, depending on your agent:
+Two ways to install, depending on your agent.
 
-- **[Claude Code plugins](#claude-code-plugins)** — full plugins: skills **+** slash commands **+** the bundled `notion` MCP server, with marketplace auto-update.
-- **[Agent skills via skills.sh](#agent-skills-skillssh)** — the `SKILL.md` files only, installable into 70+ coding agents (Cursor, Codex, Gemini CLI, Windsurf, Zed, …).
+**[Claude Code plugins](#claude-code-plugins)** — full plugins: skills, slash commands, and the bundled `notion` MCP server, with marketplace auto-update.
+
+**[Agent skills via skills.sh](#agent-skills-skillssh)** — the `SKILL.md` files only, installable into 70+ coding agents (Cursor, Codex, Gemini CLI, Windsurf, Zed, …).
 
 ## Claude Code plugins
 
