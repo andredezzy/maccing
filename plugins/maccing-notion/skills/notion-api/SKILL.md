@@ -59,6 +59,56 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 Walk the tree. Read every `AGENTS.md` from root to target. Obey the closest one on conflict. **Only then** act. This is non-negotiable.
 
+## MANDATORY — exhaust every paginated list (never act on a partial set)
+
+This runs on **every** list-shaped response. Notion caps every list. A reply with `has_more: true` is a **fragment, not the data** — counting it, summing it, reporting "your X is X", or concluding "none found" off a fragment produces a confidently-wrong number. Acting on page 1 is the most common way to silently corrupt a total.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+
+```
+WHILE has_more == true, KEEP FETCHING WITH next_cursor — NO COUNT, SUM, FILTER, OR CONCLUSION ON A LIST UNTIL has_more == false
+```
+
+No exceptions — not for "just counting", not for "just a summary", not when "100 rows is surely all of it", not when an unrelated cross-check happened to match.
+
+### The loop (run for every list endpoint)
+
+```python
+results, cursor = [], None
+while True:
+    page = POST /v1/data_sources/{id}/query   # body: {page_size:100, start_cursor:cursor, ...filter/sorts}
+    results += page["results"]
+    if not page["has_more"]:
+        break
+    cursor = page["next_cursor"]              # feed back as the next start_cursor
+# ONLY NOW: len(results), sums, "none found", any conclusion
+```
+
+- **Cursor placement differs by verb:** `POST .../query` and `POST /v1/search` take `start_cursor` in the **body**; `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=` take `start_cursor` in the **query string**. `page_size` max 100 — a full 100-row page almost always means `has_more: true`.
+- **Every list-shaped response carries its own `has_more`/`next_cursor` — all are covered:**
+  - `POST /v1/data_sources/{id}/query` — rows
+  - `GET /v1/blocks/{id}/children` — page/block content, **including the `AGENTS.md` sweep above** (a dropped cursor can hide an `AGENTS.md` on a long page → you skip a playbook you were required to obey)
+  - `POST /v1/search` — hits
+  - `GET /v1/views?data_source_id=` — views
+- **Relation values paginate too (the sneaky one):** a row's `properties.<Rel>.relation` array is itself capped (~25) and carries its OWN `has_more: true`. The query cursor does **not** expand it — you must call `GET /v1/pages/{page_id}/properties/{property_id}` and paginate THAT to the end. A relation that "only has 25 items" is the tell that you're holding a fragment.
+
+### Red Flags — STOP, you're rationalizing
+
+| Thought | Reality |
+|---|---|
+| "100 rows is surely all of them" | `page_size` max is 100 — a full page almost always means more. Check `has_more`. |
+| "The first page is enough for a summary" | A summary off a fragment is a wrong number stated confidently. |
+| "The totals happened to match, so I'm fine" | Matching one cross-check ≠ complete. Loop to `has_more: false` anyway. |
+| "It's just to count / check if any exist" | Count and existence are exactly what truncation corrupts. |
+| "The relation shows 25 — that's the list" | 25 is the relation page cap. Fetch `/properties/{id}` to the end. |
+| "I'll note it's partial and move on" | A flagged wrong number is still a wrong number. Fetch the rest, then answer. |
+
+### The Bottom Line
+
+`has_more: true` means you do not yet have the data. Loop on `next_cursor` until it is `false` — for queries, block children, search, views, **and** relation values — *before* any count, sum, filter, or conclusion. Non-negotiable.
+
 ## Data model & versions
 
 - API base: `https://api.notion.com/v1` — header `Notion-Version: 2026-03-11`
@@ -107,7 +157,7 @@ PATCH  /v1/blocks/{id}/children         # append children (append-only)
 DELETE /v1/blocks/{id}                   # delete a content block
 ```
 
-Paginate queries: loop while `has_more == true`, pass `next_cursor` as `start_cursor`. `page_size` max 100.
+Paginate queries: **mandatory** — loop on `next_cursor` until `has_more == false` before counting/summing/concluding (see [MANDATORY — exhaust every paginated list](#mandatory--exhaust-every-paginated-list-never-act-on-a-partial-set)). `page_size` max 100.
 
 Add/modify/delete properties in one PATCH:
 ```json
