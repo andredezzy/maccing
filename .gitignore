@@ -2,3 +2,8 @@
 
 # macOS
 .DS_Store
+
+# Plugin-local MCP secrets (never commit)
+plugins/*/mcp/secrets.env
+secrets.env
+.env
