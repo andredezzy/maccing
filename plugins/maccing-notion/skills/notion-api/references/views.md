@@ -102,3 +102,41 @@ PATCH /v1/views/{id}
 - **Property-based only** (no `timestamp` sorts on views). When multiple sorts are given, the first in the array wins ties. `"sorts": null` clears all sorts.
 - Combine with `configuration`, `filter`, `name` in the **same** PATCH — only provided fields change. (This is how a gallery gets both its look and its order in one call — see `references/gallery-view.md`.)
 
+**Filter a view** (`filter` is a top-level PATCH field; full replacement; **same condition schema as a `POST /v1/data_sources/{id}/query` filter**). Compose with `and` / `or`.
+
+**Date conditions — the COMPLETE set** (a wrong condition 400s with this list): `equals` · `before` · `after` · `on_or_before` · `on_or_after` (each takes an ISO-8601 string **or** a relative string) · `is_empty` · `is_not_empty` · and the empty-object windows `past_week` / `past_month` / `past_year`, `next_week` / `next_month` / `next_year`, and **`this_week`**.
+- **Relative date STRINGS** (the only ones — used with equals/before/after/on_or_before/on_or_after): `"today"`, `"tomorrow"`, `"yesterday"`, `"one_week_ago"`, `"one_week_from_now"`, `"one_month_ago"`, `"one_month_from_now"`.
+- ⚠️ **There is NO `this_month` / `this_year` / `last_month`** — only `this_week`. Don't invent them; they `400`.
+
+**Filtering a ROLLUP** wraps the inner filter in `rollup` (a bare `date`/`number` 400s: *"property type … rollup does not match filter date"*). For a single-value date rollup (`latest_date`/`earliest_date`):
+```json
+{ "property": "Month date", "rollup": { "date": { "after": "one_month_ago" } } }
+```
+There is **no `condition` key** — just `rollup: { date: {…} }`. (Multi-value rollups use `rollup: { any|every|none: {…} }`.)
+
+⚠️ **Formula filterability depends on WHERE the formula was created** (forensically isolated 2026-06-11, same workspace, same `Notion-Version: 2026-03-11`):
+- **UI-created formulas filter fine** — `formula: { string | checkbox | number | date: {…} }` (note: `boolean` is NOT a valid sub-key — the schema dump lists exactly those four). Live-verified `200` on a number formula and a string formula from a UI-built database.
+- **API-created (or API-rewritten) formulas are NOT filterable** → `400 Unable to filter based on a formula of unknown type`. The public API write path stores the `expression` but never compiles the result-type metadata the filter layer reads. Live-verified identical 400 on a plain boolean (`prop("Value") > 1000`, no rollup), a rollup-derived boolean, and a number formula — across `2022-06-28`/`2025-09-03`/`2026-03-11` and both `databases/{id}/query` and `data_sources/{id}/query`; rewriting via the legacy `PATCH /v1/databases/{id}` does NOT repair it. (The error is about the formula's missing compiled type, NOT about rollup-derivation, and NOT about all formulas.)
+- **Consequences:** in an **API-built** database, never design a filter around a formula (e.g. an `Is current month` boolean) — **filter the underlying property instead** (e.g. the `Month date` rollup directly). Conversely, do **not** rewrite a UI-created formula via the API if any view/query filters on it — the API rewrite is presumed to strip the compiled type and break those filters (untested — treat as breaking until verified). A UI re-save presumably recompiles/repairs an API-created formula (also untested).
+- **Second cause of the same 400 — type-ambiguous formulas (hits UI-created ones too):** branches returning different types (`if(prop("Due"), dateAdd(prop("Due"),1,"days"), "")` → date branch + string branch) make the result type unresolvable. Fix per Notion's own help ("Common formula errors"): make every branch one type — use **`empty()`**, not `""`/`null`, for the no-value branch. So when "unknown type" hits a UI-created formula, check for mixed branches before blaming anything else.
+- The schema never exposes a formula's resolved type (only `expression`) — to learn it, read a row's value: `page.properties[name].formula.type`.
+- Formulas (including rollup-derived ones) always work for *computing* and for feeding rollups — only their *filterability* depends on creation path and type-resolvability.
+
+**✅ API-only workaround — wrap the formula in a function-typed ROLLUP and filter that** (live-verified 2026-06-11 for boolean, number, and date formulas; a rollup's filter type comes from its *function*, so the unfilterable formula underneath stops mattering):
+1. **Relation:** reuse an existing relation that points at the rows (e.g. a `sum` rollup over a formula on a related DB filters fine), or add a **`Self` relation** on the same data source — `{"Self": {"relation": {"data_source_id": "<this ds>", "single_property": {}}}}` — and self-link each row: `PATCH /v1/pages/{row} {"properties": {"Self": {"relation": [{"id": "<row's own id>"}]}}}`. (New rows need the self-link → create row, then patch — fold into the row-creation routine.)
+2. **Rollup over the formula** — pick the function by the formula's type: boolean → `checked` · number → `sum` (or `max`) · date → `latest_date`.
+3. **Filter the rollup:** boolean → `{"property": "<rollup>", "rollup": {"number": {"greater_than": 0}}}` · number → `rollup.number` conditions · date → `rollup.date` conditions (incl. relative strings).
+
+Pitfalls (all live-verified): **create the rollup in a SEPARATE PATCH after the formula + relation exist** — defining them in one PATCH fails (`Invalid rollup schema … Cannot create rollup with rollup property`). `show_original` + `any.checkbox` returns 200 but matches nothing — the `any`/`every`/`none` inner vocabulary has **no `formula` member**, so element-wise filters never match formula values; only function-typed rollups work. **Strings have no typed rollup function** — reshape the formula to emit a boolean/number instead. A schema-write `result_type` hint is silently dropped (useless). Formulas that *reference* rollups (e.g. `Real Value = Value × USD-Rate-rollup`) wrap fine — the no-rollup-of-rollup rule only blocks rolling up a related *rollup property* directly.
+
+**Exact "current calendar month", dynamic, NO month-rollover fuzz** (data dated on the 1st of each month):
+```json
+{ "and": [
+  { "property": "Month date", "rollup": { "date": { "after":        "one_month_ago" } } },
+  { "property": "Month date", "rollup": { "date": { "on_or_before":  "today"         } } }
+] }
+```
+`past_month` is a rolling ~30-day window, so on the 1st–2nd of a new month it still contains the previous month's 1st → two months show. The **strict `after "one_month_ago"`** drops the previous month's 1st even on day 1 (calendar-aware anchor + `>`), so it's exact every day; `on_or_before "today"` excludes any future-dated month. Live-verified 2026-06-11.
+
+⚠️ **The UI's relative filters ("This month", "Last month", "This year", …) are UI-ONLY — invisible to the public API.** They live in the view's internal `format.property_filters` (private app API: `date_is_relative_to` / `{type:"relative", value:"surrounding", unit:"month"}`). `GET /v1/views/{id}` on a view that has a UI "This month" filter returns **only** the API-settable conditions (the UI relative filter is absent), and `PATCH` cannot set them. To reproduce "This month" via the API, use the `after one_month_ago` recipe above. Live-verified 2026-06-11.
+

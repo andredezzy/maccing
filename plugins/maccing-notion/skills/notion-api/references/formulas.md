@@ -10,6 +10,10 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 **Rewriting a formula via API resets its UI display format** — no way to preserve via API.
 
+**API-written formulas are NOT filterable** — any formula created or rewritten via the API returns `400 Unable to filter based on a formula of unknown type` on query/view filters (the write path doesn't compile result-type metadata); UI-created formulas filter fine. So never API-rewrite a UI-created formula that a filter depends on (presumed to break it — treat as breaking), and in API-built DBs design filters on underlying props/rollups, not formulas. **When the formula's logic can't be expressed on underlying props (cross-property conditionals), use the rollup-wrap workaround: Self-relation + function-typed rollup over the formula, filter the rollup** — recipe in views.md "Filter a view". Live-verified 2026-06-11.
+
+**Mixed-type branches make a formula unfilterable too** (same "unknown type" 400, even UI-created): `if(cond, <date>, "")` mixes date+string → type unresolvable. Every branch must return ONE type — use **`empty()`** (not `""`, not `null`) for the no-value branch. Source: Notion help "Common formula errors".
+
 **After formula/rollup schema update**: Notion needs ~5s to recompute all rows — `time.sleep(5)` before querying.
 
 **15-layer formula reference chain limit** (increased from 7 in Aug 2024) — Notion silently stops computing when exceeded with no error raised. Chains like formula → formula → rollup consume depth.
@@ -42,8 +46,13 @@ formatNumber(282536.47, "brl")          // → "R$282,536.47"  (US separators, N
 
 **Useful formula patterns:**
 ```
-// Current-month detection (auto-advances, zero-maintenance)
+// Current-month detection (auto-advances, zero-maintenance) — COMPUTE only
 if(formatDate(prop("Month date"), "YYYYMM") == formatDate(now(), "YYYYMM"), prop("Value"), 0)
+// ⚠ API-created formulas are NOT query/view-filterable ("unknown type" 400) — the API write
+//   path never compiles the result-type metadata the filter layer reads; even a plain
+//   `prop("Value") > 1000` fails if API-written. UI-created formulas filter fine.
+//   So in an API-built DB, to FILTER rows to the current month, filter the Month-date
+//   ROLLUP itself with after:"one_month_ago" + on_or_before:"today" — see views.md "Filter a view".
 
 // Cascading rollup switch (no lets)
 if(prop("Key") == "A", prop("RollupA"), if(prop("Key") == "B", prop("RollupB"), 0))
