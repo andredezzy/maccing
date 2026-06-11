@@ -211,6 +211,7 @@ modify_gmail_message_labels(message_id="...", add_labels=["Label_123"])
 
 - **Timezones:** always use IANA names (`America/Sao_Paulo`, `UTC`, `America/New_York`) — never raw offsets (`-03:00`). André's timezone is `America/Sao_Paulo`.
 - **`user_google_email`:** defaults to `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `secrets.env`). Omit it or pass `andrevcv1@gmail.com` explicitly. Never use `nicolas1120201@gmail.com`.
+- Never use the `mcp__claude_ai_*` Google connectors — see the account-isolation rule in SKILL.md.
 - **Calendar IDs:** `primary` refers to the user's primary calendar — preferred over the explicit calendar ID for most operations.
 - **Gmail query syntax:** `search_gmail_messages` uses Gmail search operators (`from:`, `to:`, `subject:`, `is:unread`, `after:`, `before:`, label names, etc.).
 - **Drive MIME types:** use `application/vnd.google-apps.document` for Docs, `application/vnd.google-apps.spreadsheet` for Sheets, `application/vnd.google-apps.presentation` for Slides, `application/vnd.google-apps.folder` for folders.

@@ -70,3 +70,5 @@ The launcher runs `uvx "workspace-mcp==1.21.2" --transport stdio`. Requires [`uv
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+(Skip if `uv` is already installed — check with `which uv`.)
