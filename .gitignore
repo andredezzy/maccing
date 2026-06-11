@@ -3,10 +3,11 @@
 # macOS
 .DS_Store
 
-# Plugin-local MCP secrets (never commit)
-plugins/*/mcp/secrets.env
-secrets.env
-.env
+# MCP secrets — `.env` files are committed templates; `.env.local` holds the real secrets (never commit)
+**/.env.local
+
+# Node — dev-only type deps for the MCP servers (@types/bun); the servers run with zero runtime deps
+node_modules/
 
 # Python
 __pycache__/

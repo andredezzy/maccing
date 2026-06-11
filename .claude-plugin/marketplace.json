@@ -25,10 +25,24 @@
     {
       "name": "maccing-notion",
       "source": "./plugins/maccing-notion",
-      "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, zero-dep)",
-      "version": "0.8.0",
+      "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, official MCP SDK)",
+      "version": "0.9.0",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
-      "keywords": ["notion", "notion-api", "data-sources", "formulas", "rollups", "relations", "views", "charts", "blocks", "mcp", "notion-mcp", "bun", "agents.md"],
+      "keywords": [
+        "notion",
+        "notion-api",
+        "data-sources",
+        "formulas",
+        "rollups",
+        "relations",
+        "views",
+        "charts",
+        "blocks",
+        "mcp",
+        "notion-mcp",
+        "bun",
+        "agents.md"
+      ],
       "license": "MIT"
     },
     {
@@ -37,7 +51,18 @@
       "description": "Self-hosted Google Workspace MCP (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts) via taylorwilsdon/google_workspace_mcp, run in stdio single-user mode — authenticates to Google directly, so no daily re-authorization. Ships a combined setup + usage skill. An alternative to the official Claude Google connector that keeps you on your own OAuth client and account.",
       "version": "0.1.2",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
-      "keywords": ["google-workspace", "gmail", "google-calendar", "google-drive", "docs", "sheets", "tasks", "mcp", "oauth", "stdio"],
+      "keywords": [
+        "google-workspace",
+        "gmail",
+        "google-calendar",
+        "google-drive",
+        "docs",
+        "sheets",
+        "tasks",
+        "mcp",
+        "oauth",
+        "stdio"
+      ],
       "license": "MIT"
     }
   ]

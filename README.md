@@ -22,7 +22,7 @@ Add the marketplace once, then install the plugins you want:
 | Plugin | What you get | Install |
 |--------|--------------|---------|
 | [growth](plugins/maccing-growth/README.md) | 8 skills (growth, google-ads, tiktok-ads, meta, meta-ads, whatsapp, ycloud, ycloud-api) + the `/growth` command | `/plugin install maccing-growth@maccing` |
-| [notion](plugins/maccing-notion/README.md) | `notion-api` skill + a bundled self-hosted `notion` MCP server (Bun, zero-dep) | `/plugin install maccing-notion@maccing` |
+| [notion](plugins/maccing-notion/README.md) | `notion-api` skill + a bundled self-hosted `notion` MCP server (Bun, official MCP SDK) | `/plugin install maccing-notion@maccing` |
 | [google-workspace](plugins/google-workspace/README.md) | `google-workspace` skill + a bundled self-hosted Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts) | `/plugin install google-workspace@maccing` |
 
 **Update:**
