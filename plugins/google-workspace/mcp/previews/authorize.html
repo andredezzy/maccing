@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maccing Google Workspace — Authorize Access</title>
+  <style>
+    /* ─── TOKENS ─────────────────────────────────────────────────── */
+    :root {
+      /* Surfaces */
+      --bg:        #ffffff;
+      --surface:   #f6f5f2;
+      --surface-2: #f1f0ee;
+
+      /* Text */
+      --text:      #111111;
+      --muted:     #606060;
+
+      /* Borders */
+      --border:    #dad9d6;
+
+      /* Interactive */
+      --btn-bg:    #17171b;
+      --btn-text:  #f9f9f9;
+
+      /* Status */
+      --success:   #1a7f4b;
+      --error:     #c8392b;
+
+      /* Shape */
+      --radius:    0.5rem;
+      --radius-sm: 0.25rem;
+
+      /* Font stacks (no external assets) */
+      --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Inter,
+                   system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
+                   Menlo, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:        #0c0c0c;
+        --surface:   #111111;
+        --surface-2: #1c1c1c;
+
+        --text:      #f9f9f9;
+        --muted:     #606060;
+
+        --border:    #1c1c1c;
+
+        --btn-bg:    #f9f9f9;
+        --btn-text:  #17171b;
+
+        --success:   #2fa86a;
+        --error:     #e85555;
+      }
+    }
+
+    /* ─── RESET & BASE ───────────────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 0.9375rem;
+      line-height: 1.6;
+      background-color: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    /* ─── CARD ───────────────────────────────────────────────────── */
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 420px;
+      padding: 2.5rem 2rem;
+    }
+
+    /* ─── WORDMARK ────────────────────────────────────────────────── */
+    .wordmark {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      display: block;
+    }
+
+    /* ─── HEADING ─────────────────────────────────────────────────── */
+    .heading {
+      font-size: 1.0625rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.4;
+      margin-bottom: 0.5rem;
+    }
+
+    /* ─── BODY TEXT ───────────────────────────────────────────────── */
+    .body-text {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ─── EMAIL CHIP ──────────────────────────────────────────────── */
+    .email-chip {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--text);
+      background-color: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.25rem 0.625rem;
+      margin-bottom: 1.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ─── STATUS LINE (success / error) ──────────────────────────── */
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot--success { background-color: var(--success); }
+    .status-dot--error   { background-color: var(--error);   }
+
+    /* ─── PRIMARY BUTTON ──────────────────────────────────────────── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0.625rem 1.25rem;
+      background-color: var(--btn-bg);
+      color: var(--btn-text);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: opacity 0.15s ease-out;
+    }
+
+    .btn-primary:hover  { opacity: 0.82; }
+    .btn-primary:active { opacity: 0.68; }
+
+    .btn-primary:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 3px;
+    }
+
+    /* ─── DIVIDER ─────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      width: 100%;
+      background-color: var(--border);
+      margin: 1.5rem 0;
+    }
+
+    /* ─── FOOTER ──────────────────────────────────────────────────── */
+    .footer {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 1.5rem;
+    }
+
+    /* ─── ERROR BLOCK ─────────────────────────────────────────────── */
+    .error-block {
+      background-color: var(--surface-2);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--error);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .error-block p {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--error);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    /* ─── REDUCED MOTION ──────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <main>
+    <article class="card" role="main" aria-labelledby="card-heading">
+
+      <span class="wordmark" aria-label="Maccing Google Workspace">
+        Maccing · Google Workspace
+      </span>
+
+      <h1 class="heading" id="card-heading">
+        Authorize access
+      </h1>
+
+      <p class="body-text">
+        Allow Maccing to read and manage your Google Workspace on your behalf.
+        You will be redirected to Google to complete authorization.
+      </p>
+
+      <a
+        href="https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=123456789-example.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A4100%2Foauth2callback&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.modify&state=abc123&access_type=offline&prompt=consent"
+        class="btn-primary"
+        role="button"
+        aria-label="Authorize access with Google"
+      >
+        Continue with Google
+      </a>
+
+      <div class="divider" role="separator" aria-hidden="true"></div>
+
+      <p class="footer">
+        Maccing · Google Workspace
+      </p>
+
+    </article>
+  </main>
+
+</body>
+</html>

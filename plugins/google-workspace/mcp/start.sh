@@ -29,4 +29,4 @@ export WORKSPACE_MCP_TOOL_TIER="${WORKSPACE_MCP_TOOL_TIER:-complete}"
 # uv/uvx self-install to ~/.local/bin; prepend it so the launcher finds them.
 export PATH="$HOME/.local/bin:$PATH"
 
-exec uvx "workspace-mcp==1.21.2" --transport stdio
+exec uvx --from "workspace-mcp==1.21.2" python "$DIR/launch.py" --transport stdio
