@@ -23,9 +23,10 @@ for secret in "$DIR/secrets.env" "$HOME/.claude/mcp/workspace-mcp/secrets.env"; 
   fi
 done
 
-export OAUTHLIB_INSECURE_TRANSPORT="${OAUTHLIB_INSECURE_TRANSPORT:-1}"
+export OAUTHLIB_INSECURE_TRANSPORT=1  # required: the OAuth callback is localhost HTTP
 export WORKSPACE_MCP_TOOL_TIER="${WORKSPACE_MCP_TOOL_TIER:-complete}"
 
-export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# uv/uvx self-install to ~/.local/bin; prepend it so the launcher finds them.
+export PATH="$HOME/.local/bin:$PATH"
 
 exec uvx "workspace-mcp==1.21.2" --transport stdio

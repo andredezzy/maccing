@@ -55,10 +55,10 @@ This step is critical. Go to **APIs & Services → OAuth consent screen** and:
 
 ## Secrets
 
-Copy the example file and fill in your credentials:
+From the plugin directory (`plugins/google-workspace/`), copy the example file and fill in your credentials:
 
 ```bash
-cp plugins/google-workspace/mcp/secrets.env.example plugins/google-workspace/mcp/secrets.env
+cp mcp/secrets.env.example mcp/secrets.env
 ```
 
 Then edit `secrets.env` and set:
