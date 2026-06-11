@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "workspace": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/start.sh",
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}",
+        "USER_GOOGLE_EMAIL": "${USER_GOOGLE_EMAIL}"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "google-workspace",
+  "version": "0.1.0",
+  "description": "Self-hosted Google Workspace MCP for coding agents: Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, and Contacts via taylorwilsdon/google_workspace_mcp, run in stdio single-user mode (no FastMCP OAuth proxy, so no daily re-authorization). Ships a setup + usage skill. An alternative to the official Claude Google connector that keeps you on your own OAuth client and account.",
+  "author": {
+    "name": "André \"Dezzy\" Victor",
+    "email": "contact@andredezzy.com",
+    "url": "https://github.com/andredezzy"
+  },
+  "homepage": "https://github.com/andredezzy/maccing",
+  "repository": "https://github.com/andredezzy/maccing",
+  "license": "MIT",
+  "keywords": ["google-workspace", "gmail", "google-calendar", "google-drive", "docs", "sheets", "tasks", "mcp", "workspace-mcp", "oauth", "stdio", "single-user"]
+}
