@@ -109,6 +109,38 @@ while True:
 
 `has_more: true` means you do not yet have the data. Loop on `next_cursor` until it is `false` — for queries, block children, search, views, **and** relation values — *before* any count, sum, filter, or conclusion. Non-negotiable.
 
+## MANDATORY — emit a tree view after every page-structure change
+
+Any write that changes a page's **structure** — creating, moving (re-parenting), renaming, or trashing a child page, database, or content block — MUST be followed in your reply by a verified tree view of the affected page(s). The user reads the tree to confirm the new shape at a glance; skipping it hides what you changed.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+
+```
+NO STRUCTURE-CHANGING WRITE IS COMPLETE UNTIL YOU RE-READ THE PARENT'S CHILDREN (fully paginated) AND EMIT THE RESULTING TREE
+```
+
+### Format (exact)
+
+- Re-read each affected page's children **after** the change (`GET /v1/blocks/{page_id}/children`, exhaust `has_more` per the pagination law) — the tree reflects VERIFIED live state, never your intention.
+- Unicode tree: the parent page at the root, children indented with `├──` / `└──` and `│   ` continuation; recurse into changed sub-pages.
+- Label by type: page → its title; database → its title; embed/media → a bracketed tag like `[notion2charts chart]`; text block → first words in quotes `"…"`.
+- Annotate every node you changed this turn with a trailing `← what changed` (new / moved here / renamed from "…" / trashed). Leave untouched nodes unannotated.
+
+```
+Investments
+├── Net worth                    ← renamed from "Net worth v2 (rebuild — parallel test)"
+└── Net worth (pre-v2 backup)    ← new backup page
+    ├── "Archived pre-v2 net-worth tracker…"
+    ├── Net worth (old — pre-v2)  ← moved here (data + relations intact, inline)
+    └── [notion2charts chart]
+```
+
+### The Bottom Line
+
+Change a page's shape → re-read it (fully paginated) → draw the tree, marking what moved / renamed / created / trashed. Every structural change, every time. Non-negotiable.
+
 ## Data model & versions
 
 - API base: `https://api.notion.com/v1` — header `Notion-Version: 2026-03-11`
@@ -324,7 +356,7 @@ PATCH /v1/pages/{id}/markdown
 ## Blocks & positioning
 
 - **Append-only**: existing blocks cannot be moved or reordered via API — `PATCH /v1/blocks/{id}` only exposes content fields and `in_trash`
-- `POST /v1/pages/{id}/move` (Jan 2026) re-parents regular pages only — does NOT work on databases, no ordering control
+- **Re-parenting** — `POST /v1/pages/{id}/move` moves regular **pages** only (no ordering control, and the subject must be a page, not a database). To move a **database** to another page, use `PATCH /v1/databases/{id}` with `{ "parent": { "type": "page_id", "page_id": "..." } }` (API 2025-09-03+, current in 2026-03-11): it relocates the wrapper **in place** — same db `id`, and preserves `is_inline`, **relations, rollups, views, and rows** (it's a move, not a copy; verified live on an inline DB with dual relations + rollups). Reversible by patching `parent` again. **Don't** duplicate-to-move — a duplicate gets a new id and breaks every relation/rollup pointing at the original. (`PATCH /v1/data_sources/{id}` `parent` only moves a data source to a different `database_id`, never to a page; its old views become linked views.)
 - Renaming a `child_database` block via `PATCH /v1/blocks/{id}` → 400 — use `PATCH /v1/data_sources/{id}` (title field) instead
 - General rule: `child_page` and `child_database` block updates must go through Update page / Update database endpoints respectively
 - `child_page` and `child_database` blocks **cannot be appended** via `PATCH /v1/blocks` — use `POST /v1/pages` or `POST /v1/databases`
