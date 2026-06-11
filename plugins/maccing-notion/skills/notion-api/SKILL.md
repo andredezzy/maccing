@@ -472,7 +472,8 @@ PATCH /v1/pages/{id}/markdown
 
 ## Blocks & positioning
 
-- **Append-only**: existing blocks cannot be moved or reordered via API — `PATCH /v1/blocks/{id}` only exposes content fields and `in_trash`
+- **No in-place reorder** — an existing block **cannot be moved or reordered within its parent** via the API. There is no `POST /v1/blocks/{id}/move`; `PATCH /v1/blocks/{id}` only exposes content fields + `in_trash`. Docs verbatim: *"Existing blocks cannot be moved using this endpoint. Once a block is appended as a child, it can't be moved elsewhere via the API."* The `position` object on `PATCH /v1/blocks/{id}/children` (`start`/`end`/`after_block`) places **new** children only. (Verified primary-source, 2026-03-11.)
+- **✅ Reorder workaround — `child_database` / `child_page` blocks only**: re-parent them out and back. Re-parenting **appends at the end** (DBs via `PATCH /v1/databases/{id}` `parent`; pages via `POST /v1/pages/{id}/move`), so to set an order: move each sibling OUT to a temp page, then move them back into the target page **in the order you want** — and leave the block that should be first untouched (everything re-appends after it). Verified live (Net-worth migration). Plain content blocks (paragraph, callout, embed) can't be re-parented at all — reorder is genuinely UI-only for those.
 - **Re-parenting** — `POST /v1/pages/{id}/move` moves regular **pages** only (no ordering control, and the subject must be a page, not a database). To move a **database** to another page, use `PATCH /v1/databases/{id}` with `{ "parent": { "type": "page_id", "page_id": "..." } }` (API 2025-09-03+, current in 2026-03-11): it relocates the wrapper **in place** — same db `id`, and preserves `is_inline`, **relations, rollups, views, and rows** (it's a move, not a copy; verified live on an inline DB with dual relations + rollups). Reversible by patching `parent` again. **Don't** duplicate-to-move — a duplicate gets a new id and breaks every relation/rollup pointing at the original. (`PATCH /v1/data_sources/{id}` `parent` only moves a data source to a different `database_id`, never to a page; its old views become linked views.)
 - Renaming a `child_database` block via `PATCH /v1/blocks/{id}` → 400 — use `PATCH /v1/data_sources/{id}` (title field) instead
 - General rule: `child_page` and `child_database` block updates must go through Update page / Update database endpoints respectively
@@ -608,7 +609,7 @@ Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. M
   - Workaround: mirror relation name into a `select` property via API, use `x_axis.type: 'select'`
 - Chart display limits: max 200 groups and 50 subgroups visible simultaneously
 - Chart blocks (`/v1/blocks`) **cannot** be created via API — use `POST /v1/views` with `type: 'chart'`
-- Linked-database views, block reordering, column layouts: **UI-only**
+- Linked-database views, column layouts: **UI-only**. In-place **block reordering** is UI-only too — but `child_database`/`child_page` blocks can be reordered via the re-parent trick (see Blocks & positioning)
 - Relative date filters (`past_month`, `this_week`) work in `POST /v1/data_sources/{id}/query` but cause `Something is wrong with your chart data` when used as chart view filters; alternative fixed-date filters (`on_or_after`) may also fail — the root cause in testing was the 1-chart billing wall, not the filter shape, so the exact safe filter form for chart views is unconfirmed
 - Dashboard views (`type: 'dashboard'`) require Business+ plan; widgets added via separate `POST /v1/views` calls with `view_id` parent reference; max 4 widgets per row
 
