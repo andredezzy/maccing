@@ -35,7 +35,7 @@
       "name": "google-workspace",
       "source": "./plugins/google-workspace",
       "description": "Self-hosted Google Workspace MCP (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts) via taylorwilsdon/google_workspace_mcp, run in stdio single-user mode — authenticates to Google directly, so no daily re-authorization. Ships a combined setup + usage skill. An alternative to the official Claude Google connector that keeps you on your own OAuth client and account.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": ["google-workspace", "gmail", "google-calendar", "google-drive", "docs", "sheets", "tasks", "mcp", "oauth", "stdio"],
       "license": "MIT"
