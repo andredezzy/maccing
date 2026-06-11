@@ -1,4 +1,4 @@
-# google-workspace plugin
+# google-workspace plugin · v0.1.2
 
 A self-hosted Google Workspace MCP server for Claude Code, built on [`taylorwilsdon/google_workspace_mcp`](https://github.com/taylorwilsdon/google_workspace_mcp) (PyPI package pinned to `workspace-mcp==1.21.2`). Runs as a per-session stdio process — no daemon, no daily re-authorization. An alternative to the official Claude Google connector that keeps you on your own OAuth client and Google account.
 
@@ -77,7 +77,7 @@ The `secrets.env` file is gitignored by the repo's `.gitignore` pattern `plugins
 
 ## Install
 
-This plugin ships as part of the [`maccing`](https://github.com/andredezzy/maccing) Claude Code plugin marketplace. Once the marketplace is configured in your Claude Code setup, enable the plugin. The MCP server starts automatically per session.
+This plugin ships as part of the [`maccing`](https://github.com/andredezzy/maccing) Claude Code plugin marketplace. Once the marketplace is configured in your Claude Code setup, enable the plugin. The MCP server starts automatically per session via `mcp/start.sh` (registered as the `workspace` stdio server in `.mcp.json`).
 
 Workspace tools are exposed to Claude under the namespace:
 
@@ -85,7 +85,19 @@ Workspace tools are exposed to Claude under the namespace:
 mcp__plugin_google-workspace_workspace__<tool_name>
 ```
 
-For example: `mcp__plugin_google-workspace_workspace__list_events`, `mcp__plugin_google-workspace_workspace__search_emails`, and so on.
+For example: `mcp__plugin_google-workspace_workspace__list_events`, `mcp__plugin_google-workspace_workspace__search_gmail_messages`, and so on.
+
+### Tool tiers
+
+The launcher exposes tools in one of three tiers, controlled by the `WORKSPACE_MCP_TOOL_TIER` env var (set in `secrets.env` or exported):
+
+| Tier | Description |
+|---|---|
+| `core` | Essential read/write tools only (smallest surface) |
+| `extended` | Core + additional management tools |
+| `complete` | All 121 tools across all services (default) |
+
+The launcher defaults to `complete` if the variable is unset.
 
 ---
 
@@ -97,9 +109,24 @@ The first time Claude calls any Workspace tool in a new session, the MCP server 
 2. After you grant consent, Google redirects to `http://localhost:8000/oauth2callback`.
 3. The server exchanges the authorization code for tokens and saves the encrypted credentials to `~/.google_workspace_mcp/credentials/` (file permissions `0600`).
 
+The OAuth callback page is a minimalist, Midday-style design with full light/dark mode support (via `prefers-color-scheme`), WCAG AA contrast, and no external assets. It is rendered by `mcp/auth_pages.py` and patched into the upstream server at launch time by `mcp/launch.py` (a monkeypatch shim that runs before `workspace-mcp`'s server modules are imported). Preview renders live in `mcp/previews/`.
+
 Subsequent calls in the same session — and future sessions — reuse the cached tokens. Tokens are refreshed automatically against Google; you will not be prompted again unless you explicitly revoke access.
 
 If the tool call times out before you complete the browser flow, just retry the same tool call with the `user_google_email` parameter set to your email address.
+
+---
+
+## Companion skill
+
+The plugin ships a companion skill named **`google-workspace`** (at `skills/google-workspace/`). It is the canonical reference for:
+
+- Account-isolation rule — always use `mcp__plugin_google-workspace_workspace__*`; never the `mcp__claude_ai_*` Google connectors (they are wired to a different account).
+- First-run OAuth flow, credential storage, and reset procedure (`references/auth-and-credentials.md`).
+- Full tool inventory by service with common workflows and parameter gotchas (`references/tools.md`).
+- Google Cloud setup, tool tiers, and secrets (`references/setup.md`).
+
+One key rule the skill enforces: **always reuse the existing calendar color pattern.** André color-codes his calendar events; any event created by Claude must match the color used for same-type events rather than falling back to the calendar default. Fetch individual events via `get_events` with `detailed=true` to read their `Color ID`, sample more than one, treat any colored same-type event as the pattern, then pass `color_id` to `manage_event`.
 
 ---
 

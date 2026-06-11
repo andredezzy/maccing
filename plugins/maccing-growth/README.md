@@ -1,5 +1,7 @@
 # maccing-growth
 
+> v1.21.1
+
 Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API) — strategy, metrics, and platform references.
 
 ## Install
@@ -23,7 +25,7 @@ skills/
 | Skill | Group | Purpose |
 |-------|-------|---------|
 | growth | — | Cross-channel strategy, metrics, funnel, attribution, competitive intelligence, defensive techniques |
-| google-ads | — | Google Ads production reference + scripts |
+| google-ads | — | Google Ads production reference + 12 ready-to-run Scripts (6 read: campaign performance, keyword performance, search terms, ad details, conversion actions, full audit; 6 write: add keywords, add negatives, create conversion, create RSA, pause campaign, update ad URL) |
 | tiktok-ads | — | TikTok Ads production reference |
 | **meta** | meta | **Shared Meta platform substrate** — Business Manager, business verification, account quality, enforcement classifier + defensive intelligence, asset isolation, proxy/antidetect, disposable-BM strategy, payment hygiene, ban/appeal/cascade. Loaded first by `meta-ads` and `whatsapp`. |
 | meta-ads | meta | Meta (Facebook/Instagram) Ads production reference. Loads `meta`. |
