@@ -43,7 +43,7 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
-**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. When a new convention is established mid-session, include a root AGENTS.md update in the same approval batch.
+**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. **The sweep is bidirectional — read the closest AGENTS.md before a change, maintain the closest one after** (every change, at the right level — see "Maintain the nearest governing `AGENTS.md`" under the conventions rule).
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -215,9 +215,16 @@ When the user's instruction deviates from inferred conventions (e.g. user says "
 1. **FLAG** the deviation in the approval-gate proposal — one sentence: `"Note: existing collections are plural ("Backups", "Months") — using your wording "Backup" instead."`
 2. **FOLLOW the user's explicit wording** — the flag is informational only; it must never become a negotiation.
 
-### Persist to root AGENTS.md
+### Maintain the nearest governing `AGENTS.md` — after every change
 
-When you establish a **new** convention, include a root AGENTS.md update in the same approval-gate proposal (cross-ref: "MANDATORY FIRST STEP — read every ancestral AGENTS.md" — ROOT AGENTS.md BOOTSTRAP clause). The root AGENTS.md is the living source of truth; conventions discovered ad-hoc must be written back, not held only in model context.
+The ancestral sweep is **bidirectional**: you read the closest `AGENTS.md` *before* touching a target, and you **maintain the closest one *after***. So **every** create / edit / move / rename / restyle ends with a maintenance check — not only changes that feel like "a new convention." Ask: *does the `AGENTS.md` that governs this subtree still describe reality?* If the change established or altered a convention, fact, ID, or workflow the playbook should carry, update it in the same approval batch; if nothing changed, the check costs one thought and you move on. "Nothing to update" is a conclusion you reach *after* checking — never a step you skip.
+
+**Write at the right level — closest wins, exactly like reads:**
+- **Subtree-local** convention (e.g. "Category rows use gray icons", "this tracker's Months view sorts descending") → the **nearest** ancestor `AGENTS.md` that owns that subtree (the area/hub playbook), **NOT** root.
+- **Workspace-wide** convention → the **root** `AGENTS.md`.
+- No `AGENTS.md` yet at the level a subtree-local convention belongs → **propose creating one there** (approval-gated; author it test-driven per `references/agents-md-authoring.md`).
+
+Root is the global source of truth and lower files override on conflict — so an area-scoped rule belongs in that area's file, where the agents working there will find it and where it won't pollute the global playbook. Conventions discovered ad-hoc must be written back, never held only in model context.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -228,47 +235,53 @@ When you establish a **new** convention, include a root AGENTS.md update in the 
 | "I read two pages, that's enough to know the style" | The sample must be fully paginated — partial reads miss outliers and sub-hub overrides |
 | "The root AGENTS.md doesn't mention covers, so I'll skip it" | Absence of documentation ≠ no convention; infer from the live sample, then write it back |
 | "This is a small rename, conventions don't matter" | Every write sets a precedent; mismatched titles and wrong icon colors accumulate into workspace entropy |
+| "Routine edit — no AGENTS.md to maintain" | Every change fires a maintenance check of the governing AGENTS.md; "nothing to update" is a conclusion you reach *after* checking, not a step you skip |
+| "I'll record this area rule in the root AGENTS.md" | Closest wins — a subtree-scoped convention belongs in the nearest area/hub AGENTS.md; root is for workspace-wide rules only |
 
 ### The Bottom Line
 
-Infer the complete house style from the root AGENTS.md (primary) or a fully-paginated bounded sample (fallback) before any write. Flag user-instruction deviations once, then follow the user; persist newly codified conventions back to the root AGENTS.md. Non-negotiable.
+Infer the complete house style from the root AGENTS.md (primary) or a fully-paginated bounded sample (fallback) before any write. Flag user-instruction deviations once, then follow the user. **After every change, maintain the nearest governing AGENTS.md** (the closest one that owns the changed subtree; root only for workspace-wide conventions) — the write-side mirror of the mandatory read-sweep. Non-negotiable.
 
-## MANDATORY — brainstorm the visual layout before a gallery/aesthetic view write
+## MANDATORY — brainstorm the view design before creating or restyling a view
 
-Creating or restyling a gallery (or board) view's **appearance** — cover source, card size, cover aspect, card layout, which properties show and their order — requires proposing the look and getting approval before any API call. Visual choices are subjective and the user sees them instantly; imposing one without discussion erodes trust the same way an unapproved structural write does.
+Creating or restyling **any** view is a design decision in two layers: its **data shape** — view type, filter (which rows), sort (order), grouping (`group_by`), which properties are visible and their order, and a self-describing name — **and** its **appearance** — cover source, card size, fit-image, card layout, per-property width. Propose the design and get approval before any API call. The user lives inside a view daily and sees it instantly; an imposed sort, filter, or grouping is as wrong as an imposed cover.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO GALLERY/AESTHETIC VIEW WRITE UNTIL YOU HAVE PROPOSED THE VISUAL LAYOUT AND THE USER HAS APPROVED IT
+NO VIEW CREATE OR RESTYLE UNTIL YOU HAVE PROPOSED THE VIEW DESIGN — DATA SHAPE *AND* LOOK — AND THE USER HAS APPROVED IT
 ```
 
-Not for "obvious" covers, not when the DB has images, not when the user said "make it look nice", not when defaults look fine.
+Not for "obvious" covers, not for "it's just a table", not when defaults look fine, not when the user said "make it look nice" or merely "add a view".
 
-### What counts as a visual choice
+### What counts as a design choice
 
-cover source (`page_cover` / `page_content` / a Files-&-media property / none) · card size (small/medium/large) · fit-image (`contain` vs `cover`/crop) · card layout (`list` vs `compact`) · which properties appear and their order · per-property width mode. (Field reference: `references/gallery-view.md`.)
+- **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`). Field reference: `references/views.md`.
+- **Appearance (visual view types — gallery/board cards):** cover source (`page_cover` / `page_content` / a Files-&-media property / none) · card size (small/medium/large) · fit-image (`contain` vs `cover`/crop) · card layout (`list` vs `compact`) · per-property width. Field reference: `references/gallery-view.md`.
 
 ### The Gate
 
-Present a concise visual brief: **(a) cover** source + why · **(b) size + aspect** (`large`/`cover` for impact; `small`/`contain` for dense scanning) · **(c) card layout** (`list` shows all props; `compact` for big collections) · **(d) visible properties** in order, with rationale. Then **stop and wait** — silence or "looks good" is approval; a new question or a tweak is not.
+Present a concise design brief — **one line per applicable dimension, each with a recommendation + why**: type · filter · sort · grouping · visible properties · name; plus cover · size + aspect · card layout for visual types. **State EVERY applicable dimension explicitly — especially `sort` and `visible properties`, the two most often silently dropped.** "No sort / Notion default order" and "all properties, default order" are valid recommendations — but they must be *stated*, never omitted: **if your brief has no `sort:` line, you skipped it.** Never bury a sort/filter/group inside the payload. Then **stop and wait** — silence or "looks good" is approval; a new question or a tweak is not.
 
-**Collapse the friction:** if the user already fully specified the look, confirm in ONE sentence instead of a full brief; and fold this visual brief and the standard approval-gate operations into a single turn ("here's the layout I propose; if you approve, here are the exact calls").
+**Collapse the friction:** if the user already fully specified the design, confirm in ONE sentence instead of a full brief; and fold the brief and the standard approval-gate operations into a single turn ("here's the design I propose; if you approve, here are the exact calls").
 
 ### Red Flags — STOP, you're rationalizing
 
 | Thought | Reality |
 |---|---|
+| "It's just a table — nothing to brainstorm" | Type, filter, sort, and visible props are all choices, even for a plain table |
+| "A board obviously groups by Status" | Grouping is a design choice — offer Status vs Priority vs Assignee |
+| "I'll just sort by created date" | A default sort IS a decision — surface it, don't bury it in the payload |
+| "This view doesn't need a sort, so I won't mention it" | Omitting a dimension = deciding it silently. Every applicable line (sort, visible props) MUST appear — "none/default" is a stated answer, not a skip |
+| "'Current sprint' implies the filter" | Which property = which value? Name it and confirm — never guess a filter |
 | "'Create a gallery' implies large covers" | Implicit intent ≠ approval — show the brief |
-| "It's just a cover size, I'll fix it after" | The user sees it instantly — propose first |
-| "The DB has an image property, so obviously use it" | Confirm it's the right property/size and that they prefer it over the page cover |
 | "Defaults are fine, skip the brief" | "Default" is a design decision you're making for them — surface it |
 
 ### The Bottom Line
 
-Draft the visual brief (cover, size, aspect, layout, visible props), present it, wait for approval, then proceed through the standard approval-gate write cycle. Non-negotiable.
+Draft the design brief (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views), present it, wait for approval, then proceed through the standard approval-gate write cycle. Non-negotiable.
 
 ## Data model & versions
 

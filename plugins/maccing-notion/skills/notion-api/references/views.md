@@ -45,6 +45,13 @@ POST /v1/views
 { "position": { "type": "after_view", "view_id": "<view_id>" } }
 ```
 
+**After adding a view, rename the leftover `Default view`.** Notion auto-names a database's first view generically — **`Default view`** (or a bare type name like `Table`). That name only makes sense while it's the *only* view. The moment you `POST` a second view, `Default view` is misleading — it's no longer "the" default, just an unlabelled table sitting next to your named view. **So adding a view is a two-write job:** create the new view, **and** rename the old generic one to say what it actually is.
+```json
+PATCH /v1/views/{old_view_id}
+{ "name": "Table" }
+```
+Name it by what it IS — by **type** to match a type-named sibling (a `Gallery` view → rename the table to `Table`), or by **purpose** (`All categories`, `Backlog`). Every tab must be self-describing: a database showing a `Gallery` tab next to a `Default view` tab is **unfinished, not clean**. Detect the leftover from `GET /v1/views/{id}` → `name === "Default view"` (or a `name` equal to the bare view `type`).
+
 **Create a chart view:**
 ```json
 POST /v1/views
