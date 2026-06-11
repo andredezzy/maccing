@@ -56,6 +56,7 @@ Name it by what it IS — by **type** to match a type-named sibling (a `Gallery`
 ```json
 POST /v1/views
 {
+  "database_id": "<database_id>",
   "data_source_id": "<ds_id>",
   "name": "Net Worth Over Time",
   "type": "chart",
@@ -73,7 +74,7 @@ POST /v1/views
   }
 }
 ```
-> Note: chart views do NOT take `database_id` as a top-level field alongside `data_source_id` — only one of `database_id`, `view_id`, or `create_database` may be used as a location param, and chart views use `data_source_id` alone.
+> Note: like every `POST /v1/views` on an existing database, pass the location param `database_id` (the container) **plus** `data_source_id` (which source). `data_source_id` alone → `400 "Exactly one of database_id, view_id, or create_database must be provided."` (live-verified 2026-03-11 — see `references/gallery-view.md`).
 
 **Number/KPI chart** uses `value: {aggregator, property_id}` instead of `x_axis`/`y_axis`.
 

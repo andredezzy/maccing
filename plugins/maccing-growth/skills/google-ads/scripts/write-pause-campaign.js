@@ -15,41 +15,38 @@
  * Only "status" is changed; all other campaign settings remain untouched.
  */
 
-var CONFIG = {
+const CONFIG = {
   customerId: "YOUR_CUSTOMER_ID",
-  campaignId: "REPLACE_CAMPAIGN_ID",   // Numeric ID from the campaign URL
-  newStatus: "PAUSED"                  // "PAUSED" or "ENABLED"
+  campaignId: "REPLACE_CAMPAIGN_ID", // Numeric ID from the campaign URL
+  newStatus: "PAUSED", // "PAUSED" or "ENABLED"
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
-  Logger.log(
-    "Updating campaign " + CONFIG.campaignId + " status to: " + CONFIG.newStatus
-  );
+function _main() {
+  Logger.log(`Updating campaign ${CONFIG.campaignId} status to: ${CONFIG.newStatus}`);
 
-  var campaignResource =
-    "customers/" + CONFIG.customerId + "/campaigns/" + CONFIG.campaignId;
+  const campaignResource = `customers/${CONFIG.customerId}/campaigns/${CONFIG.campaignId}`;
 
-  var result = AdsApp.mutate({
+  const result = AdsApp.mutate({
     campaignOperation: {
       update: {
         resourceName: campaignResource,
-        status: CONFIG.newStatus
+        status: CONFIG.newStatus,
       },
-      updateMask: "status"
-    }
+      updateMask: "status",
+    },
   });
 
   if (result.isSuccessful()) {
     Logger.log("Campaign status updated successfully.");
-    Logger.log("Resource name: " + result.getResourceName());
-    Logger.log("New status: " + CONFIG.newStatus);
+    Logger.log(`Resource name: ${result.getResourceName()}`);
+    Logger.log(`New status: ${CONFIG.newStatus}`);
   } else {
     Logger.log("ERROR: Failed to update campaign status.");
-    var errors = result.getErrorMessages();
-    for (var i = 0; i < errors.length; i++) {
-      Logger.log("  [" + (i + 1) + "] " + errors[i]);
+    const errors = result.getErrorMessages();
+    for (let i = 0; i < errors.length; i++) {
+      Logger.log(`  [${i + 1}] ${errors[i]}`);
     }
   }
 }

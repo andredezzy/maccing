@@ -10,5 +10,18 @@
   "homepage": "https://github.com/andredezzy/maccing",
   "repository": "https://github.com/andredezzy/maccing",
   "license": "MIT",
-  "keywords": ["google-workspace", "gmail", "google-calendar", "google-drive", "docs", "sheets", "tasks", "mcp", "workspace-mcp", "oauth", "stdio", "single-user"]
+  "keywords": [
+    "google-workspace",
+    "gmail",
+    "google-calendar",
+    "google-drive",
+    "docs",
+    "sheets",
+    "tasks",
+    "mcp",
+    "workspace-mcp",
+    "oauth",
+    "stdio",
+    "single-user"
+  ]
 }

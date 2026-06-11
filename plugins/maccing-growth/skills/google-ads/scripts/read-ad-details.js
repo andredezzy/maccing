@@ -9,8 +9,8 @@
  * Usage: Tools → Scripts → New script → paste → Preview/Run
  */
 
-function main() {
-  var query =
+function _main() {
+  const query =
     "SELECT " +
     "  ad_group_ad.ad.id, " +
     "  ad_group_ad.ad.type, " +
@@ -43,16 +43,16 @@ function main() {
     "  AND campaign.status != 'REMOVED' " +
     "ORDER BY metrics.impressions DESC";
 
-  var ads = [];
-  var results = AdsApp.search(query);
+  const ads = [];
+  const results = AdsApp.search(query);
 
   while (results.hasNext()) {
-    var row = results.next();
-    var adGroupAd = row.adGroupAd;
-    var ad = adGroupAd.ad;
-    var rsa = ad.responsiveSearchAd || {};
-    var policy = adGroupAd.policySummary || {};
-    var metrics = row.metrics;
+    const row = results.next();
+    const adGroupAd = row.adGroupAd;
+    const ad = adGroupAd.ad;
+    const rsa = ad.responsiveSearchAd || {};
+    const policy = adGroupAd.policySummary || {};
+    const metrics = row.metrics;
 
     ads.push({
       id: ad.id,
@@ -61,36 +61,32 @@ function main() {
       adStrength: adGroupAd.adStrength,
       policy: {
         approvalStatus: policy.approvalStatus,
-        reviewStatus: policy.reviewStatus
+        reviewStatus: policy.reviewStatus,
       },
       creative: {
-        headlines: (rsa.headlines || []).map(function (h) {
-          return {
-            text: h.text,
-            pinnedField: h.pinnedField || null
-          };
-        }),
-        descriptions: (rsa.descriptions || []).map(function (d) {
-          return {
-            text: d.text,
-            pinnedField: d.pinnedField || null
-          };
-        }),
+        headlines: (rsa.headlines || []).map((h) => ({
+          text: h.text,
+          pinnedField: h.pinnedField || null,
+        })),
+        descriptions: (rsa.descriptions || []).map((d) => ({
+          text: d.text,
+          pinnedField: d.pinnedField || null,
+        })),
         path1: rsa.path1 || "",
         path2: rsa.path2 || "",
         finalUrls: ad.finalUrls || [],
         finalMobileUrls: ad.finalMobileUrls || [],
-        trackingUrlTemplate: ad.trackingUrlTemplate || null
+        trackingUrlTemplate: ad.trackingUrlTemplate || null,
       },
       adGroup: {
         id: row.adGroup.id,
         name: row.adGroup.name,
-        status: row.adGroup.status
+        status: row.adGroup.status,
       },
       campaign: {
         id: row.campaign.id,
         name: row.campaign.name,
-        status: row.campaign.status
+        status: row.campaign.status,
       },
       metrics: {
         impressions: metrics.impressions,
@@ -100,22 +96,22 @@ function main() {
         costUsd: (metrics.costMicros / 1000000).toFixed(2),
         conversions: metrics.conversions,
         averageCpcMicros: metrics.averageCpc,
-        averageCpcUsd: (metrics.averageCpc / 1000000).toFixed(2)
-      }
+        averageCpcUsd: (metrics.averageCpc / 1000000).toFixed(2),
+      },
     });
   }
 
-  var output = {
+  const output = {
     timestamp: new Date().toISOString(),
     customerId: "YOUR_CUSTOMER_ID",
     dateRange: "LAST_30_DAYS",
     totalAds: ads.length,
-    adStrengthDistribution: ads.reduce(function (acc, ad) {
-      var strength = ad.adStrength || "UNKNOWN";
+    adStrengthDistribution: ads.reduce((acc, ad) => {
+      const strength = ad.adStrength || "UNKNOWN";
       acc[strength] = (acc[strength] || 0) + 1;
       return acc;
     }, {}),
-    ads: ads
+    ads: ads,
   };
 
   Logger.log(JSON.stringify(output, null, 2));

@@ -4,7 +4,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 ## Rollups
 
-- Add rollup: `PATCH /v1/data_sources/{id}` with `{rollup: {relation_property_name, rollup_property_name, function}}`
+- Add rollup: `PATCH /v1/data_sources/{id}` with the full property envelope — `{ "properties": { "MyRollup": { "rollup": { "relation_property_name": "RelProp", "rollup_property_name": "TargetProp", "function": "sum" } } } }` (the `{ "properties": { "<name>": … } }` wrapper is required, same as every schema PATCH)
 - Functions include: `sum`, `max`, `min`, `count`, `latest_date`, `earliest_date`, etc.
 - **No rollup-of-rollup** — API returns: `"Cannot create a rollup of a related rollup property."` (applies to any rollup-of-rollup, including date rollups)
 - When creating a rollup referencing a new relation, Notion auto-names the reverse property `"Related to X (DB Name)"` — **rename it BEFORE adding the rollup**, not after; using the unrenamed name produces 400 'Cannot create rollup with relation property':

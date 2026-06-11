@@ -1,22 +1,15 @@
 #!/usr/bin/env bash
-# Launcher for the bundled Notion MCP server (Bun, zero-dependency, full Notion API at 2026-03-11).
+# Launcher for the bundled Notion MCP server (Bun, official MCP SDK, full Notion API at 2026-03-11).
 #
-# Registered by ../.mcp.json as the `notion` stdio server. Resolves the NOTION_TOKEN secret
-# in this order — first hit wins, and the token is NEVER committed:
-#   1. plugin-local secrets.env  (gitignored, beside this script)
-#   2. legacy ~/.claude/mcp/notion/secrets.env  (back-compat with a pre-plugin setup)
-#   3. NOTION_TOKEN already in the environment  (forwarded by .mcp.json `env`)
+# Registered by ../.mcp.json as the `notion` stdio server. Secrets are NEVER committed:
+#   1. plugin-local .env.local  (gitignored, beside this script — copy .env -> .env.local and fill in)
+#   2. otherwise whatever is already exported in the environment  (forwarded by .mcp.json `env`)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-for secret in "$DIR/secrets.env" "$HOME/.claude/mcp/notion/secrets.env"; do
-  if [ -f "$secret" ]; then
-    # shellcheck source=/dev/null
-    source "$secret"
-    break
-  fi
-done
+# shellcheck source=/dev/null
+[ -f "$DIR/.env.local" ] && source "$DIR/.env.local"
 
 export NOTION_VERSION="${NOTION_VERSION:-2026-03-11}"
 
@@ -24,4 +17,11 @@ export NOTION_VERSION="${NOTION_VERSION:-2026-03-11}"
 BUN="$HOME/.bun/bin/bun"
 command -v bun >/dev/null 2>&1 && BUN="$(command -v bun)"
 
-exec "$BUN" "$DIR/server.ts"
+# Runtime deps (the MCP SDK + zod) live in node_modules, which is gitignored and so absent from a
+# freshly-installed plugin. Install them once per plugin version. stdout is the JSON-RPC channel,
+# so route all install output to stderr — it must never reach the client.
+if [ ! -d "$DIR/node_modules" ]; then
+  (cd "$DIR" && "$BUN" install) 1>&2
+fi
+
+exec "$BUN" "$DIR/src/server.ts"

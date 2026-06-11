@@ -31,11 +31,11 @@ Notion API engineering reference for coding agents — the low-level details for
 
 ## MCP server
 
-The plugin bundles a zero-dependency [Bun](https://bun.sh) MCP server (`mcp/server.ts`) registered via `.mcp.json` as the `notion` server. It exposes one tool, `notion_request(method, path, body, query)`, a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` — unlocking the entire current surface (views, data sources, databases, pages, blocks, search, comments, file uploads).
+The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: **`notion_request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); **`notion_private_request`** + **`notion_set_property_icon`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `skills/notion-api/references/private-api.md`).
 
-**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens) — either `export NOTION_TOKEN=ntn_...` in your shell (`.mcp.json` forwards it), or copy `mcp/secrets.env.example` → `mcp/secrets.env` (gitignored) and fill it in.
+**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens) — either `export NOTION_TOKEN=ntn_...` in your shell (`.mcp.json` forwards it), or copy `mcp/.env` → `mcp/.env.local` (gitignored) and fill it in. Private-API features additionally need `NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `.env.local`.
 
-The launcher (`mcp/start.sh`) resolves the token in order: plugin-local `mcp/secrets.env` → legacy `~/.claude/mcp/notion/secrets.env` → `NOTION_TOKEN` in the environment. The token is never committed. Requires `bun` on `PATH` (or `~/.bun/bin/bun`).
+The launcher (`mcp/start.sh`) loads `mcp/.env.local` (gitignored) if present, else uses whatever is already in the environment. Secrets are never committed. Requires `bun` on `PATH` (or `~/.bun/bin/bun`).
 
 ## Relationship to the official Notion plugin
 

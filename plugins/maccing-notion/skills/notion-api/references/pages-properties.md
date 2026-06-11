@@ -86,7 +86,7 @@ PATCH /v1/pages/{id}   body: { "icon": null }
 **Rich text write gotchas:**
 - `title` is an array, not a string
 - `multi_select` requires array of objects `[{"name":"A"}]`, not strings
-- `select` option must already exist in schema or the call fails
+- `select` and `multi_select` auto-create options by name if they don't exist in the schema — no pre-flight schema write needed
 - `people` property uses user IDs, not email addresses
 - `date` requires `{"start":"YYYY-MM-DD"}` object, not a plain string
 - `checkbox` must be boolean `true`/`false`, not the string `"true"`
@@ -95,7 +95,11 @@ PATCH /v1/pages/{id}   body: { "icon": null }
 
 ## Icons, emoji & covers
 
-The `icon` field is supported on pages and databases (PATCH `/v1/pages`, PATCH `/v1/databases`). Six types:
+> **STOP — two different things, don't conflate them:**
+> - **Page & database icons** (the icon on a page or on a database itself) → set via the **public API** (`PATCH /v1/pages` / `/v1/databases`) — the table just below.
+> - **Database PROPERTY / COLUMN icons** (the little icon next to a *column's* name) → the **public API silently drops these**, BUT they **ARE settable** via the private app API: use the **`notion_set_property_icon`** MCP tool — **see [`private-api.md`](private-api.md)**. ⚠️ Property/column icons are a common false-negative: **never tell the user they're "UI-only" or "impossible via the API"** — they're not. Route to `private-api.md`.
+
+The `icon` field (for **pages & databases**) is supported via PATCH `/v1/pages` / PATCH `/v1/databases`. Six types:
 
 | Type | JSON shape | Notes |
 |---|---|---|
@@ -109,6 +113,8 @@ The `icon` field is supported on pages and databases (PATCH `/v1/pages`, PATCH `
 **Removal** — set `icon: null` to strip the icon entirely.
 
 **Named-icon colors** — valid values: `gray`, `lightgray`, `brown`, `yellow`, `orange`, `green`, `blue`, `purple`, `pink`, `red`. `"default"` is not a valid value — omit `color` entirely to use the default appearance.
+
+**Database PROPERTY/column icons (the icon next to a column's name) ARE settable — do NOT answer "impossible."** They just can't be done through the PUBLIC API (writing an `icon` key inside a property definition via `PATCH /v1/data_sources/{id}` or at creation returns `200` but is **silently dropped**, and property objects never expose `icon` on read). The working path is the **private app API**: use the **`notion_set_property_icon`** MCP tool (or `notion_private_request`) — **see [`references/private-api.md`](private-api.md)** for the full recipe. If you're about to tell the user property icons aren't possible, you've missed this — route to `private-api.md` first. Public-API-only fallback (no private creds configured): put an emoji in the property **name**. (Page & database icons themselves DO work via the public API — see the table above; this limit is specific to property/column icons.)
 
 **Custom emoji list** — `GET /v1/custom_emojis`; each object: `id`, `name`, `url`. Cursor-paginated; optional `?name=` for exact-match filtering.
 

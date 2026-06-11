@@ -30,7 +30,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 
 **Formula expressions** reference property IDs via `block_property:{id}:` syntax in stored expressions.
 
-**Stale `filter_properties` in URL** → 400 `validation_error` "malformed schema ... invalid attribute: <encoded_id>" — remove stale property IDs from query params. Also surfaces when MCP tool auto-appends stale query params to `GET /v1/pages/{id}`.
+**Stale `filter_properties` in URL** → 400 `validation_error` "malformed schema ... invalid attribute: <encoded_id>" — remove stale property IDs from query params. (The `notion_request` tool is a pure passthrough — it never appends params on its own; a stale id only appears if you pass it in the `query` arg.)
 
 **Linked databases limitation**: linked database views of a database shown on another page are NOT supported by the API — share the source database directly with the integration. Wiki databases can only be created via the Notion UI.
 

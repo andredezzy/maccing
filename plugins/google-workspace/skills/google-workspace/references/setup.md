@@ -36,24 +36,21 @@ Part of the `google-workspace` skill — loaded on demand from `SKILL.md`.
 
 ## Secrets
 
-Two locations are checked first-hit-wins; neither is ever committed:
-
-1. **Plugin-local** (preferred): `plugins/google-workspace/mcp/secrets.env`
-2. **Legacy fallback**: `~/.claude/mcp/workspace-mcp/secrets.env`
+Secrets live in `plugins/google-workspace/mcp/.env.local` (gitignored), or already-exported env vars; never committed.
 
 ```bash
-cp plugins/google-workspace/mcp/secrets.env.example plugins/google-workspace/mcp/secrets.env
-# then edit and fill in:
+cp plugins/google-workspace/mcp/.env plugins/google-workspace/mcp/.env.local
+# then edit .env.local and fill in:
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
 export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
 export USER_GOOGLE_EMAIL=andrevcv1@gmail.com
 ```
 
-The file is gitignored by the repo's `.gitignore` pattern `plugins/*/mcp/secrets.env`.
+`.env.local` is gitignored by the repo's `.gitignore` pattern `**/.env.local`; `mcp/.env` is the committed template.
 
 ## Tool tier
 
-Select which tools are exposed via the `WORKSPACE_MCP_TOOL_TIER` env var (set in `secrets.env` or exported):
+Select which tools are exposed via the `WORKSPACE_MCP_TOOL_TIER` env var (set in `.env.local` or exported):
 
 | Tier | Description |
 |---|---|

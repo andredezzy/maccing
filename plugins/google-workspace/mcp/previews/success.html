@@ -269,7 +269,7 @@ body {
   <script>
   function tryClose() {
     window.close();
-    setTimeout(function () {
+    setTimeout(() => {
       var note = document.getElementById('auto-close-note');
       if (note) { note.textContent = 'You can close this tab.'; }
     }, 500);

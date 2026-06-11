@@ -286,7 +286,7 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 ## Data model & versions
 
 - API base: `https://api.notion.com/v1` — header `Notion-Version: 2026-03-11`
-- SDK: TypeScript SDK v5.12.0+ required for 2026-03-11 support
+- SDK: the `@notionhq/client` TypeScript SDK needs v5.12.0+ for 2026-03-11 — relevant only to external app developers; the bundled `notion` MCP server makes raw HTTP calls (no Notion SDK)
 - Databases are queried/mutated via `/v1/data_sources/{id}` (not `/databases/{id}`)
 - `POST /v1/databases` response → use `data_sources[0]['id']` as the data source ID; `is_inline: true` supported at creation
 - Inline DB IDs (from block children) ARE valid `data_source_id` values but NOT valid `page_id` for `GET /pages/{id}`
@@ -301,7 +301,8 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 
 ## Auth / MCP pattern
 
-- MCP tool: `notion_request` — pass `method`, `path`, `body`
+- MCP tool: `notion_request` — pass `method`, `path`, `body` (POST/PATCH/PUT), and `query` (GET query-string params — the only way to send `start_cursor`/`page_size` for `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`)
+- MCP tools `notion_private_request` / **`notion_set_property_icon`** — the UNOFFICIAL private app API for UI-only things the public API can't do. ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** through these (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES (via the private app API), never "UI-only/impossible."** Recipe → `references/private-api.md`.
 - Large results (>~80k chars) overflow MCP token limit → saved to `~/.claude/projects/.../tool-results/mcp-notion-*.txt`
 - Rate limit: HTTP 429/502/503 → exponential backoff `1.2*(attempt+1)s`, up to 5 retries
 - Safe inter-request pace: `time.sleep(0.03)` in loops
@@ -359,7 +360,8 @@ The heavy API reference is split into sibling files under `references/`. Load on
 
 | Task | Load |
 |---|---|
-| Property shapes, reading values, page/DB icons & covers | `references/pages-properties.md` |
+| Property shapes, reading values, **page/DB** icons & covers (for **property/column** icons use the private-API row below, NOT this one) | `references/pages-properties.md` |
+| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — settable via the private app API through the `notion_set_property_icon` / `notion_private_request` MCP tools (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility | `references/views.md` |

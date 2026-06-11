@@ -16,67 +16,57 @@
  * which is faster and uses fewer quota units than looping with mutate().
  */
 
-var CONFIG = {
+const CONFIG = {
   customerId: "YOUR_CUSTOMER_ID",
-  adGroupId: "REPLACE_AD_GROUP_ID",   // Numeric ID from the ad group URL
+  adGroupId: "REPLACE_AD_GROUP_ID", // Numeric ID from the ad group URL
   keywords: [
     { text: "example keyword one", matchType: "BROAD" },
     { text: "example keyword two", matchType: "PHRASE" },
-    { text: "example keyword three", matchType: "EXACT" }
-  ]
+    { text: "example keyword three", matchType: "EXACT" },
+  ],
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
-  Logger.log(
-    "Adding " + CONFIG.keywords.length + " keyword(s) to ad group: " + CONFIG.adGroupId
-  );
+function _main() {
+  Logger.log(`Adding ${CONFIG.keywords.length} keyword(s) to ad group: ${CONFIG.adGroupId}`);
 
-  var adGroupResource =
-    "customers/" + CONFIG.customerId + "/adGroups/" + CONFIG.adGroupId;
+  const adGroupResource = `customers/${CONFIG.customerId}/adGroups/${CONFIG.adGroupId}`;
 
-  var operations = CONFIG.keywords.map(function(kw) {
-    return {
-      adGroupCriterionOperation: {
-        create: {
-          adGroup: adGroupResource,
-          status: "ENABLED",
-          keyword: {
-            text: kw.text,
-            matchType: kw.matchType
-          }
-        }
-      }
-    };
-  });
+  const operations = CONFIG.keywords.map((kw) => ({
+    adGroupCriterionOperation: {
+      create: {
+        adGroup: adGroupResource,
+        status: "ENABLED",
+        keyword: {
+          text: kw.text,
+          matchType: kw.matchType,
+        },
+      },
+    },
+  }));
 
-  var results = AdsApp.mutateAll(operations);
+  const results = AdsApp.mutateAll(operations);
 
-  var successCount = 0;
-  var failureCount = 0;
+  let successCount = 0;
+  let failureCount = 0;
 
-  for (var i = 0; i < results.length; i++) {
-    var kw = CONFIG.keywords[i];
-    var result = results[i];
+  for (let i = 0; i < results.length; i++) {
+    const kw = CONFIG.keywords[i];
+    const result = results[i];
 
     if (result.isSuccessful()) {
       successCount++;
-      Logger.log(
-        "  Added [" + kw.matchType + "] " + kw.text +
-        " → " + result.getResourceName()
-      );
+      Logger.log(`  Added [${kw.matchType}] ${kw.text} → ${result.getResourceName()}`);
     } else {
       failureCount++;
-      Logger.log("  FAILED [" + kw.matchType + "] " + kw.text);
-      var errors = result.getErrorMessages();
-      for (var j = 0; j < errors.length; j++) {
-        Logger.log("    Error: " + errors[j]);
+      Logger.log(`  FAILED [${kw.matchType}] ${kw.text}`);
+      const errors = result.getErrorMessages();
+      for (let j = 0; j < errors.length; j++) {
+        Logger.log(`    Error: ${errors[j]}`);
       }
     }
   }
 
-  Logger.log(
-    "Done. " + successCount + " added, " + failureCount + " failed."
-  );
+  Logger.log(`Done. ${successCount} added, ${failureCount} failed.`);
 }

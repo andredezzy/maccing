@@ -15,68 +15,57 @@
  *     Use "PHRASE" or "EXACT" to narrow the exclusion scope.
  */
 
-var CONFIG = {
+const CONFIG = {
   customerId: "YOUR_CUSTOMER_ID",
-  campaignId: "REPLACE_CAMPAIGN_ID",   // Numeric ID from the campaign URL
+  campaignId: "REPLACE_CAMPAIGN_ID", // Numeric ID from the campaign URL
   keywords: [
     { text: "free", matchType: "BROAD" },
     { text: "cheap alternatives", matchType: "PHRASE" },
-    { text: "competitor brand name", matchType: "EXACT" }
-  ]
+    { text: "competitor brand name", matchType: "EXACT" },
+  ],
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
-  Logger.log(
-    "Adding " + CONFIG.keywords.length + " negative keyword(s) to campaign: " +
-    CONFIG.campaignId
-  );
+function _main() {
+  Logger.log(`Adding ${CONFIG.keywords.length} negative keyword(s) to campaign: ${CONFIG.campaignId}`);
 
-  var campaignResource =
-    "customers/" + CONFIG.customerId + "/campaigns/" + CONFIG.campaignId;
+  const campaignResource = `customers/${CONFIG.customerId}/campaigns/${CONFIG.campaignId}`;
 
-  var operations = CONFIG.keywords.map(function(kw) {
-    return {
-      campaignCriterionOperation: {
-        create: {
-          campaign: campaignResource,
-          negative: true,
-          keyword: {
-            text: kw.text,
-            matchType: kw.matchType
-          }
-        }
-      }
-    };
-  });
+  const operations = CONFIG.keywords.map((kw) => ({
+    campaignCriterionOperation: {
+      create: {
+        campaign: campaignResource,
+        negative: true,
+        keyword: {
+          text: kw.text,
+          matchType: kw.matchType,
+        },
+      },
+    },
+  }));
 
-  var results = AdsApp.mutateAll(operations);
+  const results = AdsApp.mutateAll(operations);
 
-  var successCount = 0;
-  var failureCount = 0;
+  let successCount = 0;
+  let failureCount = 0;
 
-  for (var i = 0; i < results.length; i++) {
-    var kw = CONFIG.keywords[i];
-    var result = results[i];
+  for (let i = 0; i < results.length; i++) {
+    const kw = CONFIG.keywords[i];
+    const result = results[i];
 
     if (result.isSuccessful()) {
       successCount++;
-      Logger.log(
-        "  Added negative [" + kw.matchType + "] " + kw.text +
-        " → " + result.getResourceName()
-      );
+      Logger.log(`  Added negative [${kw.matchType}] ${kw.text} → ${result.getResourceName()}`);
     } else {
       failureCount++;
-      Logger.log("  FAILED [" + kw.matchType + "] " + kw.text);
-      var errors = result.getErrorMessages();
-      for (var j = 0; j < errors.length; j++) {
-        Logger.log("    Error: " + errors[j]);
+      Logger.log(`  FAILED [${kw.matchType}] ${kw.text}`);
+      const errors = result.getErrorMessages();
+      for (let j = 0; j < errors.length; j++) {
+        Logger.log(`    Error: ${errors[j]}`);
       }
     }
   }
 
-  Logger.log(
-    "Done. " + successCount + " added, " + failureCount + " failed."
-  );
+  Logger.log(`Done. ${successCount} added, ${failureCount} failed.`);
 }

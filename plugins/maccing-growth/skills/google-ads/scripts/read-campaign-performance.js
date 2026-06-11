@@ -8,8 +8,8 @@
  * Usage: Tools → Scripts → New script → paste → Preview/Run
  */
 
-function main() {
-  var query =
+function _main() {
+  const query =
     "SELECT " +
     "  campaign.id, " +
     "  campaign.name, " +
@@ -40,14 +40,14 @@ function main() {
     "  AND campaign.status != 'REMOVED' " +
     "ORDER BY metrics.cost_micros DESC";
 
-  var campaigns = [];
-  var results = AdsApp.search(query);
+  const campaigns = [];
+  const results = AdsApp.search(query);
 
   while (results.hasNext()) {
-    var row = results.next();
-    var campaign = row.campaign;
-    var budget = row.campaignBudget;
-    var metrics = row.metrics;
+    const row = results.next();
+    const campaign = row.campaign;
+    const budget = row.campaignBudget;
+    const metrics = row.metrics;
 
     campaigns.push({
       id: campaign.id,
@@ -55,16 +55,13 @@ function main() {
       status: campaign.status,
       channelType: campaign.advertisingChannelType,
       biddingStrategyType: campaign.biddingStrategyType,
-      targetCpaMicros:
-        (campaign.targetCpa && campaign.targetCpa.targetCpaMicros) ||
-        (campaign.maximizeConversions && campaign.maximizeConversions.targetCpaMicros) ||
-        null,
+      targetCpaMicros: campaign.targetCpa?.targetCpaMicros || campaign.maximizeConversions?.targetCpaMicros || null,
       budget: {
         amountMicros: budget.amountMicros,
         amountUsd: (budget.amountMicros / 1000000).toFixed(2),
         deliveryMethod: budget.deliveryMethod,
         hasRecommendedBudget: budget.hasRecommendedBudget,
-        recommendedAmountMicros: budget.recommendedBudgetAmountMicros
+        recommendedAmountMicros: budget.recommendedBudgetAmountMicros,
       },
       metrics: {
         impressions: metrics.impressions,
@@ -82,17 +79,17 @@ function main() {
         averageCpmMicros: metrics.averageCpm,
         searchImpressionShare: metrics.searchImpressionShare,
         searchBudgetLostImpressionShare: metrics.searchBudgetLostImpressionShare,
-        searchRankLostImpressionShare: metrics.searchRankLostImpressionShare
-      }
+        searchRankLostImpressionShare: metrics.searchRankLostImpressionShare,
+      },
     });
   }
 
-  var output = {
+  const output = {
     timestamp: new Date().toISOString(),
     customerId: "YOUR_CUSTOMER_ID",
     dateRange: "LAST_30_DAYS",
     totalCampaigns: campaigns.length,
-    campaigns: campaigns
+    campaigns: campaigns,
   };
 
   Logger.log(JSON.stringify(output, null, 2));

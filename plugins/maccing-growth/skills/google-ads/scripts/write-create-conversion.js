@@ -21,21 +21,21 @@
  * or set up import from Google Analytics / Firebase.
  */
 
-var CONFIG = {
+const CONFIG = {
   customerId: "YOUR_CUSTOMER_ID",
-  name: "My Conversion Action",        // Descriptive name shown in the UI
-  category: "PURCHASE",               // "PURCHASE", "SIGNUP", "PAGE_VIEW", "OTHER"
-  countingType: "ONE_CONVERSION"      // "ONE_CONVERSION" or "MANY_PER_CLICK"
+  name: "My Conversion Action", // Descriptive name shown in the UI
+  category: "PURCHASE", // "PURCHASE", "SIGNUP", "PAGE_VIEW", "OTHER"
+  countingType: "ONE_CONVERSION", // "ONE_CONVERSION" or "MANY_PER_CLICK"
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
-  Logger.log("Creating conversion action: " + CONFIG.name);
-  Logger.log("  Category: " + CONFIG.category);
-  Logger.log("  Counting type: " + CONFIG.countingType);
+function _main() {
+  Logger.log(`Creating conversion action: ${CONFIG.name}`);
+  Logger.log(`  Category: ${CONFIG.category}`);
+  Logger.log(`  Counting type: ${CONFIG.countingType}`);
 
-  var result = AdsApp.mutate({
+  const result = AdsApp.mutate({
     conversionActionOperation: {
       create: {
         name: CONFIG.name,
@@ -44,22 +44,20 @@ function main() {
         category: CONFIG.category,
         countingType: CONFIG.countingType,
         viewThroughLookbackWindowDays: 1,
-        clickThroughLookbackWindowDays: 30
-      }
-    }
+        clickThroughLookbackWindowDays: 30,
+      },
+    },
   });
 
   if (result.isSuccessful()) {
     Logger.log("Conversion action created successfully.");
-    Logger.log("Resource name: " + result.getResourceName());
-    Logger.log(
-      "Next step: add the conversion tag to your site or link an import source."
-    );
+    Logger.log(`Resource name: ${result.getResourceName()}`);
+    Logger.log("Next step: add the conversion tag to your site or link an import source.");
   } else {
     Logger.log("ERROR: Failed to create conversion action.");
-    var errors = result.getErrorMessages();
-    for (var i = 0; i < errors.length; i++) {
-      Logger.log("  [" + (i + 1) + "] " + errors[i]);
+    const errors = result.getErrorMessages();
+    for (let i = 0; i < errors.length; i++) {
+      Logger.log(`  [${i + 1}] ${errors[i]}`);
     }
   }
 }

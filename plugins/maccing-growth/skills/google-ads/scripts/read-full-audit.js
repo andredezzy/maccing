@@ -8,8 +8,8 @@
  * Usage: Tools → Scripts → New script → paste → Preview/Run
  */
 
-function main() {
-  var audit = {
+function _main() {
+  const audit = {
     timestamp: new Date().toISOString(),
     customerId: "YOUR_CUSTOMER_ID",
     campaigns: queryCampaigns(),
@@ -17,15 +17,15 @@ function main() {
     ads: queryAds(),
     keywords: queryKeywords(),
     searchTerms: querySearchTerms(),
-    conversionActions: queryConversionActions()
+    conversionActions: queryConversionActions(),
   };
 
   Logger.log(JSON.stringify(audit, null, 2));
 }
 
 function queryCampaigns() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  campaign.id, " +
     "  campaign.name, " +
@@ -45,9 +45,9 @@ function queryCampaigns() {
     "  AND campaign.status != 'REMOVED' " +
     "ORDER BY metrics.cost_micros DESC";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
+    const row = results.next();
     rows.push({
       id: row.campaign.id,
       name: row.campaign.name,
@@ -63,15 +63,15 @@ function queryCampaigns() {
       costUsd: (row.metrics.costMicros / 1000000).toFixed(2),
       conversions: row.metrics.conversions,
       averageCpcMicros: row.metrics.averageCpc,
-      averageCpcUsd: (row.metrics.averageCpc / 1000000).toFixed(2)
+      averageCpcUsd: (row.metrics.averageCpc / 1000000).toFixed(2),
     });
   }
   return rows;
 }
 
 function queryAdGroups() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  ad_group.id, " +
     "  ad_group.name, " +
@@ -90,9 +90,9 @@ function queryAdGroups() {
     "  AND ad_group.status != 'REMOVED' " +
     "ORDER BY metrics.cost_micros DESC";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
+    const row = results.next();
     rows.push({
       id: row.adGroup.id,
       name: row.adGroup.name,
@@ -105,15 +105,15 @@ function queryAdGroups() {
       clicks: row.metrics.clicks,
       ctr: row.metrics.ctr,
       costMicros: row.metrics.costMicros,
-      conversions: row.metrics.conversions
+      conversions: row.metrics.conversions,
     });
   }
   return rows;
 }
 
 function queryAds() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  ad_group_ad.ad.id, " +
     "  ad_group_ad.ad.type, " +
@@ -138,11 +138,11 @@ function queryAds() {
     "  AND ad_group_ad.status != 'REMOVED' " +
     "ORDER BY metrics.impressions DESC";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
-    var ad = row.adGroupAd.ad;
-    var rsa = ad.responsiveSearchAd || {};
+    const row = results.next();
+    const ad = row.adGroupAd.ad;
+    const rsa = ad.responsiveSearchAd || {};
     rows.push({
       id: ad.id,
       type: ad.type,
@@ -161,15 +161,15 @@ function queryAds() {
       clicks: row.metrics.clicks,
       ctr: row.metrics.ctr,
       costMicros: row.metrics.costMicros,
-      conversions: row.metrics.conversions
+      conversions: row.metrics.conversions,
     });
   }
   return rows;
 }
 
 function queryKeywords() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  ad_group_criterion.keyword.text, " +
     "  ad_group_criterion.keyword.match_type, " +
@@ -191,10 +191,10 @@ function queryKeywords() {
     "  AND ad_group_criterion.status != 'REMOVED' " +
     "ORDER BY metrics.impressions DESC";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
-    var kw = row.adGroupCriterion;
+    const row = results.next();
+    const kw = row.adGroupCriterion;
     rows.push({
       text: kw.keyword.text,
       matchType: kw.keyword.matchType,
@@ -211,15 +211,15 @@ function queryKeywords() {
       averageCpcMicros: row.metrics.averageCpc,
       averageCpcUsd: (row.metrics.averageCpc / 1000000).toFixed(2),
       costMicros: row.metrics.costMicros,
-      conversions: row.metrics.conversions
+      conversions: row.metrics.conversions,
     });
   }
   return rows;
 }
 
 function querySearchTerms() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  search_term_view.search_term, " +
     "  search_term_view.status, " +
@@ -238,9 +238,9 @@ function querySearchTerms() {
     "ORDER BY metrics.clicks DESC " +
     "LIMIT 500";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
+    const row = results.next();
     rows.push({
       searchTerm: row.searchTermView.searchTerm,
       status: row.searchTermView.status,
@@ -255,15 +255,15 @@ function querySearchTerms() {
       costUsd: (row.metrics.costMicros / 1000000).toFixed(2),
       conversions: row.metrics.conversions,
       averageCpcMicros: row.metrics.averageCpc,
-      averageCpcUsd: (row.metrics.averageCpc / 1000000).toFixed(2)
+      averageCpcUsd: (row.metrics.averageCpc / 1000000).toFixed(2),
     });
   }
   return rows;
 }
 
 function queryConversionActions() {
-  var rows = [];
-  var query =
+  const rows = [];
+  const query =
     "SELECT " +
     "  conversion_action.id, " +
     "  conversion_action.name, " +
@@ -281,10 +281,10 @@ function queryConversionActions() {
     "FROM conversion_action " +
     "WHERE conversion_action.status != 'REMOVED'";
 
-  var results = AdsApp.search(query);
+  const results = AdsApp.search(query);
   while (results.hasNext()) {
-    var row = results.next();
-    var ca = row.conversionAction;
+    const row = results.next();
+    const ca = row.conversionAction;
     rows.push({
       id: ca.id,
       name: ca.name,
@@ -298,7 +298,7 @@ function queryConversionActions() {
       clickThroughLookbackWindowDays: ca.clickThroughLookbackWindowDays,
       viewThroughLookbackWindowDays: ca.viewThroughLookbackWindowDays,
       primaryForGoal: ca.primaryForGoal,
-      tagSnippets: ca.tagSnippets || []
+      tagSnippets: ca.tagSnippets || [],
     });
   }
   return rows;

@@ -8,8 +8,8 @@
  * Usage: Tools → Scripts → New script → paste → Preview/Run
  */
 
-function main() {
-  var query =
+function _main() {
+  const query =
     "SELECT " +
     "  ad_group_criterion.criterion_id, " +
     "  ad_group_criterion.keyword.text, " +
@@ -47,13 +47,13 @@ function main() {
     "  AND campaign.status != 'REMOVED' " +
     "ORDER BY metrics.impressions DESC";
 
-  var keywords = [];
-  var results = AdsApp.search(query);
+  const keywords = [];
+  const results = AdsApp.search(query);
 
   while (results.hasNext()) {
-    var row = results.next();
-    var kw = row.adGroupCriterion;
-    var metrics = row.metrics;
+    const row = results.next();
+    const kw = row.adGroupCriterion;
+    const metrics = row.metrics;
 
     keywords.push({
       criterionId: kw.criterionId,
@@ -71,17 +71,17 @@ function main() {
         score: kw.qualityInfo.qualityScore,
         searchPredictedCtr: kw.qualityInfo.searchPredictedCtr,
         adRelevance: kw.qualityInfo.adRelevance,
-        landingPageExperience: kw.qualityInfo.landingPageExperience
+        landingPageExperience: kw.qualityInfo.landingPageExperience,
       },
       adGroup: {
         id: row.adGroup.id,
         name: row.adGroup.name,
-        status: row.adGroup.status
+        status: row.adGroup.status,
       },
       campaign: {
         id: row.campaign.id,
         name: row.campaign.name,
-        status: row.campaign.status
+        status: row.campaign.status,
       },
       metrics: {
         impressions: metrics.impressions,
@@ -97,17 +97,17 @@ function main() {
         costPerConversionMicros: metrics.costPerConversion,
         costPerConversionUsd: (metrics.costPerConversion / 1000000).toFixed(2),
         searchImpressionShare: metrics.searchImpressionShare,
-        searchRankLostImpressionShare: metrics.searchRankLostImpressionShare
-      }
+        searchRankLostImpressionShare: metrics.searchRankLostImpressionShare,
+      },
     });
   }
 
-  var output = {
+  const output = {
     timestamp: new Date().toISOString(),
     customerId: "YOUR_CUSTOMER_ID",
     dateRange: "LAST_30_DAYS",
     totalKeywords: keywords.length,
-    keywords: keywords
+    keywords: keywords,
   };
 
   Logger.log(JSON.stringify(output, null, 2));

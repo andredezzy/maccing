@@ -15,44 +15,42 @@
  * all other ad fields (headlines, descriptions, paths) remain unchanged.
  */
 
-var CONFIG = {
+const CONFIG = {
   customerId: "YOUR_CUSTOMER_ID",
-  adGroupId: "REPLACE_AD_GROUP_ID",   // Numeric ID from the ad group URL
-  adId: "REPLACE_AD_ID",              // Numeric ID from the ad URL
-  newFinalUrl: "https://example.com/new-landing-page"
+  adGroupId: "REPLACE_AD_GROUP_ID", // Numeric ID from the ad group URL
+  adId: "REPLACE_AD_ID", // Numeric ID from the ad URL
+  newFinalUrl: "https://example.com/new-landing-page",
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-function main() {
-  Logger.log("Updating Final URL for ad: " + CONFIG.adId);
-  Logger.log("New URL: " + CONFIG.newFinalUrl);
+function _main() {
+  Logger.log(`Updating Final URL for ad: ${CONFIG.adId}`);
+  Logger.log(`New URL: ${CONFIG.newFinalUrl}`);
 
-  var adGroupAdResource =
-    "customers/" + CONFIG.customerId +
-    "/adGroupAds/" + CONFIG.adGroupId + "~" + CONFIG.adId;
+  const adGroupAdResource = `customers/${CONFIG.customerId}/adGroupAds/${CONFIG.adGroupId}~${CONFIG.adId}`;
 
-  var result = AdsApp.mutate({
+  const result = AdsApp.mutate({
     adGroupAdOperation: {
       update: {
         resourceName: adGroupAdResource,
         ad: {
-          finalUrls: [CONFIG.newFinalUrl]
-        }
+          finalUrls: [CONFIG.newFinalUrl],
+        },
       },
-      updateMask: "ad.finalUrls"
-    }
+      updateMask: "ad.finalUrls",
+    },
   });
 
   if (result.isSuccessful()) {
     Logger.log("Final URL updated successfully.");
-    Logger.log("Resource name: " + result.getResourceName());
-    Logger.log("New Final URL: " + CONFIG.newFinalUrl);
+    Logger.log(`Resource name: ${result.getResourceName()}`);
+    Logger.log(`New Final URL: ${CONFIG.newFinalUrl}`);
   } else {
     Logger.log("ERROR: Failed to update Final URL.");
-    var errors = result.getErrorMessages();
-    for (var i = 0; i < errors.length; i++) {
-      Logger.log("  [" + (i + 1) + "] " + errors[i]);
+    const errors = result.getErrorMessages();
+    for (let i = 0; i < errors.length; i++) {
+      Logger.log(`  [${i + 1}] ${errors[i]}`);
     }
   }
 }

@@ -8,8 +8,8 @@
  * Usage: Tools → Scripts → New script → paste → Preview/Run
  */
 
-function main() {
-  var query =
+function _main() {
+  const query =
     "SELECT " +
     "  conversion_action.id, " +
     "  conversion_action.name, " +
@@ -31,12 +31,12 @@ function main() {
     "FROM conversion_action " +
     "ORDER BY conversion_action.name ASC";
 
-  var conversionActions = [];
-  var results = AdsApp.search(query);
+  const conversionActions = [];
+  const results = AdsApp.search(query);
 
   while (results.hasNext()) {
-    var row = results.next();
-    var ca = row.conversionAction;
+    const row = results.next();
+    const ca = row.conversionAction;
 
     conversionActions.push({
       id: ca.id,
@@ -50,36 +50,32 @@ function main() {
       value: {
         defaultValue: ca.valueSettings.defaultValue,
         defaultCurrencyCode: ca.valueSettings.defaultCurrencyCode,
-        alwaysUseDefaultValue: ca.valueSettings.alwaysUseDefaultValue
+        alwaysUseDefaultValue: ca.valueSettings.alwaysUseDefaultValue,
       },
       attribution: {
         model: ca.attributionModelSettings.attributionModel,
-        dataDrivenModelStatus: ca.attributionModelSettings.dataDrivenModelStatus
+        dataDrivenModelStatus: ca.attributionModelSettings.dataDrivenModelStatus,
       },
       lookbackWindows: {
         clickThroughDays: ca.clickThroughLookbackWindowDays,
-        viewThroughDays: ca.viewThroughLookbackWindowDays
+        viewThroughDays: ca.viewThroughLookbackWindowDays,
       },
       phoneCallDurationSeconds: ca.phoneCallDurationSeconds || null,
-      tagSnippets: (ca.tagSnippets || []).map(function (snippet) {
-        return {
-          type: snippet.type,
-          pageFormat: snippet.pageFormat,
-          globalSiteTagSnippet: snippet.globalSiteTagSnippet,
-          eventSnippet: snippet.eventSnippet
-        };
-      })
+      tagSnippets: (ca.tagSnippets || []).map((snippet) => ({
+        type: snippet.type,
+        pageFormat: snippet.pageFormat,
+        globalSiteTagSnippet: snippet.globalSiteTagSnippet,
+        eventSnippet: snippet.eventSnippet,
+      })),
     });
   }
 
-  var output = {
+  const output = {
     timestamp: new Date().toISOString(),
     customerId: "YOUR_CUSTOMER_ID",
     totalConversionActions: conversionActions.length,
-    activeCount: conversionActions.filter(function (ca) {
-      return ca.status === "ENABLED";
-    }).length,
-    conversionActions: conversionActions
+    activeCount: conversionActions.filter((ca) => ca.status === "ENABLED").length,
+    conversionActions: conversionActions,
   };
 
   Logger.log(JSON.stringify(output, null, 2));

@@ -58,10 +58,10 @@ This step is critical. Go to **APIs & Services → OAuth consent screen** and:
 From the plugin directory (`plugins/google-workspace/`), copy the example file and fill in your credentials:
 
 ```bash
-cp mcp/secrets.env.example mcp/secrets.env
+cp mcp/.env mcp/.env.local
 ```
 
-Then edit `secrets.env` and set:
+Then edit `.env.local` and set:
 
 ```bash
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
@@ -69,9 +69,7 @@ export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
 export USER_GOOGLE_EMAIL=you@gmail.com
 ```
 
-The `secrets.env` file is gitignored by the repo's `.gitignore` pattern `plugins/*/mcp/secrets.env` and is never committed.
-
-**Legacy fallback:** If `secrets.env` is absent, the launcher also checks `~/.claude/mcp/workspace-mcp/secrets.env` — useful if you previously ran the workspace-mcp daemon and already have credentials stored there.
+The `.env.local` file is gitignored (repo `.gitignore` pattern `**/.env.local`) and is never committed; `mcp/.env` is the committed template. The launcher loads `mcp/.env.local` if present, else uses whatever is already exported in your environment.
 
 ---
 
@@ -89,7 +87,7 @@ For example: `mcp__plugin_google-workspace_workspace__list_events`, `mcp__plugin
 
 ### Tool tiers
 
-The launcher exposes tools in one of three tiers, controlled by the `WORKSPACE_MCP_TOOL_TIER` env var (set in `secrets.env` or exported):
+The launcher exposes tools in one of three tiers, controlled by the `WORKSPACE_MCP_TOOL_TIER` env var (set in `.env.local` or exported):
 
 | Tier | Description |
 |---|---|

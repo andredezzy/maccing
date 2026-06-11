@@ -10,7 +10,20 @@
   "homepage": "https://github.com/andredezzy/maccing",
   "repository": "https://github.com/andredezzy/maccing",
   "license": "MIT",
-  "keywords": ["growth", "ads", "google-ads", "meta", "meta-ads", "tiktok-ads", "whatsapp", "ycloud", "bsp", "cloud-api", "marketing", "performance-marketing"],
+  "keywords": [
+    "growth",
+    "ads",
+    "google-ads",
+    "meta",
+    "meta-ads",
+    "tiktok-ads",
+    "whatsapp",
+    "ycloud",
+    "bsp",
+    "cloud-api",
+    "marketing",
+    "performance-marketing"
+  ],
   "skills": ["./skills/meta/", "./skills/platforms/ycloud/"],
   "commands": ["./commands/"]
 }

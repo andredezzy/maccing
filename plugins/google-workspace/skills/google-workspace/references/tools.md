@@ -9,7 +9,7 @@ All tools share the prefix `mcp__plugin_google-workspace_workspace__`.
 | Setting | Value |
 |---|---|
 | Account | `andrevcv1@gmail.com` |
-| `user_google_email` default | `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `secrets.env`) |
+| `user_google_email` default | `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `.env.local`) |
 | Timezone | `America/Sao_Paulo` (IANA name — always use IANA names, never offsets like `UTC-3`) |
 | Locale | `pt-BR` |
 
@@ -218,7 +218,7 @@ modify_gmail_message_labels(message_id="...", add_labels=["Label_123"])
 ## Parameter gotchas
 
 - **Timezones:** always use IANA names (`America/Sao_Paulo`, `UTC`, `America/New_York`) — never raw offsets (`-03:00`). André's timezone is `America/Sao_Paulo`.
-- **`user_google_email`:** defaults to `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `secrets.env`). Omit it or pass `andrevcv1@gmail.com` explicitly. Never use `nicolas1120201@gmail.com`.
+- **`user_google_email`:** defaults to `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `.env.local`). Omit it or pass `andrevcv1@gmail.com` explicitly. Never use `nicolas1120201@gmail.com`.
 - Never use the `mcp__claude_ai_*` Google connectors — see the account-isolation rule in SKILL.md.
 - **Calendar IDs:** `primary` refers to the user's primary calendar — preferred over the explicit calendar ID for most operations.
 - **Event colors — ALWAYS reuse the existing pattern.** The user color-codes events; a created event must not fall to the default color when same-type events are colored. Read colors via `get_events(event_id=..., detailed=true)` (the list view hides them), sample several, treat any colored same-type event as the pattern (`None` ≠ the pattern), then set `color_id` on `manage_event`. Full rule in the Calendar section above.
