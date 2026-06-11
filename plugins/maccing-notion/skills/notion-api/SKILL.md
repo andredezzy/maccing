@@ -402,7 +402,7 @@ The `icon` field is supported on pages and databases (PATCH `/v1/pages`, PATCH `
 | Type | JSON shape | Notes |
 |---|---|---|
 | `emoji` | `{"type":"emoji","emoji":"📊"}` | Any Unicode emoji; settable |
-| `icon` | `{"type":"icon","icon":{"name":"cash","color":"gray"}}` | Notion built-in named icons; settable since Mar 25 2026. `name` required, `color` optional. Name catalog unpublished — discover empirically from existing pages |
+| `icon` | `{"type":"icon","icon":{"name":"cash","color":"gray"}}` | Notion built-in named icons; settable since Mar 25 2026. `name` required, `color` optional. Full name catalog → [`references/icon-names.md`](references/icon-names.md) (Notion's set is proprietary/unofficial — verify unusual names with a test PATCH) |
 | `custom_emoji` | `{"type":"custom_emoji","custom_emoji":{"id":"<uuid>"}}` | Settable; list workspace set via `GET /v1/custom_emojis` (cursor-paginated, `?name=` exact filter, `page_size` ≤ 100) |
 | `external` | `{"type":"external","external":{"url":"https://…"}}` | Settable; any public URL |
 | `file_upload` | `{"type":"file_upload","file_upload":{"id":"<FileUpload id>"}}` | Requires `POST /v1/file_uploads` → upload binary → reference id once `status == "uploaded"`; PDFs not valid for page icons |
