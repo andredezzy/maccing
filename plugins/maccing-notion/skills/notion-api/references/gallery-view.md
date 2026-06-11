@@ -1,6 +1,6 @@
 # Gallery view — visual configuration
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — brainstorm the visual layout** (propose cover / size / aspect / layout / visible-props and get approval) *and* the standard approval gate, before any gallery write.
+Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — brainstorm the view design** (propose type / filter / sort / grouping / visible-props + cover / size / aspect / layout and get approval) *and* the standard approval gate, before any gallery write.
 
 > Requires `Notion-Version: 2026-03-11` (gallery config minimum `2025-09-03`).
 
@@ -83,7 +83,7 @@ Any nullable field (`cover`, `cover_size`, `cover_aspect`, `card_layout`, `prope
 
 ## Sourcing cover images (when `cover:{type:"page_cover"}`)
 
-Cards with `page_cover` are only as good as the page covers behind them. When the rows have no covers, sourcing them is a **visual choice → it belongs in the brainstorm gate** (SKILL.md "brainstorm the visual layout"): propose the theme, source candidates, **show them to the user**, and let them pick before any write.
+Cards with `page_cover` are only as good as the page covers behind them. When the rows have no covers, sourcing them is a **visual choice → it belongs in the brainstorm gate** (SKILL.md "brainstorm the view design"): propose the theme, source candidates, **show them to the user**, and let them pick before any write.
 
 **Brainstorm-the-images loop (live-verified, Unsplash):**
 1. **Find real photos.** Unsplash sits behind a bot wall — do **not** scrape its search HTML and do **not** defeat the bot challenge. Instead `WebSearch` (e.g. `allowed_domains:["unsplash.com"]`) for the theme to get photo-**page** URLs, then `WebFetch` each page asking for "the exact `images.unsplash.com/photo-…` URL" — the og:image. Skip any that resolve only to `plus.unsplash.com` (premium → unusable).
