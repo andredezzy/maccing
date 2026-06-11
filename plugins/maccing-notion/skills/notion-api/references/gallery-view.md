@@ -4,7 +4,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 > Requires `Notion-Version: 2026-03-11` (gallery config minimum `2025-09-03`).
 
-⚠️ **Maturity:** the Views API is new (early 2026). The **creation location rule and the minimal create below are live-verified**; the `configuration` visual fields (cover/size/aspect/layout/per-property options) are **doc-sourced, not all live-verified** — when using an unusual field, confirm with a test `PATCH` and treat a `400 validation_error` as "that field/name is wrong." Flag uncertainty rather than asserting.
+⚠️ **Maturity:** the Views API is new (early 2026). **Live-verified 2026-03-11** (on a real gallery): the creation location rule, the minimal create, **`cover:{type:"page_cover"}`, `cover_size` (small/medium/large), `cover_aspect` (contain/cover), `properties[]` with `visible`, and top-level `sorts`** (see `references/views.md`) — all confirmed in one `PATCH`. Still **doc-sourced / not all live-verified**: `card_layout`, `cover` via `property`/`page_content`, and the per-property options (`wrap`, `date_format`, `card_property_width_mode`). For those, confirm with a test `PATCH` and treat `400 validation_error` as "that field/name is wrong." Flag uncertainty rather than asserting.
 
 ## Creating a gallery view on an EXISTING database (live-verified)
 
@@ -80,3 +80,16 @@ Any nullable field (`cover`, `cover_size`, `cover_aspect`, `card_layout`, `prope
 ### UI-only (no API equivalent)
 - **Cover image repositioning** (custom focal point on hover) — API controls source + aspect mode only.
 - Property-id lookup: `GET /v1/data_sources/{id}` → `properties.<name>.id` (URL-decode if needed).
+
+## Sourcing cover images (when `cover:{type:"page_cover"}`)
+
+Cards with `page_cover` are only as good as the page covers behind them. When the rows have no covers, sourcing them is a **visual choice → it belongs in the brainstorm gate** (SKILL.md "brainstorm the visual layout"): propose the theme, source candidates, **show them to the user**, and let them pick before any write.
+
+**Brainstorm-the-images loop (live-verified, Unsplash):**
+1. **Find real photos.** Unsplash sits behind a bot wall — do **not** scrape its search HTML and do **not** defeat the bot challenge. Instead `WebSearch` (e.g. `allowed_domains:["unsplash.com"]`) for the theme to get photo-**page** URLs, then `WebFetch` each page asking for "the exact `images.unsplash.com/photo-…` URL" — the og:image. Skip any that resolve only to `plus.unsplash.com` (premium → unusable).
+2. **Build the URL** in the workspace's cover style, e.g. `…?ixlib=rb-4.1.0&q=85&fm=jpg&w=1200&crop=entropy&cs=srgb`. For **black-and-white**, append the imgix param **`&sat=-100`** (desaturates any colour photo — no need to find a B&W original).
+3. **Verify before proposing — no broken covers.** `curl -sI "<url>"` must return `200` + `content-type: image/*`. Drop any that don't.
+4. **Show the user.** Download each (`curl -o`) and display via the Read tool so they see the actual B&W result; give the page URL + photographer for attribution. **Flag thematic mismatches** (e.g. a "Bitcoin" chart photo landing on a non-crypto category) — surface it, offer a swap.
+5. **Apply only after approval** — `PATCH /v1/pages/{id}` `{ "cover": { "type":"external", "external": { "url":"<verified url>" } } }` per row, then set the gallery `configuration.cover` to `page_cover`.
+
+> Page covers take **external** URLs; the imgix params (`sat`, `w`, `crop`, …) are honoured by `images.unsplash.com`. Match the workspace's existing cover convention (house style) — colour vs B&W, Unsplash vs gradient — and flag-then-follow if the user asks for something different.

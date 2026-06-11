@@ -43,7 +43,7 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
-**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. This file is the global source of truth; lower AGENTS.md files override on conflict. When a new convention is established mid-session, include a root AGENTS.md update in the same approval batch.
+**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. When a new convention is established mid-session, include a root AGENTS.md update in the same approval batch.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -350,7 +350,8 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility | `references/views.md` |
-| **Gallery view** visual config (cover, card size, visible props) | `references/gallery-view.md` |
+| **Gallery view** visual config (cover, card size, visible props) + **sourcing B&W cover images** | `references/gallery-view.md` |
+| **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |
 | Formulas (gotchas, pt-BR currency) & number formatting | `references/formulas.md` |
 | Relations & rollups | `references/relations-rollups.md` |

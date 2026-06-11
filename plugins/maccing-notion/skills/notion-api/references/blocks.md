@@ -60,6 +60,7 @@ PATCH /v1/pages/{id}/markdown
 - Renaming a `child_database` block via `PATCH /v1/blocks/{id}` → 400 — use `PATCH /v1/data_sources/{id}` (title field) instead
 - General rule: `child_page` and `child_database` block updates must go through Update page / Update database endpoints respectively
 - `child_page` and `child_database` blocks **cannot be appended** via `PATCH /v1/blocks` — use `POST /v1/pages` or `POST /v1/databases`
+- **Visual spacing between stacked inline DBs** — two inline databases (or any blocks) rendered back-to-back have no gap and read as cramped. Insert an **empty paragraph** between them for breathing room: `PATCH /v1/blocks/{page_id}/children` with `{ "position": {"type":"after_block","after_block":{"id":"<first-db-block-id>"}}, "children":[{ "object":"block", "type":"paragraph", "paragraph":{"rich_text":[]} }] }`. (A `child_database` block's id == its database id.) Live-verified on the Investments tracker (between Categories and Months).
 
 **Positioning on append (`PATCH /v1/blocks/{page_id}/children`):**
 ```json
@@ -69,9 +70,10 @@ PATCH /v1/pages/{id}/markdown
 // Append explicitly (also the default)
 { "position": { "type": "end" }, "children": [...] }
 
-// After a specific block  (note flat block_id field, not nested object)
-{ "position": { "type": "after_block", "block_id": "<block_id>" }, "children": [...] }
+// After a specific block — nested object { "id": ... }, NOT a flat block_id
+{ "position": { "type": "after_block", "after_block": { "id": "<block_id>" } }, "children": [...] }
 ```
+> ⚠️ **`after_block` is a nested object, same shape as `POST /v1/pages` below — live-verified 2026-03-11.** A flat `{ "type":"after_block", "block_id":"…" }` → `400 position.after_block should be defined`; `after_block` as a bare string → `400 position.after_block should be an object`; omitting `type` → `400 position.type should be defined`. The only valid forms are `{type:"start"}`, `{type:"end"}`, and `{type:"after_block", after_block:{id}}`.
 
 **Positioning on `POST /v1/pages`** uses different values:
 ```json

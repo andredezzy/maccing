@@ -31,7 +31,7 @@ POST /v1/views
   "type": "table",
   "create_database": {
     "parent": { "type": "page_id", "page_id": "<page_id>" },
-    "position": { "type": "after_block", "block_id": "<block_id>" }
+    "position": { "type": "after_block", "after_block": { "id": "<block_id>" } }
   },
   "filter": { "property": "Active", "checkbox": { "equals": true } }
 }
@@ -85,4 +85,13 @@ PATCH /v1/views/{id}
 { "configuration": { "type": "table", "properties": [{ "property_id": "<id>", "visible": false }] } }
 ```
 Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. May be URL-encoded → `urllib.parse.unquote()`.
+
+**Sort a view** (`sorts` is a **top-level view field**, NOT inside `configuration` — table, gallery, board, list, …):
+```json
+PATCH /v1/views/{id}
+{ "sorts": [ { "property": "<PROPERTY NAME>", "direction": "ascending" | "descending" } ] }
+```
+- Send the property **name**, not the id — the API normalizes it and **stores the `property_id`**, so a later GET shows `"property": "<id>"` (e.g. you send `"Date"`, GET returns `"S=Vn"`). Live-verified 2026-03-11.
+- **Property-based only** (no `timestamp` sorts on views). When multiple sorts are given, the first in the array wins ties. `"sorts": null` clears all sorts.
+- Combine with `configuration`, `filter`, `name` in the **same** PATCH — only provided fields change. (This is how a gallery gets both its look and its order in one call — see `references/gallery-view.md`.)
 
