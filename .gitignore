@@ -7,3 +7,7 @@
 plugins/*/mcp/secrets.env
 secrets.env
 .env
+
+# Python
+__pycache__/
+*.pyc

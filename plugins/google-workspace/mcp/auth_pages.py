@@ -1,9 +1,11 @@
 """
 OAuth callback HTML page templates for the google-workspace plugin.
 
-Returns full HTML strings (no external dependencies) for the three OAuth
-callback states: success, error (user-facing OAuth error), and server error
-(exception during token exchange).
+Returns full HTML strings (no external dependencies) for the OAuth callback
+states served over HTTP: success and error (covering both user-facing OAuth
+errors and server/token-exchange errors). The "authorize" step has no HTTP
+page upstream — it is a plain-text MCP tool response — so it is not rendered
+here.
 
 Design: Midday-style minimal, light + dark via prefers-color-scheme, WCAG AA,
 prefers-reduced-motion, no external assets, no SVG icons, no animations.
@@ -41,7 +43,7 @@ _TOKENS_CSS = """\
   --radius-sm: 0.25rem;
 
   /* Font stacks (no external assets) */
-  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Inter,
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto,
                system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
                Menlo, monospace;
@@ -50,13 +52,13 @@ _TOKENS_CSS = """\
 @media (prefers-color-scheme: dark) {
   :root {
     --bg:        #0c0c0c;
-    --surface:   #111111;
-    --surface-2: #1c1c1c;
+    --surface:   #161616;
+    --surface-2: #1f1f1f;
 
     --text:      #f9f9f9;
-    --muted:     #606060;
+    --muted:     #8a8a8a;
 
-    --border:    #1c1c1c;
+    --border:    #2a2a2a;
 
     --btn-bg:    #f9f9f9;
     --btn-text:  #17171b;
@@ -214,7 +216,6 @@ body {
 .error-block {
   background-color: var(--surface-2);
   border: 1px solid var(--border);
-  border-left: 2px solid var(--error);
   border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
   margin-bottom: 1.5rem;
@@ -228,6 +229,14 @@ body {
   word-break: break-word;
 }
 
+/* Non-color "Error" prefix so the block does not rely on color alone. */
+.error-label {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--text);
+  margin-right: 0.4rem;
+}
+
 /* ─── REDUCED MOTION ──────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
@@ -236,15 +245,14 @@ body {
 # Auto-close JS preserved from upstream for UX parity:
 # The browser tab is opened by webbrowser.open() in auth/google_auth.py and
 # there is no other mechanism to dismiss it — without this the tab stays open.
+# Injected at the end of <body> so the DOM is parsed before it runs.
 _AUTO_CLOSE_JS = """\
 <script>
   function tryClose() {
     window.close();
-    setTimeout(function() {
-      var btn = document.querySelector('.btn-primary');
-      if (btn) { btn.textContent = 'You can close this tab manually'; }
+    setTimeout(function () {
       var note = document.getElementById('auto-close-note');
-      if (note) { note.style.display = 'none'; }
+      if (note) { note.textContent = 'You can close this tab.'; }
     }, 500);
   }
   setTimeout(tryClose, 10000);
@@ -273,14 +281,13 @@ def success_page(verified_user_id: Optional[str] = None) -> str:
     {_TOKENS_CSS}
     {_BASE_CSS}
   </style>
-  {_AUTO_CLOSE_JS}
 </head>
 <body>
 
   <main>
-    <article class="card" role="main" aria-labelledby="card-heading">
+    <article class="card" aria-labelledby="card-heading">
 
-      <span class="wordmark" aria-label="Maccing Google Workspace">
+      <span class="wordmark" aria-hidden="true">
         Maccing · Google Workspace
       </span>
 
@@ -290,7 +297,7 @@ def success_page(verified_user_id: Optional[str] = None) -> str:
 
       <p class="body-text">
         Your Google account is connected. You can close this window and return
-        to Claude.
+        to your agent.
       </p>
 
       <div class="status-line" role="status" aria-live="polite">
@@ -311,6 +318,8 @@ def success_page(verified_user_id: Optional[str] = None) -> str:
     </article>
   </main>
 
+  {_AUTO_CLOSE_JS}
+
 </body>
 </html>"""
 
@@ -323,8 +332,7 @@ def error_page(error_message: str, auth_url: Optional[str] = None) -> str:
     ----------
     error_message:
         The raw error string or human-readable description to display in the
-        code-styled error block.  Must already be HTML-escaped by the caller,
-        or pass the raw string — this function escapes it.
+        code-styled error block. This function HTML-escapes it.
     auth_url:
         Optional Google OAuth authorization URL for the "Try again" button.
         If None, the retry button is omitted.
@@ -338,7 +346,6 @@ def error_page(error_message: str, auth_url: Optional[str] = None) -> str:
       <a
         href="{escaped_url}"
         class="btn-primary"
-        role="button"
         aria-label="Retry Google authorization"
       >
         Try again
@@ -349,7 +356,7 @@ def error_page(error_message: str, auth_url: Optional[str] = None) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Maccing Google Workspace — Authentication Error</title>
+  <title>Maccing Google Workspace Authentication Failed</title>
   <style>
     {_TOKENS_CSS}
     {_BASE_CSS}
@@ -358,20 +365,20 @@ def error_page(error_message: str, auth_url: Optional[str] = None) -> str:
 <body>
 
   <main>
-    <article class="card" role="main" aria-labelledby="card-heading">
+    <article class="card" aria-labelledby="card-heading">
 
-      <span class="wordmark" aria-label="Maccing Google Workspace">
+      <span class="wordmark" aria-hidden="true">
         Maccing · Google Workspace
       </span>
+
+      <h1 class="heading" id="card-heading">
+        Something went wrong
+      </h1>
 
       <div class="status-line" role="alert" aria-live="assertive">
         <span class="status-dot status-dot--error" aria-hidden="true"></span>
         <span>Authentication failed</span>
       </div>
-
-      <h1 class="heading" id="card-heading">
-        Something went wrong
-      </h1>
 
       <p class="body-text">
         Authorization could not be completed. The details below may help if you
@@ -379,7 +386,7 @@ def error_page(error_message: str, auth_url: Optional[str] = None) -> str:
       </p>
 
       <div class="error-block" role="region" aria-label="Error details">
-        <p>{escaped_message}</p>
+        <p><span class="error-label">Error</span>{escaped_message}</p>
       </div>
       {retry_button}
 
