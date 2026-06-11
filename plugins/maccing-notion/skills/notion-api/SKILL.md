@@ -199,7 +199,7 @@ NEVER WRITE A SINGLE GLYPH UNTIL YOU KNOW THE HOUSE STYLE
 - **Language** — pt-BR, EN, or a deliberate pt-BR/EN mix (e.g. hub names in pt-BR, property names in EN)?
 - **Singular vs plural** — collection/DB names: "Task" or "Tasks", "Month" or "Months"?
 - **Hub patterns** — inline DBs with an "X Navigation" header, full-page DBs, linked views, dashboard layouts?
-- **Icon/emoji style** — infer which type is used where (`emoji` vs Notion named `icon`) and which color palette applies to which category of page (cross-ref: "Icons, emoji & covers")
+- **Icon/emoji style** — infer which type is used where (`emoji` vs Notion named `icon`) and which color palette applies to which category of page (cross-ref: "Icons, emoji & covers"). **Fixed exception: every `AGENTS.md` page uses the 🤖 emoji icon — a signature marking the agent playbook, independent of the surrounding house style.**
 - **Cover style** — external URLs, Notion gradient covers (`https://www.notion.so/images/page-cover/…`), none?
 - **Inline vs full-page** — are child DBs always inline, always full-page, or context-dependent?
 
