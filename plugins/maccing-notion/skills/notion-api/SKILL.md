@@ -43,6 +43,8 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
+**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. This file is the global source of truth; lower AGENTS.md files override on conflict. When a new convention is established mid-session, include a root AGENTS.md update in the same approval batch.
+
 ### Red Flags — STOP, you're rationalizing
 
 | Thought | Reality |
@@ -140,6 +142,96 @@ Investments
 ### The Bottom Line
 
 Change a page's shape → re-read it (fully paginated) → draw the tree, marking what moved / renamed / created / trashed. Every structural change, every time. Non-negotiable.
+
+## MANDATORY — propose and get approval before any write
+
+Every Notion write (create, update, move, rename, trash, icon/cover change, property change) requires a concise proposal and explicit user approval before execution — because structural changes to a workspace are irreversible and the user must retain full agency over their data.
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+```
+NO WRITE TOUCHES NOTION UNTIL THE USER TYPES AN EXPLICIT APPROVAL — NO EXCEPTIONS
+```
+
+### The Gate
+
+Present ONE proposal per logical batch of related writes. Never split a related batch to reduce friction. Structure:
+
+- **(a) Intent** — one sentence: what and why
+- **(b) Exact operations** — terse bullet per API call: method, target block/page/db ID (or title), fields changing
+- **(c) Preview tree** — Unicode tree of the resulting structure (same format as the tree-view rule) — mark new nodes `[NEW]`, changed nodes `[~]`, trashed nodes `[TRASH]`
+
+Then **stop and wait**. Silence, a question, or a clarifying reply is **not** approval — hold.
+
+After all writes complete, emit the **verified tree** (live-fetched) confirming the result matches the preview.
+
+Read-only operations — `GET`, `/query`, `/search`, reading `AGENTS.md` — proceed freely, no gate.
+
+### Red Flags — STOP, you're rationalizing
+
+| Thought | Reality |
+|---|---|
+| "It's just a rename, I'll do it and mention it" | Any write, however minor, requires a proposal first |
+| "The user clearly wants this, the approval is a formality" | Implicit intent is not approval — present the gate every time |
+| "These are two quick writes, I'll propose them one at a time" | Related writes batch into ONE proposal — never split to reduce friction |
+| "I'll do the writes now and show the tree after" | Preview tree comes BEFORE execution, verified tree comes AFTER |
+| "The user said 'create X' mid-conversation, that's approval enough" | A task description is not an approval — proposal-then-explicit-confirm is the cycle |
+
+### The Bottom Line
+
+Every write is gated: propose (intent + operations + preview tree), wait for explicit approval, execute, verify with a live tree. Reads are always free, writes never are. Non-negotiable.
+
+## MANDATORY — match the workspace's conventions
+
+Before creating, renaming, or styling anything in Notion, infer and follow the workspace's established house style — because a single page that breaks the pattern degrades workspace coherence and forces the user to manually repair it.
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+```
+NEVER WRITE A SINGLE GLYPH UNTIL YOU KNOW THE HOUSE STYLE
+```
+
+### The Inference Gate
+
+**What to infer** — scan for all of the following before any write:
+
+- **Naming casing** — Title Case, sentence case, ALL CAPS, camelCase in page/DB titles?
+- **Language** — pt-BR, EN, or a deliberate pt-BR/EN mix (e.g. hub names in pt-BR, property names in EN)?
+- **Singular vs plural** — collection/DB names: "Task" or "Tasks", "Month" or "Months"?
+- **Hub patterns** — inline DBs with an "X Navigation" header, full-page DBs, linked views, dashboard layouts?
+- **Icon/emoji style** — infer which type is used where (`emoji` vs Notion named `icon`) and which color palette applies to which category of page (cross-ref: "Icons, emoji & covers")
+- **Cover style** — external URLs, Notion gradient covers (`https://www.notion.so/images/page-cover/…`), none?
+- **Inline vs full-page** — are child DBs always inline, always full-page, or context-dependent?
+
+**How to infer** — in priority order:
+
+1. **Root AGENTS.md first** (cross-ref: "MANDATORY FIRST STEP — read every ancestral AGENTS.md"). If it exists at the topmost workspace ancestor, it is the canonical house-style source of truth.
+2. **Bounded paginated live sample** when no root AGENTS.md exists: fetch the root hub page + 1–2 levels of children, fully paginated (`page_size=100`, exhaust all cursors — cross-ref: "MANDATORY — exhaust every paginated list"). That sample is the evidence base; do not generalize beyond it without reading further.
+
+### Flag-then-follow on explicit user conflict
+
+When the user's instruction deviates from inferred conventions (e.g. user says "Backup" but every existing collection is plural like "Backups", "Months"), **do both**:
+
+1. **FLAG** the deviation in the approval-gate proposal — one sentence: `"Note: existing collections are plural ("Backups", "Months") — using your wording "Backup" instead."`
+2. **FOLLOW the user's explicit wording** — the flag is informational only; it must never become a negotiation.
+
+### Persist to root AGENTS.md
+
+When you establish a **new** convention, include a root AGENTS.md update in the same approval-gate proposal (cross-ref: "MANDATORY FIRST STEP — read every ancestral AGENTS.md" — ROOT AGENTS.md BOOTSTRAP clause). The root AGENTS.md is the living source of truth; conventions discovered ad-hoc must be written back, not held only in model context.
+
+### Red Flags — STOP, you're rationalizing
+
+| Thought | Reality |
+|---|---|
+| "I'll just use an emoji here, it looks fine" | You haven't checked whether this page category uses named icons — sample first |
+| "User said 'Backup' so I'll pluralize it to match the pattern" | Flag-then-follow is absolute: flag the deviation, use the user's word |
+| "I read two pages, that's enough to know the style" | The sample must be fully paginated — partial reads miss outliers and sub-hub overrides |
+| "The root AGENTS.md doesn't mention covers, so I'll skip it" | Absence of documentation ≠ no convention; infer from the live sample, then write it back |
+| "This is a small rename, conventions don't matter" | Every write sets a precedent; mismatched titles and wrong icon colors accumulate into workspace entropy |
+
+### The Bottom Line
+
+Infer the complete house style from the root AGENTS.md (primary) or a fully-paginated bounded sample (fallback) before any write. Flag user-instruction deviations once, then follow the user; persist newly codified conventions back to the root AGENTS.md. Non-negotiable.
 
 ## Data model & versions
 
@@ -300,6 +392,31 @@ PATCH /v1/pages/{id}   body: { "icon": null }
 - `people` property uses user IDs, not email addresses
 - `date` requires `{"start":"YYYY-MM-DD"}` object, not a plain string
 - `checkbox` must be boolean `true`/`false`, not the string `"true"`
+
+---
+
+## Icons, emoji & covers
+
+The `icon` field is supported on pages and databases (PATCH `/v1/pages`, PATCH `/v1/databases`). Six types:
+
+| Type | JSON shape | Notes |
+|---|---|---|
+| `emoji` | `{"type":"emoji","emoji":"📊"}` | Any Unicode emoji; settable |
+| `icon` | `{"type":"icon","icon":{"name":"cash","color":"gray"}}` | Notion built-in named icons; settable since Mar 25 2026. `name` required, `color` optional. Name catalog unpublished — discover empirically from existing pages |
+| `custom_emoji` | `{"type":"custom_emoji","custom_emoji":{"id":"<uuid>"}}` | Settable; list workspace set via `GET /v1/custom_emojis` (cursor-paginated, `?name=` exact filter, `page_size` ≤ 100) |
+| `external` | `{"type":"external","external":{"url":"https://…"}}` | Settable; any public URL |
+| `file_upload` | `{"type":"file_upload","file_upload":{"id":"<FileUpload id>"}}` | Requires `POST /v1/file_uploads` → upload binary → reference id once `status == "uploaded"`; PDFs not valid for page icons |
+| `file` | *(read-only)* | Notion-hosted (UI-uploaded) — appears in GET responses only, cannot be set |
+
+**Removal** — set `icon: null` to strip the icon entirely.
+
+**Named-icon colors** — valid values: `gray`, `lightgray`, `brown`, `yellow`, `orange`, `green`, `blue`, `purple`, `pink`, `red`. `"default"` is not a valid value — omit `color` entirely to use the default appearance.
+
+**Custom emoji list** — `GET /v1/custom_emojis`; each object: `id`, `name`, `url`. Cursor-paginated; optional `?name=` for exact-match filtering.
+
+**Covers** — the `cover` field accepts only `external` or `file_upload` types; `emoji` and `icon` types are rejected. Remove with `cover: null`. Notion's built-in gradient covers have no distinct API type — pass their `https://www.notion.so/images/page-cover/…` URL as `external`.
+
+Match the workspace's existing icon style (often Notion named icons like `cash`, `chart-mixed`) per the conventions rule.
 
 ---
 
