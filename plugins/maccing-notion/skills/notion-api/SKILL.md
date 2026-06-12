@@ -39,6 +39,8 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 3. **Read & obey, top→down** — `GET /v1/blocks/{agents_id}/children` (recurse into toggles/sub-blocks), render to text, follow it. On conflict the lower (closer-to-target) `AGENTS.md` wins.
 4. **Only then** perform the requested operation.
 
+**One-call shortcut for steps 1–3:** the **`read_agents_md(page_id)`** MCP tool *is* this Gate, executed server-side — it climbs `.parent` root→target, locates every ancestral `AGENTS.md`, and returns them root→closest with precedence already applied. It is **not** a "skip-to-content convenience" to be avoided — it performs the full sweep *for* you and is the preferred way to run it. Use it first; fall back to the manual climb above only if it errors (or you have no id yet — then descend via `/search` as below).
+
 *No id yet?* Descend instead: `POST /v1/search {"filter":{"property":"object","value":"page"}}` → first level = results with `parent.type == "workspace"`; walk down through `child_page` blocks to the target, reading `AGENTS.md` at each step.
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
@@ -88,6 +90,7 @@ while True:
 # ONLY NOW: len(results), sums, "none found", any conclusion
 ```
 
+- **Shortcut that SATISFIES this law (not a bypass):** the `read_database(id, format, exhaust_all=true)` MCP tool runs exactly this loop server-side — fetching until `has_more == false` — and returns every row already flattened. Using it (e.g. with `format: "summary"` for a grouped sum) is a *compliant* way to obtain a total; it is the manual cursor loop, done for you, not a partial read. See "High-level reader tools" below.
 - **Cursor placement differs by verb:** `POST .../query` and `POST /v1/search` take `start_cursor` in the **body**; `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=` take `start_cursor` in the **query string**. `page_size` max 100 — a full 100-row page almost always means `has_more: true`.
 - **Every list-shaped response carries its own `has_more`/`next_cursor` — all are covered:**
   - `POST /v1/data_sources/{id}/query` — rows
@@ -301,8 +304,8 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 
 ## Auth / MCP pattern
 
-- MCP tool: `notion_request` — pass `method`, `path`, `body` (POST/PATCH/PUT), and `query` (GET query-string params — the only way to send `start_cursor`/`page_size` for `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`)
-- MCP tools `notion_private_request` / **`notion_set_property_icon`** — the UNOFFICIAL private app API for UI-only things the public API can't do. ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** through these (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES (via the private app API), never "UI-only/impossible."** Recipe → `references/private-api.md`.
+- MCP tool: `request` — pass `method`, `path`, `body` (POST/PATCH/PUT), and `query` (GET query-string params — the only way to send `start_cursor`/`page_size` for `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`)
+- MCP tools `private_request` / **`set_property_icon`** — the UNOFFICIAL private app API for UI-only things the public API can't do. ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** through these (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES (via the private app API), never "UI-only/impossible."** Recipe → `references/private-api.md`.
 - Large results (>~80k chars) overflow MCP token limit → saved to `~/.claude/projects/.../tool-results/mcp-notion-*.txt`
 - Rate limit: HTTP 429/502/503 → exponential backoff `1.2*(attempt+1)s`, up to 5 retries
 - Safe inter-request pace: `time.sleep(0.03)` in loops
@@ -312,6 +315,18 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 **Permission model — two layers required:**
 1. Integration capability scopes (read/write/delete declared in integration settings)
 2. User explicitly shares page/database with the integration via `...` > Connections menu
+
+---
+
+## High-level reader tools — the preferred read path (not lossy "convenience")
+
+Three MCP tools render Notion **server-side** into agent-ready text: relations resolved to titles, rollups/formulas flattened to scalars, the native `/markdown` endpoint (~20× smaller than block JSON), callouts → blockquotes, and infinite-depth recovery of any unfetchable blocks. They are **more** rigorous than a hand-rolled `request` loop, not less — prefer them for every read. Reach for raw `request` only for **writes**, `.parent`/schema inspection these don't expose, or endpoints they don't cover.
+
+- **`read_agents_md(page_id)`** — runs the entire MANDATORY-FIRST-STEP Gate in one call (the `.parent` climb + AGENTS.md discovery + precedence ordering). This is *the* tool for that sweep.
+- **`read_page(page_id, format)`** — `format` (required): `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree, for planning edits) · `text` (prose only). Recovers unknown blocks to completion.
+- **`read_database(database_id, format, …)`** — `format` (required): `table` (GFM pipe) · `kv` · `tsv` · `summary` (grouped totals — pass `group_by`). Optional `filter`/`sorts` (Notion objects verbatim), `fields` (project columns), `page_size`+`cursor`. **`exhaust_all=true` loops to `has_more==false` server-side and returns every row — it SATISFIES the pagination Iron Law, it does not bypass it.** Use `exhaust_all`+`summary` for any count / sum / grouped total.
+
+`format` is **required** on every reader tool (no default). Output is plain text with a trailing `# …` summary line.
 
 ---
 
@@ -361,7 +376,7 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | Task | Load |
 |---|---|
 | Property shapes, reading values, **page/DB** icons & covers (for **property/column** icons use the private-API row below, NOT this one) | `references/pages-properties.md` |
-| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — settable via the private app API through the `notion_set_property_icon` / `notion_private_request` MCP tools (never answer "impossible") | `references/private-api.md` |
+| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — settable via the private app API through the `set_property_icon` / `private_request` MCP tools (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility | `references/views.md` |

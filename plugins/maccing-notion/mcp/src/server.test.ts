@@ -23,13 +23,16 @@ async function connectClient(): Promise<Client> {
   return client;
 }
 
-test("tools/list exposes exactly the three snake_case Notion tools", async () => {
+test("tools/list exposes exactly the snake_case Notion tools", async () => {
   const client = await connectClient();
   const { tools } = await client.listTools();
   expect(tools.map((tool) => tool.name).sort()).toEqual([
-    "notion_private_request",
-    "notion_request",
-    "notion_set_property_icon",
+    "private_request",
+    "read_agents_md",
+    "read_database",
+    "read_page",
+    "request",
+    "set_property_icon",
   ]);
 });
 
@@ -46,22 +49,22 @@ test("annotations pass through — private + icon tools are flagged destructive,
   const client = await connectClient();
   const { tools } = await client.listTools();
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
-  expect(byName.get("notion_request")?.annotations?.openWorldHint).toBe(true);
-  expect(byName.get("notion_private_request")?.annotations?.destructiveHint).toBe(true);
-  expect(byName.get("notion_set_property_icon")?.annotations?.destructiveHint).toBe(true);
+  expect(byName.get("request")?.annotations?.openWorldHint).toBe(true);
+  expect(byName.get("private_request")?.annotations?.destructiveHint).toBe(true);
+  expect(byName.get("set_property_icon")?.annotations?.destructiveHint).toBe(true);
 });
 
 test("invalid arguments are rejected without crashing the server", async () => {
   const client = await connectClient();
   // Missing required `method`/`path` → SDK input validation returns an error (or rejects); either is fine.
-  const result = await client.callTool({ name: "notion_request", arguments: {} }).catch(() => ({ isError: true }));
+  const result = await client.callTool({ name: "request", arguments: {} }).catch(() => ({ isError: true }));
   expect(result.isError).toBe(true);
 });
 
 test("a malformed data_source_id yields a graceful error result, not a throw", async () => {
   const client = await connectClient();
   const result = await client.callTool({
-    name: "notion_set_property_icon",
+    name: "set_property_icon",
     arguments: { data_source_id: "not-a-uuid", property: "Status" },
   });
   expect(result.isError).toBe(true);

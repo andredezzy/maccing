@@ -3,9 +3,9 @@
 // a capability = create a file in tools/ and add it to the TOOLS array below — one line, no
 // protocol plumbing to touch.
 //
-//   notion_request           public REST API (api.notion.com/v1), Notion-Version 2026-03-11
-//   notion_private_request   UNOFFICIAL private app API (api/v3) escape hatch for UI-only features
-//   notion_set_property_icon convenience for the flagship private capability (column icons)
+//   request           public REST API (api.notion.com/v1), Notion-Version 2026-03-11
+//   private_request   UNOFFICIAL private app API (api/v3) escape hatch for UI-only features
+//   set_property_icon convenience for the flagship private capability (column icons)
 //
 // Public token: NOTION_TOKEN. Private session cookie: NOTION_TOKEN_V2 + NOTION_SPACE_ID. All loaded
 // by start.sh from ~/.config/maccing/notion.env (stable per-user) and/or mcp/.env.local (dev
@@ -17,8 +17,11 @@ import { StdioServerTransport } from "#sdk/server/stdio";
 import { VERSION } from "./lib/notion-public";
 import { withRedact } from "./redact";
 import type { ToolModule } from "./tool";
-import { notionPrivateRequest } from "./tools/notion-private-request";
-import { notionRequest } from "./tools/notion-request";
+import { privateRequest } from "./tools/private-request";
+import { readAgentsMd } from "./tools/read-agents-md";
+import { readDatabase } from "./tools/read-database";
+import { readPage } from "./tools/read-page";
+import { request } from "./tools/request";
 import { setPropertyIcon } from "./tools/set-property-icon";
 
 // stdout is the JSON-RPC transport channel — route any stray console.log to stderr so it can't corrupt it.
@@ -27,7 +30,7 @@ console.log = console.error;
 const SERVER_INFO = { name: "notion", version: "2.0.0" };
 
 // Open/closed registry: a new tool is a new file in tools/ plus one line here.
-export const TOOLS: ToolModule[] = [notionRequest, notionPrivateRequest, setPropertyIcon];
+export const TOOLS: ToolModule[] = [request, privateRequest, setPropertyIcon, readAgentsMd, readPage, readDatabase];
 
 async function main(): Promise<void> {
   // Fail-fast on startup: the public token is required; private-API vars are optional (graceful degrade).

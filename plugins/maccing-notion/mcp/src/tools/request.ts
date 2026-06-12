@@ -6,8 +6,8 @@ import { err, type ToolModule } from "../tool";
 
 const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;
 
-export const notionRequest: ToolModule = {
-  name: "notion_request",
+export const request: ToolModule = {
+  name: "request",
   config: {
     title: "Notion REST API request",
     description:

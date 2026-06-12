@@ -20,15 +20,15 @@ function hasCommitOp(operations: Operation[]): boolean {
   return last?.command === "update" && last?.pointer?.table === "collection";
 }
 
-export const notionPrivateRequest: ToolModule = {
-  name: "notion_private_request",
+export const privateRequest: ToolModule = {
+  name: "private_request",
   config: {
     title: "Notion private app API (unofficial)",
     description:
       "UNOFFICIAL private Notion app API (api/v3) for UI-only features the public API CANNOT do — e.g. " +
       "database property/column icons. Session-cookie auth lives in the server (NOTION_TOKEN_V2); never " +
       "exposed. RISKS: undocumented, against ToS, can break anytime, rate-limited. Use only when the public " +
-      "`notion_request` genuinely can't, for the user's own workspace, with approval. For `saveTransactions` " +
+      "`request` genuinely can't, for the user's own workspace, with approval. For `saveTransactions` " +
       "pass `operations` (auto-wrapped in the transaction envelope; the active-user header is injected) — and " +
       "include a trailing collection `update` commit op or the change silently no-ops (enforced here). Discover " +
       "operation formats via DevTools capture; full guide in the skill's references/private-api.md. Returns { status, ok, body }.",
@@ -67,7 +67,7 @@ export const notionPrivateRequest: ToolModule = {
         if (!hasCommitOp(operations)) {
           return err(
             "saveTransactions for a schema mutation needs a trailing collection `update` commit op, or it silently " +
-              "no-ops — see references/private-api.md. Add it, or use notion_set_property_icon which handles it.",
+              "no-ops — see references/private-api.md. Add it, or use set_property_icon which handles it.",
           );
         }
         const response = await saveTransactions(operations);

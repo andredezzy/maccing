@@ -51,7 +51,7 @@ function extractIcon(body: unknown, propertyId: string): string | null {
 }
 
 export const setPropertyIcon: ToolModule = {
-  name: "notion_set_property_icon",
+  name: "set_property_icon",
   config: {
     title: "Set Notion property/column icon (unofficial)",
     description:

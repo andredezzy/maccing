@@ -31,7 +31,7 @@ Notion API engineering reference for coding agents — the low-level details for
 
 ## MCP server
 
-The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: **`notion_request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); **`notion_private_request`** + **`notion_set_property_icon`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `skills/notion-api/references/private-api.md`).
+The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: **`request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); **`private_request`** + **`set_property_icon`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `skills/notion-api/references/private-api.md`).
 
 **Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens). Create `~/.config/maccing/notion.env` (chmod 600, outside the repo and cache — so it survives plugin version bumps):
 

@@ -11,8 +11,8 @@ The public REST API (`api.notion.com/v1`) covers most things — **use it first,
 
 ## Access — through the bundled `notion` MCP ONLY (never a standalone script)
 The private API is reached exclusively via two tools on the self-hosted `notion` MCP server, so the session cookie stays inside one trusted process (`NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `~/.config/maccing/notion.env`, or the per-project `mcp/.env.local` dev override) and is never handled by agent shell:
-- **`notion_set_property_icon`** — the safe, verified convenience for the flagship capability (column icons). Reads the schema back and reports `verified`.
-- **`notion_private_request`** — the generic escape hatch (`{ endpoint, operations | body }`) for any other UI-only op; the active-user header and transaction envelope are injected for you.
+- **`set_property_icon`** — the safe, verified convenience for the flagship capability (column icons). Reads the schema back and reports `verified`.
+- **`private_request`** — the generic escape hatch (`{ endpoint, operations | body }`) for any other UI-only op; the active-user header and transaction envelope are injected for you.
 
 Extending it (a new UI-only capability) is a server change — add a file under `mcp/tools/` and one line to the registry — not a new script. Auth/envelope details below are for understanding and for DevTools capture; you drive it through the tools.
 
@@ -64,7 +64,7 @@ The flagship case — **impossible via the public API, works here.** Two ops in 
 - **`property_id` is the RAW internal id** — url-DECODE the public API's `%XX`-encoded id (e.g. public `l%3ERV` → `l>RV`).
 - **Icon value = `/icons/<file>_<color>.svg`.** Colors = the same 10 as named icons (`gray`/`blue`/…). The `<file>` is an internal asset name that **usually matches** the public icon catalog (`references/icon-names.md`) — `cash`, `star`, etc. — **but not always**: unknown files (e.g. `chart-mixed`) return `200` and **silently no-op**. Always read back to confirm; if absent, the file name is wrong.
 - **Remove an icon:** same op, but set the **inner** primitive to null — `"args": { "primitiveOp": { "command": "set", "args": null } }` (the operation-level `args` keeps its `primitiveOp` wrapper; only `primitiveOp.args` becomes `null`).
-- **The easy path:** call the **`notion_set_property_icon`** MCP tool — `{ data_source_id, property (name or id), icon, color?, remove? }`. It resolves the active user, resolves the property NAME→raw id, sends both ops, and **reads the schema back to report `verified: true/false`**. (Under the hood this is exactly the two ops above — `notion_private_request` lets you send them by hand.)
+- **The easy path:** call the **`set_property_icon`** MCP tool — `{ data_source_id, property (name or id), icon, color?, remove? }`. It resolves the active user, resolves the property NAME→raw id, sends both ops, and **reads the schema back to report `verified: true/false`**. (Under the hood this is exactly the two ops above — `private_request` lets you send them by hand.)
 
 ## Verify a private write (the public API is blind)
 `getRecordValues` reads the internal record:

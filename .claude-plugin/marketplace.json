@@ -25,8 +25,8 @@
     {
       "name": "maccing-notion",
       "source": "./plugins/maccing-notion",
-      "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, official MCP SDK)",
-      "version": "0.9.2",
+      "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, official MCP SDK) with high-level reader tools: read_agents_md, read_page, read_database",
+      "version": "0.10.0",
       "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
       "keywords": [
         "notion",
