@@ -167,14 +167,14 @@ export const readAgentsMd: ToolModule = {
   config: {
     title: "Read the ancestral AGENTS.md chain",
     description:
-      "MANDATORY FIRST STEP for any Notion task. Pass the page_id of your target (any page, block, or " +
-      "database row); this walks root→target, finds every AGENTS.md playbook on the path, reads each as " +
+      "MANDATORY FIRST STEP for any Notion task. Pass the id of your target — any page, database row, block, " +
+      "database, or data_source; this walks root→target, finds every AGENTS.md playbook on the path, reads each as " +
       "markdown, and returns them ordered root→closest with explicit precedence (the closest one wins on " +
       "conflict). One call replaces the multi-step manual sweep. AGENTS.md pages are matched by exact title " +
       "'AGENTS.md' (the 🤖 convention).",
     annotations: { title: "Read ancestral AGENTS.md chain", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
-      page_id: z.string().describe("The target page/block/row id to sweep from (any page, block, or database row)."),
+      id: z.string().describe("The target id to sweep from — any page, database row, block, database, or data_source."),
     },
   },
 
@@ -182,7 +182,7 @@ export const readAgentsMd: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const pageId = String(args.page_id ?? "").trim();
+    const pageId = String(args.id ?? "").trim();
     if (!UUID.test(pageId)) {
       return err("page_id must be a UUID.");
     }

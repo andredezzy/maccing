@@ -5,7 +5,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 ## Views API
 
 ```
-GET    /v1/views?data_source_id={ds}   # list views — returns MINIMAL objects (id, type, created_time) only
+GET    /v1/views?data_source_id={ds}   # list views — returns MINIMAL objects (id only; live-verified) — GET each for type/name/config
 GET    /v1/views/{view_id}             # full detail incl. name + configuration — call individually per view
 POST   /v1/views                       # create view
 PATCH  /v1/views/{view_id}            # update view
@@ -14,13 +14,7 @@ DELETE /v1/views/{view_id}            # delete view
 
 **INVALID**: `GET /v1/data_sources/{ds}/views` → 400
 
-**Two-step pattern to list views with names:**
-```python
-# Step 1: list (minimal)
-views = GET /v1/views?data_source_id={ds}   # returns id, type, created_time only
-# Step 2: fetch each for name + configuration
-details = [GET /v1/views/{v['id']} for v in views['results']]
-```
+**Reads:** to INSPECT views (names + complete config, property ids resolved to names), use **`read_database(database_id, format, include_views=true)`** — it lists every view and dumps each one's full configuration for you. Use raw `request` for view **writes** (`POST`/`PATCH /v1/views`). Raw read equivalent, only when driving it by hand: `GET /v1/views?data_source_id={ds}` (a minimal list of **ids only** — paginate `has_more` per the Iron Law) then `GET /v1/views/{id}` per result for type + name + configuration.
 
 **Create a linked database view embedded in a page** (only API mechanism):
 ```json
@@ -36,7 +30,7 @@ POST /v1/views
   "filter": { "property": "Active", "checkbox": { "equals": true } }
 }
 ```
-- `create_database.position` is optional; controls where the linked-DB block is inserted on the parent page
+- `create_database` is the location locator here, so no top-level `database_id` is needed; for a view on an **existing** database, `database_id` IS required (see the chart example below). `create_database.position` is optional; controls where the linked-DB block is inserted on the parent page
 
 **View tab-bar positioning** (top-level field on `POST /v1/views`):
 ```json
@@ -48,9 +42,9 @@ POST /v1/views
 **After adding a view, rename the leftover `Default view`.** Notion auto-names a database's first view generically — **`Default view`** (or a bare type name like `Table`). That name only makes sense while it's the *only* view. The moment you `POST` a second view, `Default view` is misleading — it's no longer "the" default, just an unlabelled table sitting next to your named view. **So adding a view is a two-write job:** create the new view, **and** rename the old generic one to say what it actually is.
 ```json
 PATCH /v1/views/{old_view_id}
-{ "name": "Table" }
+{ "name": "Table" }   // illustrative — or purpose-based: "All categories", "Backlog"
 ```
-Name it by what it IS — by **type** to match a type-named sibling (a `Gallery` view → rename the table to `Table`), or by **purpose** (`All categories`, `Backlog`). Every tab must be self-describing: a database showing a `Gallery` tab next to a `Default view` tab is **unfinished, not clean**. Detect the leftover from `GET /v1/views/{id}` → `name === "Default view"` (or a `name` equal to the bare view `type`).
+Name it by what it IS — by **type** to match a type-named sibling (a `Gallery` view → rename the table to `Table`), or by **purpose** (`All categories`, `Backlog`). Every tab must be self-describing: a database showing a `Gallery` tab next to a `Default view` tab is **unfinished, not clean**. Detect the leftover from the view-list detail already fetched above — `name === "Default view"` (or a `name` equal to the bare view `type`).
 
 **Create a chart view:**
 ```json
@@ -74,7 +68,7 @@ POST /v1/views
   }
 }
 ```
-> Note: like every `POST /v1/views` on an existing database, pass the location param `database_id` (the container) **plus** `data_source_id` (which source). `data_source_id` alone → `400 "Exactly one of database_id, view_id, or create_database must be provided."` (live-verified 2026-03-11 — see `references/gallery-view.md`).
+> Note: like every `POST /v1/views` on an existing database, pass the location param `database_id` (the container — the Notion DB UUID from `GET /v1/databases/{id}` or the page URL) **plus** `data_source_id` (which source — `data_sources[0].id`). `data_source_id` alone → `400 "Exactly one of database_id, view_id, or create_database must be provided."` (live-verified 2026-03-11 — see `gallery-view.md`). When using a `create_database` block instead (linked view on a new page), omit `database_id` — that block specifies the parent.
 
 **Number/KPI chart** uses `value: {aggregator, property_id}` instead of `x_axis`/`y_axis`.
 
@@ -84,6 +78,7 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 ```json
 { "configuration": { "type": "board", "group_by": { "type": "select", "property_id": "...", "sort": { "type": "descending" } } } }
 ```
+(`configuration` excerpt — a full create POST also needs `database_id` + `data_source_id` + `name` + `type`, as in the chart example above.)
 
 **Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard`, `map`, `form`
 
@@ -92,7 +87,7 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 PATCH /v1/views/{id}
 { "configuration": { "type": "table", "properties": [{ "property_id": "<id>", "visible": false }] } }
 ```
-Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. May be URL-encoded → `urllib.parse.unquote()`.
+Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. (For column **names** alone, `read_database` output is enough — drop to the schema GET only when a raw **id** is needed for the PATCH body.) May be URL-encoded → `urllib.parse.unquote()`.
 
 **Sort a view** (`sorts` is a **top-level view field**, NOT inside `configuration` — table, gallery, board, list, …):
 ```json
@@ -101,9 +96,11 @@ PATCH /v1/views/{id}
 ```
 - Send the property **name**, not the id — the API normalizes it and **stores the `property_id`**, so a later GET shows `"property": "<id>"` (e.g. you send `"Date"`, GET returns `"S=Vn"`). Live-verified 2026-03-11.
 - **Property-based only** (no `timestamp` sorts on views). When multiple sorts are given, the first in the array wins ties. `"sorts": null` clears all sorts.
-- Combine with `configuration`, `filter`, `name` in the **same** PATCH — only provided fields change. (This is how a gallery gets both its look and its order in one call — see `references/gallery-view.md`.)
+- Combine with `configuration`, `filter`, `name` in the **same** PATCH — only provided fields change. (This is how a gallery gets both its look and its order in one call — see `gallery-view.md`.)
 
-**Filter a view** (`filter` is a top-level PATCH field; full replacement; **same condition schema as a `POST /v1/data_sources/{id}/query` filter**). Compose with `and` / `or`.
+### Filter a view
+
+`filter` is a top-level PATCH field; full replacement; **same condition schema as a `POST /v1/data_sources/{id}/query` filter**. Compose with `and` / `or`.
 
 **Date conditions — the COMPLETE set** (a wrong condition 400s with this list): `equals` · `before` · `after` · `on_or_before` · `on_or_after` (each takes an ISO-8601 string **or** a relative string) · `is_empty` · `is_not_empty` · and the empty-object windows `past_week` / `past_month` / `past_year`, `next_week` / `next_month` / `next_year`, and **`this_week`**.
 - **Relative date STRINGS** (the only ones — used with equals/before/after/on_or_before/on_or_after): `"today"`, `"tomorrow"`, `"yesterday"`, `"one_week_ago"`, `"one_week_from_now"`, `"one_month_ago"`, `"one_month_from_now"`.
@@ -118,7 +115,7 @@ There is **no `condition` key** — just `rollup: { date: {…} }`. (Multi-value
 ⚠️ **Formula filterability depends on WHERE the formula was created** (forensically isolated 2026-06-11, same workspace, same `Notion-Version: 2026-03-11`):
 - **UI-created formulas filter fine** — `formula: { string | checkbox | number | date: {…} }` (note: `boolean` is NOT a valid sub-key — the schema dump lists exactly those four). Live-verified `200` on a number formula and a string formula from a UI-built database.
 - **API-created (or API-rewritten) formulas are NOT filterable** → `400 Unable to filter based on a formula of unknown type`. The public API write path stores the `expression` but never compiles the result-type metadata the filter layer reads. Live-verified identical 400 on a plain boolean (`prop("Value") > 1000`, no rollup), a rollup-derived boolean, and a number formula — across `2022-06-28`/`2025-09-03`/`2026-03-11` and both `databases/{id}/query` and `data_sources/{id}/query`; rewriting via the legacy `PATCH /v1/databases/{id}` does NOT repair it. (The error is about the formula's missing compiled type, NOT about rollup-derivation, and NOT about all formulas.)
-- **Consequences:** in an **API-built** database, never design a filter around a formula (e.g. an `Is current month` boolean) — **filter the underlying property instead** (e.g. the `Month date` rollup directly). Conversely, do **not** rewrite a UI-created formula via the API if any view/query filters on it — the API rewrite is presumed to strip the compiled type and break those filters (untested — treat as breaking until verified). A UI re-save presumably recompiles/repairs an API-created formula (also untested).
+- **Consequences:** in an **API-built** database, never design a filter around a formula (e.g. an `Is current month` boolean) — **filter the underlying property instead** (e.g. the `Month date` rollup directly). Conversely, do **not** rewrite a UI-created formula via the API if any view/query filters on it — the API rewrite is presumed to strip the compiled type and break those filters (untested — treat as breaking until verified). A UI re-save may recompile/repair an API-created formula (untested — do not rely on it).
 - **Second cause of the same 400 — type-ambiguous formulas (hits UI-created ones too):** branches returning different types (`if(prop("Due"), dateAdd(prop("Due"),1,"days"), "")` → date branch + string branch) make the result type unresolvable. Fix per Notion's own help ("Common formula errors"): make every branch one type — use **`empty()`**, not `""`/`null`, for the no-value branch. So when "unknown type" hits a UI-created formula, check for mixed branches before blaming anything else.
 - The schema never exposes a formula's resolved type (only `expression`) — to learn it, read a row's value: `page.properties[name].formula.type`.
 - Formulas (including rollup-derived ones) always work for *computing* and for feeding rollups — only their *filterability* depends on creation path and type-resolvability.

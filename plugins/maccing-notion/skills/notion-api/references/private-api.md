@@ -12,7 +12,7 @@ The public REST API (`api.notion.com/v1`) covers most things — **use it first,
 ## Access — through the bundled `notion` MCP ONLY (never a standalone script)
 The private API is reached exclusively via two tools on the self-hosted `notion` MCP server, so the session cookie stays inside one trusted process (`NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `~/.config/maccing/notion.env`, or the per-project `mcp/.env.local` dev override) and is never handled by agent shell:
 - **`set_property_icon`** — the safe, verified convenience for the flagship capability (column icons). Reads the schema back and reports `verified`.
-- **`private_request`** — the generic escape hatch (`{ endpoint, operations | body }`) for any other UI-only op; the active-user header and transaction envelope are injected for you.
+- **`private_request`** — the generic escape hatch: pass `{ endpoint, operations }` for a `saveTransactions` mutation, or `{ endpoint, body }` for any other `api/v3` endpoint (`operations` = the array of ops for `saveTransactions`; `body` = the tool's key for the JSON payload of any other endpoint, e.g. `{ requests: [...] }` for `getRecordValues`); the active-user header and transaction envelope are injected for you. `endpoint` must be a camelCase api/v3 identifier; for `saveTransactions` the tool **rejects** (pre-flight, before the HTTP call) operations missing the trailing collection `update` commit op.
 
 Extending it (a new UI-only capability) is a server change — add a file under `mcp/tools/` and one line to the registry — not a new script. Auth/envelope details below are for understanding and for DevTools capture; you drive it through the tools.
 
@@ -62,12 +62,12 @@ The flagship case — **impossible via the public API, works here.** Two ops in 
 ]
 ```
 - **`property_id` is the RAW internal id** — url-DECODE the public API's `%XX`-encoded id (e.g. public `l%3ERV` → `l>RV`).
-- **Icon value = `/icons/<file>_<color>.svg`.** Colors = the same 10 as named icons (`gray`/`blue`/…). The `<file>` is an internal asset name that **usually matches** the public icon catalog (`references/icon-names.md`) — `cash`, `star`, etc. — **but not always**: unknown files (e.g. `chart-mixed`) return `200` and **silently no-op**. Always read back to confirm; if absent, the file name is wrong.
+- **Icon value = `/icons/<file>_<color>.svg`.** Colors = the same 10 as named icons (`gray`/`blue`/…). The `<file>` is an internal asset name that **usually matches** the public icon catalog (`icon-names.md`) — `cash`, `star`, etc. — **but not always**: a valid public name can still no-op here if its private asset name differs (e.g. `chart-mixed` is a valid public name yet silently no-ops as a property icon — `200`, no persist). Always read back to confirm; if absent, the file name is wrong.
 - **Remove an icon:** same op, but set the **inner** primitive to null — `"args": { "primitiveOp": { "command": "set", "args": null } }` (the operation-level `args` keeps its `primitiveOp` wrapper; only `primitiveOp.args` becomes `null`).
 - **The easy path:** call the **`set_property_icon`** MCP tool — `{ data_source_id, property (name or id), icon, color?, remove? }`. It resolves the active user, resolves the property NAME→raw id, sends both ops, and **reads the schema back to report `verified: true/false`**. (Under the hood this is exactly the two ops above — `private_request` lets you send them by hand.)
 
 ## Verify a private write (the public API is blind)
-`getRecordValues` reads the internal record:
+After a private write, verify with `read_page` (a page/row change), `read_database` (a schema/row-set change — property names, types, sorts, filters all surface), or `getRecordValues` **only** for fields the readers never expose (property icons, internal flags) — use `read_database` for everything else. It reads the internal record — call it through the tool: `private_request({ endpoint: "getRecordValues", body: { requests: [{ id: "<ds_id>", table: "collection" }] } })` (cookie + active-user header injected). Raw shape, for DevTools reference:
 ```jsonc
 POST /api/v3/getRecordValues   // headers: Cookie + x-notion-active-user-header
 { "requests": [ { "id": "<ds_id>", "table": "collection" } ] }
@@ -94,5 +94,5 @@ This is how the property-icon and "This month" formats were found. To learn the 
 
 ## For everyone on the PUBLIC API (no private access)
 If you can't (or won't) touch the private API, know the public-API limits and fallbacks:
-- **Property (column) icons: NOT settable via the public API.** Writing an `icon` key inside a property def (`PATCH /v1/data_sources/{id}` or at creation) returns `200` and is **silently dropped**; reads never expose it. (Pages and databases *do* take icons — see `references/pages-properties.md`.)
+- **Property (column) icons: NOT settable via the public API.** Writing an `icon` key inside a property def (via `PATCH /v1/data_sources/{id}` or on `POST /v1/databases` at creation) returns `200` and is **silently dropped**; reads never expose it. (Pages and databases *do* take icons — see `pages-properties.md`.)
 - **Closest public-API fallback — emoji in the property NAME** (verified): `PATCH /v1/data_sources/{id} {"properties":{"Old":{"name":"💰 Old"}}}`. It renders like a column icon. Caveats: formulas referencing the property by name must update (`prop("💰 Old")`); any integration matching by display name sees the new name; the emoji appears in every API read of the name.

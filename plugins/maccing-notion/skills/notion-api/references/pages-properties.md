@@ -2,6 +2,8 @@
 
 Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
 
+**Reads:** prefer `read_page` / `read_database` (SKILL.md "MCP tools — pick by job") — they resolve relations→titles and flatten rollups/formulas to scalars. The raw shapes here are for **writes** and for processing a `request` response (e.g. a write's returned object).
+
 ## Property creation shapes
 
 ```json
@@ -29,14 +31,16 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 ---
 
-## Reading property values from query results
+## Reading property values from a raw `request` response (write-response / GET parsing)
+
+> Only needed when parsing a raw `request` response. `read_page` / `read_database` already resolve relations to titles and flatten rollups/formulas to scalars — no manual traversal.
 
 ```python
 row["properties"]["Title"]["title"][0]["plain_text"]         # title
 row["properties"]["Num"]["number"]                           # number (may be null if upstream fields empty)
 row["properties"]["Sel"]["select"]["name"]                   # select
 row["properties"]["Date"]["date"]["start"]                   # date
-row["properties"]["Rel"]["relation"]                         # list of {"id":"..."}
+row["properties"]["Rel"]["relation"]                         # list of {"id":"..."} — read_database resolves to title strings
 row["properties"]["Rollup"]["rollup"]["number"]              # numeric rollup
 row["properties"]["Rollup"]["rollup"]["date"]                # date rollup (has .start)
 row["properties"]["Rollup"]["rollup"]["array"]               # array rollup
@@ -45,7 +49,7 @@ row["properties"]["Formula"]["formula"]["string"]            # string formula
 ```
 
 - `formula.number` may be `null` if upstream referenced fields are empty (e.g., missing number field → formula produces null instead of 0)
-- Rollup `Show Original` setting always outputs a **string** type even when targeting a number property
+- Rollup `Show Original` outputs a **string** even when the target is a number property — the raw API preserves it as a string (verify `read_database`'s handling if numeric coercion matters)
 
 ---
 
@@ -79,9 +83,12 @@ PATCH /v1/pages/{id}   body: { "in_trash": true }
 
 // Remove icon
 PATCH /v1/pages/{id}   body: { "icon": null }
+
+// Move (re-parent) a page
+POST /v1/pages/{id}/move   body: { "parent": { "type": "page_id", "page_id": "<new_parent_id>" } }
 ```
 
-**Position values for `POST /v1/pages`:** `page_start`, `page_end`, or `{ "type": "after_block", "after_block": { "id": "<block_id>" } }`
+**Position values for `POST /v1/pages`** (all object shapes, like the create example above): `{ "type": "page_start" }` | `{ "type": "page_end" }` | `{ "type": "after_block", "after_block": { "id": "<block_id>" } }`
 
 **Rich text write gotchas:**
 - `title` is an array, not a string
@@ -114,7 +121,7 @@ The `icon` field (for **pages & databases**) is supported via PATCH `/v1/pages` 
 
 **Named-icon colors** — valid values: `gray`, `lightgray`, `brown`, `yellow`, `orange`, `green`, `blue`, `purple`, `pink`, `red`. `"default"` is not a valid value — omit `color` entirely to use the default appearance.
 
-**Database PROPERTY/column icons (the icon next to a column's name) ARE settable — do NOT answer "impossible."** They just can't be done through the PUBLIC API (writing an `icon` key inside a property definition via `PATCH /v1/data_sources/{id}` or at creation returns `200` but is **silently dropped**, and property objects never expose `icon` on read). The working path is the **private app API**: use the **`set_property_icon`** MCP tool (or `private_request`) — **see [`references/private-api.md`](private-api.md)** for the full recipe. If you're about to tell the user property icons aren't possible, you've missed this — route to `private-api.md` first. Public-API-only fallback (no private creds configured): put an emoji in the property **name**. (Page & database icons themselves DO work via the public API — see the table above; this limit is specific to property/column icons.)
+**Property/column icon mechanism** (the STOP callout above has the routing): writing an `icon` key inside a property definition (via `PATCH /v1/data_sources/{id}` or on `POST /v1/databases` at creation) returns `200` but is **silently dropped**; property objects never expose `icon` on read. Public-API-only fallback (no private creds): put an emoji in the property **name**. (Page & database icons themselves DO work via the public API — see the table above; this limit is specific to property/column icons.)
 
 **Custom emoji list** — `GET /v1/custom_emojis`; each object: `id`, `name`, `url`. Cursor-paginated; optional `?name=` for exact-match filtering.
 

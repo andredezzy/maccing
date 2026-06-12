@@ -2,6 +2,8 @@
 
 Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
 
+**Reading formula/rollup values:** use `read_database` (a set of rows) or `read_page(page_id, "markdown")` (a single row) — both flatten them to computed scalars server-side, sidestepping the raw API's "unknown type" complications. For aggregates (sum/count/grouped totals) across formula/rollup columns, use `read_database(..., format="summary", exhaust_all=true)`. The gotchas below concern *authoring* and *filtering* formulas (writes).
+
 ## Formulas — gotchas
 
 **Formula schema is FULL REPLACEMENT** — sending `{formula: {number_format: "real"}}` without `expression` wipes the expression.
@@ -10,11 +12,11 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 **Rewriting a formula via API resets its UI display format** — no way to preserve via API.
 
-**API-written formulas are NOT filterable** — any formula created or rewritten via the API returns `400 Unable to filter based on a formula of unknown type` on query/view filters (the write path doesn't compile result-type metadata); UI-created formulas filter fine. So never API-rewrite a UI-created formula that a filter depends on (presumed to break it — treat as breaking), and in API-built DBs design filters on underlying props/rollups, not formulas. **When the formula's logic can't be expressed on underlying props (cross-property conditionals), use the rollup-wrap workaround: Self-relation + function-typed rollup over the formula, filter the rollup** — recipe in views.md "Filter a view". Live-verified 2026-06-11.
+**API-written formulas are NOT filterable** — any formula created/rewritten via the API returns `400 Unable to filter based on a formula of unknown type` on query/view filters; UI-created formulas filter fine. In API-built DBs, filter underlying props/rollups (never the formula); never API-rewrite a UI-created formula a filter depends on. For cross-property conditionals, use the Self-relation + rollup-wrap workaround. **Full rules + recipe → `views.md` "Filter a view".** Live-verified 2026-06-11.
 
 **Mixed-type branches make a formula unfilterable too** (same "unknown type" 400, even UI-created): `if(cond, <date>, "")` mixes date+string → type unresolvable. Every branch must return ONE type — use **`empty()`** (not `""`, not `null`) for the no-value branch. Source: Notion help "Common formula errors".
 
-**After formula/rollup schema update**: Notion needs ~5s to recompute all rows — `time.sleep(5)` before querying.
+**After formula/rollup schema update**: Notion needs ~5s to recompute all rows — wait (retry with brief backoff) before querying.
 
 **15-layer formula reference chain limit** (increased from 7 in Aug 2024) — Notion silently stops computing when exceeded with no error raised. Chains like formula → formula → rollup consume depth.
 
@@ -73,7 +75,6 @@ formatDate(prop("Date"), "YYYYMM")
 ## Number formatting
 
 - Plain number property format: `{number: {format: "real"}}` — set via API, works reliably
-- Formula display format (e.g. R$, %, currency): **UI-only** — API silently drops any format field; only `expression` is stored
-- Rewriting formula expression via API resets the UI display format to default — no workaround
+- Formula display format (R$, %, currency) is **UI-only** and an API expression-rewrite resets it — see the Formulas gotchas above (the same file)
 - **Currency output**: `formatNumber(n,"brl")` → `R$1,234.56` (US separators, and errors on rollup-derived values); for pt-BR `R$ 1.234,56` build with floor/mod arithmetic (see Formulas)
 

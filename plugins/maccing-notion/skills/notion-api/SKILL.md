@@ -12,6 +12,8 @@ description: Use when working with the Notion API or MCP — creating, editing, 
 >
 > THIS skill is the complementary **low-level engineering reference** — the Notion API/formula/rollup/relation/view/chart/block details for building & editing databases programmatically (and debugging Notion API errors).
 
+**Tooling in one line:** reads → `read_agents_md` / `read_page` / `read_database`; writes, schema, and endpoints the readers don't cover → `request`; UI-only (column icons, relative-date filters) → `set_property_icon` / `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
+
 ## MANDATORY FIRST STEP — read every ancestral `AGENTS.md`
 
 This runs on **every** Notion task, before you read or write anything. Not optional, not situational, not skippable.
@@ -30,18 +32,13 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 ### The Gate (run every time)
 
-1. **Build the root→target chain** — climb `.parent` to the workspace:
-   `GET /v1/pages/{id}` (or `/v1/databases/{id}`, `/v1/data_sources/{id}`) → read `.parent`, repeat until `type == "workspace"`:
-   - `page_id` → that page
-   - `block_id` → `GET /v1/blocks/{id}` → its parent
-   - `data_source_id` / `database_id` → take `.parent.database_id`, `GET /v1/databases/{database_id}` → its parent (a DB's `AGENTS.md` lives on its **parent page**, beside the `child_database` block — not on the rows)
-2. **At each page, top→down, find its `AGENTS.md`** — `GET /v1/blocks/{page_id}/children` (`page_size=100`, paginate on `start_cursor`) → match the block where `type == "child_page"` **and** `child_page.title == "AGENTS.md"`.
-3. **Read & obey, top→down** — `GET /v1/blocks/{agents_id}/children` (recurse into toggles/sub-blocks), render to text, follow it. On conflict the lower (closer-to-target) `AGENTS.md` wins.
-4. **Only then** perform the requested operation.
+1. **Sweep — call `read_agents_md(<target id>)`.** That one call *is* this Gate: it climbs `.parent` root→target — accepting **any** target id (page, database row, block, database, or data_source) — finds every ancestral `AGENTS.md`, reads each, and returns them root→closest with precedence applied (closest wins). Read and obey them top→down.
+2. **Only then** perform the requested operation.
 
-**One-call shortcut for steps 1–3:** the **`read_agents_md(page_id)`** MCP tool *is* this Gate, executed server-side — it climbs `.parent` root→target, locates every ancestral `AGENTS.md`, and returns them root→closest with precedence already applied. It is **not** a "skip-to-content convenience" to be avoided — it performs the full sweep *for* you and is the preferred way to run it. Use it first; fall back to the manual climb above only if it errors (or you have no id yet — then descend via `/search` as below).
-
-*No id yet?* Descend instead: `POST /v1/search {"filter":{"property":"object","value":"page"}}` → first level = results with `parent.type == "workspace"`; walk down through `child_page` blocks to the target, reading `AGENTS.md` at each step.
+**Fallback — only if `read_agents_md` errors, or you have no id yet** — do the climb by hand. ⚠️ **The GETs below are for `.parent` traversal ONLY — never to read content or properties (use `read_page` for that).**
+- **Build the root→target chain** — `GET /v1/pages/{id}` (or `/v1/databases/{id}`, `/v1/data_sources/{id}`) → read `.parent`, repeat until `type == "workspace"`, branching on `.parent.type`: `page_id` → `.parent.page_id`; `block_id` → `GET /v1/blocks/{id}` → its parent; `data_source_id`/`database_id` → `GET /v1/databases/{.parent.database_id}` (a row's `.parent` carries **both** `data_source_id` and `database_id`; climb via the `database_id`) → continue from **that database's** own `.parent` (its parent page, where the DB's `AGENTS.md` lives beside the `child_database` block — not on the rows).
+- **At each page, top→down, find its `AGENTS.md`** — `GET /v1/blocks/{page_id}/children` (or `read_page(page_id, "outline")` for the child tree; `page_size=100`, paginate on `start_cursor`) → match `type == "child_page"` **and** `child_page.title == "AGENTS.md"`. Read its content via `read_page(agents_id, format="text")` (handles toggle recursion + block recovery), obey top→down; closer-to-target wins on conflict.
+- **No id yet?** Descend: `POST /v1/search {"filter":{"property":"object","value":"page"}}` → first level = `parent.type == "workspace"`; walk down `child_page` blocks to the target, reading `AGENTS.md` at each step.
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
@@ -77,27 +74,29 @@ WHILE has_more == true, KEEP FETCHING WITH next_cursor — NO COUNT, SUM, FILTER
 
 No exceptions — not for "just counting", not for "just a summary", not when "100 rows is surely all of it", not when an unrelated cross-check happened to match.
 
-### The loop (run for every list endpoint)
+### The loop
+
+**For database rows, `read_database(database_id, format, exhaust_all=true)` runs this loop for you** — it fetches until `has_more == false` server-side and returns every row flattened (`format: "summary"` for a grouped sum/total). That *satisfies* this law; it is not a bypass. Hand-roll the loop below only for the endpoints the readers don't cover — block children, search, views.
 
 ```python
+# hand-roll ONLY for block children / search / views — NOT for DB rows (use read_database(exhaust_all=true))
 results, cursor = [], None
 while True:
-    page = POST /v1/data_sources/{id}/query   # body: {page_size:100, start_cursor:cursor, ...filter/sorts}
+    page = GET /v1/blocks/{id}/children   # query:{page_size:100,start_cursor:cursor} (or POST /v1/search, /v1/views?data_source_id=)
     results += page["results"]
     if not page["has_more"]:
         break
     cursor = page["next_cursor"]              # feed back as the next start_cursor
-# ONLY NOW: len(results), sums, "none found", any conclusion
+# ONLY NOW: len(results), "none found", any conclusion
 ```
 
-- **Shortcut that SATISFIES this law (not a bypass):** the `read_database(id, format, exhaust_all=true)` MCP tool runs exactly this loop server-side — fetching until `has_more == false` — and returns every row already flattened. Using it (e.g. with `format: "summary"` for a grouped sum) is a *compliant* way to obtain a total; it is the manual cursor loop, done for you, not a partial read. See "High-level reader tools" below.
 - **Cursor placement differs by verb:** `POST .../query` and `POST /v1/search` take `start_cursor` in the **body**; `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=` take `start_cursor` in the **query string**. `page_size` max 100 — a full 100-row page almost always means `has_more: true`.
 - **Every list-shaped response carries its own `has_more`/`next_cursor` — all are covered:**
   - `POST /v1/data_sources/{id}/query` — rows
-  - `GET /v1/blocks/{id}/children` — page/block content, **including the `AGENTS.md` sweep above** (a dropped cursor can hide an `AGENTS.md` on a long page → you skip a playbook you were required to obey)
+  - `GET /v1/blocks/{id}/children` — page/block content (for a page body tree `read_page(page_id, "outline")` handles this automatically; hand-roll only for block subtrees the readers don't cover). **The `AGENTS.md` sweep is covered too** — a dropped cursor can hide an `AGENTS.md` on a long page → you skip a playbook you were required to obey
   - `POST /v1/search` — hits
-  - `GET /v1/views?data_source_id=` — views
-- **Relation values paginate too (the sneaky one):** a row's `properties.<Rel>.relation` array is itself capped (~25) and carries its OWN `has_more: true`. The query cursor does **not** expand it — you must call `GET /v1/pages/{page_id}/properties/{property_id}` and paginate THAT to the end. A relation that "only has 25 items" is the tell that you're holding a fragment.
+  - `GET /v1/views?data_source_id=` — views (to read view config prefer `read_database(database_id, format, include_views=true)`; hand-roll only for a write or a per-view GET)
+- **Relation values paginate too (the sneaky one):** a row's `properties.<Rel>.relation` array is itself capped (~25) and carries its OWN `has_more: true`. The query cursor does **not** expand it — you must call `GET /v1/pages/{page_id}/properties/{property_id}` and paginate THAT to the end. A relation that "only has 25 items" is the tell that you're holding a fragment. (In read contexts `read_page`/`read_database` resolve relations to titles and bypass this — raw pagination is needed only when writing back relation ids or inspecting raw values via `request`.)
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -128,7 +127,7 @@ NO STRUCTURE-CHANGING WRITE IS COMPLETE UNTIL YOU RE-READ THE PARENT'S CHILDREN 
 
 ### Format (exact)
 
-- Re-read each affected page's children **after** the change (`GET /v1/blocks/{page_id}/children`, exhaust `has_more` per the pagination law) — the tree reflects VERIFIED live state, never your intention.
+- Re-read each affected page's children **after** the change via `read_page(page_id, format="outline")` — it returns the full block tree (with block ids) and handles pagination server-side. (Fallback: `GET /v1/blocks/{page_id}/children`, exhausting `has_more`.) The tree reflects VERIFIED live state, never your intention.
 - Unicode tree: the parent page at the root, children indented with `├──` / `└──` and `│   ` continuation; recurse into changed sub-pages.
 - Label by type: page → its title; database → its title; embed/media → a bracketed tag like `[notion2charts chart]`; text block → first words in quotes `"…"`.
 - Annotate every node you changed this turn with a trailing `← what changed` (new / moved here / renamed from "…" / trashed). Leave untouched nodes unannotated.
@@ -286,17 +285,33 @@ Present a concise design brief — **one line per applicable dimension, each wit
 
 Draft the design brief (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views), present it, wait for approval, then proceed through the standard approval-gate write cycle. Non-negotiable.
 
+## MCP tools — pick by job
+
+This skill drives the `notion` MCP, which exposes **six tools**. Reads default to the three readers; `request` is for writes, schema inspection, and the endpoints readers don't cover.
+
+| Job | Tool |
+|---|---|
+| The ancestral `AGENTS.md` sweep (mandatory first step) | **`read_agents_md(id)`** — one call does the whole climb + precedence; the `id` is any target (page/row/block/database/data_source) |
+| Read a page or DB row — properties **and** body | **`read_page(page_id, format)`** — `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree with optional `depth`, for planning edits) · `text`. Relations→titles, rollups/formulas→scalars, blocks recovered, ~22× smaller than raw JSON. Optional `include_properties=false` suppresses the YAML property frontmatter (default `true`) |
+| Query DB rows — list / count / sum / grouped total | **`read_database(database_id, format, …)`** (`database_id` = the DB UUID **or** a `data_source_id`; auto-resolved) — `table` · `kv` · `tsv` · `summary` (overall or grouped totals; add `group_by` to group by a column). Optional `fields` to limit columns; `filter`/`sorts` are Notion objects passed verbatim; `exhaust_all=true` returns every row and **satisfies the pagination law** (row pagination only). Row **page ids are NOT in the output** — use raw `POST /v1/data_sources/{id}/query` (`.id` per result) when you need an id (e.g. to write a relation) |
+| Inspect a database's **views** (full config — covers/preview, card size, layout, visible props, sorts, filters; ids resolved to names) | **`read_database(database_id, format, include_views=true)`** — appends every view's complete config; the reader path for view *design* (raw `GET /v1/views` not needed) |
+| Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); schema/`.parent` inspection; search; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
+| Set a database **column/property** icon (public API drops these) | **`set_property_icon(data_source_id, property, …)`** — the one private-API convenience |
+| Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
+
+A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on every reader; reader output is plain text with a trailing `# …` summary line.
+
 ## Data model & versions
 
 - API base: `https://api.notion.com/v1` — header `Notion-Version: 2026-03-11`
 - SDK: the `@notionhq/client` TypeScript SDK needs v5.12.0+ for 2026-03-11 — relevant only to external app developers; the bundled `notion` MCP server makes raw HTTP calls (no Notion SDK)
-- Databases are queried/mutated via `/v1/data_sources/{id}` (not `/databases/{id}`)
+- Databases are queried/mutated via `/v1/data_sources/{id}` — prefer it over the **legacy** `/v1/databases/{id}` (which still coexists on 2026-03-11). This covers schema `PATCH`, row queries, **and** relation targets: a relation/rollup property references a `data_source_id`, not a `database_id` (a 2026-03-11 change; pre-2026 priors that say `database_id` are stale)
 - `POST /v1/databases` response → use `data_sources[0]['id']` as the data source ID; `is_inline: true` supported at creation
 - Inline DB IDs (from block children) ARE valid `data_source_id` values but NOT valid `page_id` for `GET /pages/{id}`
 - Search API: `filter.value` accepts `'page'` or `'data_source'` — **not** `'database'` (breaking change in 2025-09-03)
 
 **Version 2026-03-11 breaking changes** (requires SDK v5.12.0+):
-1. Append-block `after` param → `position` object (see Blocks section)
+1. Append-block `after` param → `position` object (see `references/blocks.md`)
 2. `archived` field renamed to `in_trash` everywhere
 3. `transcription` block type renamed to `meeting_notes`
 
@@ -304,8 +319,8 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 
 ## Auth / MCP pattern
 
-- MCP tool: `request` — pass `method`, `path`, `body` (POST/PATCH/PUT), and `query` (GET query-string params — the only way to send `start_cursor`/`page_size` for `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`)
-- MCP tools `private_request` / **`set_property_icon`** — the UNOFFICIAL private app API for UI-only things the public API can't do. ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** through these (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES (via the private app API), never "UI-only/impossible."** Recipe → `references/private-api.md`.
+- Tool selection → "MCP tools — pick by job" above. `request`'s `query` arg is the GET query-string — the only way to send `start_cursor`/`page_size` to `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`.
+- ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** via `set_property_icon` / `private_request` (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES, never "UI-only/impossible."** Recipe → `references/private-api.md`.
 - Large results (>~80k chars) overflow MCP token limit → saved to `~/.claude/projects/.../tool-results/mcp-notion-*.txt`
 - Rate limit: HTTP 429/502/503 → exponential backoff `1.2*(attempt+1)s`, up to 5 retries
 - Safe inter-request pace: `time.sleep(0.03)` in loops
@@ -318,31 +333,24 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 
 ---
 
-## High-level reader tools — the preferred read path (not lossy "convenience")
-
-Three MCP tools render Notion **server-side** into agent-ready text: relations resolved to titles, rollups/formulas flattened to scalars, the native `/markdown` endpoint (~20× smaller than block JSON), callouts → blockquotes, and infinite-depth recovery of any unfetchable blocks. They are **more** rigorous than a hand-rolled `request` loop, not less — prefer them for every read. Reach for raw `request` only for **writes**, `.parent`/schema inspection these don't expose, or endpoints they don't cover.
-
-- **`read_agents_md(page_id)`** — runs the entire MANDATORY-FIRST-STEP Gate in one call (the `.parent` climb + AGENTS.md discovery + precedence ordering). This is *the* tool for that sweep.
-- **`read_page(page_id, format)`** — `format` (required): `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree, for planning edits) · `text` (prose only). Recovers unknown blocks to completion.
-- **`read_database(database_id, format, …)`** — `format` (required): `table` (GFM pipe) · `kv` · `tsv` · `summary` (grouped totals — pass `group_by`). Optional `filter`/`sorts` (Notion objects verbatim), `fields` (project columns), `page_size`+`cursor`. **`exhaust_all=true` loops to `has_more==false` server-side and returns every row — it SATISFIES the pagination Iron Law, it does not bypass it.** Use `exhaust_all`+`summary` for any count / sum / grouped total.
-
-`format` is **required** on every reader tool (no default). Output is plain text with a trailing `# …` summary line.
-
----
-
 ## Core endpoints
+
+**Reads:** prefer `read_page` (pages/rows) and `read_database` (`/query`) over the raw endpoints below — they are for writes and for what the readers don't cover (see the tool table).
 
 ```
 GET    /v1/data_sources/{id}              # DB schema (properties map with ids + types)
 PATCH  /v1/data_sources/{id}             # add/modify/delete/rename properties
 POST   /v1/data_sources/{id}/query       # query rows; body: {page_size,filter,sorts,start_cursor}
-GET    /v1/pages/{id}                    # page metadata + properties
+GET    /v1/databases/{id}                # resolve database_id → data_sources[0].id; also .parent
+GET    /v1/pages/{id}                    # page metadata + .parent — for content/properties use read_page
 PATCH  /v1/pages/{id}                    # update page properties / icon / cover / in_trash
 POST   /v1/pages                         # create page or DB row
-GET    /v1/pages/{id}/markdown           # retrieve page content as Notion-flavored Markdown
+GET    /v1/pages/{id}/markdown           # PREFER read_page(page_id,"markdown"); raw GET truncates large pages + skips block recovery
 PATCH  /v1/pages/{id}/markdown           # update page content via Markdown
-POST   /v1/databases                     # create database
-GET    /v1/blocks/{id}/children          # child blocks
+POST   /v1/databases                     # create database — then inspect via read_database / GET /v1/data_sources/{ds}
+POST   /v1/pages/{id}/move               # re-parent a page (move to a new parent page)
+PATCH  /v1/databases/{id}                # move a database (set {parent}); also the legacy schema path
+GET    /v1/blocks/{id}/children          # child blocks — PREFER read_page(page_id,"outline"); hand-roll only for non-page subtrees
 PATCH  /v1/blocks/{id}/children         # append children (append-only)
 DELETE /v1/blocks/{id}                   # delete a content block
 ```
@@ -379,7 +387,7 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — settable via the private app API through the `set_property_icon` / `private_request` MCP tools (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
-| Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility | `references/views.md` |
+| Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
 | **Gallery view** visual config (cover, card size, visible props) + **sourcing B&W cover images** | `references/gallery-view.md` |
 | **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |

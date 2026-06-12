@@ -31,7 +31,7 @@ Use words an agent will recognize/search: the subtree name, DB names, property n
 
 ## 2. Keep it terse (token efficiency)
 
-An AGENTS.md is re-read into context **on every task touching its subtree.** Every token is paid repeatedly.
+An AGENTS.md is re-read into context **on every task touching its subtree.** Every token is paid repeatedly — `read_agents_md` pulls every ancestor file (root → closest) in one call on each task (it accepts any target id — page, row, block, database, or data_source), so a verbose root AGENTS.md costs tokens on every Notion operation workspace-wide.
 
 - Tables/bullets over prose. One concrete example, not three.
 - Push heavy detail (long schemas, formula source, ID lists) into **toggles or a child sub-page**, not the top level.
@@ -58,7 +58,7 @@ Before you finalize a new AGENTS.md or land an edit:
 2. **GREEN** — rewrite the offending rule to address that exact failure: tighten wording, close the loophole, add the missing fact. Don't add content for hypothetical failures — only the ones you saw.
 3. **REFACTOR** — re-run the task with the revised page. New rationalization? Add an explicit counter (and a Red-Flags row). Repeat until it complies **under pressure** (combine time pressure + "the user's in a hurry" + a tempting shortcut).
 
-This whole loop is a *read-only* dry run (the subagent proposes; you don't execute its writes), so it needs **no approval gate** — only the real write to the AGENTS.md page does.
+This whole loop is a *read-only* dry run (the subagent proposes; you don't execute its writes), so it needs **no approval gate** — only the real write to the AGENTS.md page does (approval gate per SKILL.md).
 
 ## Red Flags — STOP, you're writing a bad playbook
 

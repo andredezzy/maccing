@@ -5,6 +5,7 @@
 import { z } from "zod";
 
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
+import { formatViews, type IdToName, type RawView } from "../lib/format-views";
 import { flattenProperty, type RawProperty } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { resolveRelations } from "../lib/resolve-relations";
@@ -32,6 +33,12 @@ interface QueryResponse {
   next_cursor?: string | null;
 }
 
+interface ViewListResponse {
+  results?: { id: string }[];
+  has_more?: boolean;
+  next_cursor?: string | null;
+}
+
 /** Resolve a database id to its data source id (falls back to treating the id as a data source). */
 async function resolveDataSourceId(databaseId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/databases/${databaseId}`);
@@ -40,6 +47,54 @@ async function resolveDataSourceId(databaseId: string): Promise<string> {
     return db.data_sources?.[0]?.id ?? databaseId;
   }
   return databaseId; // the caller may have passed a data_source_id directly
+}
+
+/** Invert the data-source schema into a property-id → name map (covering raw + url-encoded ids). */
+function buildIdToName(schema: Record<string, SchemaProp>): IdToName {
+  const idToName: IdToName = {};
+  for (const [name, meta] of Object.entries(schema)) {
+    idToName[meta.id] = name;
+    try {
+      idToName[decodeURIComponent(meta.id)] = name;
+    } catch {
+      // id wasn't url-encoded — the raw mapping above is enough
+    }
+  }
+  return idToName;
+}
+
+/** List a data source's view ids (paginated), then fetch each view's full configuration. */
+async function fetchViews(dataSourceId: string): Promise<RawView[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const query: Record<string, unknown> = { data_source_id: dataSourceId, page_size: 100 };
+    if (cursor) {
+      query.start_cursor = cursor;
+    }
+    const response = await publicRequest("GET", "/v1/views", undefined, query);
+    if (!response.ok) {
+      break;
+    }
+    const body = response.body as ViewListResponse;
+    ids.push(...(body.results ?? []).map((view) => view.id));
+    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  const views: RawView[] = [];
+  const BATCH = 10;
+  for (let start = 0; start < ids.length; start += BATCH) {
+    const responses = await Promise.all(
+      ids.slice(start, start + BATCH).map((id) => publicRequest("GET", `/v1/views/${id}`)),
+    );
+    for (const response of responses) {
+      if (response.ok) {
+        views.push(response.body as RawView);
+      }
+    }
+  }
+  return views;
 }
 
 export const readDatabase: ToolModule = {
@@ -51,7 +106,8 @@ export const readDatabase: ToolModule = {
       "as scalars. format (required): table (GFM pipe table) | kv (key:value per row) | tsv | summary (grouped " +
       "totals, e.g. value-by-category — pass group_by). Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
-      "(use for counts/sums per the pagination Iron Law).",
+      "(use for counts/sums per the pagination Iron Law). Set include_views=true to also dump every view's full " +
+      "config (covers/preview, card size, layout, visible props, sorts, filters, chart axes), property ids resolved.",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
@@ -63,6 +119,14 @@ export const readDatabase: ToolModule = {
       cursor: z.string().optional().describe("Opaque next_cursor from a prior call."),
       exhaust_all: z.boolean().optional().describe("Loop to the end and return every row (for counts/sums)."),
       group_by: z.string().optional().describe("summary only: the property to group by."),
+      include_views: z
+        .boolean()
+        .optional()
+        .describe(
+          "Also append every view with its COMPLETE configuration — type, sorts, filter, and all visual props " +
+            "(cover/preview, card size, aspect, layout, group_by, chart axes, visible/hidden columns) — with property " +
+            "ids resolved to names. Use to inspect or replicate a database's view design.",
+        ),
     },
   },
 
@@ -150,7 +214,13 @@ export const readDatabase: ToolModule = {
       const more = cursor ? ` | next_cursor: ${cursor}` : exhaust ? "" : " | next_cursor: null";
       const trailer = `\n# ${rows.length} rows${more} | fields: [${columns.join(", ")}]`;
 
-      return ok(rendered + trailer);
+      let viewsSection = "";
+      if (args.include_views === true) {
+        const views = await fetchViews(dataSourceId);
+        viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
+      }
+
+      return ok(rendered + trailer + viewsSection);
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }
