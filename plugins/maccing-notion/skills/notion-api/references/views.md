@@ -14,7 +14,7 @@ DELETE /v1/views/{view_id}            # delete view
 
 **INVALID**: `GET /v1/data_sources/{ds}/views` → 400
 
-**Reads:** to INSPECT views (names + complete config, property ids resolved to names), use **`read_database(database_id, format, include_views=true)`** — it lists every view and dumps each one's full configuration for you. Use raw `request` for view **writes** (`POST`/`PATCH /v1/views`). Raw read equivalent, only when driving it by hand: `GET /v1/views?data_source_id={ds}` (a minimal list of **ids only** — paginate `has_more` per the Iron Law) then `GET /v1/views/{id}` per result for type + name + configuration.
+**Reads:** to INSPECT views (names + complete config, property ids resolved to names), just call **`read_database(database_id, format)`** — every call appends a `# Views` section dumping each view's full configuration (sorts, `filter`, `quick_filters`, and all visual props). Use raw `request` for view **writes** (`POST`/`PATCH /v1/views`). Raw read equivalent, only when driving it by hand: `GET /v1/views?data_source_id={ds}` (a minimal list of **ids only** — paginate `has_more` per the Iron Law) then `GET /v1/views/{id}` per result for type + name + configuration.
 
 **Create a linked database view embedded in a page** (only API mechanism):
 ```json

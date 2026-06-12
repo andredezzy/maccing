@@ -16,14 +16,14 @@ POST /v1/data_sources/{id}/query
 }
 ```
 
-**Get all property IDs** (for building WRITE payloads / authoring formulas — you rarely need raw ids for reads: `read_database` resolves names, and `include_views=true` even surfaces id↔name in view configs):
+**Get all property IDs** (for building WRITE payloads / authoring formulas — you rarely need raw ids for reads: `read_database` resolves names, and its `# Views` section even surfaces id↔name in view configs):
 ```python
 schema = GET /v1/data_sources/{id}
 prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 # IDs may be URL-encoded — urllib.parse.unquote(id) to normalize
 ```
 
-**Read view config:** `read_database(database_id, format, include_views=true)` appends every view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, filters) with property ids resolved to names. Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views.
+**Read view config:** every `read_database(database_id, format)` call appends every view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, `filter`, `quick_filters`) with property ids resolved to names — no flag. Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views.
 
 **Extract data_source_id from a database URL:**
 ```python

@@ -2,7 +2,7 @@
 
 Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
 
-**Reads:** use `read_database` (`exhaust_all=true`) to enumerate or sum rows for chart data; use `read_database(include_views=true)` to inspect an existing chart view's full config (axes, filters, sorts, group_by). The raw patterns here are for **writes** (creating/patching chart views and properties).
+**Reads:** use `read_database` (`exhaust_all=true`) to enumerate or sum rows for chart data; every `read_database` call also dumps each view's full config (axes, filters, sorts, group_by) in a trailing `# Views` section — no flag. The raw patterns here are for **writes** (creating/patching chart views and properties).
 
 - **Free plan = 1 chart/workspace** (hard billing wall, not configurable; exact slot reclaim behavior after deletion is ambiguous)
 - **Y-axis**: plain `number` properties and scalar formulas work; rollups, buttons, unique IDs, and files/media are not supported

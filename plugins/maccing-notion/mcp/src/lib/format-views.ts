@@ -51,7 +51,10 @@ function idVariants(id: string): string[] {
   return variants;
 }
 
-/** Deep-clone a config value, annotating every `property_id` with a resolved `property_name`. */
+/**
+ * Deep-clone a config/filter value, annotating every property reference with a resolved `property_name`.
+ * Views reference properties two ways: `property_id` (in configuration) and `property` (in filters/sorts).
+ */
 function resolveDeep(value: unknown, idToName: IdToName): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => resolveDeep(item, idToName));
@@ -61,7 +64,7 @@ function resolveDeep(value: unknown, idToName: IdToName): unknown {
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
       out[key] = resolveDeep(inner, idToName);
-      if (key === "property_id" && typeof inner === "string") {
+      if ((key === "property_id" || key === "property") && typeof inner === "string") {
         out.property_name = nameFor(inner, idToName);
       }
     }
@@ -89,18 +92,12 @@ export function formatViews(views: RawView[], idToName: IdToName): string {
   const blocks = views.map((view) => {
     const lines = [
       `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? short(view.id) : "?"})`,
+      view.url ? `url: ${view.url}` : null,
       `sorts: ${renderSorts(view.sorts, idToName)}`,
-    ];
+      `filter: ${view.filter ? JSON.stringify(resolveDeep(view.filter, idToName)) : "—"}`,
+      `quick_filters: ${view.quick_filters ? JSON.stringify(resolveDeep(view.quick_filters, idToName)) : "—"}`,
+    ].filter((line): line is string => line !== null);
 
-    if (view.url) {
-      lines.push(`url: ${view.url}`);
-    }
-    if (view.filter) {
-      lines.push(`filter: ${JSON.stringify(resolveDeep(view.filter, idToName))}`);
-    }
-    if (view.quick_filters) {
-      lines.push(`quick_filters: ${JSON.stringify(resolveDeep(view.quick_filters, idToName))}`);
-    }
     if (view.configuration) {
       lines.push("configuration:");
       lines.push(JSON.stringify(resolveDeep(view.configuration, idToName), null, 2));

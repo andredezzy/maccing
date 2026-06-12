@@ -106,8 +106,9 @@ export const readDatabase: ToolModule = {
       "as scalars. format (required): table (GFM pipe table) | kv (key:value per row) | tsv | summary (grouped " +
       "totals, e.g. value-by-category — pass group_by). Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
-      "(use for counts/sums per the pagination Iron Law). Set include_views=true to also dump every view's full " +
-      "config (covers/preview, card size, layout, visible props, sorts, filters, chart axes), property ids resolved.",
+      "(use for counts/sums per the pagination Iron Law). The output ALSO appends every view with its COMPLETE " +
+      "config — type, sorts, filter, quick_filters, and all visual props (covers/preview, card size, aspect, layout, " +
+      "group_by, chart axes, visible/hidden columns) — with property ids resolved to names. Views always included.",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
@@ -119,14 +120,6 @@ export const readDatabase: ToolModule = {
       cursor: z.string().optional().describe("Opaque next_cursor from a prior call."),
       exhaust_all: z.boolean().optional().describe("Loop to the end and return every row (for counts/sums)."),
       group_by: z.string().optional().describe("summary only: the property to group by."),
-      include_views: z
-        .boolean()
-        .optional()
-        .describe(
-          "Also append every view with its COMPLETE configuration — type, sorts, filter, and all visual props " +
-            "(cover/preview, card size, aspect, layout, group_by, chart axes, visible/hidden columns) — with property " +
-            "ids resolved to names. Use to inspect or replicate a database's view design.",
-        ),
     },
   },
 
@@ -214,11 +207,9 @@ export const readDatabase: ToolModule = {
       const more = cursor ? ` | next_cursor: ${cursor}` : exhaust ? "" : " | next_cursor: null";
       const trailer = `\n# ${rows.length} rows${more} | fields: [${columns.join(", ")}]`;
 
-      let viewsSection = "";
-      if (args.include_views === true) {
-        const views = await fetchViews(dataSourceId);
-        viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
-      }
+      // Views are always appended — every read_database dumps the database's full view design.
+      const views = await fetchViews(dataSourceId);
+      const viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
 
       return ok(rendered + trailer + viewsSection);
     } catch (error) {

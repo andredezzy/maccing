@@ -54,6 +54,34 @@ test("empty view list is reported, not crashed", () => {
   expect(formatViews([], idToName)).toContain("# Views (0)");
 });
 
+test("resolves the `property` id inside a view filter (and shows it)", () => {
+  const view: RawView = {
+    name: "Holdings",
+    type: "table",
+    sorts: [{ property: "IiYA", direction: "descending" }],
+    filter: { property: "yKFr", relation: { contains: "page-123" } },
+    configuration: { type: "table", properties: [] },
+  };
+  const map: IdToName = { yKFr: "Month", IiYA: "Real Value" };
+  const out = formatViews([view], map);
+  expect(out).toContain("sorts: Real Value ↓");
+  expect(out).toMatch(/property_name":\s*"Month"/); // filter property id resolved to name
+  expect(out).toMatch(/contains":\s*"page-123"/); // filter value preserved verbatim
+});
+
+test("always shows filter and quick_filters lines (— when none)", () => {
+  const view: RawView = {
+    name: "T",
+    type: "table",
+    filter: null,
+    quick_filters: null,
+    configuration: { type: "table" },
+  };
+  const out = formatViews([view], {});
+  expect(out).toContain("filter: —");
+  expect(out).toContain("quick_filters: —");
+});
+
 test("a chart view's axes property ids resolve", () => {
   const chart: RawView = {
     name: "NW over time",
