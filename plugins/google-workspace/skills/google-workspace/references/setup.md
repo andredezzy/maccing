@@ -36,17 +36,19 @@ Part of the `google-workspace` skill — loaded on demand from `SKILL.md`.
 
 ## Secrets
 
-Secrets live in `plugins/google-workspace/mcp/.env.local` (gitignored), or already-exported env vars; never committed.
+Secrets live in `~/.config/maccing/google-workspace.env` (stable, version-proof — recommended) or `mcp/.env.local` (gitignored dev override, sourced last so it wins); never committed.
 
 ```bash
-cp plugins/google-workspace/mcp/.env plugins/google-workspace/mcp/.env.local
-# then edit .env.local and fill in:
+mkdir -p ~/.config/maccing
+cp plugins/google-workspace/mcp/.env ~/.config/maccing/google-workspace.env
+chmod 600 ~/.config/maccing/google-workspace.env
+# then edit and fill in:
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
 export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
 export USER_GOOGLE_EMAIL=andrevcv1@gmail.com
 ```
 
-`.env.local` is gitignored by the repo's `.gitignore` pattern `**/.env.local`; `mcp/.env` is the committed template.
+The stable file survives plugin version bumps (the cache install path is versioned); override its path with `MACCING_WORKSPACE_ENV`. `mcp/.env` is the committed template (`**/.env.local` is gitignored).
 
 ## Tool tier
 

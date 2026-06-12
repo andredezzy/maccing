@@ -55,13 +55,15 @@ This step is critical. Go to **APIs & Services → OAuth consent screen** and:
 
 ## Secrets
 
-From the plugin directory (`plugins/google-workspace/`), copy the example file and fill in your credentials:
+Create a stable per-user secrets file at `~/.config/maccing/google-workspace.env`. It lives outside the repo and the plugin cache, so it survives plugin version bumps (the install path is versioned — a `.env.local` placed in the cache is lost on every upgrade):
 
 ```bash
-cp mcp/.env mcp/.env.local
+mkdir -p ~/.config/maccing
+cp mcp/.env ~/.config/maccing/google-workspace.env
+chmod 600 ~/.config/maccing/google-workspace.env
 ```
 
-Then edit `.env.local` and set:
+Then edit `~/.config/maccing/google-workspace.env` and set:
 
 ```bash
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
@@ -69,7 +71,7 @@ export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
 export USER_GOOGLE_EMAIL=you@gmail.com
 ```
 
-The `.env.local` file is gitignored (repo `.gitignore` pattern `**/.env.local`) and is never committed; `mcp/.env` is the committed template. The launcher loads `mcp/.env.local` if present, else uses whatever is already exported in your environment.
+The launcher (`mcp/start.sh`) loads that stable file first, then `mcp/.env.local` (gitignored dev override — wins because it's sourced last; `cp mcp/.env mcp/.env.local` for per-project switching), then any inherited env. Override the path with `MACCING_WORKSPACE_ENV`. `mcp/.env` is the committed template; real secrets are never committed.
 
 ---
 

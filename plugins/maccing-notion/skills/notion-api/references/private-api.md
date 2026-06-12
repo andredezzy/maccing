@@ -10,7 +10,7 @@ The public REST API (`api.notion.com/v1`) covers most things — **use it first,
 > - The session cookie **rotates** (logging out invalidates it). Store it ONLY in a gitignored secrets file; never echo, log, or commit it.
 
 ## Access — through the bundled `notion` MCP ONLY (never a standalone script)
-The private API is reached exclusively via two tools on the self-hosted `notion` MCP server, so the session cookie stays inside one trusted process (`NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `mcp/.env.local`) and is never handled by agent shell:
+The private API is reached exclusively via two tools on the self-hosted `notion` MCP server, so the session cookie stays inside one trusted process (`NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `~/.config/maccing/notion.env`, or the per-project `mcp/.env.local` dev override) and is never handled by agent shell:
 - **`notion_set_property_icon`** — the safe, verified convenience for the flagship capability (column icons). Reads the schema back and reports `verified`.
 - **`notion_private_request`** — the generic escape hatch (`{ endpoint, operations | body }`) for any other UI-only op; the active-user header and transaction envelope are injected for you.
 

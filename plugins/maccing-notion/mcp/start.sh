@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
 # Launcher for the bundled Notion MCP server (Bun, official MCP SDK, full Notion API at 2026-03-11).
 #
-# Registered by ../.mcp.json as the `notion` stdio server. Secrets are NEVER committed:
-#   1. plugin-local .env.local  (gitignored, beside this script — copy .env -> .env.local and fill in)
-#   2. otherwise whatever is already exported in the environment  (forwarded by .mcp.json `env`)
+# Registered by ../.mcp.json as the `notion` stdio server. Secrets are NEVER committed.
+# Load order (last source wins — .env.local overrides the stable file):
+#   1. ${MACCING_NOTION_ENV:-$HOME/.config/maccing/notion.env}  — stable per-user secrets file,
+#      outside the repo and cache; survives plugin version bumps. Create once, chmod 600.
+#   2. plugin-local .env.local  (gitignored, beside this script — dev override; copy .env -> .env.local)
+#   3. whatever is already exported in the environment  (forwarded by .mcp.json `env`)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=/dev/null
-[ -f "$DIR/.env.local" ] && source "$DIR/.env.local"
+for envfile in "${MACCING_NOTION_ENV:-$HOME/.config/maccing/notion.env}" "$DIR/.env.local"; do
+  if [ -f "$envfile" ]; then
+    set -a
+    . "$envfile"
+    set +a
+  fi
+done
 
 export NOTION_VERSION="${NOTION_VERSION:-2026-03-11}"
 

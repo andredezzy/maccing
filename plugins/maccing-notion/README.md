@@ -33,9 +33,17 @@ Notion API engineering reference for coding agents — the low-level details for
 
 The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: **`notion_request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); **`notion_private_request`** + **`notion_set_property_icon`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `skills/notion-api/references/private-api.md`).
 
-**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens) — either `export NOTION_TOKEN=ntn_...` in your shell (`.mcp.json` forwards it), or copy `mcp/.env` → `mcp/.env.local` (gitignored) and fill it in. Private-API features additionally need `NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `.env.local`.
+**Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens). Create `~/.config/maccing/notion.env` (chmod 600, outside the repo and cache — so it survives plugin version bumps):
 
-The launcher (`mcp/start.sh`) loads `mcp/.env.local` (gitignored) if present, else uses whatever is already in the environment. Secrets are never committed. Requires `bun` on `PATH` (or `~/.bun/bin/bun`).
+```sh
+mkdir -p ~/.config/maccing && chmod 600 ~/.config/maccing/notion.env  # after creating it
+export NOTION_TOKEN=ntn_...
+# Optional — private-API features (database property/column icons, other UI-only ops):
+export NOTION_TOKEN_V2=v03%3A...
+export NOTION_SPACE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+The launcher (`mcp/start.sh`) loads that stable file first, then `mcp/.env.local` (gitignored, dev override — wins because it's sourced last), then any inherited env (`.mcp.json` forwards `${NOTION_TOKEN}` as a fallback). Override the path with `MACCING_NOTION_ENV`. Secrets are never committed. Requires `bun` on `PATH` (or `~/.bun/bin/bun`).
 
 ## Relationship to the official Notion plugin
 

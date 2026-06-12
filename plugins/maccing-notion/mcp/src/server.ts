@@ -8,8 +8,9 @@
 //   notion_set_property_icon convenience for the flagship private capability (column icons)
 //
 // Public token: NOTION_TOKEN. Private session cookie: NOTION_TOKEN_V2 + NOTION_SPACE_ID. All loaded
-// by start.sh from the gitignored mcp/.env.local and kept ONLY in this process. Secret values are
-// scrubbed from every tool result by the withRedact middleware (redact.ts).
+// by start.sh from ~/.config/maccing/notion.env (stable per-user) and/or mcp/.env.local (dev
+// override), kept ONLY in this process. Secret values are scrubbed from every tool result by the
+// withRedact middleware (redact.ts).
 
 import { McpServer } from "#sdk/server/mcp";
 import { StdioServerTransport } from "#sdk/server/stdio";
@@ -31,13 +32,15 @@ export const TOOLS: ToolModule[] = [notionRequest, notionPrivateRequest, setProp
 async function main(): Promise<void> {
   // Fail-fast on startup: the public token is required; private-API vars are optional (graceful degrade).
   if (!process.env.NOTION_TOKEN) {
-    console.error("FATAL: NOTION_TOKEN is not set (mcp/.env.local or the environment). The notion MCP cannot start.");
+    console.error(
+      "FATAL: NOTION_TOKEN is not set. Add it to ~/.config/maccing/notion.env (or mcp/.env.local). The notion MCP cannot start.",
+    );
     process.exit(1);
   }
   const privateMissing = ["NOTION_TOKEN_V2", "NOTION_SPACE_ID"].filter((name) => !process.env[name]);
   if (privateMissing.length > 0) {
     console.error(
-      `notion MCP: private app API disabled — set ${privateMissing.join(", ")} in mcp/.env.local to enable the property-icon / private tools.`,
+      `notion MCP: private app API disabled — set ${privateMissing.join(", ")} in ~/.config/maccing/notion.env (or mcp/.env.local) to enable the property-icon / private tools.`,
     );
   }
 
