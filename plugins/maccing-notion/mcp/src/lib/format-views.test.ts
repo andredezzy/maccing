@@ -28,7 +28,17 @@ test("renders a header with name + type and resolved sorts", () => {
   const out = formatViews([gallery], idToName);
   expect(out).toContain("# Views (1)");
   expect(out).toContain("## Gallery · gallery");
-  expect(out).toContain("sorts: Net worth (last month) ↓");
+  expect(out).toContain("sorts: Net worth (last month) ↓ descending");
+});
+
+test("renders the sort direction word (ascending) alongside the arrow", () => {
+  const view: RawView = {
+    name: "Oldest first",
+    type: "table",
+    sorts: [{ property: "title", direction: "ascending" }],
+    configuration: { type: "table" },
+  };
+  expect(formatViews([view], idToName)).toContain("sorts: Name ↑ ascending");
 });
 
 test("dumps the full configuration with every visual prop and resolves property ids", () => {
@@ -64,7 +74,7 @@ test("resolves the `property` id inside a view filter (and shows it)", () => {
   };
   const map: IdToName = { yKFr: "Month", IiYA: "Real Value" };
   const out = formatViews([view], map);
-  expect(out).toContain("sorts: Real Value ↓");
+  expect(out).toContain("sorts: Real Value ↓ descending");
   expect(out).toMatch(/property_name":\s*"Month"/); // filter property id resolved to name
   expect(out).toMatch(/contains":\s*"page-123"/); // filter value preserved verbatim
 });

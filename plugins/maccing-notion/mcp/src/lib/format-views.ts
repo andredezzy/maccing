@@ -79,7 +79,14 @@ function renderSorts(sorts: SortEntry[] | null | undefined, idToName: IdToName):
     return "—";
   }
   return sorts
-    .map((sort) => `${nameFor(String(sort.property ?? ""), idToName)} ${sort.direction === "descending" ? "↓" : "↑"}`)
+    .map((sort) => {
+      const descending = sort.direction === "descending";
+      const name = nameFor(String(sort.property ?? ""), idToName);
+
+      // Arrow for the human; the full API word ("descending"/"ascending") so an agent
+      // can lift it straight into a write payload's `direction` with no translation.
+      return `${name} ${descending ? "↓ descending" : "↑ ascending"}`;
+    })
     .join(", ");
 }
 
