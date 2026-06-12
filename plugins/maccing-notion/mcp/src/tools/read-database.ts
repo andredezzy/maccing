@@ -5,6 +5,7 @@
 import { z } from "zod";
 
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
+import { formatSchema, type PropertiesMap } from "../lib/format-schema";
 import { formatViews, type IdToName, type RawView } from "../lib/format-views";
 import { flattenProperty, type RawProperty } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
@@ -106,9 +107,11 @@ export const readDatabase: ToolModule = {
       "as scalars. format (required): table (GFM pipe table) | kv (key:value per row) | tsv | summary (grouped " +
       "totals, e.g. value-by-category — pass group_by). Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
-      "(use for counts/sums per the pagination Iron Law). The output ALSO appends every view with its COMPLETE " +
-      "config — type, sorts, filter, quick_filters, and all visual props (covers/preview, card size, aspect, layout, " +
-      "group_by, chart axes, visible/hidden columns) — with property ids resolved to names. Views always included.",
+      "(use for counts/sums per the pagination Iron Law). The output ALSO appends a # Schema section (every " +
+      "column as name · type · detail, formula bodies elided) and every view with its COMPLETE config — type, " +
+      "sorts, filter, quick_filters, and all visual props (covers/preview, card size, aspect, layout, group_by, " +
+      "chart axes, visible/hidden columns) — with property ids resolved to names. Schema + views always included. " +
+      "For column ICONS, or to describe a page/data source on its own, use the `describe` tool.",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
@@ -207,11 +210,16 @@ export const readDatabase: ToolModule = {
       const more = cursor ? ` | next_cursor: ${cursor}` : exhaust ? "" : " | next_cursor: null";
       const trailer = `\n# ${rows.length} rows${more} | fields: [${columns.join(", ")}]`;
 
-      // Views are always appended — every read_database dumps the database's full view design.
+      // Schema + views are always appended — every read_database dumps the database's full structure
+      // (column definitions, formula bodies elided) and view design. The schema is free here: this
+      // tool already fetched it above. Column ICONS are deliberately NOT fetched on this hot path
+      // (they need a ToS-risk private call) — that lives in the dedicated `describe` tool.
+      const schemaSection = `\n\n${formatSchema(schema as PropertiesMap)}`;
+
       const views = await fetchViews(dataSourceId);
       const viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
 
-      return ok(rendered + trailer + viewsSection);
+      return ok(rendered + trailer + schemaSection + viewsSection);
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }

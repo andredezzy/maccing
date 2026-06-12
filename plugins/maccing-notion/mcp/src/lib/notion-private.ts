@@ -136,6 +136,39 @@ export async function getRecordValues(requests: RecordRequest[]): Promise<Privat
   return privateCall("getRecordValues", { requests });
 }
 
+interface CollectionSchemaBody {
+  results?: { value?: { schema?: Record<string, { icon?: string }> } }[];
+}
+
+/**
+ * Best-effort: read every column's icon from the private collection schema (the public API never
+ * exposes property icons). Returns a { RAW propertyId → "/icons/<file>_<color>.svg" } map, or an
+ * empty map on ANY failure — creds absent, 401, bot/HTML page, rate-limit. NEVER throws: this
+ * enriches `describe` opportunistically, so a miss must degrade to "no icons", never an error.
+ */
+export async function fetchPropertyIcons(dataSourceId: string): Promise<Record<string, string>> {
+  if (!privateConfig().ok) {
+    return {};
+  }
+  try {
+    const response = await getRecordValues([{ id: dataSourceId, table: "collection" }]);
+    if (!response.ok) {
+      return {};
+    }
+
+    const schema = (response.body as CollectionSchemaBody).results?.[0]?.value?.schema ?? {};
+    const icons: Record<string, string> = {};
+    for (const [propertyId, definition] of Object.entries(schema)) {
+      if (definition?.icon) {
+        icons[propertyId] = definition.icon;
+      }
+    }
+    return icons;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Commit op required after any schema mutation: without this trailing `update` bumping the
  * collection's editor, saveTransactions returns 200 but silently does NOT persist.

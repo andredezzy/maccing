@@ -17,11 +17,13 @@ import { StdioServerTransport } from "#sdk/server/stdio";
 import { VERSION } from "./lib/notion-public";
 import { withRedact } from "./redact";
 import type { ToolModule } from "./tool";
+import { describe } from "./tools/describe";
 import { privateRequest } from "./tools/private-request";
 import { readAgentsMd } from "./tools/read-agents-md";
 import { readDatabase } from "./tools/read-database";
 import { readPage } from "./tools/read-page";
 import { request } from "./tools/request";
+import { search } from "./tools/search";
 import { setPropertyIcon } from "./tools/set-property-icon";
 
 // stdout is the JSON-RPC transport channel — route any stray console.log to stderr so it can't corrupt it.
@@ -30,7 +32,16 @@ console.log = console.error;
 const SERVER_INFO = { name: "notion", version: "2.0.0" };
 
 // Open/closed registry: a new tool is a new file in tools/ plus one line here.
-export const TOOLS: ToolModule[] = [request, privateRequest, setPropertyIcon, readAgentsMd, readPage, readDatabase];
+export const TOOLS: ToolModule[] = [
+  request,
+  privateRequest,
+  setPropertyIcon,
+  search,
+  describe,
+  readAgentsMd,
+  readPage,
+  readDatabase,
+];
 
 async function main(): Promise<void> {
   // Fail-fast on startup: the public token is required; private-API vars are optional (graceful degrade).

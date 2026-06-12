@@ -2,7 +2,7 @@
 
 Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
 
-**Reads:** start with the mandatory `read_agents_md` sweep, then prefer `read_database` for querying rows (or `read_page` for a single row) — see SKILL.md "MCP tools — pick by job". They take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes, schema inspection, and what the readers don't cover.
+**Reads:** start with the mandatory `read_agents_md` sweep, then `search` to resolve a name→id, `read_database` for querying rows (or `read_page` for a single row), and `describe` for a data source's column schema (+ column icons) or a page's metadata — see SKILL.md "MCP tools — pick by job". The row readers take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes and what the readers don't cover.
 
 ## Useful patterns
 
@@ -16,7 +16,7 @@ POST /v1/data_sources/{id}/query
 }
 ```
 
-**Get all property IDs** (for building WRITE payloads / authoring formulas — you rarely need raw ids for reads: `read_database` resolves names, and its `# Views` section even surfaces id↔name in view configs):
+**Inspect the schema** — `describe(data_source_id)` renders every column as `name · type · detail` (formula bodies elided) plus each column's icon; far cleaner than the raw GET, whose compiled-formula blobs bloat the response. Drop to the raw GET below only when you need the raw property-**id** map for WRITE payloads / formula authoring (you rarely need raw ids for reads: `read_database` resolves names, and its `# Views` section even surfaces id↔name in view configs):
 ```python
 schema = GET /v1/data_sources/{id}
 prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}

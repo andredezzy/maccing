@@ -12,7 +12,7 @@ description: Use when working with the Notion API or MCP — creating, editing, 
 >
 > THIS skill is the complementary **low-level engineering reference** — the Notion API/formula/rollup/relation/view/chart/block details for building & editing databases programmatically (and debugging Notion API errors).
 
-**Tooling in one line:** reads → `read_agents_md` / `read_page` / `read_database`; writes, schema, and endpoints the readers don't cover → `request`; UI-only (column icons, relative-date filters) → `set_property_icon` / `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
+**Tooling in one line:** reads → `read_agents_md` / `search` (name→id) / `read_page` / `read_database` / `describe` (schema + column icons, or page/object metadata); writes and endpoints the readers don't cover → `request`; UI-only writes (set column icons, relative-date filters) → `set_property_icon` / `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
 
 ## MANDATORY FIRST STEP — read every ancestral `AGENTS.md`
 
@@ -76,7 +76,7 @@ No exceptions — not for "just counting", not for "just a summary", not when "1
 
 ### The loop
 
-**For database rows, `read_database(database_id, format, exhaust_all=true)` runs this loop for you** — it fetches until `has_more == false` server-side and returns every row flattened (`format: "summary"` for a grouped sum/total). That *satisfies* this law; it is not a bypass. Hand-roll the loop below only for the endpoints the readers don't cover — block children, search, views.
+**For database rows, `read_database(database_id, format, exhaust_all=true)` runs this loop for you** — it fetches until `has_more == false` server-side and returns every row flattened (`format: "summary"` for a grouped sum/total). That *satisfies* this law; it is not a bypass. Hand-roll the loop below only for the endpoints the readers don't cover — block children and views (the `search` reader takes `exhaust_all` to page hits to the end).
 
 ```python
 # hand-roll ONLY for block children / search / views — NOT for DB rows (use read_database(exhaust_all=true))
@@ -287,16 +287,18 @@ Draft the design brief (type, filter, sort, grouping, visible props, name — pl
 
 ## MCP tools — pick by job
 
-This skill drives the `notion` MCP, which exposes **six tools**. Reads default to the three readers; `request` is for writes, schema inspection, and the endpoints readers don't cover.
+This skill drives the `notion` MCP, which exposes **eight tools**. Reads default to the five readers; `request` is for writes and the endpoints readers don't cover.
 
 | Job | Tool |
 |---|---|
 | The ancestral `AGENTS.md` sweep (mandatory first step) | **`read_agents_md(id)`** — one call does the whole climb + precedence; the `id` is any target (page/row/block/database/data_source) |
+| Find a page or data source **by name → id** | **`search(query, object_type?)`** — compact ranked hits (`object · "title" · short id · parent`) over `POST /v1/search`; the name→id resolver, so you don't pay the raw endpoint's tens-of-KB page objects. `object_type` = `page` \| `data_source` (never `database`). Ranked, NOT exhaustive; `exhaust_all=true` pages to the end |
 | Read a page or DB row — properties **and** body | **`read_page(page_id, format)`** — `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree with optional `depth`, for planning edits) · `text`. Relations→titles, rollups/formulas→scalars, blocks recovered, ~22× smaller than raw JSON. Optional `include_properties=false` suppresses the YAML property frontmatter (default `true`) |
-| Query DB rows — list / count / sum / grouped total | **`read_database(database_id, format, …)`** (`database_id` = the DB UUID **or** a `data_source_id`; auto-resolved) — `table` · `kv` · `tsv` · `summary` (overall or grouped totals; add `group_by` to group by a column). Optional `fields` to limit columns; `filter`/`sorts` are Notion objects passed verbatim; `exhaust_all=true` returns every row and **satisfies the pagination law** (row pagination only). Row **page ids are NOT in the output** — use raw `POST /v1/data_sources/{id}/query` (`.id` per result) when you need an id (e.g. to write a relation) |
+| Query DB rows — list / count / sum / grouped total | **`read_database(database_id, format, …)`** (`database_id` = the DB UUID **or** a `data_source_id`; auto-resolved) — `table` · `kv` · `tsv` · `summary` (overall or grouped totals; add `group_by` to group by a column). Optional `fields` to limit columns; `filter`/`sorts` are Notion objects passed verbatim; `exhaust_all=true` returns every row and **satisfies the pagination law** (row pagination only). Its output ALSO appends a `# Schema` section (every column `name · type`, formula bodies elided — **types only**; for column ICONS use `describe`) and a `# Views` section, both always. Row **page ids are NOT in the output** — use raw `POST /v1/data_sources/{id}/query` (`.id` per result) when you need an id (e.g. to write a relation) |
 | Inspect a database's **views** (view design) | **Already in every `read_database` output** — the trailing `# Views` section dumps each view's complete config (covers/preview, card size, aspect, layout, visible/hidden props, sorts, **filters, quick_filters**, chart axes; property ids resolved to names). No flag needed — the reader path for view design (raw `GET /v1/views` not needed) |
-| Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); schema/`.parent` inspection; search; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
-| Set a database **column/property** icon (public API drops these) | **`set_property_icon(data_source_id, property, …)`** — the one private-API convenience |
+| Describe an object's **structure** — a data source's column schema **+ column icons**, or a page's icon/cover + property types | **`describe(id)`** — any id (page/row/database/data_source). Data source → `name · type · detail` per column (formula bodies elided) **+ each column's icon** (best-effort private when `NOTION_TOKEN_V2` set; silently omitted otherwise — the public API can't read column icons). Page → its **public** icon, cover, title, parent + property types. Complements `read_page` (values) and `read_database` (rows). Standalone schema read; `read_database` already inlines the **types** |
+| Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); `.parent` inspection; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
+| Set a database **column/property** icon (public API drops these) | **`set_property_icon(data_source_id, property, …)`** — the one private-API convenience (to READ current column icons, use `describe`) |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
 
 A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on every reader; reader output is plain text with a trailing `# …` summary line.
