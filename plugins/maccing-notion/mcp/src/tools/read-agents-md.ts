@@ -30,10 +30,37 @@ interface Ancestor {
   title: string;
 }
 
+/**
+ * Normalize any target id — page, database row, block, database, or data_source — to the page where the
+ * climb begins. A database/data_source isn't itself a page (its AGENTS.md lives on its PARENT page beside
+ * the child_database block), so resolve those to that parent; a bare block resolves to its container page.
+ */
+async function resolveStartPage(id: string): Promise<string | undefined> {
+  // Pages and database rows both resolve through /v1/pages — the common case, one probe.
+  if ((await publicRequest("GET", `/v1/pages/${id}`)).ok) {
+    return id;
+  }
+
+  // A database target — start from its parent page.
+  if ((await publicRequest("GET", `/v1/databases/${id}`)).ok) {
+    return pageIdForDatabase(id);
+  }
+
+  // A data_source target — climb to its database, then that database's parent page.
+  const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
+  if (dataSource.ok) {
+    const parent = (dataSource.body as PageLike).parent ?? {};
+    return parent.database_id ? pageIdForDatabase(parent.database_id) : parent.page_id;
+  }
+
+  // Otherwise treat it as a bare block id.
+  return pageIdForBlock(id);
+}
+
 /** Climb .parent from the start page to the workspace root; return ancestors root-first (root … target). */
 async function climbToRoot(startId: string): Promise<Ancestor[]> {
   const chain: Ancestor[] = [];
-  let pageId: string | undefined = startId;
+  let pageId: string | undefined = await resolveStartPage(startId);
   let guard = 0;
 
   while (pageId && guard++ < MAX_DEPTH) {
