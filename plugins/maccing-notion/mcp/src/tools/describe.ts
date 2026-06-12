@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { iconLabel, type NotionIcon } from "../lib/format-object";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
-import { fetchPropertyIcons } from "../lib/notion-private";
+import { readCollectionIcons } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { err, ok, type ToolModule } from "../tool";
 
@@ -72,7 +72,8 @@ function parentLabel(parent: ParentRef | undefined): string {
 
 /** Render a data source: metadata header + the column schema, enriched with best-effort column icons. */
 async function describeDataSource(dataSourceId: string, body: DataSourceObject, note = ""): Promise<string> {
-  const icons = await fetchPropertyIcons(dataSourceId);
+  const read = await readCollectionIcons([dataSourceId]);
+  const icons = read.status === "ok" ? (read.byCollection[dataSourceId] ?? {}) : {};
 
   const header = [
     `# Data source: ${plain(body.title) || "(untitled)"}${note ? ` ${note}` : ""}`,
@@ -81,7 +82,8 @@ async function describeDataSource(dataSourceId: string, body: DataSourceObject, 
     `parent: ${parentLabel(body.parent)}`,
   ].join("\n");
 
-  return `${header}\n\n${formatSchema(body.properties ?? {}, icons)}`;
+  const throttled = read.status === "throttled" ? "\n\n(column icons unavailable — private read throttled; retry)" : "";
+  return `${header}\n\n${formatSchema(body.properties ?? {}, icons)}${throttled}`;
 }
 
 /** Render a page/row: metadata header (icon/cover both PUBLIC) + its properties as name · type. */

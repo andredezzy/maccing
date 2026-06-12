@@ -104,7 +104,7 @@ POST /v1/pages/{id}/move   body: { "parent": { "type": "page_id", "page_id": "<n
 
 > **STOP — two different things, don't conflate them:**
 > - **Page & database icons** (the icon on a page or on a database itself) → set via the **public API** (`PATCH /v1/pages` / `/v1/databases`) — the table just below.
-> - **Database PROPERTY / COLUMN icons** (the little icon next to a *column's* name) → the **public API silently drops these**, BUT they **ARE settable** via the private app API: use the **`set_property_icon`** MCP tool — **see [`private-api.md`](private-api.md)**. ⚠️ Property/column icons are a common false-negative: **never tell the user they're "UI-only" or "impossible via the API"** — they're not. Route to `private-api.md`.
+> - **Database PROPERTY / COLUMN icons** (the little icon next to a *column's* name) → the **public API silently drops these**, BUT they **ARE settable** via the private app API: use the **`upsert_property`** MCP tool (its `icon` field) — **see [`private-api.md`](private-api.md)**. ⚠️ Property/column icons are a common false-negative: **never tell the user they're "UI-only" or "impossible via the API"** — they're not. Route to `private-api.md`.
 
 The `icon` field (for **pages & databases**) is supported via PATCH `/v1/pages` / PATCH `/v1/databases`. Six types:
 

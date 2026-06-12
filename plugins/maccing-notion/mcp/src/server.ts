@@ -5,7 +5,7 @@
 //
 //   request           public REST API (api.notion.com/v1), Notion-Version 2026-03-11
 //   private_request   UNOFFICIAL private app API (api/v3) escape hatch for UI-only features
-//   set_property_icon convenience for the flagship private capability (column icons)
+//   upsert_property   create/update any property (data_source column + icon, or page value), batched
 //
 // Public token: NOTION_TOKEN. Private session cookie: NOTION_TOKEN_V2 + NOTION_SPACE_ID. All loaded
 // by start.sh from ~/.config/maccing/notion.env (stable per-user) and/or mcp/.env.local (dev
@@ -24,7 +24,7 @@ import { readDatabase } from "./tools/read-database";
 import { readPage } from "./tools/read-page";
 import { request } from "./tools/request";
 import { search } from "./tools/search";
-import { setPropertyIcon } from "./tools/set-property-icon";
+import { upsertProperty } from "./tools/upsert-property";
 
 // stdout is the JSON-RPC transport channel — route any stray console.log to stderr so it can't corrupt it.
 console.log = console.error;
@@ -35,7 +35,7 @@ const SERVER_INFO = { name: "notion", version: "2.0.0" };
 export const TOOLS: ToolModule[] = [
   request,
   privateRequest,
-  setPropertyIcon,
+  upsertProperty,
   search,
   describe,
   readAgentsMd,

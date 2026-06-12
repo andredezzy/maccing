@@ -8,7 +8,7 @@ Reference for the `notion-api` skill — the `name` values for Notion's **built-
 
 Set via `PATCH /v1/pages/{id}`, `PATCH /v1/databases/{id}`, or at creation (`POST /v1/pages`, `POST /v1/databases`). Note the **doubly-nested `icon`**: the page field is `{ "icon": { "type":"icon", "icon": { "name":"…", "color":"…" } } }`.
 
-To set a database **column/property** icon (not the database's own icon), use **`set_property_icon(data_source_id, property, …)`** — pass the database's *data_source id* and the property name; the public API silently drops property-icon writes (`private-api.md`).
+To set a database **column/property** icon (not the database's own icon), use **`upsert_property`** with an `icon` field — `{ properties: [{ target_id: <data_source id>, property: <name>, icon: "cash", color: "gray" }] }`; the public API silently drops property-icon writes (`private-api.md`).
 
 ## This list is verified — 885 valid names
 

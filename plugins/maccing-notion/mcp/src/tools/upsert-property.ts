@@ -1,0 +1,282 @@
+// upsert_property — the universal property writer, the write-dual of `describe`. Create-or-update a
+// property on ANY target: a data_source (the COLUMN schema def + its private column icon) or a page
+// (the property VALUE). Batched across any mix of targets in one call. `value` is a verbatim Notion
+// property object (zero drift). Column icons go through the private app API; everything else public.
+
+import { z } from "zod";
+
+import {
+  activeUserId,
+  type IconRead,
+  privateConfig,
+  readCollectionIcons,
+  saveTransactions,
+  spaceId,
+} from "../lib/notion-private";
+import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { buildIconOperations, planUpserts, type ResolvedEntry, type TargetType } from "../lib/upsert-property";
+import { err, ok, type ToolModule } from "../tool";
+
+const UUID = /^[0-9a-f-]{32,36}$/i;
+const COLORS = ["gray", "lightgray", "brown", "yellow", "orange", "green", "blue", "purple", "pink", "red"] as const;
+
+interface SchemaProp {
+  id: string;
+  name: string;
+}
+
+interface SchemaBody {
+  properties?: Record<string, SchemaProp>;
+}
+
+interface DatabaseBody {
+  data_sources?: { id: string }[];
+}
+
+interface RawEntry {
+  target_id?: string;
+  property?: string;
+  value?: unknown;
+  icon?: string;
+  color?: string;
+  remove?: boolean;
+  remove_icon?: boolean;
+}
+
+interface ResolvedIcon {
+  dataSourceId: string;
+  propertyId: string;
+  iconValue: string | null;
+}
+
+interface TargetInfo {
+  type: TargetType;
+  dataSourceId?: string;
+}
+
+/** "/icons/cash_gray.svg" → "cash·gray". */
+function prettyAsset(asset: string): string {
+  const file = asset.replace(/^\/icons\//, "").replace(/\.svg$/, "");
+  const cut = file.lastIndexOf("_");
+  return cut === -1 ? file : `${file.slice(0, cut)}·${file.slice(cut + 1)}`;
+}
+
+/** Resolve a property NAME (or id) to its RAW internal id (url-decoded), or null. */
+function resolvePropId(schema: Record<string, SchemaProp>, property: string): string | null {
+  for (const def of Object.values(schema)) {
+    const decoded = decodeURIComponent(def.id);
+    if (def.name === property || def.id === property || decoded === property) {
+      return decoded;
+    }
+  }
+  return null;
+}
+
+/** Probe a target id → is it a data_source (or database→its ds), or a page? */
+async function resolveTarget(id: string): Promise<TargetInfo | null> {
+  const ds = await publicRequest("GET", `/v1/data_sources/${id}`);
+  if (ds.ok) {
+    return { type: "data_source", dataSourceId: id };
+  }
+  const db = await publicRequest("GET", `/v1/databases/${id}`);
+  if (db.ok) {
+    const dataSourceId = (db.body as DatabaseBody).data_sources?.[0]?.id;
+    if (dataSourceId) {
+      return { type: "data_source", dataSourceId };
+    }
+  }
+  const page = await publicRequest("GET", `/v1/pages/${id}`);
+  if (page.ok) {
+    return { type: "page" };
+  }
+  return null;
+}
+
+/** Per-icon verification line distinguishing confirmed / read-throttled / did-not-persist (no-op name). */
+function verifyIcons(icons: ResolvedIcon[], read: IconRead, idToName: Record<string, string>): string {
+  if (read.status === "throttled") {
+    return `${icons.length} column icon(s) written (saveTransactions 200) — verification read throttled; re-run describe to confirm.`;
+  }
+  return icons
+    .map((icon) => {
+      const name = idToName[icon.propertyId] ?? icon.propertyId;
+      const persisted = read.byCollection[icon.dataSourceId]?.[icon.propertyId] ?? null;
+      if (icon.iconValue === null) {
+        return persisted ? `${name}: remove — STILL PRESENT` : `${name}: removed ✓`;
+      }
+      if (persisted === icon.iconValue) {
+        return `${name}: ${prettyAsset(icon.iconValue)} ✓`;
+      }
+      return `${name}: ${prettyAsset(icon.iconValue)} — DID NOT PERSIST (name may no-op as a property asset; pick another)`;
+    })
+    .join("\n");
+}
+
+export const upsertProperty: ToolModule = {
+  name: "upsert_property",
+  config: {
+    title: "Upsert a Notion property (column or page value)",
+    description:
+      "Create-or-update a property on ANY target, batched. The write-dual of `describe`. Each entry: " +
+      "{ target_id, property, value?, icon?, color?, remove?, remove_icon? }. If target_id is a data_source/" +
+      "database → `value` is the COLUMN's schema definition (a verbatim Notion property object, e.g. " +
+      "{number:{format}}, {select:{options:[{name,color}]}}, {name:'New name'}) applied via PATCH /v1/data_sources, " +
+      "and `icon` sets the COLUMN icon (private app API; the public API can't). If target_id is a page/row → " +
+      "`value` is the property VALUE (e.g. {status:{name:'Done'}}, {number:1234}) applied via PATCH /v1/pages; " +
+      "`icon` is rejected (page values have no icon — set the PAGE icon via request). `remove` deletes the column " +
+      "/ clears the value; `remove_icon` clears a column's icon. Mix any targets in one call. Replaces set_property_icon.",
+    annotations: {
+      title: "Upsert a Notion property (column or page value)",
+      openWorldHint: true,
+      destructiveHint: true,
+    },
+    inputSchema: {
+      properties: z
+        .array(
+          z.object({
+            target_id: z.string().describe("A data_source/database id (→ column) or a page/row id (→ value)."),
+            property: z.string().describe("Property name (or id)."),
+            value: z
+              .unknown()
+              .optional()
+              .describe("Verbatim Notion property object — schema def for a data_source, value for a page."),
+            icon: z.string().optional().describe("Column icon name (data_source targets only), e.g. cash."),
+            color: z.enum(COLORS).optional().describe("Icon color (default gray)."),
+            remove: z.boolean().optional().describe("Delete the column / clear the page value."),
+            remove_icon: z.boolean().optional().describe("Remove just the column's icon (data_source only)."),
+          }),
+        )
+        .describe("The batch of property upserts — any mix of data sources and pages."),
+    },
+  },
+
+  handler: async (args) => {
+    if (!hasPublicToken()) {
+      return err("NOTION_TOKEN is not set.");
+    }
+    const rawEntries = Array.isArray(args.properties) ? (args.properties as RawEntry[]) : null;
+    if (!rawEntries || rawEntries.length === 0) {
+      return err("`properties` must be a non-empty array of upsert entries.");
+    }
+
+    try {
+      const errors: string[] = [];
+
+      // 1. Resolve each distinct target's type.
+      const targets = new Map<string, TargetInfo>();
+      for (const id of [...new Set(rawEntries.map((entry) => String(entry.target_id ?? "")))]) {
+        if (!UUID.test(id)) {
+          errors.push(`"${id}" is not a UUID.`);
+          continue;
+        }
+        const info = await resolveTarget(id);
+        if (info) {
+          targets.set(id, info);
+        } else {
+          errors.push(`"${id}" is not a readable page, database, or data source.`);
+        }
+      }
+
+      // 2. Build resolved entries (data_source ids normalized via the database→ds resolution).
+      const resolved: ResolvedEntry[] = [];
+      for (const entry of rawEntries) {
+        const info = targets.get(String(entry.target_id ?? ""));
+        if (!info) {
+          continue;
+        }
+        resolved.push({
+          targetId:
+            info.type === "data_source" ? (info.dataSourceId ?? String(entry.target_id)) : String(entry.target_id),
+          targetType: info.type,
+          property: String(entry.property ?? ""),
+          value: entry.value,
+          icon: typeof entry.icon === "string" ? entry.icon : undefined,
+          color: typeof entry.color === "string" ? entry.color : undefined,
+          remove: entry.remove === true,
+          removeIcon: entry.remove_icon === true,
+        });
+      }
+
+      const plan = planUpserts(resolved);
+      errors.push(...plan.errors);
+
+      // 3. Apply the public PATCHes — data-source schema defs, then page values.
+      const applied: string[] = [];
+      let anyWrite = false;
+      for (const [dataSourceId, properties] of Object.entries(plan.dataSourcePatches)) {
+        const response = await publicRequest("PATCH", `/v1/data_sources/${dataSourceId}`, { properties });
+        if (response.ok) {
+          applied.push(`data_source ${dataSourceId}: ${Object.keys(properties).join(", ")}`);
+          anyWrite = true;
+        } else {
+          errors.push(`PATCH data_source ${dataSourceId} failed: ${JSON.stringify(response.body)}`);
+        }
+      }
+      for (const [pageId, properties] of Object.entries(plan.pagePatches)) {
+        const response = await publicRequest("PATCH", `/v1/pages/${pageId}`, { properties });
+        if (response.ok) {
+          applied.push(`page ${pageId}: ${Object.keys(properties).join(", ")} ✓`);
+          anyWrite = true;
+        } else {
+          errors.push(`PATCH page ${pageId} failed: ${JSON.stringify(response.body)}`);
+        }
+      }
+
+      // 4. Column icons (private) — resolve names→raw ids on the FRESH schema (catches new/renamed cols), apply, verify.
+      let icons = "no column icons in this batch";
+      if (plan.iconPlan.length > 0) {
+        const config = privateConfig();
+        if (!config.ok) {
+          errors.push(`Column icons skipped — private API not configured (${config.missing.join(", ")}).`);
+          icons = "skipped (private API not configured)";
+        } else {
+          const iconDataSourceIds = [...new Set(plan.iconPlan.map((entry) => entry.dataSourceId))];
+          const schemaById = new Map<string, Record<string, SchemaProp>>();
+          for (const dataSourceId of iconDataSourceIds) {
+            const response = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+            if (response.ok) {
+              schemaById.set(dataSourceId, (response.body as SchemaBody).properties ?? {});
+            }
+          }
+
+          const resolvedIcons: ResolvedIcon[] = [];
+          for (const entry of plan.iconPlan) {
+            const propertyId = resolvePropId(schemaById.get(entry.dataSourceId) ?? {}, entry.property);
+            if (propertyId) {
+              resolvedIcons.push({ dataSourceId: entry.dataSourceId, propertyId, iconValue: entry.iconValue });
+            } else {
+              errors.push(`Could not resolve property "${entry.property}" on ${entry.dataSourceId} for its icon.`);
+            }
+          }
+
+          if (resolvedIcons.length > 0) {
+            const operations = buildIconOperations(resolvedIcons, spaceId(), await activeUserId());
+            const setResponse = await saveTransactions(operations);
+            if (!setResponse.ok) {
+              errors.push(`Icon saveTransactions failed: ${JSON.stringify(setResponse.body)}`);
+              icons = "icon write FAILED";
+            } else {
+              anyWrite = true;
+              const idToName: Record<string, string> = {};
+              for (const schema of schemaById.values()) {
+                for (const def of Object.values(schema)) {
+                  idToName[decodeURIComponent(def.id)] = def.name;
+                }
+              }
+              icons = verifyIcons(resolvedIcons, await readCollectionIcons(iconDataSourceIds), idToName);
+            }
+          }
+        }
+      }
+
+      // Nothing succeeded and we collected errors → a hard error, not a silent no-op result.
+      if (!anyWrite && errors.length > 0) {
+        return err(errors.join("\n"));
+      }
+
+      return ok({ applied, icons, errors: errors.length > 0 ? errors : undefined });
+    } catch (error) {
+      return err(error instanceof Error ? error.message : String(error));
+    }
+  },
+};

@@ -10,9 +10,29 @@
 //  - x-notion-active-user-header must be the account (a session can hold several) that has edit
 //    access to NOTION_SPACE_ID — resolved from getSpaces by matching the space, then cached.
 
+import { parseCollectionIcons } from "./upsert-property";
+
 const TOKEN_V2 = process.env.NOTION_TOKEN_V2;
 const SPACE_ID = process.env.NOTION_SPACE_ID;
 const BASE = "https://www.notion.so/api/v3";
+
+// Serialize private POSTs with a minimum interval — Notion's api/v3 bot-protection trips on bursts
+// (rapid calls return an HTML page). A shared promise chain spaces every call ≥ MIN apart, so no
+// code path (a batch readback, describe, an upsert) can burst-trip it. Transparent to callers.
+const MIN_PRIVATE_INTERVAL_MS = 280;
+let lastPrivateStart = 0;
+let privateGate: Promise<void> = Promise.resolve();
+
+function pacePrivate(): Promise<void> {
+  privateGate = privateGate.then(async () => {
+    const wait = MIN_PRIVATE_INTERVAL_MS - (Date.now() - lastPrivateStart);
+    if (wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+    lastPrivateStart = Date.now();
+  });
+  return privateGate;
+}
 
 export interface PrivateResponse {
   status: number;
@@ -42,6 +62,8 @@ export function spaceId(): string | undefined {
 
 /** Low-level POST to api/v3 with cookie auth. Detects the bot/HTML page returned when rate-limited. */
 async function post(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
+  await pacePrivate();
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Cookie: `token_v2=${TOKEN_V2}`,
@@ -136,36 +158,44 @@ export async function getRecordValues(requests: RecordRequest[]): Promise<Privat
   return privateCall("getRecordValues", { requests });
 }
 
-interface CollectionSchemaBody {
-  results?: { value?: { schema?: Record<string, { icon?: string }> } }[];
+/** getRecordValues with bounded backoff — the read-back is the bot-throttle-prone half of the private API. */
+async function getRecordValuesRetry(requests: RecordRequest[], tries = 3): Promise<PrivateResponse> {
+  let response = await getRecordValues(requests);
+  for (let attempt = 1; attempt < tries && !response.ok; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    response = await getRecordValues(requests);
+  }
+  return response;
 }
 
+export interface IconReadOk {
+  status: "ok";
+  byCollection: Record<string, Record<string, string>>;
+}
+
+export interface IconReadThrottled {
+  status: "throttled";
+}
+
+export type IconRead = IconReadOk | IconReadThrottled;
+
 /**
- * Best-effort: read every column's icon from the private collection schema (the public API never
- * exposes property icons). Returns a { RAW propertyId → "/icons/<file>_<color>.svg" } map, or an
- * empty map on ANY failure — creds absent, 401, bot/HTML page, rate-limit. NEVER throws: this
- * enriches `describe` opportunistically, so a miss must degrade to "no icons", never an error.
+ * Best-effort read of column icons for one or more collections (the public API can't see them).
+ * Returns a DISCRIMINATED result so callers tell "no icons" apart from "read throttled" — never a
+ * misleading silent empty. No creds → ok/empty (graceful degrade). Retries the bot-prone read. Never throws.
  */
-export async function fetchPropertyIcons(dataSourceId: string): Promise<Record<string, string>> {
-  if (!privateConfig().ok) {
-    return {};
+export async function readCollectionIcons(dataSourceIds: string[]): Promise<IconRead> {
+  if (!privateConfig().ok || dataSourceIds.length === 0) {
+    return { status: "ok", byCollection: {} };
   }
   try {
-    const response = await getRecordValues([{ id: dataSourceId, table: "collection" }]);
+    const response = await getRecordValuesRetry(dataSourceIds.map((id) => ({ id, table: "collection" })));
     if (!response.ok) {
-      return {};
+      return { status: "throttled" };
     }
-
-    const schema = (response.body as CollectionSchemaBody).results?.[0]?.value?.schema ?? {};
-    const icons: Record<string, string> = {};
-    for (const [propertyId, definition] of Object.entries(schema)) {
-      if (definition?.icon) {
-        icons[propertyId] = definition.icon;
-      }
-    }
-    return icons;
+    return { status: "ok", byCollection: parseCollectionIcons(response.body, dataSourceIds) };
   } catch {
-    return {};
+    return { status: "throttled" };
   }
 }
 

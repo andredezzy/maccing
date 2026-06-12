@@ -34,7 +34,7 @@ test("tools/list exposes exactly the snake_case Notion tools", async () => {
     "read_page",
     "request",
     "search",
-    "set_property_icon",
+    "upsert_property",
   ]);
 });
 
@@ -53,7 +53,7 @@ test("annotations pass through — private + icon tools are flagged destructive,
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   expect(byName.get("request")?.annotations?.openWorldHint).toBe(true);
   expect(byName.get("private_request")?.annotations?.destructiveHint).toBe(true);
-  expect(byName.get("set_property_icon")?.annotations?.destructiveHint).toBe(true);
+  expect(byName.get("upsert_property")?.annotations?.destructiveHint).toBe(true);
 });
 
 test("invalid arguments are rejected without crashing the server", async () => {
@@ -63,11 +63,11 @@ test("invalid arguments are rejected without crashing the server", async () => {
   expect(result.isError).toBe(true);
 });
 
-test("a malformed data_source_id yields a graceful error result, not a throw", async () => {
+test("a malformed target_id yields a graceful error result, not a throw", async () => {
   const client = await connectClient();
   const result = await client.callTool({
-    name: "set_property_icon",
-    arguments: { data_source_id: "not-a-uuid", property: "Status" },
+    name: "upsert_property",
+    arguments: { properties: [{ target_id: "not-a-uuid", property: "Status", icon: "cash" }] },
   });
   expect(result.isError).toBe(true);
 });

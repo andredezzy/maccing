@@ -12,7 +12,7 @@ description: Use when working with the Notion API or MCP — creating, editing, 
 >
 > THIS skill is the complementary **low-level engineering reference** — the Notion API/formula/rollup/relation/view/chart/block details for building & editing databases programmatically (and debugging Notion API errors).
 
-**Tooling in one line:** reads → `read_agents_md` / `search` (name→id) / `read_page` / `read_database` / `describe` (schema + column icons, or page/object metadata); writes and endpoints the readers don't cover → `request`; UI-only writes (set column icons, relative-date filters) → `set_property_icon` / `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
+**Tooling in one line:** reads → `read_agents_md` / `search` (name→id) / `read_page` / `read_database` / `describe` (schema + column icons, or page/object metadata); writes and endpoints the readers don't cover → `request`; create/update a **property** (a database column + its icon, or a page value) → `upsert_property`; other UI-only writes (relative-date filters) → `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
 
 ## MANDATORY FIRST STEP — read every ancestral `AGENTS.md`
 
@@ -285,6 +285,38 @@ Present a concise design brief — **one line per applicable dimension, each wit
 
 Draft the design brief (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views), present it, wait for approval, then proceed through the standard approval-gate write cycle. Non-negotiable.
 
+## MANDATORY — design the whole object before creating it (logical *and* aesthetic)
+
+Creating any structure-bearing object — a **data source / database**, a **page**, or **new properties** on one — is a design act. Propose the COMPLETE design — every logical AND aesthetic choice — in the approval batch, before the first `POST`/`PATCH`. A column with no icon, a select with default colors, an unformatted number: each is a decision you made silently for the user.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+
+```
+NO CREATE (data source, page, or property) UNTIL ITS FULL DESIGN — LOGICAL + AESTHETIC — IS PROPOSED AND APPROVED
+```
+
+### What to design — state every applicable line ("default" is a stated answer, never a skip)
+
+- **Logical** — the data model (columns + types; relations/rollups/formulas; domain-faithful nesting); **names** (house-style casing/language, singular vs plural); property **descriptions**; the **view(s)** + their data shape *(→ the view-design rule above)*.
+- **Aesthetic** — page **icon** + **cover**; **every column's icon** (gray named, matching the column's meaning); **select/status option colors**; **number/currency formats** (pt-BR `R$`); gallery/card look + layout.
+
+Conform to the nearest `AGENTS.md` (read its recorded conventions; if none exist for this concern, brainstorm fresh **and record them back** per the conventions rule). Apply in one batch: **`upsert_property`** sets the column defs + their icons (and any page values); `request` creates the database/page and sets the page icon/cover.
+
+### Red Flags — STOP, you're rationalizing
+
+| Thought | Reality |
+|---|---|
+| "I'll create the columns now and add icons later" | Icons are part of the design — propose them in the same batch; `upsert_property` makes it one call |
+| "Default option colors / number format are fine" | "Default" is a choice you're making for them — surface it |
+| "It's just a quick column add" | A new column with no icon breaks the workspace's column-icon convention — propose its icon |
+| "The icon doesn't matter for a hidden/rollup column" | Every column carries one for consistency; pick one that matches its meaning |
+
+### The Bottom Line
+
+Every create proposes the whole object — data model, names, descriptions, views, icons, colors, formats — conforming to the nearest `AGENTS.md`, in one approval batch; then apply (`upsert_property` for columns + icons + values, `request` for the db/page + its icon/cover) and record any new convention back. Non-negotiable.
+
 ## MCP tools — pick by job
 
 This skill drives the `notion` MCP, which exposes **eight tools**. Reads default to the five readers; `request` is for writes and the endpoints readers don't cover.
@@ -298,7 +330,7 @@ This skill drives the `notion` MCP, which exposes **eight tools**. Reads default
 | Inspect a database's **views** (view design) | **Already in every `read_database` output** — the trailing `# Views` section dumps each view's complete config (covers/preview, card size, aspect, layout, visible/hidden props, sorts, **filters, quick_filters**, chart axes; property ids resolved to names). No flag needed — the reader path for view design (raw `GET /v1/views` not needed) |
 | Describe an object's **structure** — a data source's column schema **+ column icons**, or a page's icon/cover + property types | **`describe(id)`** — any id (page/row/database/data_source). Data source → `name · type · detail` per column (formula bodies elided) **+ each column's icon** (best-effort private when `NOTION_TOKEN_V2` set; silently omitted otherwise — the public API can't read column icons). Page → its **public** icon, cover, title, parent + property types. Complements `read_page` (values) and `read_database` (rows). Standalone schema read; `read_database` already inlines the **types** |
 | Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); `.parent` inspection; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
-| Set a database **column/property** icon (public API drops these) | **`set_property_icon(data_source_id, property, …)`** — the one private-API convenience (to READ current column icons, use `describe`) |
+| Create/update a **property** — a database **column** (name, type, format, options+colors, description, **+ its icon**) or a **page property value** | **`upsert_property({ properties:[{target_id, property, value?, icon?, color?, remove?}] })`** — the write-dual of `describe`, **batched** across any mix of data sources + pages. `value` = a verbatim Notion property object (a schema def for a data_source, a value for a page); `icon` sets the **column** icon (private app API; data_source targets only — the public API can't). Replaces `set_property_icon`. To READ current column icons, use `describe` |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
 
 A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on every reader; reader output is plain text with a trailing `# …` summary line.
@@ -322,7 +354,7 @@ A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read pro
 ## Auth / MCP pattern
 
 - Tool selection → "MCP tools — pick by job" above. `request`'s `query` arg is the GET query-string — the only way to send `start_cursor`/`page_size` to `GET /v1/blocks/{id}/children` and `GET /v1/views?data_source_id=…`.
-- ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** via `set_property_icon` / `private_request` (the public API silently drops them) — so when asked whether a property/column icon can be set via the API, the answer is **YES, never "UI-only/impossible."** Recipe → `references/private-api.md`.
+- ⚠️ **Database PROPERTY/COLUMN icons (the icon next to a column name) ARE settable** via `upsert_property` (or raw `private_request`) — the public API silently drops them — so when asked whether a property/column icon can be set via the API, the answer is **YES, never "UI-only/impossible."** Recipe → `references/private-api.md`.
 - Large results (>~80k chars) overflow MCP token limit → saved to `~/.claude/projects/.../tool-results/mcp-notion-*.txt`
 - Rate limit: HTTP 429/502/503 → exponential backoff `1.2*(attempt+1)s`, up to 5 retries
 - Safe inter-request pace: `time.sleep(0.03)` in loops
@@ -386,7 +418,7 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | Task | Load |
 |---|---|
 | Property shapes, reading values, **page/DB** icons & covers (for **property/column** icons use the private-API row below, NOT this one) | `references/pages-properties.md` |
-| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — settable via the private app API through the `set_property_icon` / `private_request` MCP tools (never answer "impossible") | `references/private-api.md` |
+| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — column icons via `upsert_property`; other UI-only writes via `private_request` (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
