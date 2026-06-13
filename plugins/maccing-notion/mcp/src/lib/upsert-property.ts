@@ -13,10 +13,19 @@ export interface ResolvedEntry {
   value?: unknown;
   icon?: string;
   color?: string;
+  /** The property's canonical DEFAULT visibility (data_source targets only; row-detail + new-view default). */
+  visible?: boolean;
   /** Delete the whole property (column or page value). */
   remove?: boolean;
   /** Remove just the column icon, keeping the column (data_source only). */
   removeIcon?: boolean;
+}
+
+/** A canonical default-visibility change for one property (collection.format.collection_page_properties). */
+export interface VisiblePlanEntry {
+  dataSourceId: string;
+  property: string;
+  visible: boolean;
 }
 
 /** A column-icon assignment, keyed by property NAME — the handler resolves the name to a raw id. */
@@ -30,6 +39,7 @@ export interface UpsertPlan {
   dataSourcePatches: Record<string, Record<string, unknown>>;
   pagePatches: Record<string, Record<string, unknown>>;
   iconPlan: IconPlanEntry[];
+  visiblePlan: VisiblePlanEntry[];
   errors: string[];
 }
 
@@ -75,6 +85,7 @@ export function planUpserts(entries: ResolvedEntry[]): UpsertPlan {
   const dataSourcePatches: Record<string, Record<string, unknown>> = {};
   const pagePatches: Record<string, Record<string, unknown>> = {};
   const iconPlan: IconPlanEntry[] = [];
+  const visiblePlan: VisiblePlanEntry[] = [];
   const errors: string[] = [];
 
   for (const entry of entries) {
@@ -82,6 +93,11 @@ export function planUpserts(entries: ResolvedEntry[]): UpsertPlan {
       if (entry.icon || entry.removeIcon) {
         errors.push(
           `"${entry.property}" on page ${entry.targetId}: page property values have no icon — set the PAGE's icon via request PATCH /v1/pages instead.`,
+        );
+      }
+      if (entry.visible !== undefined) {
+        errors.push(
+          `"${entry.property}" on page ${entry.targetId}: a page value has no visibility — \`visible\` only applies to a data_source property's default visibility.`,
         );
       }
       if (entry.remove) {
@@ -109,9 +125,12 @@ export function planUpserts(entries: ResolvedEntry[]): UpsertPlan {
     } else if (entry.removeIcon) {
       iconPlan.push({ dataSourceId: entry.targetId, property: entry.property, iconValue: null });
     }
+    if (entry.visible !== undefined) {
+      visiblePlan.push({ dataSourceId: entry.targetId, property: entry.property, visible: entry.visible });
+    }
   }
 
-  return { dataSourcePatches, pagePatches, iconPlan, errors };
+  return { dataSourcePatches, pagePatches, iconPlan, visiblePlan, errors };
 }
 
 interface ResolvedIcon {

@@ -69,6 +69,17 @@ test("planUpserts rejects an icon on a page target with a clear error, and emits
   expect(plan.iconPlan).toEqual([]);
 });
 
+test("planUpserts collects a canonical visibility change for a data_source property", () => {
+  const plan = planUpserts([{ targetId: "ds1", targetType: "data_source", property: "X", visible: false }]);
+  expect(plan.visiblePlan).toEqual([{ dataSourceId: "ds1", property: "X", visible: false }]);
+});
+
+test("planUpserts rejects `visible` on a page target (a value has no visibility)", () => {
+  const plan = planUpserts([{ targetId: "pg1", targetType: "page", property: "Status", visible: true }]);
+  expect(plan.errors).toHaveLength(1);
+  expect(plan.visiblePlan).toEqual([]);
+});
+
 test("planUpserts: remove deletes a column (null) and clears a page value (null)", () => {
   const plan = planUpserts([
     { targetId: "ds1", targetType: "data_source", property: "Old", remove: true },

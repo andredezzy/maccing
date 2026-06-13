@@ -8,10 +8,13 @@ import { z } from "zod";
 import {
   activeUserId,
   type IconRead,
+  type PageOrderEntry,
   privateConfig,
   readCollectionIcons,
+  readCollectionPageProperties,
   saveTransactions,
   spaceId,
+  writeCollectionFormat,
 } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import {
@@ -20,6 +23,7 @@ import {
   planUpserts,
   type ResolvedEntry,
   type TargetType,
+  type VisiblePlanEntry,
 } from "../lib/upsert-property";
 import { err, ok, type ToolModule } from "../tool";
 
@@ -45,6 +49,7 @@ interface RawEntry {
   value?: unknown;
   icon?: string;
   color?: string;
+  visible?: boolean;
   remove?: boolean;
   remove_icon?: boolean;
 }
@@ -76,6 +81,70 @@ function resolvePropId(schema: Record<string, SchemaProp>, property: string): st
     }
   }
   return null;
+}
+
+interface VisibilityResult {
+  report: string;
+  didWrite: boolean;
+  errors: string[];
+}
+
+/**
+ * Apply per-property canonical DEFAULT visibility (collection.format.collection_page_properties[].visible) —
+ * the row-detail + new-view default. Read-modify-write per data source, preserving order + other props'
+ * visibility. Private; degrades gracefully like the icon path.
+ */
+async function applyCanonicalVisibility(visiblePlan: VisiblePlanEntry[]): Promise<VisibilityResult> {
+  const errors: string[] = [];
+  const lines: string[] = [];
+  let didWrite = false;
+
+  const byDataSource = new Map<string, VisiblePlanEntry[]>();
+  for (const entry of visiblePlan) {
+    const list = byDataSource.get(entry.dataSourceId) ?? [];
+    list.push(entry);
+    byDataSource.set(entry.dataSourceId, list);
+  }
+
+  for (const [dataSourceId, entries] of byDataSource) {
+    const schemaResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+    const schema = schemaResponse.ok ? ((schemaResponse.body as SchemaBody).properties ?? {}) : {};
+
+    const read = await readCollectionPageProperties(dataSourceId);
+    if (read.status === "throttled") {
+      lines.push(describePrivateFailure("throttled"));
+      errors.push(`Default visibility not applied on ${dataSourceId} — private read throttled.`);
+      continue;
+    }
+    const pageProps: PageOrderEntry[] =
+      read.pageProps.length > 0
+        ? read.pageProps.map((entry) => ({ ...entry }))
+        : Object.values(schema).map((def) => ({ property: decodeURIComponent(def.id), visible: true }));
+
+    for (const entry of entries) {
+      const rawId = resolvePropId(schema, entry.property);
+      if (!rawId) {
+        errors.push(`Could not resolve "${entry.property}" on ${dataSourceId} for its visibility.`);
+        continue;
+      }
+      const existing = pageProps.find((prop) => decodeURIComponent(prop.property) === rawId);
+      if (existing) {
+        existing.visible = entry.visible;
+      } else {
+        pageProps.push({ property: rawId, visible: entry.visible });
+      }
+    }
+
+    const write = await writeCollectionFormat(dataSourceId, { collection_page_properties: pageProps });
+    if (write.ok) {
+      didWrite = true;
+      lines.push(`${entries.length} default-visibility change(s) ✓`);
+    } else {
+      lines.push(describePrivateFailure(write.body));
+    }
+  }
+
+  return { report: lines.join("; "), didWrite, errors };
 }
 
 /** Probe a target id → is it a data_source (or database→its ds), or a page? */
@@ -129,8 +198,10 @@ export const upsertProperty: ToolModule = {
       "{number:{format}}, {select:{options:[{name,color}]}}, {name:'New name'}) applied via PATCH /v1/data_sources, " +
       "and `icon` sets the COLUMN icon (private app API; the public API can't). If target_id is a page/row → " +
       "`value` is the property VALUE (e.g. {status:{name:'Done'}}, {number:1234}) applied via PATCH /v1/pages; " +
-      "`icon` is rejected (page values have no icon — set the PAGE icon via request). `remove` deletes the column " +
-      "/ clears the value; `remove_icon` clears a column's icon. Mix any targets in one call. Replaces set_property_icon.",
+      "`icon` is rejected (page values have no icon — set the PAGE icon via request). `visible` (data_source targets) " +
+      "sets the property's DEFAULT visibility — the row-detail panel + new-view default (private; per-property, like " +
+      "the icon). `remove` deletes the column / clears the value; `remove_icon` clears a column's icon. Mix any " +
+      "targets in one call. (For per-VIEW column order/visibility, use order_properties.) Replaces set_property_icon.",
     annotations: {
       title: "Upsert a Notion property (column or page value)",
       openWorldHint: true,
@@ -148,6 +219,12 @@ export const upsertProperty: ToolModule = {
               .describe("Verbatim Notion property object — schema def for a data_source, value for a page."),
             icon: z.string().optional().describe("Column icon name (data_source targets only), e.g. cash."),
             color: z.enum(COLORS).optional().describe("Icon color (default gray)."),
+            visible: z
+              .boolean()
+              .optional()
+              .describe(
+                "Data_source targets: the property's DEFAULT visibility (row-detail + new-view default; private).",
+              ),
             remove: z.boolean().optional().describe("Delete the column / clear the page value."),
             remove_icon: z.boolean().optional().describe("Remove just the column's icon (data_source only)."),
           }),
@@ -198,6 +275,7 @@ export const upsertProperty: ToolModule = {
           value: entry.value,
           icon: typeof entry.icon === "string" ? entry.icon : undefined,
           color: typeof entry.color === "string" ? entry.color : undefined,
+          visible: typeof entry.visible === "boolean" ? entry.visible : undefined,
           remove: entry.remove === true,
           removeIcon: entry.remove_icon === true,
         });
@@ -283,12 +361,29 @@ export const upsertProperty: ToolModule = {
         }
       }
 
+      // 5. Canonical DEFAULT visibility (private) — per-property, the row-detail + new-view default.
+      let visibility = "no visibility changes";
+      if (plan.visiblePlan.length > 0) {
+        const config = privateConfig();
+        if (!config.ok) {
+          errors.push(`Default visibility skipped — private API not configured (${config.missing.join(", ")}).`);
+          visibility = "skipped (private API not configured)";
+        } else {
+          const result = await applyCanonicalVisibility(plan.visiblePlan);
+          visibility = result.report || "no visibility changes";
+          errors.push(...result.errors);
+          if (result.didWrite) {
+            anyWrite = true;
+          }
+        }
+      }
+
       // Nothing succeeded and we collected errors → a hard error, not a silent no-op result.
       if (!anyWrite && errors.length > 0) {
         return err(errors.join("\n"));
       }
 
-      return ok({ applied, icons, errors: errors.length > 0 ? errors : undefined });
+      return ok({ applied, icons, visibility, errors: errors.length > 0 ? errors : undefined });
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }
