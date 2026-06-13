@@ -28,6 +28,7 @@ test("tools/list exposes exactly the snake_case Notion tools", async () => {
   const { tools } = await client.listTools();
   expect(tools.map((tool) => tool.name).sort()).toEqual([
     "describe",
+    "order_columns",
     "private_request",
     "read_agents_md",
     "read_database",
