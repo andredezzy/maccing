@@ -6,7 +6,7 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-
+import { normalizeUuid } from "../lib/normalize-uuid";
 import { normalizeCallouts } from "../lib/notion-markdown";
 import { flattenProperty, type PageWithProps, type RawProperty, titleOf } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
@@ -218,7 +218,7 @@ export const readPage: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const pageId = String(args.page_id ?? "").trim();
+    const pageId = normalizeUuid(String(args.page_id ?? ""));
     if (!UUID.test(pageId)) {
       return err("page_id must be a UUID.");
     }

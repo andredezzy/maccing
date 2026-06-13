@@ -4,7 +4,7 @@
 // property object (zero drift). Column icons go through the private app API; everything else public.
 
 import { z } from "zod";
-
+import { normalizeUuid } from "../lib/normalize-uuid";
 import {
   activeUserId,
   type IconRead,
@@ -247,7 +247,7 @@ export const upsertProperty: ToolModule = {
 
       // 1. Resolve each distinct target's type.
       const targets = new Map<string, TargetInfo>();
-      for (const id of [...new Set(rawEntries.map((entry) => String(entry.target_id ?? "")))]) {
+      for (const id of [...new Set(rawEntries.map((entry) => normalizeUuid(String(entry.target_id ?? ""))))]) {
         if (!UUID.test(id)) {
           errors.push(`"${id}" is not a UUID.`);
           continue;
@@ -263,13 +263,13 @@ export const upsertProperty: ToolModule = {
       // 2. Build resolved entries (data_source ids normalized via the database→ds resolution).
       const resolved: ResolvedEntry[] = [];
       for (const entry of rawEntries) {
-        const info = targets.get(String(entry.target_id ?? ""));
+        const normalizedId = normalizeUuid(String(entry.target_id ?? ""));
+        const info = targets.get(normalizedId);
         if (!info) {
           continue;
         }
         resolved.push({
-          targetId:
-            info.type === "data_source" ? (info.dataSourceId ?? String(entry.target_id)) : String(entry.target_id),
+          targetId: info.type === "data_source" ? (info.dataSourceId ?? normalizedId) : normalizedId,
           targetType: info.type,
           property: String(entry.property ?? ""),
           value: entry.value,

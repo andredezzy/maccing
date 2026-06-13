@@ -4,6 +4,7 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
+import { normalizeUuid } from "../lib/normalize-uuid";
 import { normalizeCallouts } from "../lib/notion-markdown";
 import { type PageWithProps, titleOf } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
@@ -182,7 +183,7 @@ export const readAgentsMd: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const pageId = String(args.id ?? "").trim();
+    const pageId = normalizeUuid(String(args.id ?? ""));
     if (!UUID.test(pageId)) {
       return err("page_id must be a UUID.");
     }

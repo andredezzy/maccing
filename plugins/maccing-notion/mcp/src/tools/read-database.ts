@@ -7,6 +7,7 @@ import { z } from "zod";
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
 import { formatViews, type IdToName, type RawView } from "../lib/format-views";
+import { normalizeUuid } from "../lib/normalize-uuid";
 import { flattenProperty, type RawProperty } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { resolveRelations } from "../lib/resolve-relations";
@@ -130,7 +131,7 @@ export const readDatabase: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const databaseId = String(args.database_id ?? "").trim();
+    const databaseId = normalizeUuid(String(args.database_id ?? ""));
     if (!UUID.test(databaseId)) {
       return err("database_id must be a UUID.");
     }

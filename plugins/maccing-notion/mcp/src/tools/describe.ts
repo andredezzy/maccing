@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { iconLabel, type NotionIcon } from "../lib/format-object";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
+import { normalizeUuid } from "../lib/normalize-uuid";
 import { readCollectionIcons } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { err, ok, type ToolModule } from "../tool";
@@ -130,7 +131,7 @@ export const describe: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const id = String(args.id ?? "").trim();
+    const id = normalizeUuid(String(args.id ?? ""));
     if (!UUID.test(id)) {
       return err("id must be a UUID (page, database, or data_source).");
     }

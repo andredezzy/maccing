@@ -6,7 +6,7 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-
+import { normalizeUuid } from "../lib/normalize-uuid";
 import {
   type PageOrderEntry,
   privateConfig,
@@ -166,7 +166,7 @@ export const orderProperties: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const inputId = String(args.data_source_id ?? "").trim();
+    const inputId = normalizeUuid(String(args.data_source_id ?? ""));
     if (!UUID.test(inputId)) {
       return err("data_source_id must be a UUID.");
     }
