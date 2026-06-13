@@ -1,8 +1,22 @@
-// Pure unit tests for the view-column reorder planner — no Notion API. Run with `bun test`.
+// Pure unit tests for the property-order reorder planners — no Notion API. Run with `bun test`.
 
 import { expect, test } from "bun:test";
 
-import { reorderViewProperties, type ViewProp } from "./view-columns";
+import { reorderPageProperties, reorderViewProperties, type ViewProp } from "./reorder-properties";
+
+test("reorderPageProperties reorders the canonical {property, visible} list, title first, visibility preserved", () => {
+  const current = [
+    { property: "title", visible: true },
+    { property: "sshZ", visible: true },
+    { property: "ftuP", visible: false },
+  ];
+  const out = reorderPageProperties(current, ["ftuP", "sshZ"]);
+  expect(out).toEqual([
+    { property: "title", visible: true },
+    { property: "ftuP", visible: false }, // moved up, stays hidden
+    { property: "sshZ", visible: true },
+  ]);
+});
 
 test("reorders to the requested order, title pinned first, remainder appended (stable)", () => {
   const current: ViewProp[] = [
@@ -41,17 +55,6 @@ test("matches encoding-insensitively (view uses decoded ids, order may be encode
   // order passed url-ENCODED (%3F~%5CG) must still match the decoded view id "?~\\G"
   const out = reorderViewProperties(current, ["%3F~%5CG"]);
   expect(out.map((p) => p.property_id)).toEqual(["title", "?~\\G", "sshZ"]);
-});
-
-test("hide/show override visibility for listed columns; others preserved", () => {
-  const current: ViewProp[] = [
-    { property_id: "title", visible: true },
-    { property_id: "A", visible: true },
-    { property_id: "B", visible: true },
-  ];
-  const out = reorderViewProperties(current, ["A"], { hide: new Set(["B"]) });
-  expect(out.find((p) => p.property_id === "B")?.visible).toBe(false);
-  expect(out.find((p) => p.property_id === "A")?.visible).toBe(true);
 });
 
 test("an order id not present in the view is skipped, not crashed", () => {

@@ -214,6 +214,57 @@ export async function readCollectionIcons(dataSourceIds: string[]): Promise<Icon
   }
 }
 
+export interface PageOrderEntry {
+  property: string;
+  visible?: boolean;
+}
+
+export type PageOrderRead = { status: "ok"; pageProps: PageOrderEntry[] } | { status: "throttled" };
+
+interface CollectionFormatBody {
+  results?: { value?: { format?: { collection_page_properties?: PageOrderEntry[] } } }[];
+}
+
+/**
+ * Read the CANONICAL page-property order (collection.format.collection_page_properties) — the
+ * row-detail panel order + per-property default visibility (private; the public API can't see it).
+ * Discriminated like readCollectionIcons. An empty array means the collection's page order was never
+ * customised (falls back to a default). No creds → ok/empty. Retries the bot-prone read. Never throws.
+ */
+export async function readCollectionPageProperties(dataSourceId: string): Promise<PageOrderRead> {
+  if (!privateConfig().ok) {
+    return { status: "ok", pageProps: [] };
+  }
+  try {
+    const response = await getRecordValues([{ id: dataSourceId, table: "collection" }]);
+    if (!response.ok) {
+      return { status: "throttled" };
+    }
+    const pageProps = (response.body as CollectionFormatBody).results?.[0]?.value?.format?.collection_page_properties;
+    return { status: "ok", pageProps: pageProps ?? [] };
+  } catch {
+    return { status: "throttled" };
+  }
+}
+
+/** Merge a patch into the collection's `format` (e.g. collection_page_properties), with the commit op. */
+export async function writeCollectionFormat(
+  dataSourceId: string,
+  formatPatch: Record<string, unknown>,
+): Promise<PrivateResponse> {
+  const activeUser = await activeUserId();
+  const operations = [
+    {
+      pointer: { table: "collection", id: dataSourceId, spaceId: SPACE_ID },
+      command: "update",
+      path: ["format"],
+      args: formatPatch,
+    },
+    collectionCommitOp(dataSourceId, activeUser),
+  ];
+  return saveTransactions(operations);
+}
+
 /**
  * Commit op required after any schema mutation: without this trailing `update` bumping the
  * collection's editor, saveTransactions returns 200 but silently does NOT persist.

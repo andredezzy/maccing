@@ -18,7 +18,7 @@ import { VERSION } from "./lib/notion-public";
 import { withRedact } from "./redact";
 import type { ToolModule } from "./tool";
 import { describe } from "./tools/describe";
-import { orderColumns } from "./tools/order-columns";
+import { orderProperties } from "./tools/order-properties";
 import { privateRequest } from "./tools/private-request";
 import { readAgentsMd } from "./tools/read-agents-md";
 import { readDatabase } from "./tools/read-database";
@@ -37,7 +37,7 @@ export const TOOLS: ToolModule[] = [
   request,
   privateRequest,
   upsertProperty,
-  orderColumns,
+  orderProperties,
   search,
   describe,
   readAgentsMd,
