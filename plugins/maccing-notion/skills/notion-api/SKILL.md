@@ -267,7 +267,7 @@ Not for "obvious" covers, not for "it's just a table", not when defaults look fi
 
 Present a concise design brief — **one line per applicable dimension, each with a recommendation + why**: type · filter · sort · grouping · visible properties · name; plus cover · size + aspect · card layout for visual types. **State EVERY applicable dimension explicitly — especially `sort` and `visible properties`, the two most often silently dropped.** "No sort / Notion default order" and "all properties, default order" are valid recommendations — but they must be *stated*, never omitted: **if your brief has no `sort:` line, you skipped it.** Never bury a sort/filter/group inside the payload. Then **stop and wait** — silence or "looks good" is approval; a new question or a tweak is not.
 
-**Collapse the friction:** ONLY when the user has already stated EVERY applicable dimension (verified line-by-line — type, filter, sort, grouping, visible props, name, and cover/size/aspect/layout for visual types), confirm in ONE sentence instead of a full brief; fold the brief and the approval-gate operations into a single turn ("here's the design I propose; if you approve, here are the exact calls"). A single unstated dimension forbids the collapse — present the full brief. "Add a gallery" specifies the type, not the design.
+**Collapse the friction:** ONLY when the user has already stated EVERY applicable dimension (verified line-by-line — type, filter, sort, grouping, visible props, name, and cover/size/aspect/layout for visual types), confirm in ONE sentence instead of a full brief; fold the brief and the approval-gate operations into a single turn ("here's the design I propose; if you approve, here are the exact calls"). A single unstated dimension forbids the collapse — present the full brief. "Add a gallery" specifies the type, not the design. In a **multi-object build**, this per-view collapse is unavailable until the pre-build completeness gate's document (the rule below) is approved.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -317,56 +317,56 @@ Conform to the nearest `AGENTS.md` (read its recorded conventions; if none exist
 
 Every create proposes the whole object — data model, names, descriptions, views, icons, colors, formats — conforming to the nearest `AGENTS.md`, in one approval batch; then apply (`upsert_property` for columns + icons + values, `request` for the db/page + its icon/cover) and record any new convention back. Non-negotiable.
 
-## MANDATORY — enumerate EVERY design dimension for EVERY object before the spec/plan is approved (the pre-build completeness gate)
+## MANDATORY — enumerate EVERY design dimension for EVERY object before the build is approved (the pre-build completeness gate)
 
-The two rules above fire **per-object, at create-time**. But a multi-object build (a tracker, a hub, an area refactor — any spec that names **two or more** databases / properties / views / pages) is designed and approved as a *whole*, up front, often through `brainstorming` + `writing-plans`. Nothing there forces the aesthetic + configuration layer to be decided — so a fully-approved spec can be **silent on every database's icon/cover, every view's sort/filter/visible-props/name, every select's option colors, every number format, every property description, and every per-row gallery cover** while violating none of the per-object rules. By execution time the user has approved a skeleton and expects building, not a redesign. This gate closes that hole: it fires **once, before the first write**, and makes every per-object decision visible in one place.
+The two rules above fire **per-object, at create-time** — so a whole build designed up front (a tracker, hub, or refactor, often via `brainstorming` + `writing-plans`) can be fully approved while every icon, cover, option colour, view sort, format, and description stays silently undecided, and the user gets a skeleton instead of a finished workspace. This gate fires **once, before the first write**, putting every per-object decision in one reviewable document.
+
+**Applies to any build with two or more design dimensions to decide** — a multi-database tracker or hub, OR a single database that gains a view, a select/status option, or a cover. (A lone property add that changes no view/option/cover runs under the per-object rules above.)
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO MULTI-OBJECT BUILD BEGINS UNTIL A COMPLETE DESIGN DOCUMENT — EVERY OBJECT, EVERY DIMENSION, EVERY APPLICABLE LINE — IS PRESENTED AND APPROVED IN ONE TURN
+NO BUILD BEGINS UNTIL A COMPLETE DESIGN DOCUMENT — EVERY OBJECT, EVERY DIMENSION — IS PRESENTED AND APPROVED IN ONE TURN
 ```
 
-Not when "the user already specified most of it", not when "some dimensions are obvious", not when "we can decide covers at the gallery gate", not when "it's just a quick tracker."
+Not "the user specified most of it", not "some are obvious", not "we'll decide covers at the gallery gate", not "it's just a quick tracker."
 
-### The Gate — a Pre-build Design Document, one section per object, one line per dimension
+### The Gate — a Pre-build Design Document
 
-**Every applicable dimension appears — stated, or marked `none / N/A` with a reason. A blank line is a silent skip. "Default" must be spelled out** (`number format: number_with_commas — Notion default, chosen`).
+One section per object. **Reproduce, per object, every applicable line from the two rules above** — database: name/casing/inline/description/icon/cover/parent; property: type · format · option names+colours · relation · rollup · formula+guards · column-icon · default-visibility (`upsert_property.visible`) · description; view: type · name · filter · sort · group · visible+order · gallery/board cover-source+size+fit+layout · tab-position (`references/views.md`). Each is **stated, or `none / N/A` with a reason** — a blank line is a silent skip; "default" is spelled out. Whole-build-level additions and the easily-missed:
 
-- **Each DATABASE** — title · casing/language · singular-vs-plural · inline-vs-full-page · description (or `none`) · **icon** (type·name·color) · **cover** (verified URL or `none`) · parent/location · canonical property order · **Default-view rename** (what the auto `Default view` tab becomes — leaving it unnamed ships an unfinished DB).
-- **Each PROPERTY** — name · type · number/currency **format** · select/status **option names + colors** (every option) · relation target + **single/dual** + reverse-property name · rollup relation/property/**function** · formula **expression + null guards + any semantic assumption surfaced** (e.g. "1RM uses the top set only") · **column icon** (name·color) · **default visibility** (canonical `upsert_property.visible` — the row-detail panel + new-view default; this is a per-PROPERTY setting, NOT the same as a view's visible-props line) · description.
-- **Each VIEW** (incl. every embedded per-page linked view) — type · self-describing **name** (never `Default view`/bare type) · **filter** (`no filter / all rows` is a stated answer) · **sort** (`no sort / Notion order` is a stated answer — *if a view has no `sort:` line you skipped it*) · **group_by** (`none` is stated) · **visible properties + order** (`all, default order` is stated) · **gallery AND board** (a board card has the same appearance dimensions as a gallery card — state them for boards too): cover **source** · card **size** · **fit-image** (`contain`/`cover`) · card **layout** (`list`/`compact`) · tab-bar position (state it for each view; a renamed `Default view` is first by definition · others by `start`/`end`/`after_view`).
-- **page_cover galleries** — for every row that EXISTS now, source its cover *in this document*: a **verified Unsplash URL** via the WebSearch → WebFetch → 200-check loop (`references/gallery-view.md`). For a new/empty DB whose rows are created later, state the **commitment** explicitly — "each row gets a B&W cover at creation" — and honor it via each row's cover line in the page checklist (the per-row cover is governed there). Forbidden is the un-committed punt ("I'll source covers later" / "let me know if you want them") — that's a silent skip.
-- **Each PAGE / ROW** — title · **icon** (type·name·color) · **cover** (verified URL or `none` — for a single named page (area / nav / section) source it HERE; the "commit at creation" exemption is for not-yet-created DB *rows* only, never a named page) · body layout (the FULL block sequence in one place, or `no body blocks`) · non-title property values · position among siblings.
+- **Default-view rename** — name what each DB's auto `Default view` becomes AND give that renamed view its own full VIEW entry (filter/sort/group/visible) like any other; the rename supplies the name only.
+- **Relation reverse property** — it is a full property: state its name (house casing/language), icon, and default visibility, not just "dual".
+- **Linked views in a page body** — a linked database view embedded in a page is a full VIEW (type/filter/sort/group/visible/name/card-look), not a body-block reference.
+- **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200, `references/gallery-view.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
+- **A named page's cover** (area / nav / section) is sourced HERE — the "commit at creation" exemption is for not-yet-created DB *rows* only.
 
-Present it, then **stop and wait** — the user reviews the whole design at once; revisions happen here, not mid-execution. Only after explicit approval does execution begin, one object at a time, through the standard approval-gate write cycle.
+**Stated, not skipped:** `none` / `no filter` / `no sort` / `all default order` are valid stated answers. `TBD`/`OR`/`somehow`/`optional`/`must-confirm` are gaps — resolve now (a location is a *specific proposed* value via `search`, never a question handed back) or mark **out of scope**. When the **user explicitly defers** a dimension ("no icons yet", "views later"), record it as **`deferred by user — out of scope`** (a stated answer) and don't re-propose it until they re-open it.
 
-**Deferred = forbidden.** `TBD`, `OR`, `somehow`, `optional`, `latest-by-date (figure out later)`, `parent: must confirm` are not decisions — they are silent gaps. Resolve every dimension now — a location you intend to confirm is still a *proposed*, SPECIFIC value (`proposed parent: LifeOS Navigation › Gym (38d04e66…) — confirm`; use `search` to find the id if you don't have it), never a question handed back ("where should this live?") — or mark it **explicitly out of scope for this build**.
+Present it, **stop and wait**. After approval, execution goes straight to the write cycle (intent + operations + preview tree) per object — **the per-object design-brief steps of the two rules above are already satisfied by this approved document**; do not re-seek design approval.
 
-**The collapse shortcut** (one-sentence confirm instead of the full document) is allowed ONLY when the user's instructions already state EVERY applicable line for EVERY object — verified line-by-line against the checklist, not by impression. A single missing line (one sort, one option color, one icon, one cover) forbids the collapse.
+**Collapse** to a one-sentence confirm ONLY when the user already stated EVERY line for EVERY object, verified line-by-line. The per-view and per-object collapse shortcuts **cannot proxy** for this gate; in a multi-object build they are unavailable until this document is approved.
 
 ### Red Flags — STOP, you're rationalizing
 
 | Thought | Reality |
 |---|---|
-| "I'll pick the cover at the gallery gate when we get there" | Deferral without a sourced+verified URL is a silent skip — the sourcing loop runs inside this document, before approval |
-| "User said gallery, so size / fit / layout are implied" | Implicit intent ≠ approval. `medium / cover / list` are choices — state each |
-| "I'll decide sorts and filters as I create each view" | Per-view incremental reveal breaks holistic review. ALL views for ALL DBs are enumerated now |
-| "Option colors can stay at Notion defaults for now" | "Defaults" = random colors the user didn't choose. State every option's name + color (`gray` is a stated answer; silence is not) |
-| "Descriptions are optional, I'll skip them" | Every dimension appears or is `none` with a reason. A blank line is a silent skip |
-| "I specified the view type, so the view is designed" | Type is one of a dozen dimensions; type-only leaves sort/filter/visible/name silently decided |
-| "Volume (this month) is complex — I'll figure it out at that task" | A deferred decision is a gap. Resolve the mechanism now, or mark it out of scope |
-| "The collapse rule applies — they specified most of it" | Collapse needs ALL lines for ALL objects. One missing sort forbids it — verify line-by-line |
-| "The Default-view rename is a detail for after creation" | A `Default view` tab in production is an unfinished state — name it here |
-| "A board is basically a table — no card settings" | A board card has cover-source / size / layout like a gallery — state all three for every board view |
-| "I'll confirm where the page/area lives later" | Location is a *proposed* value pending confirmation, not an open question — state the proposed parent |
-| "Per-view visible-props covers visibility" | The canonical `upsert_property.visible` (row-detail + new-view default) is a separate per-property dimension — state it too |
+| "I'll design the aesthetics at each object's gate as I build" | Per-object gates fire AFTER the build starts — holistic review needs every dimension before the first write |
+| "I enumerated all the objects, so the design is done" | Object names + types are a skeleton; every dimension (sort, icon, cover, colour, format, visibility) for each must appear |
+| "Option colours can stay at Notion defaults for now" | "Defaults" = random colours the user didn't choose — state every option's name + colour (`gray` is stated; silence is not) |
+| "A board is basically a table — no card settings" | A board card has cover-source / size / fit / layout like a gallery — state them |
+| "I stated the reverse-property name — the relation's covered" | The reverse property is a full property: its casing/language, icon, and visibility are separate stated dimensions |
+| "`Default-view rename: <Name>` covers the default view" | The rename supplies the name only; the renamed view needs its own full VIEW entry |
+| "I specified the view type and name — position's obvious" | Tab-bar position is a stated dimension; creation order ≠ intended order |
+| "This formula/rollup is complex — I'll figure the expression out at build" | A deferred formula is a gap — surface its expression, null guards, and assumptions now, or mark out of scope |
+| "The view-design collapse fired, so I can build that view" | The per-view collapse applies to single-view tasks only; in a multi-object build this gate supersedes it |
+| "Collapse applies — they specified most of it" | Collapse needs ALL lines for ALL objects; one missing line forbids it — verify line-by-line |
 
 ### The Bottom Line
 
-For any build of two or more objects, the pre-build design document enumerates every dimension for every database, property, view, and page — icons, covers (with verified URLs), colors, formats, descriptions, and each view's type/filter/sort/group/visible/name/card-look — in one turn the user approves as a whole. Skeleton-now-aesthetics-later is the failure this gate exists to stop. Non-negotiable.
+Any build with more than one dimension to decide gets one pre-build design document — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design — approved as a whole before the first write. Approval of that document IS the per-object design approval; execution then runs the write cycle per object. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
 
 ## MCP tools — pick by job
 
