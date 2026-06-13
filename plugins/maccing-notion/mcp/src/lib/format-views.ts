@@ -2,6 +2,9 @@
 // agent-ready text with EVERY config field shown (cover, card size, layout, group_by, chart axes,
 // visible properties, sorts, filters) and opaque property ids resolved to names. No API calls.
 
+import { abbreviateId } from "./abbreviate-id";
+import { idVariants } from "./id-variants";
+
 export type IdToName = Record<string, string>;
 
 export interface RawView {
@@ -20,35 +23,19 @@ interface SortEntry {
   direction?: string;
 }
 
-const short = (id: string): string => `${id.slice(0, 8)}…${id.slice(-4)}`;
-
-/** Resolve a property id (raw or url-encoded) to its name, falling back to the id itself. */
+/** Resolve a property id (raw or url-encoded) to its name, falling back to the id itself.
+ * `nameFor` guards with a direct lookup first, then calls idVariants with includeRaw=false
+ * to avoid a redundant second lookup of the raw id. */
 function nameFor(id: string, idToName: IdToName): string {
   if (idToName[id]) {
     return idToName[id];
   }
-  for (const variant of idVariants(id)) {
+  for (const variant of idVariants(id, false)) {
     if (idToName[variant]) {
       return idToName[variant];
     }
   }
   return id;
-}
-
-/** The decoded and encoded forms of an id — Notion stores property ids in either form across endpoints. */
-function idVariants(id: string): string[] {
-  const variants: string[] = [];
-  try {
-    variants.push(decodeURIComponent(id));
-  } catch {
-    // not url-encoded
-  }
-  try {
-    variants.push(encodeURIComponent(id));
-  } catch {
-    // unencodable — skip
-  }
-  return variants;
 }
 
 /**
@@ -61,14 +48,14 @@ function resolveDeep(value: unknown, idToName: IdToName): unknown {
   }
 
   if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
+    const annotated: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = resolveDeep(inner, idToName);
+      annotated[key] = resolveDeep(inner, idToName);
       if ((key === "property_id" || key === "property") && typeof inner === "string") {
-        out.property_name = nameFor(inner, idToName);
+        annotated.property_name = nameFor(inner, idToName);
       }
     }
-    return out;
+    return annotated;
   }
 
   return value;
@@ -98,7 +85,7 @@ export function formatViews(views: RawView[], idToName: IdToName): string {
 
   const blocks = views.map((view) => {
     const lines = [
-      `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? short(view.id) : "?"})`,
+      `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? abbreviateId(view.id) : "?"})`,
       view.url ? `url: ${view.url}` : null,
       `sorts: ${renderSorts(view.sorts, idToName)}`,
       `filter: ${view.filter ? JSON.stringify(resolveDeep(view.filter, idToName)) : "—"}`,

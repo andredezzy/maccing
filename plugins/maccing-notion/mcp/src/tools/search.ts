@@ -44,7 +44,7 @@ export const search: ToolModule = {
     }
 
     const pageSize = typeof args.page_size === "number" ? Math.min(Math.max(args.page_size, 1), 100) : 20;
-    const exhaust = args.exhaust_all === true;
+    const exhaustAll = args.exhaust_all === true;
     const objectType = args.object_type === "page" || args.object_type === "data_source" ? args.object_type : null;
 
     try {
@@ -62,12 +62,12 @@ export const search: ToolModule = {
 
         const response = await publicRequest("POST", "/v1/search", body);
         if (!response.ok) {
-          return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }], isError: true };
+          return err(JSON.stringify(response, null, 2));
         }
 
-        const page = response.body as SearchResponse;
-        results.push(...(page.results ?? []));
-        cursor = exhaust && page.has_more ? (page.next_cursor ?? undefined) : undefined;
+        const searchResponse = response.body as SearchResponse;
+        results.push(...(searchResponse.results ?? []));
+        cursor = exhaustAll && searchResponse.has_more ? (searchResponse.next_cursor ?? undefined) : undefined;
       } while (cursor);
 
       return ok(formatSearch(results));

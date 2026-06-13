@@ -6,7 +6,8 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-import { normalizeUuid } from "../lib/normalize-uuid";
+import { abbreviateId } from "../lib/abbreviate-id";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import {
   type PageOrderEntry,
   privateConfig,
@@ -14,24 +15,19 @@ import {
   writeCollectionFormat,
 } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
-import { reorderPageProperties, reorderViewProperties, type ViewProp } from "../lib/reorder-properties";
-import { describePrivateFailure } from "../lib/upsert-property";
+import {
+  decodePropertyId,
+  reorderPageProperties,
+  reorderViewProperties,
+  type ViewProperty,
+} from "../lib/reorder-properties";
+import {
+  type DataSourceBody,
+  describePrivateFailure,
+  type SchemaBody,
+  type SchemaPropertyRef,
+} from "../lib/upsert-property";
 import { err, ok, type ToolModule } from "../tool";
-
-const UUID = /^[0-9a-f-]{32,36}$/i;
-
-interface SchemaProp {
-  id: string;
-  name: string;
-}
-
-interface SchemaBody {
-  properties?: Record<string, SchemaProp>;
-}
-
-interface DatabaseBody {
-  data_sources?: { id: string }[];
-}
 
 interface ViewListBody {
   results?: { id: string }[];
@@ -39,19 +35,15 @@ interface ViewListBody {
   next_cursor?: string | null;
 }
 
-interface ViewBody {
-  name?: string;
-  configuration?: { type?: string; properties?: ViewProp[] };
+interface ViewConfiguration {
+  type?: string;
+  properties?: ViewProperty[];
 }
 
-const short = (id: string): string => (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id);
-const decode = (id: string): string => {
-  try {
-    return decodeURIComponent(id);
-  } catch {
-    return id;
-  }
-};
+interface ViewBody {
+  name?: string;
+  configuration?: ViewConfiguration;
+}
 
 async function resolveDataSourceId(id: string): Promise<string | null> {
   const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
@@ -60,17 +52,17 @@ async function resolveDataSourceId(id: string): Promise<string | null> {
   }
   const database = await publicRequest("GET", `/v1/databases/${id}`);
   if (database.ok) {
-    return (database.body as DatabaseBody).data_sources?.[0]?.id ?? null;
+    return (database.body as DataSourceBody).data_sources?.[0]?.id ?? null;
   }
   return null;
 }
 
-function namesToDecodedIds(names: string[], schema: Record<string, SchemaProp>): string[] {
+function namesToDecodedIds(names: string[], schema: Record<string, SchemaPropertyRef>): string[] {
   const byName = new Map<string, string>();
-  for (const def of Object.values(schema)) {
-    byName.set(def.name, decode(def.id));
+  for (const propertyRef of Object.values(schema)) {
+    byName.set(propertyRef.name, decodePropertyId(propertyRef.id));
   }
-  return names.map((name) => byName.get(name) ?? decode(name));
+  return names.map((name) => byName.get(name) ?? decodePropertyId(name));
 }
 
 async function listViewIds(dataSourceId: string): Promise<string[]> {
@@ -96,7 +88,7 @@ async function listViewIds(dataSourceId: string): Promise<string[]> {
 async function reorderView(viewId: string, orderIds: string[]): Promise<string> {
   const viewResponse = await publicRequest("GET", `/v1/views/${viewId}`);
   if (!viewResponse.ok) {
-    return `${short(viewId)}: read failed`;
+    return `${abbreviateId(viewId)}: read failed`;
   }
   const view = viewResponse.body as ViewBody;
   const configuration = view.configuration ?? {};
@@ -106,15 +98,15 @@ async function reorderView(viewId: string, orderIds: string[]): Promise<string> 
     configuration: { ...configuration, properties: newProperties },
   });
   return patch.ok
-    ? `${view.name ?? "(view)"} ${short(viewId)}: reordered ✓`
-    : `${view.name ?? "(view)"} ${short(viewId)}: PATCH failed — ${JSON.stringify(patch.body).slice(0, 120)}`;
+    ? `${view.name ?? "(view)"} ${abbreviateId(viewId)}: reordered ✓`
+    : `${view.name ?? "(view)"} ${abbreviateId(viewId)}: PATCH failed — ${JSON.stringify(patch.body).slice(0, 120)}`;
 }
 
 /** Reorder the canonical page-property order (private), preserving each property's default visibility. */
 async function reorderPage(
   dataSourceId: string,
   orderIds: string[],
-  schema: Record<string, SchemaProp>,
+  schema: Record<string, SchemaPropertyRef>,
 ): Promise<string> {
   if (!privateConfig().ok) {
     return "skipped (private API not configured)";
@@ -126,9 +118,9 @@ async function reorderPage(
     }
     // Seed from the schema (all properties, default-visible) when the collection has no page order yet.
     const current: PageOrderEntry[] =
-      read.pageProps.length > 0
-        ? read.pageProps
-        : Object.values(schema).map((def) => ({ property: decode(def.id), visible: true }));
+      read.pageProperties.length > 0
+        ? read.pageProperties
+        : Object.values(schema).map((propertyRef) => ({ property: decodePropertyId(propertyRef.id), visible: true }));
 
     const reordered = reorderPageProperties(current, orderIds);
     const setResponse = await writeCollectionFormat(dataSourceId, { collection_page_properties: reordered });
@@ -167,7 +159,7 @@ export const orderProperties: ToolModule = {
       return err("NOTION_TOKEN is not set.");
     }
     const inputId = normalizeUuid(String(args.data_source_id ?? ""));
-    if (!UUID.test(inputId)) {
+    if (!UUID_PATTERN.test(inputId)) {
       return err("data_source_id must be a UUID.");
     }
     const order = Array.isArray(args.order) ? (args.order as string[]) : null;
@@ -201,7 +193,12 @@ export const orderProperties: ToolModule = {
 
       const page = wantsPage ? await reorderPage(dataSourceId, orderIds, schema) : "not targeted";
 
-      return ok({ data_source: dataSourceId, views_reordered: views.length, views, page });
+      return ok({
+        data_source: dataSourceId,
+        views_reordered: views.length,
+        views,
+        page,
+      });
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }

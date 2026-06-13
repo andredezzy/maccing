@@ -6,67 +6,79 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-import { normalizeUuid } from "../lib/normalize-uuid";
-import { normalizeCallouts } from "../lib/notion-markdown";
-import { flattenProperty, type PageWithProps, type RawProperty, titleOf } from "../lib/notion-page";
+import { abbreviateId } from "../lib/abbreviate-id";
+import type { NotionIcon } from "../lib/format-object";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
+import type { NotionChildBlock, NotionChildrenResponse } from "../lib/notion-blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../lib/notion-markdown";
+import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { resolveRelations } from "../lib/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
-const UUID = /^[0-9a-f-]{32,36}$/i;
 const FORMATS = ["markdown", "outline", "text"] as const;
 
-const short = (id: string) => `${id.slice(0, 8)}…${id.slice(-5)}`;
-
-interface MarkdownResponse {
-  markdown?: string;
-  unknown_block_ids?: string[];
+interface SubPageMarkdown {
+  markdown: string;
+  unknownBlockIds: string[];
 }
 
-interface PageObject extends PageWithProps {
-  icon?: { type?: string; emoji?: string; icon?: { name?: string } } | null;
+interface PageObject extends NotionPageBase {
+  icon?: NotionIcon | null;
+}
+
+interface FetchBodyResult {
+  markdown: string;
+  rounds: number;
+  unfetchable: string[];
 }
 
 /** Page body as markdown, recovering unknown_block_ids until no round makes progress. */
-async function fetchBody(pageId: string): Promise<{ markdown: string; rounds: number; unfetchable: string[] }> {
+async function fetchBody(pageId: string): Promise<FetchBodyResult> {
   const first = await publicRequest("GET", `/v1/pages/${pageId}/markdown`);
   if (!first.ok) {
     return { markdown: "(could not read this page as markdown)", rounds: 1, unfetchable: [] };
   }
-  const head = first.body as MarkdownResponse;
-  let body = head.markdown ?? "";
-  let pending = head.unknown_block_ids ?? [];
+  const firstPageBody = first.body as NotionMarkdownResponse;
+  let body = firstPageBody.markdown ?? "";
+  let pending = firstPageBody.unknown_block_ids ?? [];
   const seen = new Set<string>();
   let rounds = 1;
 
   while (pending.length > 0) {
-    const fresh = pending.filter((id) => !seen.has(id));
-    if (fresh.length === 0) {
+    const unseenBlockIds = pending.filter((id) => !seen.has(id));
+    if (unseenBlockIds.length === 0) {
       return { markdown: body, rounds, unfetchable: pending }; // no progress — genuinely unfetchable
     }
-    for (const id of fresh) {
+    for (const id of unseenBlockIds) {
       seen.add(id);
     }
     rounds++;
-    const recovered = await Promise.all(
-      fresh.map(async (id) => {
+    const subPageResults = await Promise.all(
+      unseenBlockIds.map(async (id): Promise<SubPageMarkdown> => {
         const response = await publicRequest("GET", `/v1/pages/${id}/markdown`);
-        const sub = response.ok ? (response.body as MarkdownResponse) : {};
-        return { markdown: sub.markdown ?? "", unknown: sub.unknown_block_ids ?? [] };
+        const subMarkdown = response.ok ? (response.body as NotionMarkdownResponse) : {};
+        return { markdown: subMarkdown.markdown ?? "", unknownBlockIds: subMarkdown.unknown_block_ids ?? [] };
       }),
     );
-    for (const sub of recovered) {
-      if (sub.markdown) {
-        body += `\n\n${sub.markdown}`;
+    for (const subPageResult of subPageResults) {
+      if (subPageResult.markdown) {
+        body += `\n\n${subPageResult.markdown}`;
       }
     }
-    pending = recovered.flatMap((sub) => sub.unknown);
+    pending = subPageResults.flatMap((subPageResult) => subPageResult.unknownBlockIds);
   }
 
   return { markdown: body, rounds, unfetchable: [] };
 }
 
-function iconString(page: PageObject): string | null {
+/**
+ * Compact page-icon label for YAML frontmatter: the emoji, or a named icon's NAME only (no `·color`
+ * suffix), or null to omit the line. Deliberately distinct from format-object's `iconLabel`: this
+ * suppresses external/file URL icons (a frontmatter URL is noise) and drops the color, keeping the
+ * header terse. `describe` uses the verbose `iconLabel` instead.
+ */
+function pageIconLabel(page: PageObject): string | null {
   const icon = page.icon;
   if (!icon) {
     return null;
@@ -82,25 +94,25 @@ function iconString(page: PageObject): string | null {
 
 /** YAML frontmatter from page properties; relations rendered as titles. */
 async function frontmatter(page: PageObject): Promise<string> {
-  const props = page.properties ?? {};
-  const flats = Object.entries(props)
-    .filter(([, prop]) => (prop as RawProperty).type !== "title")
-    .map(([name, prop]) => [name, flattenProperty(prop as RawProperty)] as const);
+  const properties = page.properties ?? {};
+  const flattenedProperties = Object.entries(properties)
+    .filter(([, property]) => (property as NotionPropertyValue).type !== "title")
+    .map(([name, property]) => [name, flattenProperty(property as NotionPropertyValue)] as const);
 
-  const relationIds = flats.flatMap(([, flat]) => flat.relationIds ?? []);
+  const relationIds = flattenedProperties.flatMap(([, flattenedProperty]) => flattenedProperty.relationIds ?? []);
   const titles = relationIds.length > 0 ? await resolveRelations(relationIds) : new Map<string, string>();
 
   const lines = ["---", `title: ${titleOf(page)}`];
-  const icon = iconString(page);
+  const icon = pageIconLabel(page);
   if (icon) {
     lines.push(`icon: ${icon}`);
   }
-  for (const [name, flat] of flats) {
+  for (const [name, flattenedProperty] of flattenedProperties) {
     let rendered: string;
-    if (flat.relationIds) {
-      rendered = flat.relationIds.map((id) => titles.get(id) ?? short(id)).join(", ");
+    if (flattenedProperty.relationIds) {
+      rendered = flattenedProperty.relationIds.map((id) => titles.get(id) ?? abbreviateId(id)).join(", ");
     } else {
-      rendered = flat.value === null ? "" : String(flat.value);
+      rendered = flattenedProperty.value === null ? "" : String(flattenedProperty.value);
     }
     if (rendered !== "") {
       lines.push(`${name}: ${rendered}`);
@@ -125,31 +137,16 @@ function toText(markdown: string): string {
     .trim();
 }
 
-interface ChildBlock {
-  id: string;
-  type: string;
-  has_children?: boolean;
-  child_page?: { title?: string };
-  child_database?: { title?: string };
-  [key: string]: unknown;
-}
-
-interface ChildrenResponse {
-  results?: ChildBlock[];
-  has_more?: boolean;
-  next_cursor?: string | null;
-}
-
-function blockPreview(block: ChildBlock): string {
+function blockPreview(block: NotionChildBlock): string {
   if (block.type === "child_page") {
     return `[page] ${block.child_page?.title ?? ""}`;
   }
   if (block.type === "child_database") {
     return `[db] ${block.child_database?.title ?? ""}`;
   }
-  const payload = block[block.type] as { rich_text?: { plain_text?: string }[] } | undefined;
-  const text = (payload?.rich_text ?? [])
-    .map((t) => t.plain_text ?? "")
+  const blockContent = block[block.type] as { rich_text?: { plain_text?: string }[] } | undefined;
+  const text = (blockContent?.rich_text ?? [])
+    .map((segment) => segment.plain_text ?? "")
     .join("")
     .replace(/\n/g, " ");
   return text.slice(0, 60);
@@ -158,7 +155,7 @@ function blockPreview(block: ChildBlock): string {
 /** Compact block tree with ids, to `depth` (root fully paginated; recurse into has_children). */
 async function buildOutline(pageId: string, depth: number): Promise<string> {
   const lines: string[] = [];
-  let truncated = false;
+  let isDepthTruncated = false;
 
   const walk = async (id: string, level: number): Promise<void> => {
     let cursor: string | undefined;
@@ -171,15 +168,15 @@ async function buildOutline(pageId: string, depth: number): Promise<string> {
       if (!response.ok) {
         return;
       }
-      const body = response.body as ChildrenResponse;
+      const body = response.body as NotionChildrenResponse;
       for (const block of body.results ?? []) {
         const indent = "  ".repeat(level - 1);
-        lines.push(`${indent}${block.type.padEnd(20)} [${short(block.id)}]  "${blockPreview(block)}"`);
+        lines.push(`${indent}${block.type.padEnd(20)} [${abbreviateId(block.id)}]  "${blockPreview(block)}"`);
         if (block.has_children) {
           if (level < depth) {
             await walk(block.id, level + 1);
           } else {
-            truncated = true;
+            isDepthTruncated = true;
           }
         }
       }
@@ -188,7 +185,7 @@ async function buildOutline(pageId: string, depth: number): Promise<string> {
   };
 
   await walk(pageId, 1);
-  const note = truncated ? ` · deeper than depth ${depth} not shown` : "";
+  const note = isDepthTruncated ? ` · deeper than depth ${depth} not shown` : "";
   return `${lines.join("\n")}\n# ${lines.length} blocks · depth ${depth}${note}`;
 }
 
@@ -219,7 +216,7 @@ export const readPage: ToolModule = {
       return err("NOTION_TOKEN is not set.");
     }
     const pageId = normalizeUuid(String(args.page_id ?? ""));
-    if (!UUID.test(pageId)) {
+    if (!UUID_PATTERN.test(pageId)) {
       return err("page_id must be a UUID.");
     }
     const format = String(args.format) as (typeof FORMATS)[number];
@@ -239,18 +236,19 @@ export const readPage: ToolModule = {
         fetchBody(pageId),
       ]);
 
-      const cleaned = normalizeCallouts(body.markdown);
-      const content = format === "text" ? toText(cleaned) : cleaned;
+      const normalizedMarkdown = normalizeCallouts(body.markdown);
+      const content = format === "text" ? toText(normalizedMarkdown) : normalizedMarkdown;
 
-      const head = includeProps && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageObject)}\n\n` : "";
+      const yamlFrontmatter =
+        includeProps && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageObject)}\n\n` : "";
 
-      const trailer =
+      const completionNote =
         body.unfetchable.length > 0
           ? `\n\n[INCOMPLETE — ${body.unfetchable.length} block(s) unfetchable (permission/deleted); recovery made no further progress. ` +
-            `Ids: ${body.unfetchable.map(short).join(", ")} | rounds_used: ${body.rounds}]`
+            `Ids: ${body.unfetchable.map(abbreviateId).join(", ")} | rounds_used: ${body.rounds}]`
           : `\n\n[TRUNCATED: false | rounds_used: ${body.rounds}]`;
 
-      return ok(`${head}${content}${trailer}`);
+      return ok(`${yamlFrontmatter}${content}${completionNote}`);
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }

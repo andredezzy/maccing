@@ -67,7 +67,7 @@ export const privateRequest: ToolModule = {
         if (!hasCommitOp(operations)) {
           return err(
             "saveTransactions for a schema mutation needs a trailing collection `update` commit op, or it silently " +
-              "no-ops — see references/private-api.md. Add it, or use set_property_icon which handles it.",
+              "no-ops — see references/private-api.md. Add it, or use upsert_property (icon / visible fields) which handles it.",
           );
         }
         const response = await saveTransactions(operations);

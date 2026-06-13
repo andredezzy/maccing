@@ -20,14 +20,16 @@ const BASE = "https://www.notion.so/api/v3";
 // (rapid calls return an HTML page). A shared promise chain spaces every call ≥ MIN apart, so no
 // code path (a batch readback, describe, an upsert) can burst-trip it. Transparent to callers.
 const MIN_PRIVATE_INTERVAL_MS = 280;
+const BASE_PRIVATE_BACKOFF_MS = 700;
+
 let lastPrivateStart = 0;
 let privateGate: Promise<void> = Promise.resolve();
 
-function pacePrivate(): Promise<void> {
+async function pacePrivate(): Promise<void> {
   privateGate = privateGate.then(async () => {
-    const wait = MIN_PRIVATE_INTERVAL_MS - (Date.now() - lastPrivateStart);
-    if (wait > 0) {
-      await new Promise((resolve) => setTimeout(resolve, wait));
+    const delayMs = MIN_PRIVATE_INTERVAL_MS - (Date.now() - lastPrivateStart);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
     lastPrivateStart = Date.now();
   });
@@ -63,7 +65,7 @@ export function spaceId(): string | undefined {
 /** A single api/v3 POST — paced, with bot-page detection AND network-error capture. Never throws:
  * a connection reset (Notion drops the socket under hard bot-protection) becomes an ok:false result,
  * so every caller handles throttling uniformly instead of seeing a raw fetch error. */
-async function rawPost(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
+async function postOnce(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
   await pacePrivate();
 
   const headers: Record<string, string> = {
@@ -75,10 +77,10 @@ async function rawPost(endpoint: string, body: unknown, activeUser?: string): Pr
   }
 
   let response: Response;
-  let raw: string;
+  let responseText: string;
   try {
     response = await fetch(`${BASE}/${endpoint}`, { method: "POST", headers, body: JSON.stringify(body) });
-    raw = await response.text();
+    responseText = await response.text();
   } catch (error) {
     return {
       status: 0,
@@ -87,28 +89,33 @@ async function rawPost(endpoint: string, body: unknown, activeUser?: string): Pr
     };
   }
 
-  let payload: unknown;
+  let responseBody: unknown;
   try {
-    payload = JSON.parse(raw);
+    responseBody = JSON.parse(responseText);
   } catch {
     return {
       status: response.status,
       ok: false,
-      body: `Non-JSON response (likely rate-limited / bot page — space out private calls and retry). First bytes: ${raw.slice(0, 120)}`,
+      body: `Non-JSON response (likely rate-limited / bot page — space out private calls and retry). First bytes: ${responseText.slice(0, 120)}`,
     };
   }
 
-  return { status: response.status, ok: response.ok, body: payload };
+  return { status: response.status, ok: response.ok, body: responseBody };
 }
 
 /** api/v3 POST with bounded paced backoff. The private API throttles via BOTH bot-pages and
  * connection resets; retrying lets a transient throttle self-heal — for reads AND writes. Our
  * private writes are idempotent (icon schema sets), so a retry after an inconclusive reset is safe. */
-async function post(endpoint: string, body: unknown, activeUser?: string, tries = 3): Promise<PrivateResponse> {
-  let response = await rawPost(endpoint, body, activeUser);
-  for (let attempt = 1; attempt < tries && !response.ok; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
-    response = await rawPost(endpoint, body, activeUser);
+async function postWithRetry(
+  endpoint: string,
+  body: unknown,
+  activeUser?: string,
+  maxRetries = 3,
+): Promise<PrivateResponse> {
+  let response = await postOnce(endpoint, body, activeUser);
+  for (let attempt = 1; attempt < maxRetries && !response.ok; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, BASE_PRIVATE_BACKOFF_MS * attempt));
+    response = await postOnce(endpoint, body, activeUser);
   }
   return response;
 }
@@ -122,7 +129,7 @@ async function resolveActiveUser(): Promise<string> {
     throw new Error("NOTION_SPACE_ID is not set.");
   }
 
-  const response = await post("getSpaces", {});
+  const response = await postWithRetry("getSpaces", {});
   if (!response.ok || typeof response.body !== "object" || response.body === null) {
     throw new Error(
       `getSpaces failed (status ${response.status}). Is NOTION_TOKEN_V2 the .app.notion.com (broad-domain) cookie?`,
@@ -130,8 +137,8 @@ async function resolveActiveUser(): Promise<string> {
   }
 
   const usersById = response.body as Record<string, GetSpacesUserRecord>;
-  const owningUser = Object.entries(usersById).find(([, record]) => record.space && SPACE_ID in record.space)?.[0];
-  const userId = owningUser ?? Object.keys(usersById)[0];
+  const owningUserId = Object.entries(usersById).find(([, record]) => record.space && SPACE_ID in record.space)?.[0];
+  const userId = owningUserId ?? Object.keys(usersById)[0];
 
   if (!userId) {
     throw new Error("Could not resolve an active user from getSpaces.");
@@ -144,22 +151,22 @@ async function resolveActiveUser(): Promise<string> {
 // dedups concurrent callers — an agent loop fires tools near-simultaneously, so a plain value
 // cache would let several race and the loser's error could clobber the winner's result. Cleared
 // on failure so the next caller retries.
-let inflightActiveUser: Promise<string> | undefined;
+let activeUserIdRequest: Promise<string> | undefined;
 
 /** The account that owns NOTION_SPACE_ID (a session can hold multiple), for the active-user header. */
 export function activeUserId(): Promise<string> {
-  if (!inflightActiveUser) {
-    inflightActiveUser = resolveActiveUser().catch((error) => {
-      inflightActiveUser = undefined;
+  if (!activeUserIdRequest) {
+    activeUserIdRequest = resolveActiveUser().catch((error) => {
+      activeUserIdRequest = undefined;
       throw error;
     });
   }
-  return inflightActiveUser;
+  return activeUserIdRequest;
 }
 
 /** Generic api/v3 call with the active-user header injected (getSpaces, getRecordValues, …). */
 export async function privateCall(endpoint: string, body: unknown): Promise<PrivateResponse> {
-  return post(endpoint, body, await activeUserId());
+  return postWithRetry(endpoint, body, await activeUserId());
 }
 
 /** saveTransactions: caller supplies the full operations[] (including any trailing commit op). */
@@ -169,7 +176,7 @@ export async function saveTransactions(operations: unknown[]): Promise<PrivateRe
     requestId: crypto.randomUUID(),
     transactions: [{ id: crypto.randomUUID(), spaceId: SPACE_ID, operations }],
   };
-  return post("saveTransactions", envelope, activeUser);
+  return postWithRetry("saveTransactions", envelope, activeUser);
 }
 
 export interface RecordRequest {
@@ -178,7 +185,7 @@ export interface RecordRequest {
 }
 
 /** Read internal records (e.g. a `collection` schema) — used to verify a private write persisted.
- * Retries with backoff via `post` (the read-back is the bot-throttle-prone half of the private API). */
+ * Retries with backoff via `postWithRetry` (the read-back is the bot-throttle-prone half of the private API). */
 export async function getRecordValues(requests: RecordRequest[]): Promise<PrivateResponse> {
   return privateCall("getRecordValues", { requests });
 }
@@ -219,7 +226,16 @@ export interface PageOrderEntry {
   visible?: boolean;
 }
 
-export type PageOrderRead = { status: "ok"; pageProps: PageOrderEntry[] } | { status: "throttled" };
+export interface PageOrderReadOk {
+  status: "ok";
+  pageProperties: PageOrderEntry[];
+}
+
+export interface PageOrderReadThrottled {
+  status: "throttled";
+}
+
+export type PageOrderRead = PageOrderReadOk | PageOrderReadThrottled;
 
 interface CollectionFormatBody {
   results?: { value?: { format?: { collection_page_properties?: PageOrderEntry[] } } }[];
@@ -233,15 +249,16 @@ interface CollectionFormatBody {
  */
 export async function readCollectionPageProperties(dataSourceId: string): Promise<PageOrderRead> {
   if (!privateConfig().ok) {
-    return { status: "ok", pageProps: [] };
+    return { status: "ok", pageProperties: [] };
   }
   try {
     const response = await getRecordValues([{ id: dataSourceId, table: "collection" }]);
     if (!response.ok) {
       return { status: "throttled" };
     }
-    const pageProps = (response.body as CollectionFormatBody).results?.[0]?.value?.format?.collection_page_properties;
-    return { status: "ok", pageProps: pageProps ?? [] };
+    const pageProperties = (response.body as CollectionFormatBody).results?.[0]?.value?.format
+      ?.collection_page_properties;
+    return { status: "ok", pageProperties: pageProperties ?? [] };
   } catch {
     return { status: "throttled" };
   }

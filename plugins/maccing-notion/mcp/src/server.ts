@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   }
 
   const server = new McpServer(SERVER_INFO);
+
   for (const tool of TOOLS) {
     server.registerTool(tool.name, tool.config, withRedact(tool.handler));
   }
@@ -72,5 +73,8 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main();
+  main().catch((error) => {
+    console.error("notion MCP startup failed:", error);
+    process.exit(1);
+  });
 }

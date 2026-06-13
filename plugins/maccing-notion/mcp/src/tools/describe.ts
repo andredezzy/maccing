@@ -5,18 +5,14 @@
 
 import { z } from "zod";
 
+import { abbreviateId } from "../lib/abbreviate-id";
 import { iconLabel, type NotionIcon } from "../lib/format-object";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
-import { normalizeUuid } from "../lib/normalize-uuid";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
+import { type RichText, richTextToPlain } from "../lib/notion-page";
 import { readCollectionIcons } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { err, ok, type ToolModule } from "../tool";
-
-const UUID = /^[0-9a-f-]{32,36}$/i;
-
-interface RichText {
-  plain_text?: string;
-}
 
 interface ParentRef {
   type?: string;
@@ -50,41 +46,39 @@ interface PageObject {
   properties?: Record<string, PageProperty>;
 }
 
-const short = (id: string): string => (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id);
-const plain = (rich: RichText[] | undefined): string => (rich ?? []).map((part) => part.plain_text ?? "").join("");
-
 function parentLabel(parent: ParentRef | undefined): string {
   if (!parent) {
     return "—";
   }
   switch (parent.type) {
     case "page_id":
-      return parent.page_id ? `page ${short(parent.page_id)}` : "page";
+      return parent.page_id ? `page ${abbreviateId(parent.page_id)}` : "page";
     case "data_source_id":
-      return parent.data_source_id ? `data_source ${short(parent.data_source_id)}` : "data_source";
+      return parent.data_source_id ? `data_source ${abbreviateId(parent.data_source_id)}` : "data_source";
     case "database_id":
-      return parent.database_id ? `database ${short(parent.database_id)}` : "database";
+      return parent.database_id ? `database ${abbreviateId(parent.database_id)}` : "database";
     case "block_id":
-      return parent.block_id ? `block ${short(parent.block_id)}` : "block";
+      return parent.block_id ? `block ${abbreviateId(parent.block_id)}` : "block";
     default:
       return parent.type ?? "—";
   }
 }
 
 /** Render a data source: metadata header + the column schema, enriched with best-effort column icons. */
-async function describeDataSource(dataSourceId: string, body: DataSourceObject, note = ""): Promise<string> {
-  const read = await readCollectionIcons([dataSourceId]);
-  const icons = read.status === "ok" ? (read.byCollection[dataSourceId] ?? {}) : {};
+async function describeDataSource(dataSourceId: string, dataSource: DataSourceObject, note = ""): Promise<string> {
+  const iconRead = await readCollectionIcons([dataSourceId]);
+  const icons = iconRead.status === "ok" ? (iconRead.byCollection[dataSourceId] ?? {}) : {};
 
   const header = [
-    `# Data source: ${plain(body.title) || "(untitled)"}${note ? ` ${note}` : ""}`,
+    `# Data source: ${richTextToPlain(dataSource.title) || "(untitled)"}${note ? ` ${note}` : ""}`,
     `id: ${dataSourceId}`,
-    `icon: ${iconLabel(body.icon)}`,
-    `parent: ${parentLabel(body.parent)}`,
+    `icon: ${iconLabel(dataSource.icon)}`,
+    `parent: ${parentLabel(dataSource.parent)}`,
   ].join("\n");
 
-  const throttled = read.status === "throttled" ? "\n\n(column icons unavailable — private read throttled; retry)" : "";
-  return `${header}\n\n${formatSchema(body.properties ?? {}, icons)}${throttled}`;
+  const throttled =
+    iconRead.status === "throttled" ? "\n\n(column icons unavailable — private read throttled; retry)" : "";
+  return `${header}\n\n${formatSchema(dataSource.properties ?? {}, icons)}${throttled}`;
 }
 
 /** Render a page/row: metadata header (icon/cover both PUBLIC) + its properties as name · type. */
@@ -92,10 +86,10 @@ function describePage(page: PageObject): string {
   const properties = page.properties ?? {};
   const names = Object.keys(properties);
   const titleName = names.find((name) => properties[name].type === "title");
-  const title = titleName ? plain(properties[titleName].title) : "";
+  const title = titleName ? richTextToPlain(properties[titleName].title) : "";
 
   const header = [
-    `# Page: ${title || (page.id ? short(page.id) : "?")}`,
+    `# Page: ${title || (page.id ? abbreviateId(page.id) : "?")}`,
     `icon: ${iconLabel(page.icon)}`,
     `cover: ${iconLabel(page.cover)}`,
     `parent: ${parentLabel(page.parent)}`,
@@ -132,32 +126,36 @@ export const describe: ToolModule = {
       return err("NOTION_TOKEN is not set.");
     }
     const id = normalizeUuid(String(args.id ?? ""));
-    if (!UUID.test(id)) {
+    if (!UUID_PATTERN.test(id)) {
       return err("id must be a UUID (page, database, or data_source).");
     }
 
     try {
-      const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
-      if (dataSource.ok) {
-        return ok(await describeDataSource(id, dataSource.body as DataSourceObject));
+      const dataSourceResponse = await publicRequest("GET", `/v1/data_sources/${id}`);
+      if (dataSourceResponse.ok) {
+        return ok(await describeDataSource(id, dataSourceResponse.body as DataSourceObject));
       }
 
-      const database = await publicRequest("GET", `/v1/databases/${id}`);
-      if (database.ok) {
-        const dataSourceId = (database.body as DatabaseObject).data_sources?.[0]?.id;
+      const databaseResponse = await publicRequest("GET", `/v1/databases/${id}`);
+      if (databaseResponse.ok) {
+        const dataSourceId = (databaseResponse.body as DatabaseObject).data_sources?.[0]?.id;
         if (dataSourceId) {
-          const inner = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
-          if (inner.ok) {
+          const resolvedDataSourceResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+          if (resolvedDataSourceResponse.ok) {
             return ok(
-              await describeDataSource(dataSourceId, inner.body as DataSourceObject, `(via database ${short(id)})`),
+              await describeDataSource(
+                dataSourceId,
+                resolvedDataSourceResponse.body as DataSourceObject,
+                `(via database ${abbreviateId(id)})`,
+              ),
             );
           }
         }
       }
 
-      const page = await publicRequest("GET", `/v1/pages/${id}`);
-      if (page.ok) {
-        return ok(describePage(page.body as PageObject));
+      const pageResponse = await publicRequest("GET", `/v1/pages/${id}`);
+      if (pageResponse.ok) {
+        return ok(describePage(pageResponse.body as PageObject));
       }
 
       return err(

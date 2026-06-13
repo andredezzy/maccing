@@ -126,24 +126,24 @@ const realFetch = globalThis.fetch;
 const realSetTimeout = globalThis.setTimeout;
 let delays: number[] = [];
 
-interface FetchSpec {
+interface ScriptedResponse {
   status: number;
   retryAfter?: string;
 }
 
-/** Replace fetch with a scripted sequence (last spec repeats); returns a call counter. */
-function mockFetch(specs: FetchSpec[]): () => number {
+/** Replace fetch with a scripted sequence (last response repeats); returns a call counter. */
+function mockFetch(responses: ScriptedResponse[]): () => number {
   let index = 0;
   let calls = 0;
   globalThis.fetch = (async () => {
     calls += 1;
-    const spec = specs[Math.min(index, specs.length - 1)];
+    const response = responses[Math.min(index, responses.length - 1)];
     index += 1;
     return {
-      status: spec.status,
-      ok: spec.status >= 200 && spec.status < 300,
+      status: response.status,
+      ok: response.status >= 200 && response.status < 300,
       text: async () => "{}",
-      headers: { get: (header: string) => (header === "Retry-After" ? (spec.retryAfter ?? null) : null) },
+      headers: { get: (header: string) => (header === "Retry-After" ? (response.retryAfter ?? null) : null) },
     } as unknown as Response;
   }) as unknown as typeof fetch;
   return () => calls;
@@ -152,9 +152,9 @@ function mockFetch(specs: FetchSpec[]): () => number {
 beforeEach(() => {
   delays = [];
   // record the backoff delays and fire the callback immediately (keeps the loop tests instant)
-  globalThis.setTimeout = ((fn: () => void, ms?: number) => {
-    delays.push(ms ?? 0);
-    fn();
+  globalThis.setTimeout = ((callback: () => void, milliseconds?: number) => {
+    delays.push(milliseconds ?? 0);
+    callback();
     return 0 as unknown as ReturnType<typeof setTimeout>;
   }) as typeof setTimeout;
 });

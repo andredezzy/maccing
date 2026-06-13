@@ -4,13 +4,14 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
-import { normalizeUuid } from "../lib/normalize-uuid";
-import { normalizeCallouts } from "../lib/notion-markdown";
-import { type PageWithProps, titleOf } from "../lib/notion-page";
+import { abbreviateId } from "../lib/abbreviate-id";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
+import type { NotionChildrenResponse } from "../lib/notion-blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../lib/notion-markdown";
+import { type NotionPageBase, titleOf } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { err, ok, type ToolModule } from "../tool";
 
-const UUID = /^[0-9a-f-]{32,36}$/i;
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains
 
 interface ParentRef {
@@ -22,13 +23,19 @@ interface ParentRef {
   workspace?: boolean;
 }
 
-interface PageLike extends PageWithProps {
+interface PageLike extends NotionPageBase {
   parent?: ParentRef;
 }
 
 interface Ancestor {
   pageId: string;
   title: string;
+}
+
+interface AgentsMdEntry {
+  title: string;
+  agentsId: string;
+  markdown: string;
 }
 
 /**
@@ -62,9 +69,9 @@ async function resolveStartPage(id: string): Promise<string | undefined> {
 async function climbToRoot(startId: string): Promise<Ancestor[]> {
   const chain: Ancestor[] = [];
   let pageId: string | undefined = await resolveStartPage(startId);
-  let guard = 0;
+  let depth = 0;
 
-  while (pageId && guard++ < MAX_DEPTH) {
+  while (pageId && depth++ < MAX_DEPTH) {
     const response = await publicRequest("GET", `/v1/pages/${pageId}`);
     if (!response.ok) {
       break; // can't read this node — stop the climb (per-node failure, not a whole-sweep abort)
@@ -112,18 +119,6 @@ async function pageIdForDatabase(databaseId: string): Promise<string | undefined
   return (response.body as PageLike).parent?.page_id;
 }
 
-interface ChildBlock {
-  id: string;
-  type: string;
-  child_page?: { title?: string };
-}
-
-interface ChildrenResponse {
-  results?: ChildBlock[];
-  has_more?: boolean;
-  next_cursor?: string | null;
-}
-
 /** Find the `AGENTS.md` child_page id on a page (fully paginated), or null. */
 async function findAgentsMdPageId(pageId: string): Promise<string | null> {
   let cursor: string | undefined;
@@ -137,7 +132,7 @@ async function findAgentsMdPageId(pageId: string): Promise<string | null> {
     if (!response.ok) {
       return null;
     }
-    const body = response.body as ChildrenResponse;
+    const body = response.body as NotionChildrenResponse;
     for (const block of body.results ?? []) {
       if (block.type === "child_page" && (block.child_page?.title ?? "").trim() === "AGENTS.md") {
         return block.id;
@@ -149,19 +144,13 @@ async function findAgentsMdPageId(pageId: string): Promise<string | null> {
   return null;
 }
 
-interface MarkdownResponse {
-  markdown?: string;
-}
-
-async function readMarkdown(pageId: string): Promise<string> {
+async function fetchPageMarkdown(pageId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/pages/${pageId}/markdown`);
   if (!response.ok) {
     return "(could not read this AGENTS.md as markdown)";
   }
-  return normalizeCallouts((response.body as MarkdownResponse).markdown ?? "");
+  return normalizeCallouts((response.body as NotionMarkdownResponse).markdown ?? "");
 }
-
-const short = (id: string) => `${id.slice(0, 8)}…${id.slice(-5)}`;
 
 export const readAgentsMd: ToolModule = {
   name: "read_agents_md",
@@ -183,64 +172,64 @@ export const readAgentsMd: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const pageId = normalizeUuid(String(args.id ?? ""));
-    if (!UUID.test(pageId)) {
-      return err("page_id must be a UUID.");
+    const targetId = normalizeUuid(String(args.id ?? ""));
+    if (!UUID_PATTERN.test(targetId)) {
+      return err("id must be a UUID.");
     }
 
     try {
-      const ancestors = await climbToRoot(pageId);
+      const ancestors = await climbToRoot(targetId);
       if (ancestors.length === 0) {
-        return err(`Could not read ${pageId} — check the id and that NOTION_TOKEN has access.`);
+        return err(`Could not read ${targetId} — check the id and that NOTION_TOKEN has access.`);
       }
 
-      const found: { title: string; agentsId: string; markdown: string }[] = [];
+      const found: AgentsMdEntry[] = [];
       for (const ancestor of ancestors) {
         const agentsId = await findAgentsMdPageId(ancestor.pageId);
         if (agentsId) {
-          found.push({ title: ancestor.title, agentsId, markdown: await readMarkdown(agentsId) });
+          found.push({ title: ancestor.title, agentsId, markdown: await fetchPageMarkdown(agentsId) });
         }
       }
 
       const target = ancestors[ancestors.length - 1];
-      const path = ancestors.map((a) => a.title).join(" › ");
+      const ancestryBreadcrumb = ancestors.map((ancestor) => ancestor.title).join(" › ");
 
       if (found.length === 0) {
         return ok(
-          `read_agents_md · target: ${target.title} (${short(pageId)})\n` +
-            `No AGENTS.md found on the ancestry (${path}). Proceed under the workspace's general conventions.`,
+          `read_agents_md · target: ${target.title} (${abbreviateId(targetId)})\n` +
+            `No AGENTS.md found on the ancestry (${ancestryBreadcrumb}). Proceed under the workspace's general conventions.`,
         );
       }
 
-      const total = found.length;
+      const playbookCount = found.length;
       const indexLines = found
-        .map((f, i) => {
-          const rank = i + 1;
-          const role = rank === 1 ? "root" : rank === total ? "closest" : "intermediate";
+        .map((entry, index) => {
+          const rank = index + 1;
+          const role = rank === 1 ? "root" : rank === playbookCount ? "closest" : "intermediate";
           const weight =
-            rank === total ? "STRONGEST — wins on conflict" : rank === 1 ? "weakest" : "overrides lower ranks";
-          return `  rank ${rank}/${total} · ${f.title} (${role}) · ${weight} · ${short(f.agentsId)}`;
+            rank === playbookCount ? "STRONGEST — wins on conflict" : rank === 1 ? "weakest" : "overrides lower ranks";
+          return `  rank ${rank}/${playbookCount} · ${entry.title} (${role}) · ${weight} · ${abbreviateId(entry.agentsId)}`;
         })
         .join("\n");
 
       const sections = found
-        .map((f, i) => {
-          const rank = i + 1;
-          const role = rank === 1 ? "root" : rank === total ? "closest" : "intermediate";
+        .map((entry, index) => {
+          const rank = index + 1;
+          const role = rank === 1 ? "root" : rank === playbookCount ? "closest" : "intermediate";
           const weight =
-            rank === total
+            rank === playbookCount
               ? "STRONGEST — overrides all earlier on conflict"
               : rank === 1
                 ? "weakest"
                 : "overrides earlier ranks";
-          return `[PLAYBOOK ${rank}/${total} · governs: ${f.title} (${role}) · precedence: ${weight}]\n${f.markdown}`;
+          return `[PLAYBOOK ${rank}/${playbookCount} · governs: ${entry.title} (${role}) · precedence: ${weight}]\n${entry.markdown}`;
         })
         .join("\n\n");
 
       const preamble =
-        `read_agents_md · target: ${target.title} (${short(pageId)})\n` +
-        `${total} playbook${total > 1 ? "s" : ""} govern this target, ordered root→closest. OBEY ALL; on any conflict the CLOSEST (higher rank) wins.\n` +
-        `ancestry: ${path}\n${indexLines}`;
+        `read_agents_md · target: ${target.title} (${abbreviateId(targetId)})\n` +
+        `${playbookCount} playbook${playbookCount > 1 ? "s" : ""} govern this target, ordered root→closest. OBEY ALL; on any conflict the CLOSEST (higher rank) wins.\n` +
+        `ancestry: ${ancestryBreadcrumb}\n${indexLines}`;
 
       return ok(`${preamble}\n\n${sections}`);
     } catch (error) {

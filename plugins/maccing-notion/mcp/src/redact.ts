@@ -29,8 +29,8 @@ export function withRedact(handler: ToolHandler): ToolHandler {
         ),
       };
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      return { content: [{ type: "text", text: redact(`Request failed: ${detail}`) }], isError: true };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: "text", text: redact(`Request failed: ${errorMessage}`) }], isError: true };
     }
   };
 }

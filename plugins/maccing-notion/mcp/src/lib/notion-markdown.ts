@@ -12,3 +12,9 @@ export function normalizeCallouts(markdown: string): string {
     return lines.map((line) => `> ${line}`).join("\n");
   });
 }
+
+/** Shape of the Notion /v1/pages/{id}/markdown endpoint response. */
+export interface NotionMarkdownResponse {
+  markdown?: string;
+  unknown_block_ids?: string[];
+}

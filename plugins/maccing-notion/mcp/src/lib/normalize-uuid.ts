@@ -5,3 +5,6 @@
 export function normalizeUuid(id: string): string {
   return id.trim().toLowerCase();
 }
+
+/** Matches a normalized Notion UUID — 32–36 hex chars with optional hyphens. */
+export const UUID_PATTERN = /^[0-9a-f-]{32,36}$/i;

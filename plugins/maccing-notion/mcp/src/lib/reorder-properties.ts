@@ -5,24 +5,25 @@
 // PRESERVING each entry's visibility/width (the correctness trap: never silently un-hide a column).
 // Ordering ONLY — visibility is a separate concern (upsert_property for the canonical default). No API.
 
-export interface ViewProp {
+export interface ViewProperty {
   property_id: string;
   visible?: boolean;
   width?: number;
   property_name?: string;
 }
 
-export interface PageProp {
+export interface PageProperty {
   property: string;
   visible?: boolean;
 }
 
-/** Property ids appear url-encoded on the schema but decoded in view configs — decode for matching. */
-function decode(id: string): string {
+/** Property ids appear url-encoded on the schema but decoded in view configs — decode for matching.
+ * Degrades gracefully on malformed percent-encoding: returns the id as-is (never encoded). */
+export function decodePropertyId(id: string): string {
   try {
     return decodeURIComponent(id);
   } catch {
-    return id;
+    return id; // intentional: malformed percent-encoding means the id was never encoded — return as-is
   }
 }
 
@@ -30,54 +31,56 @@ function decode(id: string): string {
  * Reorder a view's columns to `order` (ids, encoded or decoded). Title is pinned first; the requested
  * order follows; remaining columns keep their current relative order. Visibility/width are preserved.
  */
-export function reorderViewProperties(current: ViewProp[], order: string[]): ViewProp[] {
-  const byDecoded = new Map<string, ViewProp>();
-  for (const prop of current) {
-    byDecoded.set(decode(prop.property_id), prop);
+export function reorderViewProperties(current: ViewProperty[], order: string[]): ViewProperty[] {
+  const byDecoded = new Map<string, ViewProperty>();
+  for (const viewProperty of current) {
+    byDecoded.set(decodePropertyId(viewProperty.property_id), viewProperty);
   }
 
   const used = new Set<string>();
-  const out: ViewProp[] = [];
+  const reordered: ViewProperty[] = [];
 
-  const push = (rawId: string): void => {
-    const id = decode(rawId);
+  const appendDeduped = (rawId: string): void => {
+    const id = decodePropertyId(rawId);
     if (used.has(id)) {
       return;
     }
-    const prop = byDecoded.get(id);
-    if (!prop) {
+    const viewProperty = byDecoded.get(id);
+    if (!viewProperty) {
       return;
     }
     used.add(id);
 
-    const entry: ViewProp = { property_id: prop.property_id };
-    if (prop.visible !== undefined) {
-      entry.visible = prop.visible;
+    const entry: ViewProperty = { property_id: viewProperty.property_id };
+    if (viewProperty.visible !== undefined) {
+      entry.visible = viewProperty.visible;
     }
-    if (prop.width !== undefined) {
-      entry.width = prop.width;
+    if (viewProperty.width !== undefined) {
+      entry.width = viewProperty.width;
     }
-    out.push(entry);
+    reordered.push(entry);
   };
 
-  push("title"); // Notion pins the title column first; keep it there
+  appendDeduped("title"); // Notion pins the title column first; keep it there
+
   for (const id of order) {
-    push(id);
-  }
-  for (const prop of current) {
-    push(prop.property_id); // remainder, in current relative order
+    appendDeduped(id);
   }
 
-  return out;
+  for (const viewProperty of current) {
+    appendDeduped(viewProperty.property_id); // remainder, in current relative order
+  }
+
+  return reordered;
 }
 
 /** The canonical-page-order analog: reorder a {property, visible} list, preserving visibility. */
-export function reorderPageProperties(current: PageProp[], order: string[]): PageProp[] {
-  const asView = current.map((prop) => ({ property_id: prop.property, visible: prop.visible }));
-  return reorderViewProperties(asView, order).map((prop) => {
-    const entry: PageProp = { property: prop.property_id };
-    if (prop.visible !== undefined) {
-      entry.visible = prop.visible;
+export function reorderPageProperties(current: PageProperty[], order: string[]): PageProperty[] {
+  const asView = current.map((pageProperty) => ({ property_id: pageProperty.property, visible: pageProperty.visible }));
+  return reorderViewProperties(asView, order).map((viewProperty) => {
+    const entry: PageProperty = { property: viewProperty.property_id };
+    if (viewProperty.visible !== undefined) {
+      entry.visible = viewProperty.visible;
     }
     return entry;
   });

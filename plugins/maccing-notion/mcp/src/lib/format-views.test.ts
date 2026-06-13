@@ -25,10 +25,10 @@ const gallery: RawView = {
 };
 
 test("renders a header with name + type and resolved sorts", () => {
-  const out = formatViews([gallery], idToName);
-  expect(out).toContain("# Views (1)");
-  expect(out).toContain("## Gallery · gallery");
-  expect(out).toContain("sorts: Net worth (last month) ↓ descending");
+  const output = formatViews([gallery], idToName);
+  expect(output).toContain("# Views (1)");
+  expect(output).toContain("## Gallery · gallery");
+  expect(output).toContain("sorts: Net worth (last month) ↓ descending");
 });
 
 test("renders the sort direction word (ascending) alongside the arrow", () => {
@@ -42,12 +42,12 @@ test("renders the sort direction word (ascending) alongside the arrow", () => {
 });
 
 test("dumps the full configuration with every visual prop and resolves property ids", () => {
-  const out = formatViews([gallery], idToName);
-  expect(out).toContain('"cover_size": "medium"'); // card size preserved
-  expect(out).toContain('"cover_aspect": "cover"'); // preview/fit preserved
-  expect(out).toContain('"type": "page_cover"'); // cover/preview source
-  expect(out).toContain('"property_name": "Name"'); // title resolved
-  expect(out).toContain('"property_name": "Net worth (last month)"'); // raw id resolved
+  const output = formatViews([gallery], idToName);
+  expect(output).toContain('"cover_size": "medium"'); // card size preserved
+  expect(output).toContain('"cover_aspect": "cover"'); // preview/fit preserved
+  expect(output).toContain('"type": "page_cover"'); // cover/preview source
+  expect(output).toContain('"property_name": "Name"'); // title resolved
+  expect(output).toContain('"property_name": "Net worth (last month)"'); // raw id resolved
 });
 
 test("resolves a raw view id against a url-encoded schema id (and vice versa)", () => {
@@ -73,10 +73,10 @@ test("resolves the `property` id inside a view filter (and shows it)", () => {
     configuration: { type: "table", properties: [] },
   };
   const map: IdToName = { yKFr: "Month", IiYA: "Real Value" };
-  const out = formatViews([view], map);
-  expect(out).toContain("sorts: Real Value ↓ descending");
-  expect(out).toMatch(/property_name":\s*"Month"/); // filter property id resolved to name
-  expect(out).toMatch(/contains":\s*"page-123"/); // filter value preserved verbatim
+  const output = formatViews([view], map);
+  expect(output).toContain("sorts: Real Value ↓ descending");
+  expect(output).toMatch(/property_name":\s*"Month"/); // filter property id resolved to name
+  expect(output).toMatch(/contains":\s*"page-123"/); // filter value preserved verbatim
 });
 
 test("always shows filter and quick_filters lines (— when none)", () => {
@@ -87,9 +87,9 @@ test("always shows filter and quick_filters lines (— when none)", () => {
     quick_filters: null,
     configuration: { type: "table" },
   };
-  const out = formatViews([view], {});
-  expect(out).toContain("filter: —");
-  expect(out).toContain("quick_filters: —");
+  const output = formatViews([view], {});
+  expect(output).toContain("filter: —");
+  expect(output).toContain("quick_filters: —");
 });
 
 test("a chart view's axes property ids resolve", () => {
@@ -103,8 +103,8 @@ test("a chart view's axes property ids resolve", () => {
       y_axis: { property_id: "M>L>", aggregator: "sum" },
     },
   };
-  const out = formatViews([chart], idToName);
-  expect(out).toContain('"chart_type": "line"');
-  expect(out).toContain('"property_name": "Name"');
-  expect(out).toContain('"property_name": "Net worth (R$)"');
+  const output = formatViews([chart], idToName);
+  expect(output).toContain('"chart_type": "line"');
+  expect(output).toContain('"property_name": "Name"');
+  expect(output).toContain('"property_name": "Net worth (R$)"');
 });

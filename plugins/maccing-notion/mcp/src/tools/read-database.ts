@@ -7,22 +7,16 @@ import { z } from "zod";
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
 import { formatViews, type IdToName, type RawView } from "../lib/format-views";
-import { normalizeUuid } from "../lib/normalize-uuid";
-import { flattenProperty, type RawProperty } from "../lib/notion-page";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
+import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { resolveRelations } from "../lib/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
-const UUID = /^[0-9a-f-]{32,36}$/i;
 const FORMATS = ["table", "kv", "tsv", "summary"] as const;
 
-interface SchemaProp {
-  id: string;
-  type: string;
-}
-
 interface DataSourceSchema {
-  properties?: Record<string, SchemaProp>;
+  properties?: PropertiesMap;
 }
 
 interface DatabaseObject {
@@ -30,7 +24,7 @@ interface DatabaseObject {
 }
 
 interface QueryResponse {
-  results?: { properties?: Record<string, RawProperty> }[];
+  results?: { properties?: Record<string, NotionPropertyValue> }[];
   has_more?: boolean;
   next_cursor?: string | null;
 }
@@ -45,21 +39,27 @@ interface ViewListResponse {
 async function resolveDataSourceId(databaseId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/databases/${databaseId}`);
   if (response.ok) {
-    const db = response.body as DatabaseObject;
-    return db.data_sources?.[0]?.id ?? databaseId;
+    const database = response.body as DatabaseObject;
+    return database.data_sources?.[0]?.id ?? databaseId;
   }
   return databaseId; // the caller may have passed a data_source_id directly
 }
 
 /** Invert the data-source schema into a property-id → name map (covering raw + url-encoded ids). */
-function buildIdToName(schema: Record<string, SchemaProp>): IdToName {
+function buildIdToName(schema: PropertiesMap): IdToName {
   const idToName: IdToName = {};
-  for (const [name, meta] of Object.entries(schema)) {
-    idToName[meta.id] = name;
+  for (const [name, property] of Object.entries(schema)) {
+    if (!property.id) {
+      continue;
+    }
+    idToName[property.id] = name;
     try {
-      idToName[decodeURIComponent(meta.id)] = name;
-    } catch {
-      // id wasn't url-encoded — the raw mapping above is enough
+      idToName[decodeURIComponent(property.id)] = name;
+    } catch (error) {
+      if (!(error instanceof URIError)) {
+        throw error;
+      }
+      // expected: id was not percent-encoded
     }
   }
   return idToName;
@@ -85,10 +85,10 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
   } while (cursor);
 
   const views: RawView[] = [];
-  const BATCH = 10;
-  for (let start = 0; start < ids.length; start += BATCH) {
+  const VIEW_FETCH_BATCH_SIZE = 10;
+  for (let start = 0; start < ids.length; start += VIEW_FETCH_BATCH_SIZE) {
     const responses = await Promise.all(
-      ids.slice(start, start + BATCH).map((id) => publicRequest("GET", `/v1/views/${id}`)),
+      ids.slice(start, start + VIEW_FETCH_BATCH_SIZE).map((id) => publicRequest("GET", `/v1/views/${id}`)),
     );
     for (const response of responses) {
       if (response.ok) {
@@ -97,6 +97,19 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
     }
   }
   return views;
+}
+
+/** Collect every relation target id across the flattened rows. */
+function collectRelationIds(rows: Record<string, ReturnType<typeof flattenProperty>>[]): string[] {
+  const ids: string[] = [];
+  for (const row of rows) {
+    for (const flattenedProperty of Object.values(row)) {
+      if (flattenedProperty.relationIds) {
+        ids.push(...flattenedProperty.relationIds);
+      }
+    }
+  }
+  return ids;
 }
 
 export const readDatabase: ToolModule = {
@@ -132,7 +145,7 @@ export const readDatabase: ToolModule = {
       return err("NOTION_TOKEN is not set.");
     }
     const databaseId = normalizeUuid(String(args.database_id ?? ""));
-    if (!UUID.test(databaseId)) {
+    if (!UUID_PATTERN.test(databaseId)) {
       return err("database_id must be a UUID.");
     }
     const format = String(args.format) as RowFormat;
@@ -162,8 +175,8 @@ export const readDatabase: ToolModule = {
       }
 
       const pageSize = typeof args.page_size === "number" ? Math.min(Math.max(args.page_size, 1), 100) : 20;
-      const exhaust = args.exhaust_all === true;
-      const rawRows: { properties?: Record<string, RawProperty> }[] = [];
+      const exhaustAll = args.exhaust_all === true;
+      const rawRows: { properties?: Record<string, NotionPropertyValue> }[] = [];
       let cursor = typeof args.cursor === "string" ? args.cursor : undefined;
 
       do {
@@ -179,63 +192,52 @@ export const readDatabase: ToolModule = {
         }
         const response = await publicRequest("POST", path, body);
         if (!response.ok) {
-          return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }], isError: true };
+          return err(JSON.stringify(response, null, 2));
         }
-        const page = response.body as QueryResponse;
-        rawRows.push(...(page.results ?? []));
-        cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
-      } while (exhaust && cursor);
+        const queryResponse = response.body as QueryResponse;
+        rawRows.push(...(queryResponse.results ?? []));
+        cursor = queryResponse.has_more ? (queryResponse.next_cursor ?? undefined) : undefined;
+      } while (exhaustAll && cursor);
 
       // Flatten + collect relation ids, resolve once, build display rows.
-      const flattened = rawRows.map((row) => {
-        const props = row.properties ?? {};
-        const out: Record<string, ReturnType<typeof flattenProperty>> = {};
+      const flattenedRows = rawRows.map((row) => {
+        const properties = row.properties ?? {};
+        const flatRow: Record<string, ReturnType<typeof flattenProperty>> = {};
         for (const column of columns) {
-          out[column] = props[column] ? flattenProperty(props[column]) : { value: null };
+          flatRow[column] = properties[column] ? flattenProperty(properties[column]) : { value: null };
         }
-        return out;
+        return flatRow;
       });
-      const relationIds = collectRelationIds(flattened);
+      const relationIds = collectRelationIds(flattenedRows);
       const titles = relationIds.length > 0 ? await resolveRelations(relationIds) : new Map<string, string>();
 
-      const rows: FlatRow[] = flattened.map((flat) => {
+      const rows: FlatRow[] = flattenedRows.map((flatRow) => {
         const row: FlatRow = {};
         for (const column of columns) {
-          const f = flat[column];
-          row[column] = f.relationIds ? f.relationIds.map((id) => titles.get(id) ?? id).join(", ") || null : f.value;
+          const flattenedProperty = flatRow[column];
+          row[column] = flattenedProperty.relationIds
+            ? flattenedProperty.relationIds.map((id) => titles.get(id) ?? id).join(", ") || null
+            : flattenedProperty.value;
         }
         return row;
       });
 
       const rendered = formatRows(rows, columns, format, typeof args.group_by === "string" ? args.group_by : undefined);
-      const more = cursor ? ` | next_cursor: ${cursor}` : exhaust ? "" : " | next_cursor: null";
-      const trailer = `\n# ${rows.length} rows${more} | fields: [${columns.join(", ")}]`;
+      const paginationSuffix = cursor ? ` | next_cursor: ${cursor}` : exhaustAll ? "" : " | next_cursor: null";
+      const rowsSummary = `\n# ${rows.length} rows${paginationSuffix} | fields: [${columns.join(", ")}]`;
 
       // Schema + views are always appended — every read_database dumps the database's full structure
       // (column definitions, formula bodies elided) and view design. The schema is free here: this
       // tool already fetched it above. Column ICONS are deliberately NOT fetched on this hot path
       // (they need a ToS-risk private call) — that lives in the dedicated `describe` tool.
-      const schemaSection = `\n\n${formatSchema(schema as PropertiesMap)}`;
+      const schemaSection = `\n\n${formatSchema(schema)}`;
 
       const views = await fetchViews(dataSourceId);
       const viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
 
-      return ok(rendered + trailer + schemaSection + viewsSection);
+      return ok(rendered + rowsSummary + schemaSection + viewsSection);
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }
   },
 };
-
-/** Collect every relation target id across the flattened rows. */
-function collectRelationIds(rows: Record<string, ReturnType<typeof flattenProperty>>[]): string[] {
-  const ids: string[] = [];
-  for (const row of rows) {
-    for (const flat of Object.values(row)) {
-      if (flat.relationIds) {
-        ids.push(...flat.relationIds);
-      }
-    }
-  }
-  return ids;
-}

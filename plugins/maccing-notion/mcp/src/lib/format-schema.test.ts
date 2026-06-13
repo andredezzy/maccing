@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 
 import { formatSchema, type IconsById, type PropertiesMap } from "./format-schema";
 
-const props: PropertiesMap = {
+const properties: PropertiesMap = {
   Name: { id: "title", type: "title" },
   Value: { id: "sshZ", type: "number", number: { format: "number_with_commas" } },
   "Is USD": { id: "DmQd", type: "checkbox" },
@@ -22,35 +22,35 @@ const props: PropertiesMap = {
 };
 
 test("renders the column count and every property name", () => {
-  const out = formatSchema(props);
-  expect(out).toContain("# Schema (6 columns)");
-  expect(out).toContain("Name");
-  expect(out).toContain("Real Value");
+  const output = formatSchema(properties);
+  expect(output).toContain("# Schema (6 columns)");
+  expect(output).toContain("Name");
+  expect(output).toContain("Real Value");
 });
 
 test("elides the formula BODY — never leaks the compiled {{notion:…}} blob", () => {
-  const out = formatSchema(props);
-  expect(out).toContain("formula");
-  expect(out).not.toContain("notion:block_property");
-  expect(out).not.toContain("round(if");
+  const output = formatSchema(properties);
+  expect(output).toContain("formula");
+  expect(output).not.toContain("notion:block_property");
+  expect(output).not.toContain("round(if");
 });
 
 test("summarizes number format, relation arity, and rollup function", () => {
-  const out = formatSchema(props);
-  expect(out).toContain("number · number_with_commas");
-  expect(out).toContain("relation · dual");
-  expect(out).toContain("rollup · max(USD Rate)");
+  const output = formatSchema(properties);
+  expect(output).toContain("number · number_with_commas");
+  expect(output).toContain("relation · dual");
+  expect(output).toContain("rollup · max(USD Rate)");
 });
 
 test("injects a column icon, matching a RAW private id to the url-encoded schema id", () => {
   // private icon map keys are RAW (url-decoded): decodeURIComponent("%3F~%5CG") === "?~\\G"
   const icons: IconsById = { "?~\\G": "/icons/arrows-swap-horizontally_gray.svg" };
-  const out = formatSchema(props, icons);
-  expect(out).toContain("[icon arrows-swap-horizontally·gray]");
+  const output = formatSchema(properties, icons);
+  expect(output).toContain("[icon arrows-swap-horizontally·gray]");
 });
 
 test("no icons map → no icon markers at all", () => {
-  expect(formatSchema(props)).not.toContain("[icon ");
+  expect(formatSchema(properties)).not.toContain("[icon ");
 });
 
 test("empty schema is reported, not crashed", () => {

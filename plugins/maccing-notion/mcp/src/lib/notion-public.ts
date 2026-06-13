@@ -81,26 +81,26 @@ export async function publicRequest(
     "Notion-Version": VERSION,
   };
 
-  const init: RequestInit = { method: verb, headers };
+  const fetchOptions: RequestInit = { method: verb, headers };
   if (body !== undefined && verb !== "GET" && verb !== "DELETE") {
     headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
+    fetchOptions.body = JSON.stringify(body);
   }
 
   let lastResponse: PublicResponse = { status: 0, ok: false, body: null };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const response = await fetch(url, init);
+    const response = await fetch(url, fetchOptions);
 
-    const raw = await response.text();
-    let payload: unknown;
+    const responseText = await response.text();
+    let responseBody: unknown;
     try {
-      payload = JSON.parse(raw);
+      responseBody = JSON.parse(responseText);
     } catch {
-      payload = raw;
+      responseBody = responseText;
     }
 
-    lastResponse = { status: response.status, ok: response.ok, body: payload };
+    lastResponse = { status: response.status, ok: response.ok, body: responseBody };
 
     if (!shouldRetryPublic(response.status, verb)) {
       return lastResponse;
@@ -112,8 +112,8 @@ export async function publicRequest(
     }
 
     // Exponential backoff, unless the response's Retry-After (seconds) overrides it.
-    const retryAfterRaw = response.headers.get("Retry-After");
-    const waitMs = backoffMs(attempt, retryAfterRaw !== null ? Number(retryAfterRaw) : undefined);
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const waitMs = backoffMs(attempt, retryAfterHeader !== null ? Number(retryAfterHeader) : undefined);
 
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }

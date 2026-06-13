@@ -2,10 +2,15 @@
 // (emoji, named icon, external/file url, or null). Used by `describe` to show a page's or database's
 // own icon (these ARE public, unlike property/column icons). No API calls.
 
+interface NotionNamedIconRef {
+  name?: string;
+  color?: string;
+}
+
 export interface NotionIcon {
   type?: string;
   emoji?: string;
-  icon?: { name?: string; color?: string };
+  icon?: NotionNamedIconRef;
   external?: { url?: string };
   file?: { url?: string };
 }

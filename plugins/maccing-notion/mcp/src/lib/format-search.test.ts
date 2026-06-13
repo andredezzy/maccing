@@ -20,12 +20,12 @@ const results: RawSearchResult[] = [
 ];
 
 test("renders one compact line per hit: object · title · short id · parent", () => {
-  const out = formatSearch(results);
-  expect(out).toContain("data_source");
-  expect(out).toContain('"Months"');
-  expect(out).toContain("b2479c20…caf9"); // short id
-  expect(out).toContain("parent page 3cf65cfc…bdb4");
-  expect(out).toContain("# 2 hits");
+  const output = formatSearch(results);
+  expect(output).toContain("data_source");
+  expect(output).toContain('"Months"');
+  expect(output).toContain("b2479c20…caf9"); // short id
+  expect(output).toContain("parent page 3cf65cfc…bdb4");
+  expect(output).toContain("# 2 hits");
 });
 
 test("extracts a PAGE title from its title-type property", () => {

@@ -3,12 +3,20 @@
 // relations/rollups summarized. Optional per-column icons are INJECTED, not fetched here, so this
 // stays pure and unit-testable with zero network — exactly like format-views.
 
+import { idVariants } from "./id-variants";
+
+interface SchemaRollupConfig {
+  function?: string;
+  rollup_property_name?: string;
+  relation_property_name?: string;
+}
+
 export interface SchemaProperty {
   id?: string;
   name?: string;
   type?: string;
   number?: { format?: string };
-  rollup?: { function?: string; rollup_property_name?: string; relation_property_name?: string };
+  rollup?: SchemaRollupConfig;
   relation?: { type?: string };
   select?: { options?: unknown[] };
   multi_select?: { options?: unknown[] };
@@ -21,53 +29,40 @@ export type PropertiesMap = Record<string, SchemaProperty>;
 /** property id (any variant — raw, url-decoded, or url-encoded) → "/icons/<file>_<color>.svg". */
 export type IconsById = Record<string, string>;
 
-/** The decoded and encoded forms of an id — Notion stores property ids in either form across endpoints. */
-function idVariants(id: string): string[] {
-  const variants = [id];
-  try {
-    variants.push(decodeURIComponent(id));
-  } catch {
-    // not url-encoded
-  }
-  try {
-    variants.push(encodeURIComponent(id));
-  } catch {
-    // unencodable — skip
-  }
-  return variants;
-}
-
 /** "/icons/arrows-swap-horizontally_gray.svg" → "arrows-swap-horizontally·gray" (color = the last _segment). */
-function prettyIcon(asset: string): string {
-  const file = asset.replace(/^\/icons\//, "").replace(/\.svg$/, "");
-  const cut = file.lastIndexOf("_");
-  return cut === -1 ? file : `${file.slice(0, cut)}·${file.slice(cut + 1)}`;
+export function formatIconAssetPath(assetPath: string): string {
+  const stem = assetPath.replace(/^\/icons\//, "").replace(/\.svg$/, "");
+  const colorSeparatorIndex = stem.lastIndexOf("_");
+  return colorSeparatorIndex === -1
+    ? stem
+    : `${stem.slice(0, colorSeparatorIndex)}·${stem.slice(colorSeparatorIndex + 1)}`;
 }
 
-/** Find a column's icon by trying every id variant against the (raw-id-keyed) private icon map. */
+/** Find a column's icon by trying every id variant against the (raw-id-keyed) private icon map.
+ * `iconFor` has no direct-lookup guard, so idVariants must include the raw id (includeRaw=true). */
 function iconFor(id: string | undefined, icons: IconsById): string | null {
   if (!id) {
     return null;
   }
-  for (const variant of idVariants(id)) {
+  for (const variant of idVariants(id, true)) {
     if (icons[variant]) {
-      return prettyIcon(icons[variant]);
+      return formatIconAssetPath(icons[variant]);
     }
   }
   return null;
 }
 
 /** One-line summary after the type — formula body is NEVER included, only the word "formula". */
-function typeDetail(meta: SchemaProperty): string {
-  switch (meta.type) {
+function typeDetail(property: SchemaProperty): string {
+  switch (property.type) {
     case "number": {
-      const format = meta.number?.format;
+      const format = property.number?.format;
       return format && format !== "number" ? format : "";
     }
     case "relation":
-      return meta.relation?.type === "dual_property" ? "dual" : "single";
+      return property.relation?.type === "dual_property" ? "dual" : "single";
     case "rollup": {
-      const rollup = meta.rollup;
+      const rollup = property.rollup;
       if (!rollup?.function) {
         return "";
       }
@@ -78,7 +73,7 @@ function typeDetail(meta: SchemaProperty): string {
     case "select":
     case "multi_select":
     case "status": {
-      const count = meta[meta.type]?.options?.length;
+      const count = property[property.type]?.options?.length;
       return count ? `${count} options` : "";
     }
     default:
@@ -96,11 +91,11 @@ export function formatSchema(properties: PropertiesMap, icons: IconsById = {}): 
   const pad = Math.max(...names.map((name) => name.length)) + 2;
 
   const lines = names.map((name) => {
-    const meta = properties[name];
-    const detail = typeDetail(meta);
-    const icon = iconFor(meta.id, icons);
+    const property = properties[name];
+    const detail = typeDetail(property);
+    const icon = iconFor(property.id, icons);
 
-    const typeCell = `${meta.type ?? "?"}${detail ? ` · ${detail}` : ""}`;
+    const typeCell = `${property.type ?? "?"}${detail ? ` · ${detail}` : ""}`;
     const iconCell = icon ? `   [icon ${icon}]` : "";
     return `${name.padEnd(pad)}${typeCell}${iconCell}`;
   });

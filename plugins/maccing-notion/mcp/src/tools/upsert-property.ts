@@ -4,7 +4,8 @@
 // property object (zero drift). Column icons go through the private app API; everything else public.
 
 import { z } from "zod";
-import { normalizeUuid } from "../lib/normalize-uuid";
+import { formatIconAssetPath } from "../lib/format-schema";
+import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import {
   activeUserId,
   type IconRead,
@@ -17,33 +18,24 @@ import {
   writeCollectionFormat,
 } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { decodePropertyId } from "../lib/reorder-properties";
 import {
   buildIconOperations,
+  type DataSourceBody,
   describePrivateFailure,
   planUpserts,
   type ResolvedEntry,
-  type TargetType,
+  type ResolvedIcon,
+  type SchemaBody,
+  type SchemaPropertyRef,
+  TargetType,
   type VisiblePlanEntry,
 } from "../lib/upsert-property";
 import { err, ok, type ToolModule } from "../tool";
 
-const UUID = /^[0-9a-f-]{32,36}$/i;
 const COLORS = ["gray", "lightgray", "brown", "yellow", "orange", "green", "blue", "purple", "pink", "red"] as const;
 
-interface SchemaProp {
-  id: string;
-  name: string;
-}
-
-interface SchemaBody {
-  properties?: Record<string, SchemaProp>;
-}
-
-interface DatabaseBody {
-  data_sources?: { id: string }[];
-}
-
-interface RawEntry {
+interface PropertyUpsertInput {
   target_id?: string;
   property?: string;
   value?: unknown;
@@ -54,29 +46,16 @@ interface RawEntry {
   remove_icon?: boolean;
 }
 
-interface ResolvedIcon {
-  dataSourceId: string;
-  propertyId: string;
-  iconValue: string | null;
-}
-
-interface TargetInfo {
+interface ResolvedTarget {
   type: TargetType;
   dataSourceId?: string;
 }
 
-/** "/icons/cash_gray.svg" → "cash·gray". */
-function prettyAsset(asset: string): string {
-  const file = asset.replace(/^\/icons\//, "").replace(/\.svg$/, "");
-  const cut = file.lastIndexOf("_");
-  return cut === -1 ? file : `${file.slice(0, cut)}·${file.slice(cut + 1)}`;
-}
-
 /** Resolve a property NAME (or id) to its RAW internal id (url-decoded), or null. */
-function resolvePropId(schema: Record<string, SchemaProp>, property: string): string | null {
-  for (const def of Object.values(schema)) {
-    const decoded = decodeURIComponent(def.id);
-    if (def.name === property || def.id === property || decoded === property) {
+function resolvePropertyId(schema: Record<string, SchemaPropertyRef>, property: string): string | null {
+  for (const propertyRef of Object.values(schema)) {
+    const decoded = decodePropertyId(propertyRef.id);
+    if (propertyRef.name === property || propertyRef.id === property || decoded === property) {
       return decoded;
     }
   }
@@ -116,26 +95,26 @@ async function applyCanonicalVisibility(visiblePlan: VisiblePlanEntry[]): Promis
       errors.push(`Default visibility not applied on ${dataSourceId} — private read throttled.`);
       continue;
     }
-    const pageProps: PageOrderEntry[] =
-      read.pageProps.length > 0
-        ? read.pageProps.map((entry) => ({ ...entry }))
-        : Object.values(schema).map((def) => ({ property: decodeURIComponent(def.id), visible: true }));
+    const pageProperties: PageOrderEntry[] =
+      read.pageProperties.length > 0
+        ? read.pageProperties.map((entry) => ({ ...entry }))
+        : Object.values(schema).map((propertyRef) => ({ property: decodePropertyId(propertyRef.id), visible: true }));
 
     for (const entry of entries) {
-      const rawId = resolvePropId(schema, entry.property);
+      const rawId = resolvePropertyId(schema, entry.property);
       if (!rawId) {
         errors.push(`Could not resolve "${entry.property}" on ${dataSourceId} for its visibility.`);
         continue;
       }
-      const existing = pageProps.find((prop) => decodeURIComponent(prop.property) === rawId);
+      const existing = pageProperties.find((pageOrderEntry) => decodePropertyId(pageOrderEntry.property) === rawId);
       if (existing) {
         existing.visible = entry.visible;
       } else {
-        pageProps.push({ property: rawId, visible: entry.visible });
+        pageProperties.push({ property: rawId, visible: entry.visible });
       }
     }
 
-    const write = await writeCollectionFormat(dataSourceId, { collection_page_properties: pageProps });
+    const write = await writeCollectionFormat(dataSourceId, { collection_page_properties: pageProperties });
     if (write.ok) {
       didWrite = true;
       lines.push(`${entries.length} default-visibility change(s) ✓`);
@@ -148,21 +127,21 @@ async function applyCanonicalVisibility(visiblePlan: VisiblePlanEntry[]): Promis
 }
 
 /** Probe a target id → is it a data_source (or database→its ds), or a page? */
-async function resolveTarget(id: string): Promise<TargetInfo | null> {
-  const ds = await publicRequest("GET", `/v1/data_sources/${id}`);
-  if (ds.ok) {
-    return { type: "data_source", dataSourceId: id };
+async function resolveTarget(id: string): Promise<ResolvedTarget | null> {
+  const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
+  if (dataSource.ok) {
+    return { type: TargetType.DATA_SOURCE, dataSourceId: id };
   }
-  const db = await publicRequest("GET", `/v1/databases/${id}`);
-  if (db.ok) {
-    const dataSourceId = (db.body as DatabaseBody).data_sources?.[0]?.id;
+  const database = await publicRequest("GET", `/v1/databases/${id}`);
+  if (database.ok) {
+    const dataSourceId = (database.body as DataSourceBody).data_sources?.[0]?.id;
     if (dataSourceId) {
-      return { type: "data_source", dataSourceId };
+      return { type: TargetType.DATA_SOURCE, dataSourceId };
     }
   }
-  const page = await publicRequest("GET", `/v1/pages/${id}`);
-  if (page.ok) {
-    return { type: "page" };
+  const pageResponse = await publicRequest("GET", `/v1/pages/${id}`);
+  if (pageResponse.ok) {
+    return { type: TargetType.PAGE };
   }
   return null;
 }
@@ -176,13 +155,13 @@ function verifyIcons(icons: ResolvedIcon[], read: IconRead, idToName: Record<str
     .map((icon) => {
       const name = idToName[icon.propertyId] ?? icon.propertyId;
       const persisted = read.byCollection[icon.dataSourceId]?.[icon.propertyId] ?? null;
-      if (icon.iconValue === null) {
+      if (icon.iconAssetPath === null) {
         return persisted ? `${name}: remove — STILL PRESENT` : `${name}: removed ✓`;
       }
-      if (persisted === icon.iconValue) {
-        return `${name}: ${prettyAsset(icon.iconValue)} ✓`;
+      if (persisted === icon.iconAssetPath) {
+        return `${name}: ${formatIconAssetPath(icon.iconAssetPath)} ✓`;
       }
-      return `${name}: ${prettyAsset(icon.iconValue)} — DID NOT PERSIST (name may no-op as a property asset; pick another)`;
+      return `${name}: ${formatIconAssetPath(icon.iconAssetPath)} — DID NOT PERSIST (name may no-op as a property asset; pick another)`;
     })
     .join("\n");
 }
@@ -237,8 +216,8 @@ export const upsertProperty: ToolModule = {
     if (!hasPublicToken()) {
       return err("NOTION_TOKEN is not set.");
     }
-    const rawEntries = Array.isArray(args.properties) ? (args.properties as RawEntry[]) : null;
-    if (!rawEntries || rawEntries.length === 0) {
+    const inputEntries = Array.isArray(args.properties) ? (args.properties as PropertyUpsertInput[]) : null;
+    if (!inputEntries || inputEntries.length === 0) {
       return err("`properties` must be a non-empty array of upsert entries.");
     }
 
@@ -246,15 +225,15 @@ export const upsertProperty: ToolModule = {
       const errors: string[] = [];
 
       // 1. Resolve each distinct target's type.
-      const targets = new Map<string, TargetInfo>();
-      for (const id of [...new Set(rawEntries.map((entry) => normalizeUuid(String(entry.target_id ?? ""))))]) {
-        if (!UUID.test(id)) {
+      const targets = new Map<string, ResolvedTarget>();
+      for (const id of [...new Set(inputEntries.map((entry) => normalizeUuid(String(entry.target_id ?? ""))))]) {
+        if (!UUID_PATTERN.test(id)) {
           errors.push(`"${id}" is not a UUID.`);
           continue;
         }
-        const info = await resolveTarget(id);
-        if (info) {
-          targets.set(id, info);
+        const resolvedTarget = await resolveTarget(id);
+        if (resolvedTarget) {
+          targets.set(id, resolvedTarget);
         } else {
           errors.push(`"${id}" is not a readable page, database, or data source.`);
         }
@@ -262,15 +241,18 @@ export const upsertProperty: ToolModule = {
 
       // 2. Build resolved entries (data_source ids normalized via the database→ds resolution).
       const resolved: ResolvedEntry[] = [];
-      for (const entry of rawEntries) {
+      for (const entry of inputEntries) {
         const normalizedId = normalizeUuid(String(entry.target_id ?? ""));
-        const info = targets.get(normalizedId);
-        if (!info) {
+        const resolvedTarget = targets.get(normalizedId);
+        if (!resolvedTarget) {
           continue;
         }
         resolved.push({
-          targetId: info.type === "data_source" ? (info.dataSourceId ?? normalizedId) : normalizedId,
-          targetType: info.type,
+          targetId:
+            resolvedTarget.type === TargetType.DATA_SOURCE
+              ? (resolvedTarget.dataSourceId ?? normalizedId)
+              : normalizedId,
+          targetType: resolvedTarget.type,
           property: String(entry.property ?? ""),
           value: entry.value,
           icon: typeof entry.icon === "string" ? entry.icon : undefined,
@@ -319,7 +301,7 @@ export const upsertProperty: ToolModule = {
           // public `applied` results collected above.
           try {
             const iconDataSourceIds = [...new Set(plan.iconPlan.map((entry) => entry.dataSourceId))];
-            const schemaById = new Map<string, Record<string, SchemaProp>>();
+            const schemaById = new Map<string, Record<string, SchemaPropertyRef>>();
             for (const dataSourceId of iconDataSourceIds) {
               const response = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
               if (response.ok) {
@@ -329,9 +311,13 @@ export const upsertProperty: ToolModule = {
 
             const resolvedIcons: ResolvedIcon[] = [];
             for (const entry of plan.iconPlan) {
-              const propertyId = resolvePropId(schemaById.get(entry.dataSourceId) ?? {}, entry.property);
+              const propertyId = resolvePropertyId(schemaById.get(entry.dataSourceId) ?? {}, entry.property);
               if (propertyId) {
-                resolvedIcons.push({ dataSourceId: entry.dataSourceId, propertyId, iconValue: entry.iconValue });
+                resolvedIcons.push({
+                  dataSourceId: entry.dataSourceId,
+                  propertyId,
+                  iconAssetPath: entry.iconAssetPath,
+                });
               } else {
                 errors.push(`Could not resolve property "${entry.property}" on ${entry.dataSourceId} for its icon.`);
               }
@@ -339,16 +325,16 @@ export const upsertProperty: ToolModule = {
 
             if (resolvedIcons.length > 0) {
               const operations = buildIconOperations(resolvedIcons, spaceId(), await activeUserId());
-              const setResponse = await saveTransactions(operations);
-              if (!setResponse.ok) {
-                icons = describePrivateFailure(setResponse.body);
+              const saveTransactionsResponse = await saveTransactions(operations);
+              if (!saveTransactionsResponse.ok) {
+                icons = describePrivateFailure(saveTransactionsResponse.body);
                 errors.push(`Column icons not applied — ${icons}`);
               } else {
                 anyWrite = true;
                 const idToName: Record<string, string> = {};
                 for (const schema of schemaById.values()) {
-                  for (const def of Object.values(schema)) {
-                    idToName[decodeURIComponent(def.id)] = def.name;
+                  for (const propertyRef of Object.values(schema)) {
+                    idToName[decodePropertyId(propertyRef.id)] = propertyRef.name;
                   }
                 }
                 icons = verifyIcons(resolvedIcons, await readCollectionIcons(iconDataSourceIds), idToName);
@@ -383,7 +369,12 @@ export const upsertProperty: ToolModule = {
         return err(errors.join("\n"));
       }
 
-      return ok({ applied, icons, visibility, errors: errors.length > 0 ? errors : undefined });
+      return ok({
+        applied,
+        icons,
+        visibility,
+        errors: errors.length > 0 ? errors : undefined,
+      });
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }
