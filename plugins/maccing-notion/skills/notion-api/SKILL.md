@@ -321,7 +321,7 @@ Every create proposes the whole object — data model, names, descriptions, view
 
 The two rules above fire **per-object, at create-time** — so a whole build designed up front (a tracker, hub, or refactor, often via `brainstorming` + `writing-plans`) can be fully approved while every icon, cover, option colour, view sort, format, and description stays silently undecided, and the user gets a skeleton instead of a finished workspace. This gate fires **once, before the first write**, putting every per-object decision in one reviewable document.
 
-**Applies to any build with two or more design dimensions to decide** — a multi-database tracker or hub, OR a single database that gains a view, a select/status option, or a cover. (A lone property add that changes no view/option/cover runs under the per-object rules above.)
+**Applies to any build with two or more design dimensions to decide** — a multi-database tracker or hub, OR a single database that gains a view, a select/status option, a cover, or **two or more properties in one batch**. (A lone single-property add that changes no view/option/cover runs under the per-object rules above.)
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
@@ -342,10 +342,13 @@ One section per object. **Reproduce, per object, every applicable line from the 
 - **Linked views in a page body** — a linked database view embedded in a page is a full VIEW (type/filter/sort/group/visible/name/card-look), not a body-block reference.
 - **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200, `references/gallery-view.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
 - **A named page's cover** (area / nav / section) is sourced HERE — the "commit at creation" exemption is for not-yet-created DB *rows* only.
+- **Refactor / rebuild → a MIGRATION block** — for each existing DB: row count (`read_database`), every property that must survive (old name → new name/type), every relation to re-wire, every formula referencing an old name. A property you drop is stated `OUT OF SCOPE` with a reason. Approved in this same turn — *enumerating only the headline table and silently ignoring the others is the classic migration miss.*
 
 **Stated, not skipped:** `none` / `no filter` / `no sort` / `all default order` are valid stated answers. `TBD`/`OR`/`somehow`/`optional`/`must-confirm` are gaps — resolve now (a location is a *specific proposed* value via `search`, never a question handed back) or mark **out of scope**. When the **user explicitly defers** a dimension ("no icons yet", "views later"), record it as **`deferred by user — out of scope`** (a stated answer) and don't re-propose it until they re-open it.
 
 Present it, **stop and wait**. After approval, execution goes straight to the write cycle (intent + operations + preview tree) per object — **the per-object design-brief steps of the two rules above are already satisfied by this approved document**; do not re-seek design approval.
+
+**Verify the build matched the design — the loop isn't closed until you check.** A dimension can be approved yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database`) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
 
 **Collapse** to a one-sentence confirm ONLY when the user already stated EVERY line for EVERY object, verified line-by-line. The per-view and per-object collapse shortcuts **cannot proxy** for this gate; in a multi-object build they are unavailable until this document is approved.
 
@@ -360,7 +363,7 @@ Present it, **stop and wait**. After approval, execution goes straight to the wr
 | "I stated the reverse-property name — the relation's covered" | The reverse property is a full property: its casing/language, icon, and visibility are separate stated dimensions |
 | "`Default-view rename: <Name>` covers the default view" | The rename supplies the name only; the renamed view needs its own full VIEW entry |
 | "I specified the view type and name — position's obvious" | Tab-bar position is a stated dimension; creation order ≠ intended order |
-| "This formula/rollup is complex — I'll figure the expression out at build" | A deferred formula is a gap — surface its expression, null guards, and assumptions now, or mark out of scope |
+| "This formula/rollup is complex — I'll mark it out of scope" | `out of scope` is for dimensions the USER deferred. A *required* computed column can't be self-deferred — give its full expression now, or block the build with "unresolved required formula — needs your call" |
 | "The view-design collapse fired, so I can build that view" | The per-view collapse applies to single-view tasks only; in a multi-object build this gate supersedes it |
 | "Collapse applies — they specified most of it" | Collapse needs ALL lines for ALL objects; one missing line forbids it — verify line-by-line |
 
