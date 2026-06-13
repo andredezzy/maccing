@@ -60,8 +60,10 @@ export function spaceId(): string | undefined {
   return SPACE_ID;
 }
 
-/** Low-level POST to api/v3 with cookie auth. Detects the bot/HTML page returned when rate-limited. */
-async function post(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
+/** A single api/v3 POST — paced, with bot-page detection AND network-error capture. Never throws:
+ * a connection reset (Notion drops the socket under hard bot-protection) becomes an ok:false result,
+ * so every caller handles throttling uniformly instead of seeing a raw fetch error. */
+async function rawPost(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
   await pacePrivate();
 
   const headers: Record<string, string> = {
@@ -72,8 +74,18 @@ async function post(endpoint: string, body: unknown, activeUser?: string): Promi
     headers["x-notion-active-user-header"] = activeUser;
   }
 
-  const response = await fetch(`${BASE}/${endpoint}`, { method: "POST", headers, body: JSON.stringify(body) });
-  const raw = await response.text();
+  let response: Response;
+  let raw: string;
+  try {
+    response = await fetch(`${BASE}/${endpoint}`, { method: "POST", headers, body: JSON.stringify(body) });
+    raw = await response.text();
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      body: `Private API unreachable (likely throttled / bot-protection reset): ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 
   let payload: unknown;
   try {
@@ -87,6 +99,18 @@ async function post(endpoint: string, body: unknown, activeUser?: string): Promi
   }
 
   return { status: response.status, ok: response.ok, body: payload };
+}
+
+/** api/v3 POST with bounded paced backoff. The private API throttles via BOTH bot-pages and
+ * connection resets; retrying lets a transient throttle self-heal — for reads AND writes. Our
+ * private writes are idempotent (icon schema sets), so a retry after an inconclusive reset is safe. */
+async function post(endpoint: string, body: unknown, activeUser?: string, tries = 3): Promise<PrivateResponse> {
+  let response = await rawPost(endpoint, body, activeUser);
+  for (let attempt = 1; attempt < tries && !response.ok; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    response = await rawPost(endpoint, body, activeUser);
+  }
+  return response;
 }
 
 interface GetSpacesUserRecord {
@@ -153,19 +177,10 @@ export interface RecordRequest {
   table: string;
 }
 
-/** Read internal records (e.g. a `collection` schema) — used to verify a private write persisted. */
+/** Read internal records (e.g. a `collection` schema) — used to verify a private write persisted.
+ * Retries with backoff via `post` (the read-back is the bot-throttle-prone half of the private API). */
 export async function getRecordValues(requests: RecordRequest[]): Promise<PrivateResponse> {
   return privateCall("getRecordValues", { requests });
-}
-
-/** getRecordValues with bounded backoff — the read-back is the bot-throttle-prone half of the private API. */
-async function getRecordValuesRetry(requests: RecordRequest[], tries = 3): Promise<PrivateResponse> {
-  let response = await getRecordValues(requests);
-  for (let attempt = 1; attempt < tries && !response.ok; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
-    response = await getRecordValues(requests);
-  }
-  return response;
 }
 
 export interface IconReadOk {
@@ -189,7 +204,7 @@ export async function readCollectionIcons(dataSourceIds: string[]): Promise<Icon
     return { status: "ok", byCollection: {} };
   }
   try {
-    const response = await getRecordValuesRetry(dataSourceIds.map((id) => ({ id, table: "collection" })));
+    const response = await getRecordValues(dataSourceIds.map((id) => ({ id, table: "collection" })));
     if (!response.ok) {
       return { status: "throttled" };
     }

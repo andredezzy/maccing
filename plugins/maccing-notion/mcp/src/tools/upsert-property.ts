@@ -14,7 +14,13 @@ import {
   spaceId,
 } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
-import { buildIconOperations, planUpserts, type ResolvedEntry, type TargetType } from "../lib/upsert-property";
+import {
+  buildIconOperations,
+  describePrivateFailure,
+  planUpserts,
+  type ResolvedEntry,
+  type TargetType,
+} from "../lib/upsert-property";
 import { err, ok, type ToolModule } from "../tool";
 
 const UUID = /^[0-9a-f-]{32,36}$/i;
@@ -206,7 +212,7 @@ export const upsertProperty: ToolModule = {
       for (const [dataSourceId, properties] of Object.entries(plan.dataSourcePatches)) {
         const response = await publicRequest("PATCH", `/v1/data_sources/${dataSourceId}`, { properties });
         if (response.ok) {
-          applied.push(`data_source ${dataSourceId}: ${Object.keys(properties).join(", ")}`);
+          applied.push(`data_source ${dataSourceId}: ${Object.keys(properties).join(", ")} ✓`);
           anyWrite = true;
         } else {
           errors.push(`PATCH data_source ${dataSourceId} failed: ${JSON.stringify(response.body)}`);
@@ -230,41 +236,49 @@ export const upsertProperty: ToolModule = {
           errors.push(`Column icons skipped — private API not configured (${config.missing.join(", ")}).`);
           icons = "skipped (private API not configured)";
         } else {
-          const iconDataSourceIds = [...new Set(plan.iconPlan.map((entry) => entry.dataSourceId))];
-          const schemaById = new Map<string, Record<string, SchemaProp>>();
-          for (const dataSourceId of iconDataSourceIds) {
-            const response = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
-            if (response.ok) {
-              schemaById.set(dataSourceId, (response.body as SchemaBody).properties ?? {});
-            }
-          }
-
-          const resolvedIcons: ResolvedIcon[] = [];
-          for (const entry of plan.iconPlan) {
-            const propertyId = resolvePropId(schemaById.get(entry.dataSourceId) ?? {}, entry.property);
-            if (propertyId) {
-              resolvedIcons.push({ dataSourceId: entry.dataSourceId, propertyId, iconValue: entry.iconValue });
-            } else {
-              errors.push(`Could not resolve property "${entry.property}" on ${entry.dataSourceId} for its icon.`);
-            }
-          }
-
-          if (resolvedIcons.length > 0) {
-            const operations = buildIconOperations(resolvedIcons, spaceId(), await activeUserId());
-            const setResponse = await saveTransactions(operations);
-            if (!setResponse.ok) {
-              errors.push(`Icon saveTransactions failed: ${JSON.stringify(setResponse.body)}`);
-              icons = "icon write FAILED";
-            } else {
-              anyWrite = true;
-              const idToName: Record<string, string> = {};
-              for (const schema of schemaById.values()) {
-                for (const def of Object.values(schema)) {
-                  idToName[decodeURIComponent(def.id)] = def.name;
-                }
+          // The private phase is isolated: any failure (a throttle/connection-reset on getSpaces or
+          // saveTransactions) becomes a domain message and is recorded — it must NOT discard the
+          // public `applied` results collected above.
+          try {
+            const iconDataSourceIds = [...new Set(plan.iconPlan.map((entry) => entry.dataSourceId))];
+            const schemaById = new Map<string, Record<string, SchemaProp>>();
+            for (const dataSourceId of iconDataSourceIds) {
+              const response = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+              if (response.ok) {
+                schemaById.set(dataSourceId, (response.body as SchemaBody).properties ?? {});
               }
-              icons = verifyIcons(resolvedIcons, await readCollectionIcons(iconDataSourceIds), idToName);
             }
+
+            const resolvedIcons: ResolvedIcon[] = [];
+            for (const entry of plan.iconPlan) {
+              const propertyId = resolvePropId(schemaById.get(entry.dataSourceId) ?? {}, entry.property);
+              if (propertyId) {
+                resolvedIcons.push({ dataSourceId: entry.dataSourceId, propertyId, iconValue: entry.iconValue });
+              } else {
+                errors.push(`Could not resolve property "${entry.property}" on ${entry.dataSourceId} for its icon.`);
+              }
+            }
+
+            if (resolvedIcons.length > 0) {
+              const operations = buildIconOperations(resolvedIcons, spaceId(), await activeUserId());
+              const setResponse = await saveTransactions(operations);
+              if (!setResponse.ok) {
+                icons = describePrivateFailure(setResponse.body);
+                errors.push(`Column icons not applied — ${icons}`);
+              } else {
+                anyWrite = true;
+                const idToName: Record<string, string> = {};
+                for (const schema of schemaById.values()) {
+                  for (const def of Object.values(schema)) {
+                    idToName[decodeURIComponent(def.id)] = def.name;
+                  }
+                }
+                icons = verifyIcons(resolvedIcons, await readCollectionIcons(iconDataSourceIds), idToName);
+              }
+            }
+          } catch (iconError) {
+            icons = describePrivateFailure(iconError instanceof Error ? iconError.message : String(iconError));
+            errors.push(`Column icons not applied — ${icons}`);
           }
         }
       }

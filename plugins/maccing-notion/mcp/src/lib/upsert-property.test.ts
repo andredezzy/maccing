@@ -4,12 +4,32 @@ import { expect, test } from "bun:test";
 
 import {
   buildIconOperations,
+  describePrivateFailure,
   iconAssetPath,
   parseCollectionIcons,
   planUpserts,
   type ResolvedEntry,
   type SaveOp,
 } from "./upsert-property";
+
+test("describePrivateFailure: connection reset / bot page → a throttle message that says public changes applied", () => {
+  for (const body of [
+    "The socket connection was closed unexpectedly",
+    "Private API unreachable (likely throttled / bot-protection reset): socket hang up",
+    "Non-JSON response (likely rate-limited / bot page — space out private calls and retry).",
+  ]) {
+    const message = describePrivateFailure(body);
+    expect(message).toContain("throttled");
+    expect(message).toMatch(/DID apply|retry/i);
+    expect(message).not.toContain("socket"); // raw error not leaked
+  }
+});
+
+test("describePrivateFailure: a real API error is surfaced verbatim-ish, not masked as a throttle", () => {
+  const message = describePrivateFailure({ code: "validation_error", message: "bad icon path" });
+  expect(message).not.toContain("throttled");
+  expect(message).toContain("validation_error");
+});
 
 test("iconAssetPath builds /icons/<file>_<color>.svg, default gray", () => {
   expect(iconAssetPath("cash")).toBe("/icons/cash_gray.svg");
