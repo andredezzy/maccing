@@ -53,6 +53,26 @@ row["properties"]["Formula"]["formula"]["string"]            # string formula
 
 ---
 
+## Databases
+
+**Create a database** (inline or full-page) — `POST /v1/databases`; the schema goes under `initial_data_source.properties` (the 2025-09-03+ data-sources model). The response carries `data_sources:[{id,name}]` — grab `data_sources[0].id` for every later property PATCH. (Live-verified 2026-06-14.)
+```json
+POST /v1/databases
+{
+  "parent": { "type": "page_id", "page_id": "<page>" },
+  "title": [{ "type": "text", "text": { "content": "Months" } }],
+  "is_inline": true,
+  "icon": { "type": "icon", "icon": { "name": "calendar-month", "color": "gray" } },
+  "initial_data_source": { "properties": {
+    "Month": { "title": {} },
+    "Date":  { "date": {} }
+  } }
+}
+```
+- **Database DESCRIPTION is set on the database, NOT the data source:** `PATCH /v1/databases/{database_id} {"description":[{"type":"text","text":{"content":"…"}}]}`. A `description` on `PATCH /v1/data_sources/{id}` returns `400 "The description property is not supported for data sources. Use the Update Database API instead."`
+- **Inline DBs append to the page END** — you can't position one before existing blocks via the API; create them in the desired top-to-bottom order (see `blocks.md`).
+- **`select`/`multi_select` option colors** — valid: `default`, `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`. ⚠️ **No `lightgray`** (a 400 lists the valid set) — `lightgray` is valid only for **named icons** (`icon-names.md`), easy to conflate. Use `default` for the lightest select chip.
+
 ## Pages
 
 ```json

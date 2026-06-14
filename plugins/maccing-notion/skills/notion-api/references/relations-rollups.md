@@ -22,7 +22,12 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 ## Relations
 
-- Dual (two-way) relation auto-names reverse property `"Related to <SourceDB> (<TargetDB>)"` — rename before use
+- Dual (two-way) relation auto-names the reverse property `"Related to <SourceDB> (<TargetDB>)"`. **Preferred — name the reverse AT CREATION in one PATCH** via `dual_property.synced_property_name` (no auto-name-then-rename round trip):
+  ```json
+  PATCH /v1/data_sources/{id}
+  { "properties": { "Month": { "relation": { "data_source_id": "<target_ds>", "type": "dual_property", "dual_property": { "synced_property_name": "Weeks" } } } } }
+  ```
+  The reverse on the target comes back already named `Weeks` (live-verified 2026-06-14). The rename-after path below is the **fallback** for a relation that already exists.
 - **Single → dual conversion does NOT backfill** existing rows onto the reverse side — new rows auto-mirror; pre-existing rows need explicit PATCH **from the target/reverse side** (patching from the source/forward side is a silent no-op):
   ```python
   # Query BOTH data sources via raw POST /v1/data_sources/{id}/query (each result carries .id + the relation prop) —

@@ -32,7 +32,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 # 3. data_source_id = response["data_sources"][0]["id"]
 ```
 
-**Formula expressions:** author with `prop("Name")` (what you send in `expression`); Notion compiles it to an opaque internal `{{notion:block_property:<id>:…}}` form seen on read-back — don't hand-author that form.
+**Formula expressions:** author with `prop("Name")` (what you send in `expression`); Notion compiles it to an opaque internal `{{notion:block_property:<propId>:<dsId>:<spaceId>}}` form seen on read-back — *normally* don't hand-author that form. **Exception (live-verified):** `prop("text").split(...)` and other list-ops on a `prop()` reference fold to `[]` via the public API, and the **compiled-token form survives the fold** — so for split/list ops on a text property, hand-authoring the token IS the public-API workaround (still typed `unknown`, hence display-only). Full rules → `formulas.md`; the type-correct private-AST path → `private-api.md`.
 
 **Stale `filter_properties` in URL** → 400 `validation_error` "malformed schema ... invalid attribute: <encoded_id>" — remove stale property IDs from query params. (The `request` tool is a pure passthrough — it never appends params on its own; a stale id only appears if you pass it in the `query` arg.)
 
@@ -43,6 +43,10 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 2. **Re-parent** every top-level database (`PATCH /v1/databases/{id}` `{parent:{page_id}}`) and page (`POST /v1/pages/{id}/move`) into it — rows, values, relations, dual-relations all survive (only the parent pointer changes; a move, not a copy, so relation ids stay valid).
 3. **Layout fidelity** (two `blocks.md` constraints): loose blocks can't be moved (recreate + trash), and databases can't enter columns via the API (UI-only). So: `read_page(area,"outline")` to record the original order FIRST → recreate the loose blocks at the backup + sequence the DB/page moves to match the recorded order → accept that side-by-side columns degrade to stacked (finish columns in the UI).
 4. **Verify** — `read_page(backup,"outline")` + `read_page(area,"outline")`, emit both trees (the mandatory tree-view). The backup is now a safe, readable source for a later read-and-migrate pass.
+
+**Probe-first verification (API-built DB):** before bulk-migrating into a freshly-built, zero-row database, validate the whole compute chain with ONE transient connected row-set — create a row in each DB, linked together, then read them back: every formula and rollup should show its computed value (e.g. `Volume` = `Weight × Total reps`; a `sum` rollup = the children's total). **Trash the probe rows** before migrating. This catches formula type errors, wrong rollup functions, and broken relations while it's cheap to fix. (Used live: validated Volume / est.1RM / Σ-/count-/max-rollups end-to-end, then trashed 5 rows.)
+
+**Reader false-negative — "0 blocks" ≠ empty page:** `read_page(id, "outline")` on a **non-existent or mistyped page id** returns `0 blocks` with **no error** — it reads as "the page is empty." (Bit us once via a mis-padded UUID → a wrong "the area is empty" conclusion before a build.) Before concluding a page is empty, confirm the id resolves: `GET /v1/pages/{id}` (404 = bad id), or reach it via a known parent's children.
 
 ---
 

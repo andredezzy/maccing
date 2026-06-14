@@ -17,7 +17,7 @@ The private API is reached exclusively via two tools on the self-hosted `notion`
 Extending it (a new UI-only capability) is a server change — add a file under `mcp/tools/` and one line to the registry — not a new script. Auth/envelope details below are for understanding and for DevTools capture; you drive it through the tools.
 
 ## When the public API is enough (don't use this file)
-Pages/database icons & covers, properties, rows, views (table/board/gallery/chart), sorts, filters (except UI relative dates), formulas, rollups, relations, blocks — all public. Reach for the private API **only** for the UI-only gaps below.
+Pages/database icons & covers, properties, rows, views (table/board/gallery/chart), sorts, filters (except UI relative dates), **most** formulas, rollups, relations, blocks — all public. Reach for the private API **only** for the UI-only gaps below. ⚠️ **Exception — parse/list/relation formulas:** a formula that splits a text property (`split().map(toNumber(current))`) or reads a related page's property (`current.prop("X")`, `.last().prop("X")`) is **NOT authorable via the public API** (it returns `400 "Type error"` or silently folds `prop().split()` to `[]`) — author it here as a `formula2` AST (see "Author a Formula 2.0 formula" below). Full diagnosis in `formulas.md`.
 
 ## Auth (live-verified 2026-06-11)
 
@@ -75,6 +75,44 @@ POST /api/v3/getRecordValues   // headers: Cookie + x-notion-active-user-header
 ```
 The public `GET /v1/data_sources/{id}` will **never** show it (`property` objects have no `icon` field on read or write).
 
+## ⭐ Verified recipe: author a Formula 2.0 formula (parse / list / relation) the public API can't
+
+The public API stores `formula.expression` as a **string** and compiles it server-side — which **constant-folds `prop("x").split()` to `[]`** and types any parsed-list / related-page value as `unknown` (un-composable, un-filterable; full diagnosis in `formulas.md`). The Notion UI instead stores a **typed `formula2` AST** — every leaf carries a `result_type`. Write that AST directly here and the formula is correct. **Live-verified 2026-06-14** (converted a number column into a live `sum(Reps.split(";").map(toNumber(current)))` that computed `30` from `"12;10;8"`).
+
+**Don't hand-craft the AST — copy a working one.** Author the formula ONCE in the Notion UI (or find a DB that already has it), read its `formula2` back, swap the property pointers, write it to your target.
+
+1. **READ a working example** (`syncRecordValues`, table `collection`):
+   ```jsonc
+   private_request({ endpoint: "syncRecordValues",
+     body: { requests: [{ pointer: { table: "collection", id: "<source_ds_id>" }, version: -1 }] } })
+   // → recordMap.collection["<id>"].value.schema["<propId>"] = { type:"formula", version:"v2", formula2:{ code:[…], result_type:{…} } }
+   ```
+   A Formula 2.0 formula lives under **`formula2.code`** — an array of fragments where a property reference is the token
+   `["‣", [["fpp", { name, property:"<rawPropId>", collection:{ id, table:"collection", spaceId } }]]]`
+   interleaved with literal code strings (`["sum("]`, `[".split(\";\").map(toNumber(current)))"]`). `result_type` is `{type:"number"|"text"|"date"|"boolean"}`. (A legacy v1 formula instead stores a nested typed-node tree under `formula`; prefer the `formula2` form.)
+
+2. **REPLANT onto the target** — deep-clone `formula2`; in every `fpp` token swap `property`→the target's raw prop id and `collection.id`/`spaceId`→the target's. Then `set` the schema entry **with the mandatory trailing `update` commit op**:
+   ```jsonc
+   private_request({ endpoint: "saveTransactions", operations: [
+     { pointer:{table:"collection", id:"<target_ds_id>", spaceId:"<space>"},
+       command:"set", path:["schema","<target_propId>"],
+       args:{ name:"Total reps", type:"formula", version:"v2", icon:"/icons/mathematics_gray.svg",
+              formula2:{ code:[ ["sum("],
+                                ["‣",[["fpp",{name:"Reps", property:"Wr{h",
+                                       collection:{id:"<target_ds_id>", table:"collection", spaceId:"<space>"}}]]],
+                                [".split(\";\").map(toNumber(current)))"] ],
+                         result_type:{type:"number"} } } },
+     { pointer:{table:"collection", id:"<target_ds_id>", spaceId:"<space>"}, path:[], command:"update",
+       args:{last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} }
+   ] })
+   ```
+   - **`set` replaces the whole schema entry** — include `name`/`type`/`icon`/`version` so you don't drop them. (`update` would *merge*, leaving a stale `number_format` when converting a number→formula.)
+   - **Raw prop ids are URL-DECODED** (`Wr%7Bh` → `Wr{h`); `<target_ds_id>` == the collection id == your public `data_source_id`; **`spaceId`** is the 3rd UUID in any public compiled `{{notion:block_property:…}}` token.
+
+3. **VERIFY** — `200 {}` does NOT prove persistence. Create a probe row, read it back via the **public** API: the formula cell must show the computed value. Then trash the probe row.
+
+**Bonus:** an AST formula with the right `result_type` is type-correct → it composes and is view-filterable (unlike public-string formulas, typed `unknown`). And at **runtime** even existing public-string formulas that reference your new AST formula still evaluate — the `unknown`-type block is author-time only.
+
 ## Discovering NEW operations — the DevTools capture method (reusable)
 This is how the property-icon and "This month" formats were found. To learn the exact `command`/`path`/`args` for ANY UI-only action:
 1. Open Notion in the browser, DevTools → **Network**, filter `saveTransactions`.
@@ -89,6 +127,7 @@ This is how the property-icon and "This month" formats were found. To learn the 
 | `200 {}` but change didn't persist | Missing the trailing `update` commit op, OR an invalid `/icons/<file>` name (silent no-op). |
 | `getRecordValues` returns HTML / reads flaky | Missing `x-notion-active-user-header`, or **rate-limited**. Space calls out (seconds apart), add retries; don't loop hard. |
 | Public API doesn't reflect it | Expected — these features are invisible to `api.notion.com/v1`. |
+| Batched `upsert_property` (many icons/visibility) → **502 HTML bot page** (`"Non-JSON response"`) | Bot-protection throttle from bursting `saveTransactions` + read-backs. Split into smaller batches, space calls ~2s+, back off ~10s on 502, retry. For **default column visibility**, prefer the public **view config** (a view's visible-property list — `views.md`) over the private `visible` flag: reliable, not rate-limited. |
 
 ---
 

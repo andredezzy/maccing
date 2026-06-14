@@ -45,6 +45,8 @@ The names above govern **page & database icons** (public `PATCH /v1/pages|databa
 
 `"default"` is **not** a valid token — omit `color` instead.
 
+> ⚠️ **This is the ICON palette — `select`/`multi_select` OPTION colors are the inverse on two tokens:** options **accept `default`** but **reject `lightgray`** (400 lists the valid set). Don't reuse an icon color on a select option; use `default` for the lightest chip. (See `pages-properties.md`.)
+
 ## Verified valid names (885, alphabetical — live-tested 2026-06-11)
 
 ```

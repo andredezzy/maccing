@@ -473,14 +473,14 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | Task | Load |
 |---|---|
 | Property shapes, reading values, **page/DB** icons & covers (for **property/column** icons use the private-API row below, NOT this one) | `references/pages-properties.md` |
-| **Property/column icons** (the icon next to a column name) **& other UI-only features the public API can't do** — column icons via `upsert_property`; other UI-only writes via `private_request` (never answer "impossible") | `references/private-api.md` |
+| **Property/column icons** (the icon next to a column name), **authoring parse/list/relation formulas (the typed `formula2` AST)** **& other UI-only features the public API can't do** — column icons via `upsert_property`; other UI-only writes via `private_request` (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
 | **Gallery view** visual config (cover, card size, visible props) + **sourcing B&W cover images** | `references/gallery-view.md` |
 | **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |
-| Formulas (gotchas, pt-BR currency) & number formatting | `references/formulas.md` |
+| Formulas (gotchas; **`prop().split()` folds to `[]`; parse/list/relation formulas are NOT public-API-writable → use the private `formula2` AST**; pt-BR currency) & number formatting | `references/formulas.md` |
 | Relations & rollups | `references/relations-rollups.md` |
 | Querying/filtering rows, search, extracting a `data_source_id` from a URL; webhooks, caching, idempotency | `references/patterns.md` |
 | **Debugging an API error** (`400`/`409`/`429`/`401`/`403`, `validation_error`, permission) | `references/patterns.md` + the matching domain file above |
