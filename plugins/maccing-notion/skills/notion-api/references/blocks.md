@@ -26,7 +26,7 @@ POST /v1/pages
 - Use `\n` for newlines in JSON; use `<br>` for line breaks within a paragraph
 - `markdown` is mutually exclusive with `children` / `content`
 
-**Update page content** — the body is a **discriminated union; the top-level `type` is MANDATORY** (omit it → 400 `body.type should be defined`). On `Notion-Version: 2026-03-11` the REST API accepts `insert_content`, `replace_content`, and `replace_content_range` — the `update_content` (`old_str`/`new_str`) shape is **rejected** here (400 lists the three valid types), even though Notion's guide still documents it. Verified 2026-03-11.
+**Update page content** — the body is a **discriminated union; the top-level `type` is MANDATORY** (omit it → 400 `body.type should be defined`). On `Notion-Version: 2026-03-11` the REST API accepts **four** types: `insert_content`, `replace_content`, `replace_content_range`, and `update_content`. ⚠️ **`update_content` takes `content_updates: [{old_str, new_str}]`** — an ARRAY of exact-string find→replace pairs (batch replace in one call). A flat `update_content: { old_str, new_str }` is **rejected** → `400 update_content.content_updates should be defined`. Live-verified 2026-06-14 (replaced `alpha`→`beta` on a scratch page via `content_updates`).
 ```json
 // insert_content — ADDITIVE: inserts without deleting/rewriting existing blocks (preferred for edits)
 PATCH /v1/pages/{id}/markdown
@@ -42,7 +42,10 @@ PATCH /v1/pages/{id}/markdown
 { "type": "replace_content", "replace_content": { "new_str": "# Full replacement", "allow_deleting_content": false } }
 
 // replace_content_range — replaces a selected range (ellipsis selection); third valid type
-{ "type": "replace_content_range", "replace_content_range": { "old_str": "start...end", "new_str": "replacement" } }
+{ "type": "replace_content_range", "replace_content_range": { "old_str": "start...end", "new_str": "replacement", "allow_deleting_content": false } }
+
+// update_content — batch find/replace; each pair is an exact-string old_str→new_str swap (NOT additive)
+{ "type": "update_content", "update_content": { "content_updates": [{ "old_str": "alpha", "new_str": "beta" }] } }
 ```
 - **Ellipsis selection** (`after`): three ASCII dots `...` — text before = start anchor, after = end anchor; content inserts right after the matched range. Pick clean anchors (avoid escaped `\[`, `\$`, bold markers).
 - Prefer **`insert_content`** for edits — it never rewrites untouched blocks. ⚠️ `replace_content` / `replace_content_range` **delete** anything not in the new string and **trash child pages/databases** unless guarded ([makenotion#171](https://github.com/makenotion/notion-mcp-server/issues/171)); `allow_deleting_content` (default `false`) guards child pages/databases on both `replace_content` and `replace_content_range` — set `true` only when deletion is intended.
@@ -88,7 +91,7 @@ PATCH /v1/pages/{id}/markdown
 
 - The old flat `after` param on `PATCH /v1/blocks/{id}/children` was **removed** in 2026-03-11 — integrations using `after` will break
 
-**Linked-database view blocks** appear as `'Untitled'` in the block tree (via `read_page(page_id, "outline")`) even when the view has a name; `PATCH /v1/blocks/{block_id}` with a title update returns 400.
+**Linked-database view blocks** appear as `'Untitled'` in the block tree (via `read_page(page_id, "outline")`) even when the inner *view* has a name. The wrapper block **IS a database object** (a linked DB created via `create_database`), so **name it via `PATCH /v1/databases/{block_id}` with a `title`** — sets the heading shown above the embedded view (live-verified 2026-06-14). `PATCH /v1/blocks/{block_id}` with a title update returns 400 (wrong endpoint — same rule as `child_database` renames).
 
 **Useful block shapes:**
 ```json
