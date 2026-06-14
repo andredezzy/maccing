@@ -301,7 +301,7 @@ Each template item: [verified live 2026-06]
 
 `qualityRating` field values: `UNKNOWN` (new templates or insufficient send volume), `GREEN`, `YELLOW`, `RED`. This is a Meta-assigned score, not a YCloud metric. New templates return `UNKNOWN` until Meta has enough send volume to score them. [verified live 2026-06]
 
-The `QUICK_REPLY` button text "Parar mensagens" is the opt-out trigger. When a recipient taps it, YCloud automatically adds them to the unsubscribers list. [from docs]
+The `QUICK_REPLY` button text "Parar mensagens" is the opt-out trigger. When a recipient taps it, YCloud *should* add them to the unsubscribers list — but this auto-add is **unreliable** in practice (it only fires for conversations routed to the auto-unsubscribe chatbot; unassigned button opt-outs are NOT registered → reconcile manually). See Unsubscribers → "Opt-out auto-creation — and why it is UNRELIABLE". [from docs; live caveat 2026-06]
 
 ### Retrieve Single Template (GET /v2/whatsapp/templates/{wabaId}/{name}/{language})
 
@@ -624,18 +624,21 @@ Response includes both offset-based pagination fields and a `cursor` object (eve
 }
 ```
 
-Each unsubscriber item: [from docs, no live items to confirm]
+Each unsubscriber item [verified live 2026-06]:
 
 ```json
 {
-  "customer": "+5511999999999",
+  "id": "6a2b406ec059134a36e43292",
   "channel": "whatsapp",
+  "customer": "+5511999999999",
+  "type": "PHONE_NUMBER",
   "regionCode": "BR",
+  "source": "Chatbot",
   "createTime": "2026-06-01T10:00:00Z"
 }
 ```
 
-No `source` field linking the opt-out to a specific template. To attribute an opt-out to a template, correlate the `createTime` + `customer` phone number against your own send log. [verified live 2026-06]
+The `source` field records the opt-out **mechanism** (e.g. `Chatbot` for the auto-unsubscribe bot, or a STOP keyword), NOT the originating template. To attribute an opt-out to a specific template, correlate the `createTime` + `customer` phone number against your own send log. [verified live 2026-06]
 
 ### Check Opt-Out Status (GET /v2/unsubscribers/{customer}/{channel})
 
@@ -646,7 +649,21 @@ curl -s "https://api.ycloud.com/v2/unsubscribers/%2B5511999999999/whatsapp" \
   -H "X-API-Key: $KEY"
 ```
 
-Opt-outs are auto-created when: a user replies with opt-out keywords (e.g. STOP), or taps a `QUICK_REPLY` button with the "Parar mensagens" text (YCloud intercepts this response and registers the opt-out). [from docs]
+### Create Unsubscriber (POST /v2/unsubscribers)
+
+Manually add a phone to the opt-out list. **The `type` field is REQUIRED** — omitting it returns `400 PARAM_MISSING: Parameter 'type' is required`. The accepted value is `PHONE_NUMBER`. [verified live 2026-06]
+
+```bash
+curl -s -X POST "https://api.ycloud.com/v2/unsubscribers" \
+  -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"customer":"+5511999999999","channel":"whatsapp","type":"PHONE_NUMBER","regionCode":"BR"}'
+```
+
+Returns `200` with the created item. Pre-check with the GET status endpoint to avoid duplicates. Use this to **manually reconcile opt-outs the auto-unsubscribe bot missed** (see caveat below).
+
+### Opt-out auto-creation — and why it is UNRELIABLE
+
+Per YCloud docs, opt-outs are auto-created when a user replies with a STOP keyword or taps a `QUICK_REPLY` button with the "Parar mensagens" text. **In practice this is unreliable** [verified live 2026-06]: the auto-add only fires when the conversation is routed to the auto-unsubscribe **chatbot** (the created item then shows `source: "Chatbot"`). **Unassigned** conversations — the common case, since assignment only fires at conversation creation — do **NOT** get their button opt-outs registered. Live example: 6 inbound `[button]` "Parar mensagens" clicks were absent from `/v2/unsubscribers` and had to be POSTed manually. **Reconcile on every send:** read the Inbox backend for `Parar`/`Stop` text + opt-out `[button]` clicks (see the `ycloud` skill → `api-automation.md`), cross-check against `GET /v2/unsubscribers`, and POST-add the missing ones.
 
 ---
 

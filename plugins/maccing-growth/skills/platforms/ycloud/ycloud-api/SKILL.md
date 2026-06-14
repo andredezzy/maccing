@@ -42,6 +42,8 @@ No OAuth, no Bearer token. One key grants full read/write access to all resource
 | Template PATCH is full replacement | Every PATCH must include ALL components even when changing only one. |
 | Phone number ID path broken | GET /v2/whatsapp/phoneNumbers/{PHONE_NUMBER_ID} returns 404. Use `/{wabaId}/{phoneNumber}` instead. |
 | Unsubscribers has cursor + offset | The only endpoint returning both pagination styles simultaneously. |
+| POST /v2/unsubscribers needs `type` | Body requires `type: "PHONE_NUMBER"` (+ `customer`, `channel`); omitting `type` → 400 `PARAM_MISSING`. The item also has `id`/`source` fields (the docs example omits them). |
+| Button opt-out auto-add is UNRELIABLE | "Parar mensagens" / STOP only auto-registers when the conversation is routed to the auto-unsubscribe chatbot (`source:"Chatbot"`); unassigned button opt-outs are NOT registered. Reconcile manually (read Inbox `[button]` clicks → POST-add the missing). |
 | Balance is always USD | GET /v2/balance returns USD regardless of WABA billing currency. |
 
 > ⚠️ **DOCTRINE — the campaign/broadcast SEND is ALWAYS operator-executed, NEVER automated by the agent.**
