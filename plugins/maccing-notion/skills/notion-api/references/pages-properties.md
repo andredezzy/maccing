@@ -149,6 +149,13 @@ POST /v1/pages/{id}/move   body: { "parent": { "type": "page_id", "page_id": "<n
 
 **Position values for `POST /v1/pages`** (all object shapes, like the create example above): `{ "type": "page_start" }` | `{ "type": "page_end" }` | `{ "type": "after_block", "after_block": { "id": "<block_id>" } }`
 
+**Extract a DB row into a standalone page.** A row IS a page, so it can leave its database. Verified-safe, all-public pattern — lands it at a chosen spot AND guarantees it's gone from the gallery (live-verified 2026-06-14):
+1. `POST /v1/pages` a fresh page with the icon/cover you want **and `position`** (`after_block` the block above the target slot — there is no `before_block`).
+2. Re-home the old row's child pages: `POST /v1/pages/{child}/move` each into the new page (recreate loose blocks — paragraphs/callouts have no `/move`; `blocks.md`).
+3. `PATCH /v1/pages/{row} {"in_trash":true}` — trashing is the unambiguous removal from every collection view (recoverable from Trash 30 days). Verify absence with `read_database` on the source.
+
+Why not just `POST /v1/pages/{row}/move` the row itself? It does re-parent the row to a `page_id` parent, but three things bite: it **appends at the END (no position control)**; a page under a page parent has **no DB schema**, so the row's property values (Description, Order, …) no longer apply — only `title` carries over; and whether the row cleanly leaves its source database's views is **undocumented** (don't assume). The create-fresh + trash pattern sidesteps all three.
+
 **Rich text write gotchas:**
 - `title` is an array, not a string
 - `multi_select` requires array of objects `[{"name":"A"}]`, not strings

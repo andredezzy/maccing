@@ -94,6 +94,17 @@ private_request({ endpoint: "saveTransactions", operations: [
 - Read it back: `private_request({ endpoint:"getRecordValues", body:{ requests:[{ id:"<view_id>", table:"collection_view" }] } })` → `format.collection_peek_mode`. (The `200 {}` write doesn't prove persistence — verify.)
 - **House style:** navigation-hub galleries (an "X Navigation" gallery whose rows are sub-pages) should open **Full page** — set `collection_peek_mode:"full_page"` on every nav-hub gallery view.
 
+**Hide the inline DB's TITLE heading — `hide_linked_collection_name` (PRIVATE-only).** Not the same as hiding the `title` *card* property (`gallery-view.md`, `properties:[{property_id:"title",visible:false}]`): this hides the gray **database-name heading** rendered ABOVE the view tabs of an inline/linked collection_view block. The public view `configuration` has no flag for it — it's a private `format` flag on the collection_view, set exactly like peek mode:
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"collection_view", id:"<view_id>", spaceId:"<space>"},
+    command: "update", path: ["format"], args: { hide_linked_collection_name: true } },
+  { pointer: {table:"collection", id:"<any data source in the space>", spaceId:"<space>"}, path:[], command:"update",
+    args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} } ]})
+```
+- Set it on **every** view of the block — the gallery AND table tabs share the one heading, so set the flag on each view id (live-verified 2026-06-14). Read back via `getRecordValues` on the `collection_view` → `format.hide_linked_collection_name`. The `200 {}` write doesn't prove it rendered — verify (read-back, ideally a browser check).
+- **House style:** navigation-hub galleries hide the title — set `hide_linked_collection_name:true` on every nav-hub view (pairs with `collection_peek_mode:"full_page"` above).
+
 **View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) and rename/keep the old one. Live-verified 2026-06-14.
 
 **Update view column visibility:**
