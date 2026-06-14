@@ -11,8 +11,19 @@
       "source": "./plugins/maccing-growth",
       "description": "Growth toolkit: paid acquisition (Google/Meta/TikTok Ads) + owned messaging (WhatsApp Business Platform), organized into platform/provider groups (meta + platforms/ycloud) with progressive-disclosure references",
       "version": "1.21.3",
-      "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
-      "keywords": ["growth", "ads", "meta", "whatsapp", "ycloud", "bsp", "marketing"],
+      "author": {
+        "name": "André \"Dezzy\" Victor",
+        "url": "https://github.com/andredezzy"
+      },
+      "keywords": [
+        "growth",
+        "ads",
+        "meta",
+        "whatsapp",
+        "ycloud",
+        "bsp",
+        "marketing"
+      ],
       "license": "MIT",
       "skills": [
         "./skills/meta/meta",
@@ -26,8 +37,11 @@
       "name": "maccing-notion",
       "source": "./plugins/maccing-notion",
       "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning (incl. private-API block reordering), full property-type shapes, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, official MCP SDK) with high-level reader tools: read_agents_md, search (name→id), read_page, read_database (also dumps each column's schema + every view's full config by default), describe (a data source's column schema + column icons, or any page/object's metadata), upsert_property (batched create/update of any property — a column + its icon, or a page value), order_properties (re-order a database's properties across its views and/or the canonical order), and render_page (deterministic ASCII page-mockup renderer — the mandatory default for showing how a page looks/will-look in chat)",
-      "version": "0.25.0",
-      "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
+      "version": "0.25.1",
+      "author": {
+        "name": "André \"Dezzy\" Victor",
+        "url": "https://github.com/andredezzy"
+      },
       "keywords": [
         "notion",
         "notion-api",
@@ -50,7 +64,10 @@
       "source": "./plugins/google-workspace",
       "description": "Self-hosted Google Workspace MCP (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts) via taylorwilsdon/google_workspace_mcp, run in stdio single-user mode — authenticates to Google directly, so no daily re-authorization. Ships a combined setup + usage skill. An alternative to the official Claude Google connector that keeps you on your own OAuth client and account.",
       "version": "0.1.3",
-      "author": { "name": "André \"Dezzy\" Victor", "url": "https://github.com/andredezzy" },
+      "author": {
+        "name": "André \"Dezzy\" Victor",
+        "url": "https://github.com/andredezzy"
+      },
       "keywords": [
         "google-workspace",
         "gmail",

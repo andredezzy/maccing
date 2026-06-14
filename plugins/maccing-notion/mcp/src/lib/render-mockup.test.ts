@@ -98,6 +98,27 @@ test("every database header carries a right-aligned + New", () => {
   }
 });
 
+test("over-long content is truncated with … so the box still closes", () => {
+  const out = renderMockup({
+    title: "X",
+    blocks: [
+      {
+        type: "gallery",
+        name: "Areas",
+        cardSize: "small",
+        cards: [{ name: "Mindset and lifestyle", lines: ["Document your professional projects"] }],
+      },
+    ],
+  });
+  assertBoxesClose(out);
+  expect(out).toContain("…"); // the long name/description got clipped
+  // no content line is wider than its box
+  const top = out.split("\n").find((l) => l.startsWith("┌"));
+  for (const line of out.split("\n").filter((l) => l.startsWith("│"))) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(displayWidth(top ?? ""));
+  }
+});
+
 test("a table spans the full page width", () => {
   const out = renderMockup(model).split("\n");
   const topRule = out.find((l) => l.startsWith("┌─") && l.includes("┬"));
