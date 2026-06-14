@@ -82,6 +82,25 @@ Any nullable field (`cover`, `cover_size`, `cover_aspect`, `card_layout`, `prope
 ### UI-only (no API equivalent)
 - **Cover image repositioning** (custom focal point on hover) — API controls source + aspect mode only.
 
+## Design language — opinionated defaults (build like the best hand-crafted pages)
+
+These are house-agnostic *defaults* that make a gallery look crafted, not generated. (Always defer to the workspace's own house style — infer it from the root `AGENTS.md` or a bounded sample first; these fill the gaps it doesn't specify.)
+
+**Never ship naked cards.** A `page_cover` card is only as good as the page's **cover + icon** behind it. Before pointing a gallery at `page_cover`, ensure **every row has BOTH a cover and a page icon** — a coverless card is a grey void that breaks the grid. Source covers via the Unsplash loop below; give each row a named icon.
+
+**Nav gallery vs content gallery — they are sized differently** (benchmarked against real hand-built hubs):
+| | **Navigation** hub (rows = sub-pages, a launcher) | **Content** gallery (rows ARE the subject — categories, muscle groups) |
+|---|---|---|
+| `cover_size` | **`small`** (tidy launcher) | **`medium`** (let the subject breathe) |
+| `cover_aspect` | `cover` | `cover` |
+| visible props | **title + a one-line `Description`** only | title + 1–2 key stats (a rollup/number) |
+| schema | **no "Cover" text column** — covers are *page covers*, not a property | same |
+
+- Card **descriptions are short imperatives**, one line, sentence case: "Log and review your training", "Manage your finances" — not paragraphs.
+- The hub itself is an inline DB conventionally titled **"<Area> Navigation"**, its view named **"Navigation"**, placed near the **top** of the area page.
+
+**Beyond the gallery — the surrounding page:** section an area page with **`heading_3` + `divider`** markers; put the nav gallery at the top, tracker DBs below; **space stacked inline DBs** with an empty `paragraph` between them (`blocks.md`). Give **every column a gray named icon**, and use the **same icon for the same concept across sibling DBs** (a date → `calendar-day` everywhere; a Σ-volume metric → `activity`; a count → `hashtag`) — that repetition reads as craft. View names: sentence case, **no emoji**, never leave `Default view`. Keep **computed values LIVE** (rollups/formulas), never a stored static number.
+
 ## Sourcing cover images (when `cover:{type:"page_cover"}`)
 
 Cards with `page_cover` are only as good as the page covers behind them. When the rows have no covers, sourcing them is a **visual choice → it belongs in the brainstorm gate** (SKILL.md "brainstorm the view design"): propose the theme, source candidates, **show them to the user**, and let them pick before any write.

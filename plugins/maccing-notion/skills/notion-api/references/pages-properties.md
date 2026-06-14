@@ -48,6 +48,7 @@ row["properties"]["Formula"]["formula"]["number"]            # number formula �
 row["properties"]["Formula"]["formula"]["string"]            # string formula
 ```
 
+- ⚠️ **A `title` property stores its text under `.title`, NOT `.rich_text`.** A *generic* text-reader that only checks `.rich_text` (e.g. `p.rich_text?.map(t=>t.plain_text)`) silently returns `""` for a title — a classic **migration bug**: you read the source's Title/Name with a rich_text-only helper, get empty strings, and migrate blank titles/notes (no error). A reusable reader must coalesce both: `(p.rich_text ?? p.title ?? []).map(t => t.plain_text).join("")`. (Cost a full 1320-row re-run when missed.)
 - `formula.number` may be `null` if upstream referenced fields are empty (e.g., missing number field → formula produces null instead of 0)
 - Rollup `Show Original` outputs a **string** even when the target is a number property — the raw API preserves it as a string (verify `read_database`'s handling if numeric coercion matters)
 
