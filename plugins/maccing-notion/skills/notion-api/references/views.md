@@ -82,11 +82,14 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 
 **Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard`, `map`, `form`
 
+**View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) and rename/keep the old one. Live-verified 2026-06-14.
+
 **Update view column visibility:**
 ```json
 PATCH /v1/views/{id}
 { "configuration": { "type": "table", "properties": [{ "property_id": "<id>", "visible": false }] } }
 ```
+⚠️ **A freshly API-built DB's default view often renders with ALL columns hidden.** After `POST /v1/databases` + PATCH-adding properties (relations/formulas/rollups) + `order_properties`, the default view's `configuration.properties` can come back all `visible:false` — a blank table. **Always explicitly PATCH each view's full visible-column list** (list the ones you want `visible:true` first, then the rest `false`) — don't assume new properties show. Live-verified 2026-06-14.
 Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. (For column **names** alone, `read_database` output is enough — drop to the schema GET only when a raw **id** is needed for the PATCH body.) May be URL-encoded → `urllib.parse.unquote()`.
 
 **Sort a view** (`sorts` is a **top-level view field**, NOT inside `configuration` — table, gallery, board, list, …):
@@ -121,7 +124,7 @@ There is **no `condition` key** — just `rollup: { date: {…} }`. (Multi-value
 - Formulas (including rollup-derived ones) always work for *computing* and for feeding rollups — only their *filterability* depends on creation path and type-resolvability.
 
 **✅ API-only workaround — wrap the formula in a function-typed ROLLUP and filter that** (live-verified 2026-06-11 for boolean, number, and date formulas; a rollup's filter type comes from its *function*, so the unfilterable formula underneath stops mattering):
-1. **Relation:** reuse an existing relation that points at the rows (e.g. a `sum` rollup over a formula on a related DB filters fine), or add a **`Self` relation** on the same data source — `{"Self": {"relation": {"data_source_id": "<this ds>", "single_property": {}}}}` — and self-link each row: `PATCH /v1/pages/{row} {"properties": {"Self": {"relation": [{"id": "<row's own id>"}]}}}`. (New rows need the self-link → create row, then patch — fold into the row-creation routine.)
+1. **Relation:** reuse an existing relation that points at the rows (e.g. a `sum` rollup over a formula on a related DB filters fine), or add a **`Self` relation** on the same data source — `{"Self": {"relation": {"data_source_id": "<this ds>", "type": "single_property", "single_property": {}}}}` (the `type` discriminant is required — see `pages-properties.md`) — and self-link each row: `PATCH /v1/pages/{row} {"properties": {"Self": {"relation": [{"id": "<row's own id>"}]}}}`. (New rows need the self-link → create row, then patch — fold into the row-creation routine.)
 2. **Rollup over the formula** — pick the function by the formula's type: boolean → `checked` · number → `sum` (or `max`) · date → `latest_date`.
 3. **Filter the rollup:** boolean → `{"property": "<rollup>", "rollup": {"number": {"greater_than": 0}}}` · number → `rollup.number` conditions · date → `rollup.date` conditions (incl. relative strings).
 

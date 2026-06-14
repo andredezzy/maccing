@@ -25,9 +25,25 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 // Select with options
 { "PropName": { "select": { "options": [{ "name": "A", "color": "blue" }] } } }
 
+// Multi-select with options (same color set as select)
+{ "PropName": { "multi_select": { "options": [{ "name": "A", "color": "green" }] } } }
+
 // Date
 { "PropName": { "date": {} } }
+
+// Plain text · Checkbox · URL / Email / Phone
+{ "PropName": { "rich_text": {} } }
+{ "PropName": { "checkbox": {} } }
+{ "PropName": { "url": {} } }          // also { "email": {} } · { "phone_number": {} }
+
+// People · Files & media
+{ "PropName": { "people": {} } }
+{ "PropName": { "files": {} } }
+
+// Auto-computed metadata (no value writes — Notion fills them)
+{ "PropName": { "created_time": {} } }   // also created_by · last_edited_time · last_edited_by
 ```
+- **`status` and `unique_id` columns are NOT API-creatable** (verify before relying): a `status` column's option/group set is **UI-managed** — create + curate it in the UI, then write values via the API; a `unique_id` column is created in the UI too. Their *values* read/write fine (shapes below).
 
 ---
 
@@ -46,6 +62,15 @@ row["properties"]["Rollup"]["rollup"]["date"]                # date rollup (has 
 row["properties"]["Rollup"]["rollup"]["array"]               # array rollup
 row["properties"]["Formula"]["formula"]["number"]            # number formula — may be null if upstream fields are empty
 row["properties"]["Formula"]["formula"]["string"]            # string formula
+row["properties"]["Text"]["rich_text"][0]["plain_text"]      # rich_text (array; "" when empty — see title gotcha below)
+row["properties"]["Done"]["checkbox"]                        # checkbox → bool
+row["properties"]["Tags"]["multi_select"]                    # list of {id,name,color}
+row["properties"]["Link"]["url"]                             # url / email / phone_number → string (or null)
+row["properties"]["Owner"]["people"]                         # list of user objects {id,name,...}
+row["properties"]["Files"]["files"]                          # list of {name, external|file:{url}}
+row["properties"]["Stage"]["status"]["name"]                 # status → option name (null if unset)
+row["properties"]["ID"]["unique_id"]                         # {prefix, number} → render as f"{prefix}-{number}"
+row["properties"]["Created"]["created_time"]                 # ISO string (also last_edited_time)
 ```
 
 - ⚠️ **A `title` property stores its text under `.title`, NOT `.rich_text`.** A *generic* text-reader that only checks `.rich_text` (e.g. `p.rich_text?.map(t=>t.plain_text)`) silently returns `""` for a title — a classic **migration bug**: you read the source's Title/Name with a rich_text-only helper, get empty strings, and migrate blank titles/notes (no error). A reusable reader must coalesce both: `(p.rich_text ?? p.title ?? []).map(t => t.plain_text).join("")`. (Cost a full 1320-row re-run when missed.)
@@ -98,6 +123,15 @@ POST /v1/pages
     "Month":    { "relation": [{ "id": "<related_page_id>" }] }
   }
 }
+
+// More property VALUE shapes (POST/PATCH /v1/pages → properties)
+// "Text": { "rich_text": [{ "type":"text", "text": { "content":"..." } }] }
+// "Done": { "checkbox": true }                                  // boolean, not "true"
+// "Tags": { "multi_select": [{ "name":"A" }, { "name":"B" }] }   // array of objects, not strings
+// "Link": { "url": "https://..." }                              // email→{"email":".."} · phone→{"phone_number":".."}
+// "Owner":{ "people": [{ "id":"<user_id>" }] }                  // user IDs, not emails — resolve via GET /v1/users
+// "Files":{ "files": [{ "name":"doc.pdf", "external": { "url":"https://..." } }] }
+// "Stage":{ "status": { "name":"In progress" } }                // the option must already exist in the column
 
 // Trash a page
 PATCH /v1/pages/{id}   body: { "in_trash": true }

@@ -113,6 +113,25 @@ The public API stores `formula.expression` as a **string** and compiles it serve
 
 **Bonus:** an AST formula with the right `result_type` is type-correct → it composes and is view-filterable (unlike public-string formulas, typed `unknown`). And at **runtime** even existing public-string formulas that reference your new AST formula still evaluate — the `unknown`-type block is author-time only.
 
+## ⭐ Verified recipe: reorder / MOVE any block in place (`listAfter` / `listBefore`)
+
+The public API **cannot move an existing block** within its parent (`blocks.md`: child_database/page need a re-parent-out-and-back dance that appends at the end; loose blocks — paragraph, callout, embed — have **no** public move at all and must be recreated). The private app API moves **any** block — loose blocks included — in **one** transaction, via a list op on the parent block's `content`:
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"block", id:"<parentPageId>", spaceId:"<space>"},
+    command: "listAfter", path: ["content"],
+    args: { id:"<blockToMove>", after:"<anchorBlockId>" } },   // or listBefore + { before:"<anchor>" }
+  { pointer: {table:"collection", id:"<anyDataSourceInSpace>", spaceId:"<space>"}, path:[], command:"update",
+    args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} }
+] })
+```
+- **`id` is the block being moved — it's ALREADY in `content`, so `listAfter` RELOCATES it** (the content list is a set of unique ids). No `listRemove` step is needed; a single `listAfter` can't orphan or duplicate the block → the **safe** form (worst case: a no-op you verify and retry, never a removed block).
+- **Moves loose blocks too** — paragraphs, callouts, embeds, dividers reorder fine here, which the public API can't do at all. Same op works for `child_database` blocks (a DB block's id == its database id).
+- **The trailing commit op must be `table:"collection"`** — `private_request` enforces a collection commit even though this is a *block* transaction. Use any data source in the space (a harmless editor bump); the block move persists regardless. A `table:"block"` commit op fails the tool's pre-flight.
+- **To INSERT a new block at a position:** append it via public `PATCH /v1/blocks/{page}/children` (lands at the end), then `listAfter` it into place. (For a *fresh* append you can instead use the public `position:{type:"after_block",after_block:{id}}` — `blocks.md`; but `listAfter` is the ONLY way to move an **existing** block.)
+- **VERIFY** with `read_page(page_id, "outline")` — `200 {}` alone doesn't prove the move landed.
+- **Live-verified 2026-06-14** — moved an inline "Gym Navigation" DB to the top of its area page and repositioned 4 spacer paragraphs, one `listAfter` each.
+
 ## Discovering NEW operations — the DevTools capture method (reusable)
 This is how the property-icon and "This month" formats were found. To learn the exact `command`/`path`/`args` for ANY UI-only action:
 1. Open Notion in the browser, DevTools → **Network**, filter `saveTransactions`.
