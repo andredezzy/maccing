@@ -3,7 +3,7 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { displayWidth, type PageModel, renderMockup } from "./render-mockup";
+import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderMockup } from "./render-mockup";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -124,4 +124,132 @@ test("a table spans the full page width", () => {
   const topRule = out.find((l) => l.startsWith("┌─") && l.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
+});
+
+// ── 360 coverage: every block type + every Phase-1 view, recursion, columns, standalone DB ──
+const SINK: MockupBlock[] = [
+  { type: "heading_1", text: "H1 toggle", toggle: true, children: [{ type: "paragraph", text: "inside" }] },
+  { type: "heading_2", text: "H2" },
+  { type: "heading_3", text: "H3" },
+  {
+    type: "paragraph",
+    text: "A long paragraph that should word-wrap across multiple lines because it exceeds seventy display columns comfortably.",
+    children: [{ type: "paragraph", text: "nested child" }],
+  },
+  {
+    type: "bulleted_list_item",
+    text: "bullet",
+    children: [
+      { type: "bulleted_list_item", text: "nested", children: [{ type: "bulleted_list_item", text: "deep" }] },
+    ],
+  },
+  { type: "numbered_list_item", text: "first" },
+  { type: "numbered_list_item", text: "second" },
+  { type: "to_do", text: "done", checked: true },
+  { type: "to_do", text: "todo" },
+  { type: "toggle", text: "toggle", children: [{ type: "paragraph", text: "body" }] },
+  {
+    type: "quote",
+    text: "a quote that wraps onto a second line yes indeed it really does for sure",
+    children: [{ type: "paragraph", text: "qc" }],
+  },
+  { type: "callout", icon: "💡", lines: ["c1", "c2"], children: [{ type: "bulleted_list_item", text: "cc" }] },
+  { type: "code", language: "ts", text: "const x = 1;\nconsole.log(x);", caption: "snippet" },
+  { type: "equation", expression: "E = mc^2" },
+  { type: "image", url: "https://x/y.png", caption: "pic" },
+  { type: "bookmark", url: "https://example.com", caption: "bm" },
+  { type: "embed", label: "widget" },
+  { type: "divider" },
+  {
+    type: "column_list",
+    columns: [
+      {
+        ratio: 2,
+        children: [
+          { type: "paragraph", text: "left wider" },
+          { type: "bulleted_list_item", text: "l1" },
+        ],
+      },
+      { ratio: 1, children: [{ type: "paragraph", text: "right" }] },
+    ],
+  },
+  {
+    type: "simple_table",
+    rows: [
+      ["A", "B", "C"],
+      ["1", "2", "3"],
+    ],
+    hasColumnHeader: true,
+  },
+  { type: "breadcrumb", path: ["LifeOS", "Gym"] },
+  { type: "table_of_contents", headings: ["Intro", "End"] },
+  { type: "synced_block", from: "src", children: [{ type: "paragraph", text: "synced" }] },
+  { type: "table", name: "Tasks", views: ["All"], columns: ["Name", "Status"], rows: [["Do", "Done"]] },
+  {
+    type: "gallery",
+    name: "Cards",
+    views: ["Grid"],
+    cardSize: "medium",
+    cards: [{ icon: "🦴", name: "One", lines: ["0", "12"] }],
+  },
+  {
+    type: "board",
+    name: "Kanban",
+    views: ["Board"],
+    groups: [
+      { name: "To do", cards: [{ name: "A" }, { name: "B" }] },
+      { name: "Doing", cards: [{ name: "C" }] },
+      { name: "Done", cards: [] },
+    ],
+  },
+  { type: "list", name: "Items", views: ["List"], items: [{ icon: "📄", title: "I1", meta: "m" }, { title: "I2" }] },
+  { type: "page_link", icon: "📦", title: "Backups", note: "page" },
+  { type: "unsupported", label: "new block" },
+];
+
+/** Single-box lines (│…│ with no column/hcat gap) must match their box's top border width. */
+function assertSingleBoxesClose(out: string, width: number): void {
+  let top = 0;
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(width); // nothing overflows the page
+    const isHcatOrColumn = line.includes("  ") || line.includes(" │ ");
+    if (line.startsWith("┌") && !isHcatOrColumn) {
+      top = displayWidth(line);
+    } else if ((line.startsWith("│") || line.startsWith("└")) && !isHcatOrColumn && top) {
+      expect(displayWidth(line)).toBe(top);
+    }
+  }
+}
+
+test("renders EVERY block type + all Phase-1 views with no overflow and every single box closed", () => {
+  const out = renderMockup({ title: "Kitchen Sink", icon: "🧪", cover: "cover", blocks: SINK });
+  assertSingleBoxesClose(out, 70);
+  // recursion: a nested bullet uses the depth-1 marker, indented
+  expect(out).toContain("  ◦ nested");
+  expect(out).toContain("    ▪ deep");
+  // numbered ordinals thread
+  expect(out).toContain("1. first");
+  expect(out).toContain("2. second");
+  // to_do checkbox state
+  expect(out).toContain("[x] done");
+  expect(out).toContain("[ ] todo");
+  // board groups render side by side via hcat
+  expect(out).toContain("To do  (2)");
+  expect(out).toContain("Done  (0)");
+});
+
+test("standalone database renders its views (view:'all')", () => {
+  const out = renderDatabase({
+    title: "Exercises",
+    icon: "🏋",
+    view: "all",
+    views: [
+      { type: "table", name: "Exercises", views: ["All"], columns: ["Name", "Max"], rows: [["45° Leg Press", "80"]] },
+      { type: "gallery", name: "Exercises", views: ["Gallery"], cardSize: "small", cards: [{ name: "A" }] },
+    ],
+  });
+  assertSingleBoxesClose(out, 70);
+  expect(out).toContain("🏋 Exercises");
+  expect(out).toContain("◷ Exercises   ‹ All ›");
+  expect(out).toContain("◷ Exercises   ‹ Gallery ›");
 });

@@ -1,79 +1,39 @@
 // render_page — turn a structured page_model into the canonical fixed-width ASCII "page mockup":
-// a faithful visual of how a Notion page looks / WILL look (cover · icon · title · callouts · inline
-// DBs as galleries/tables with view tabs + "+ New" · full-page-DB & sub-page links). The renderer owns
-// all alignment (pads by display width, emoji-safe), so the caller supplies only structure — never
-// counts a character. Use it to SHOW a proposed page's resulting shape before writing, and to render
-// the live result after. See lib/render-mockup.ts for the model + renderer.
+// a faithful, COMPOUNDING (recursive, width-flowing) visual of how a Notion page looks / WILL look —
+// cover · icon · title · every block type (text, lists, to-do, toggle, quote, callout, code, equation,
+// media, bookmark, embed, columns, simple table, breadcrumb, TOC, synced) with nesting · inline DBs as
+// table/gallery/board/list · full-page-DB & sub-page links. The renderer owns all alignment (display-width
+// padding, truncation, word-wrap), so the caller supplies only structure. See lib/render-mockup.ts.
 
-import { z } from "zod";
-import { type PageModel, renderMockup } from "../lib/render-mockup";
+import { type PageModel, renderPage } from "../lib/render-mockup";
+import { pageModelSchema } from "../lib/render-schema";
 import { err, ok, type ToolModule } from "../tool";
 
-const card = z.object({
-  icon: z.string().optional().describe("emoji or gray named-icon name shown before the card name"),
-  name: z.string(),
-  lines: z.array(z.string()).optional().describe("metric/description lines under the name"),
-});
-
-const block = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("callout"), icon: z.string().optional(), lines: z.array(z.string()) }),
-  z.object({ type: z.literal("heading"), text: z.string() }),
-  z.object({ type: z.literal("divider") }),
-  z.object({ type: z.literal("paragraph"), text: z.string().optional() }).describe("empty text = a spacer"),
-  z.object({ type: z.literal("embed"), label: z.string() }),
-  z.object({
-    type: z.literal("gallery"),
-    name: z.string(),
-    views: z.array(z.string()).optional().describe("view-tab names, e.g. ['By muscle','All']"),
-    cardSize: z.enum(["small", "medium"]).optional(),
-    cards: z.array(card),
-  }),
-  z.object({
-    type: z.literal("table"),
-    name: z.string(),
-    views: z.array(z.string()).optional(),
-    columns: z.array(z.string()),
-    rows: z.array(z.array(z.string())),
-  }),
-  z.object({
-    type: z.literal("page_link"),
-    icon: z.string().optional(),
-    title: z.string(),
-    note: z.string().optional().describe("e.g. 'full-page database' or 'page'"),
-  }),
-]);
-
-const pageModel = z.object({
-  title: z.string(),
-  icon: z.string().optional().describe("emoji or gray named-icon name"),
-  cover: z.string().optional().describe("short cover label; rendered as a ▒ band"),
-  description: z.string().optional(),
-  width: z.number().optional().describe("page columns (default 70)"),
-  blocks: z.array(block),
-});
-
-export const renderPage: ToolModule = {
+export const renderPageTool: ToolModule = {
   name: "render_page",
   config: {
     title: "Render a Notion page mockup",
     description:
-      "Render a structured `page_model` into the canonical fixed-width ASCII PAGE MOCKUP — a faithful " +
-      "picture of how a Notion page looks / WILL look. The renderer owns ALL alignment (pads by display " +
-      "width, emoji-safe), so you supply only structure and never count characters — hand-typed mockups " +
-      "drift, rendered ones never do. `page_model`: { title, icon?, cover?, description?, blocks[] } where " +
-      "each block is one of: callout {icon?,lines[]} · heading {text} · divider · paragraph {text?} (empty=spacer) · " +
-      "embed {label} · gallery {name,views?,cardSize?('small'|'medium'),cards[{icon?,name,lines?}]} · " +
-      "table {name,views?,columns[],rows[][]} · page_link {icon?,title,note?}. Inline DBs are galleries or " +
-      "tables; a full-page DB or sub-page is a page_link. Use this to SHOW a page's resulting shape in a " +
-      "proposal (how it will become) and to render the live result after a write.",
+      "Render a structured `page_model` into the canonical fixed-width ASCII PAGE MOCKUP — a faithful, " +
+      "recursive picture of how a Notion page looks / WILL look. The renderer OWNS all alignment (pads/" +
+      "truncates by display width, word-wraps, emoji-safe), so you supply only structure and never count " +
+      "characters — hand-typed mockups drift, rendered ones never do. `page_model`: { title, icon?, cover?, " +
+      "description?, blocks[] }. Each block is one of (with optional `children` for nesting): paragraph · " +
+      "heading_1|2|3 (toggle?) · bulleted_list_item · numbered_list_item · to_do (checked?) · toggle · quote · " +
+      "callout {icon?,lines[]} · divider · code {language?,text,caption?} · equation {expression} · " +
+      "image|video|audio|file|pdf {url?,name?,caption?} · bookmark|link_preview {url} · embed {label} · " +
+      "column_list {columns[{ratio?,children[]}]} · simple_table {rows[][],hasColumnHeader?} · breadcrumb {path[]} · " +
+      "table_of_contents {headings[]} · synced_block {children[]} · page_link {icon?,title,note?} · " +
+      "table {name,views?,columns[],rows[][]} · gallery {name,views?,cardSize?,cards[]} · " +
+      "board {name,views?,groups[{name,cards[]}]} · list {name,views?,items[{icon?,title,meta?}]} · unsupported. " +
+      "Use this to SHOW a page's resulting shape in a proposal (how it will become) and the live result after a write.",
     annotations: { title: "Render a Notion page mockup", readOnlyHint: true },
-    inputSchema: { page_model: pageModel },
+    inputSchema: { page_model: pageModelSchema },
   },
-
   handler: async (args) => {
     try {
-      const model = pageModel.parse(args.page_model) as PageModel;
-      return ok(renderMockup(model));
+      const model = pageModelSchema.parse(args.page_model) as PageModel;
+      return ok(renderPage(model));
     } catch (error) {
       return err(error instanceof Error ? error.message : String(error));
     }
