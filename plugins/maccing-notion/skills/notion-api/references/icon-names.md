@@ -33,6 +33,10 @@ Compound/suffixed finance nouns mostly **fail** — `bank`, `building`, `safe`, 
 | chart / fund | `chart-pie` · `chart-line` · `chart-donut` · `chart-area` · `chart-mixed` · `chart-alternate` |
 | more / other / misc | `more` · `circle` · `grid` · `dashboard` |
 
+### Column icons — silent no-op risk (different from page/db icons)
+
+The names above govern **page & database icons** (public `PATCH /v1/pages|databases/{id}`): a name NOT in the list → immediate `400 Invalid icon name`. **Column/property icons are different** — they go through the private API (`upsert_property`) as an internal `/icons/<file>_<color>.svg` asset path. A name can be **public-valid yet have no matching private asset, so it silently no-ops**: the call returns `200`, no error, and the icon never appears (live-verified: `chart-mixed`, and `dumbbell` — which isn't even a catalog name; use `gym`). The only way to detect it is the `describe` read-back — which is exactly what the SKILL.md **post-build verification** (dimension-by-dimension audit) is for. Never mark a build done without it; if a column icon `did-not-persist`, swap to a synonym (`chart-line` for `chart-mixed`) and retry.
+
 ## Colors
 
 `color` is optional (omit for the default appearance). Valid tokens — exactly ten:

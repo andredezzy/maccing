@@ -38,6 +38,12 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 
 **Linked database views — creation IS supported** via `POST /v1/views` with a `create_database` block (see `references/views.md` "Create a linked database view embedded in a page"); the integration must have access to the **source** database, not just the page where the linked view is embedded. Wiki-database creation is not exposed by the public API — use the Notion UI.
 
+**Move-intact backup / area-refactor** — reorganise an area (rename, restructure, split) without touching or losing any data, relation, or dual-relation. Keep the original in a dated backup, build the new structure in parallel.
+1. **Create** a dated backup page under the area (`POST /v1/pages`, save its id).
+2. **Re-parent** every top-level database (`PATCH /v1/databases/{id}` `{parent:{page_id}}`) and page (`POST /v1/pages/{id}/move`) into it — rows, values, relations, dual-relations all survive (only the parent pointer changes; a move, not a copy, so relation ids stay valid).
+3. **Layout fidelity** (two `blocks.md` constraints): loose blocks can't be moved (recreate + trash), and databases can't enter columns via the API (UI-only). So: `read_page(area,"outline")` to record the original order FIRST → recreate the loose blocks at the backup + sequence the DB/page moves to match the recorded order → accept that side-by-side columns degrade to stacked (finish columns in the UI).
+4. **Verify** — `read_page(backup,"outline")` + `read_page(area,"outline")`, emit both trees (the mandatory tree-view). The backup is now a safe, readable source for a later read-and-migrate pass.
+
 ---
 
 ## Production architecture patterns

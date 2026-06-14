@@ -69,6 +69,27 @@ round(prop("Value") * 100) / 100
 formatDate(prop("Date"), "YYYYMM")
 ```
 
+### List operations over relations (Formula 2.0)
+
+A relation property is a **list of pages** — Formula 2.0 exposes `.filter()`, `.map()`, `.sort()`, `.first()`, `.last()` over it, with `current` as the per-item page reference inside each callback.
+
+| Operation | Example | Notes |
+|---|---|---|
+| `.filter(pred)` | `prop("Rel").filter(current.prop("P") > 0)` | Returns a sub-list; `current` = each page |
+| `.map(expr)` | `prop("Rel").map(current.prop("P"))` | Projects a value per page → a list |
+| `.sort(key)` | `prop("Rel").sort(current.prop("Date"))` | Ascending by key; chain after filter |
+| `.first()` / `.last()` | `…list.first()` / `…list.last()` | First / last (after sort) |
+| `.prop("P")` | after `.first()`/`.last()` | Read a property off the resolved page |
+
+**Flagship — latest value by date (no rollup can do this):** no rollup function returns "the value from the row with the most recent date". This does:
+```
+prop("<Relation>").filter(not(empty(current.prop("Date")))).sort(current.prop("Date")).last().prop("<Value>")
+```
+(1) filter strips date-less rows — null dates poison the sort; (2) sort ascending by date; (3) `.last()` = chronologically latest page; (4) `.prop()` reads its value. **API-writable** as the `formula.expression` string — but like every API-written formula it is **NOT view-filterable** (400 unknown type); display/read-only.
+
+### Live category aggregation — current-period value (the no-rollup-of-rollup workaround)
+
+When a Categories DB must show "this period's total per category" live, and rollup-of-rollup is blocked (`relations-rollups.md`): (1) a **per-row formula** on each source row outputting its value only when the row is the current period — `if(formatDate(prop("Month date"),"YYYYMM") == formatDate(now(),"YYYYMM"), prop("Value"), 0)` (the "intersection cell"); (2) a **rollup `sum`** of that formula on the Category relation. Auto-advances with `now()`, zero maintenance. (Filter rows to the current period via the underlying date prop — `after one_month_ago` + `on_or_before today` — not the formula.)
 
 ---
 
