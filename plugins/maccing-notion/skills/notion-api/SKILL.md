@@ -113,37 +113,40 @@ while True:
 
 `has_more: true` means you do not yet have the data. Loop on `next_cursor` until it is `false` — for queries, block children, search, views, **and** relation values — *before* any count, sum, filter, or conclusion. Non-negotiable.
 
-## MANDATORY — emit a tree view after every page-structure change
+## MANDATORY — show every page as a rendered mockup (`render_page`), never hand-drawn
 
-Any write that changes a page's **structure** — creating, moving (re-parenting), renaming, or trashing a child page, database, or content block — MUST be followed in your reply by a verified tree view of the affected page(s). The user reads the tree to confirm the new shape at a glance; skipping it hides what you changed.
+Whenever you show a page's shape in chat — a **proposal** ("how the page will become") OR the **verification** after a structure-changing write ("how it became") — you MUST render it with the **`render_page`** MCP tool and paste its output **verbatim**. NEVER hand-draw the visual (Unicode `├──` tree or box-art): a hand-typed mockup drifts — emoji are double-width, borders miscount, chat fonts substitute box-drawing glyphs — and the user sees broken, unclosed boxes. The renderer OWNS all alignment; you supply only structure. This is the DEFAULT and ONLY page visual — it **replaces** the bare Unicode tree.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO STRUCTURE-CHANGING WRITE IS COMPLETE UNTIL YOU RE-READ THE PARENT'S CHILDREN (fully paginated) AND EMIT THE RESULTING TREE
+NO PAGE IS SHOWN IN CHAT EXCEPT AS VERBATIM render_page OUTPUT — NEVER A HAND-DRAWN TREE OR ASCII
 ```
 
-### Format (exact)
+### The Gate (every time you'd show a page)
 
-- Re-read each affected page's children **after** the change via `read_page(page_id, format="outline")` — it returns the full block tree (with block ids) and handles pagination server-side. (Fallback: `GET /v1/blocks/{page_id}/children`, exhausting `has_more`.) The tree reflects VERIFIED live state, never your intention.
-- Unicode tree: the parent page at the root, children indented with `├──` / `└──` and `│   ` continuation; recurse into changed sub-pages.
-- Label by type: page → its title; database → its title; embed/media → a bracketed tag like `[notion2charts chart]`; text block → first words in quotes `"…"`.
-- Annotate every node you changed this turn with a trailing `← what changed` (new / moved here / renamed from "…" / trashed). Leave untouched nodes unannotated.
+1. **Get the structure.** For a **verification**, first re-read the affected page's live state — `read_page(page_id, "outline")`, fully paginated — so the model reflects VERIFIED reality, never intention. For a **proposal**, use the agreed target design.
+2. **Build the `page_model`** — `{ title, icon?, cover?, description?, blocks[] }`, blocks in document order. Map each: inline DB → `gallery` (cards = `icon`+`name`+metric `lines`) or `table` (`columns`+`rows`) by its default view type; full-page DB or sub-page → `page_link`; profile/info box → `callout`; widget → `embed`; blank spacer → `paragraph`. In a **proposal**, model the RESULTING page and mark each change in the node's own text (a card/line `← NEW`, a `page_link` `note` like `moved here` / `trashed`).
+3. **Call `render_page({ page_model })` and paste its output verbatim.** Never edit the rendered output by hand — that re-introduces drift; fix the model and re-render.
 
-```
-Investments
-├── Net worth                    ← renamed from "Net worth v2 (rebuild — parallel test)"
-└── Net worth (pre-v2 backup)    ← new backup page
-    ├── "Archived pre-v2 net-worth tracker…"
-    ├── Net worth (old — pre-v2)  ← moved here (data + relations intact, inline)
-    └── [notion2charts chart]
-```
+(A bare `read_page outline` tree stays fine for your OWN block-id lookups — it is just never what you SHOW the user.)
+
+### Red Flags — STOP, you're rationalizing
+
+| Thought | Reality |
+|---|---|
+| "I'll sketch the boxes by hand, it's faster" | Hand-drawn ASCII drifts (emoji width + miscounts). Use `render_page`. |
+| "A quick Unicode `├──` tree is enough" | The mockup is the DEFAULT now; the tree is for your own id lookups, not the user. |
+| "It's only a proposal, not the real page yet" | Proposals MUST show how it will become — render the target model. |
+| "I'll paste the render but fix one label by hand" | Editing the output re-introduces drift. Fix the model, re-render, paste verbatim. |
+| "`render_page` isn't loaded" | It ships with this skill's MCP server — load it; never fall back to hand-drawing. |
+| "I changed structure; I'll just describe it in prose" | Every structure change ends with a re-read, rendered, verified mockup. |
 
 ### The Bottom Line
 
-Change a page's shape → re-read it (fully paginated) → draw the tree, marking what moved / renamed / created / trashed. Every structural change, every time. Non-negotiable.
+Show a page → (verification: re-read live state) → build the `page_model` → `render_page` → paste verbatim. Proposals show how it will become; verifications show the live result. Never hand-draw, never edit the output. Non-negotiable.
 
 ## MANDATORY — propose and get approval before any write
 
@@ -161,11 +164,11 @@ Present ONE proposal per logical batch of related writes. Never split a related 
 
 - **(a) Intent** — one sentence: what and why
 - **(b) Exact operations** — terse bullet per API call: method, target block/page/db ID (or title), fields changing
-- **(c) Preview tree** — Unicode tree of the resulting structure (same format as the tree-view rule) — mark new nodes `[NEW]`, changed nodes `[~]`, trashed nodes `[TRASH]`
+- **(c) Preview mockup** — the RESULTING page rendered via **`render_page`** ("how it will become"; see the render-mockup rule above), pasted verbatim — mark each change in the node's own text (`← NEW` / `← moved` / `← trashed`)
 
 Then **stop and wait**. Silence, a question, or a clarifying reply is **not** approval — hold.
 
-After all writes complete, emit the **verified tree** (live-fetched) confirming the result matches the preview.
+After all writes complete, emit the **verified mockup** — re-read the live page(s) and `render_page` them — confirming the result matches the preview.
 
 Read-only operations — `GET`, `/query`, `/search`, reading `AGENTS.md` — proceed freely, no gate.
 
@@ -176,12 +179,12 @@ Read-only operations — `GET`, `/query`, `/search`, reading `AGENTS.md` — pro
 | "It's just a rename, I'll do it and mention it" | Any write, however minor, requires a proposal first |
 | "The user clearly wants this, the approval is a formality" | Implicit intent is not approval — present the gate every time |
 | "These are two quick writes, I'll propose them one at a time" | Related writes batch into ONE proposal — never split to reduce friction |
-| "I'll do the writes now and show the tree after" | Preview tree comes BEFORE execution, verified tree comes AFTER |
+| "I'll do the writes now and show the mockup after" | Preview mockup comes BEFORE execution, verified mockup comes AFTER |
 | "The user said 'create X' mid-conversation, that's approval enough" | A task description is not an approval — proposal-then-explicit-confirm is the cycle |
 
 ### The Bottom Line
 
-Every write is gated: propose (intent + operations + preview tree), wait for explicit approval, execute, verify with a live tree. Reads are always free, writes never are. Non-negotiable.
+Every write is gated: propose (intent + operations + preview mockup), wait for explicit approval, execute, verify with a live rendered mockup. Reads are always free, writes never are. Non-negotiable.
 
 ## MANDATORY — match the workspace's conventions
 
@@ -346,7 +349,7 @@ One section per object. **Reproduce, per object, every applicable line from the 
 
 **Stated, not skipped:** `none` / `no filter` / `no sort` / `all default order` are valid stated answers. `TBD`/`OR`/`somehow`/`optional`/`must-confirm` are gaps — resolve now (a location is a *specific proposed* value via `search`, never a question handed back) or mark **out of scope**. When the **user explicitly defers** a dimension ("no icons yet", "views later"), record it as **`deferred by user — out of scope`** (a stated answer) and don't re-propose it until they re-open it.
 
-Present it, **stop and wait**. After approval, execution goes straight to the write cycle (intent + operations + preview tree) per object — **the per-object design-brief steps of the two rules above are already satisfied by this approved document**; do not re-seek design approval.
+Present it, **stop and wait**. After approval, execution goes straight to the write cycle (intent + operations + preview mockup) per object — **the per-object design-brief steps of the two rules above are already satisfied by this approved document**; do not re-seek design approval.
 
 **Verify the build matched the design — the loop isn't closed until you check.** A dimension can be approved yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database`) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
 
@@ -386,6 +389,7 @@ This skill drives the `notion` MCP, which exposes **nine tools**. Reads default 
 | Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); `.parent` inspection; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
 | Create/update a **property** — a database **column** (name, type, format, options+colors, description, **+ its icon, + default visibility**) or a **page property value** | **`upsert_property({ properties:[{target_id, property, value?, icon?, color?, visible?, remove?, remove_icon?}] })`** — the write-dual of `describe`, **batched** across any mix of data sources + pages. `value` = a verbatim Notion property object (a schema def for a data_source, a value for a page); `icon` sets the **column** icon and `visible` sets the property's **default visibility** (row-detail + new-view default) — both data_source-only private per-property attributes. Replaces `set_property_icon`. To READ current column icons, use `describe`; for per-VIEW column order, `order_properties` |
 | Re-order a database's **properties** (order ONLY — visibility is a separate concern) | **`order_properties({ data_source_id, order:[names], targets? })`** — one `order` list applied to a composable set of `targets`: **`"all"`** = every view's column order — **all view types**, not just tables (gallery/board/list/chart card-property order too; public; incl. any linked-DB views of this data source embedded on other pages) · **`"page"`** = the canonical order (row-detail panel + new-view default — private app API) · a **view id** = one view. Default `["all"]`; `["all","page"]` = everywhere in one call. Title is kept first **only when unlisted** — to move it, list `title` (the Name property) in `order` at the desired spot; the title column **IS reorderable in table views** (live-verified 2026-06-14 — not pinned). Unlisted properties keep their relative order; each target's existing **visibility/width is PRESERVED**. **NB:** a "column" is a property rendered in a view — there's no per-property "order index"; order is a *list* (per-view `configuration.properties` and canonical `collection_page_properties`). For a property's default **visibility**, use `upsert_property.visible`; to redefine a property, `upsert_property` |
+| Show a page in chat — a **proposal** ("how it will become") or a **post-write verification** | **`render_page({ page_model })`** — renders the canonical fixed-width ASCII **page mockup** (cover · icon · title · callouts · inline DBs as galleries/tables with view tabs + `+ New` · full-page-DB & sub-page links). The renderer OWNS alignment (display-width / emoji-safe) — you build the `{title, icon?, cover?, description?, blocks[]}` model, it returns flawless boxes. **MANDATORY** default visual (see "show every page as a rendered mockup"); paste its output verbatim, never hand-draw |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
 
 A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on **`read_page`** and **`read_database`** (the other readers take no `format`: `describe`/`read_agents_md` take only `id`; `search` takes `query`); reader output is plain text with a trailing `# …` summary line.
