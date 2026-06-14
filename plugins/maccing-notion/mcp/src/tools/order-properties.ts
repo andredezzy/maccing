@@ -1,6 +1,6 @@
 // order_properties — re-order a database's properties (ORDER only; visibility is upsert_property's
 // canonical `visible`). One `order` list applied to a composable set of `targets`:
-//   "all"      → every table view's column order (public configuration.properties)
+//   "all"      → every VIEW's column order — ALL view types, not just tables (public configuration.properties)
 //   "page"     → the canonical property order (private collection.format.collection_page_properties)
 //   <view_id>  → a specific view's column order (public)
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
@@ -136,8 +136,8 @@ export const orderProperties: ToolModule = {
     title: "Order a database's properties",
     description:
       "Re-order a database's properties (ORDER only — visibility is a separate concern). One `order` list " +
-      '(property names, desired left-to-right) applied to a composable set of `targets`: "all" = every table ' +
-      'view\'s column order (public); "page" = the canonical property order (the row-detail panel + new-view ' +
+      '(property names, desired left-to-right) applied to a composable set of `targets`: "all" = every ' +
+      'view\'s column order — ALL view types (gallery/board/list card-property order too, not just tables), public; "page" = the canonical property order (the row-detail panel + new-view ' +
       'default — private app API); or a specific view id. Default targets = ["all"]. Title pinned first; ' +
       "unlisted properties keep their relative order; each target's existing VISIBILITY/width is PRESERVED " +
       "(filtered views keep their hidden columns). A column is a property rendered in a view — the property is " +

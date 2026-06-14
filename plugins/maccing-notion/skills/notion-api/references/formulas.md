@@ -66,6 +66,8 @@ if(formatDate(prop("Month date"), "YYYYMM") == formatDate(now(), "YYYYMM"), prop
 if(prop("Key") == "A", prop("RollupA"), if(prop("Key") == "B", prop("RollupB"), 0))
 
 // Relation name extraction (not chartable as x-axis)
+// ⚠️ UI-ONLY via the public API — current.prop() on a related page → 400 "Type error" (both prop() and
+//    compiled-token forms); author it as a formula2 AST (private-api.md). See the relation-list section below.
 prop("Category").map(current.prop("Name")).join("")
 
 // Round to 2 decimal places (no round(x,n) overload)

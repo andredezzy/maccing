@@ -82,6 +82,18 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 
 **Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard`, `map`, `form`
 
+**"Open pages in" (peek mode) — a PRIVATE-only view setting.** How a row opens — **Side peek** / **Center peek** / **Full page** — is NOT in the public view `configuration` (which carries only type/properties/cover/sorts/filter). It lives in the collection_view's `format.collection_peek_mode`. Set it via the private app API (DevTools-captured from the UI's `saveTransactionsFanout`; live-verified 2026-06-14):
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"collection_view", id:"<view_id>", spaceId:"<space>"},
+    command: "update", path: ["format"], args: { collection_peek_mode: "full_page" } },   // or "side_peek"
+  { pointer: {table:"collection", id:"<any data source in the space>", spaceId:"<space>"}, path:[], command:"update",
+    args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} } ]})
+```
+- Values: **`"full_page"`** (Full page) · **`"side_peek"`** (Side peek). **Center peek** (a gallery's default) = the field **absent** — to reset, set it back to `null`/drop the key.
+- Read it back: `getRecordValues({requests:[{id:"<view_id>", table:"collection_view"}]})` → `format.collection_peek_mode`. (The `200 {}` write doesn't prove persistence — verify.)
+- **House style:** navigation-hub galleries (an "X Navigation" gallery whose rows are sub-pages) should open **Full page** — set `collection_peek_mode:"full_page"` on every nav-hub gallery view.
+
 **View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) and rename/keep the old one. Live-verified 2026-06-14.
 
 **Update view column visibility:**
@@ -124,7 +136,7 @@ There is **no `condition` key** — just `rollup: { date: {…} }`. (Multi-value
 - Formulas (including rollup-derived ones) always work for *computing* and for feeding rollups — only their *filterability* depends on creation path and type-resolvability.
 
 **✅ API-only workaround — wrap the formula in a function-typed ROLLUP and filter that** (live-verified 2026-06-11 for boolean, number, and date formulas; a rollup's filter type comes from its *function*, so the unfilterable formula underneath stops mattering):
-1. **Relation:** reuse an existing relation that points at the rows (e.g. a `sum` rollup over a formula on a related DB filters fine), or add a **`Self` relation** on the same data source — `{"Self": {"relation": {"data_source_id": "<this ds>", "type": "single_property", "single_property": {}}}}` (the `type` discriminant is required — see `pages-properties.md`) — and self-link each row: `PATCH /v1/pages/{row} {"properties": {"Self": {"relation": [{"id": "<row's own id>"}]}}}`. (New rows need the self-link → create row, then patch — fold into the row-creation routine.)
+1. **Relation:** reuse an existing relation that points at the rows (e.g. a `sum` rollup over a formula on a related DB filters fine), or add a **`Self` relation** on the same data source — `PATCH /v1/data_sources/{id}  {"properties": {"Self": {"relation": {"data_source_id": "<this ds>", "type": "single_property", "single_property": {}}}}}` (the outer `{"properties": {…}}` envelope AND the `type` discriminant are both required — see `pages-properties.md`) — and self-link each row: `PATCH /v1/pages/{row} {"properties": {"Self": {"relation": [{"id": "<row's own id>"}]}}}`. (New rows need the self-link → create row, then patch — fold into the row-creation routine.)
 2. **Rollup over the formula** — pick the function by the formula's type: boolean → `checked` · number → `sum` (or `max`) · date → `latest_date`.
 3. **Filter the rollup:** boolean → `{"property": "<rollup>", "rollup": {"number": {"greater_than": 0}}}` · number → `rollup.number` conditions · date → `rollup.date` conditions (incl. relative strings).
 
