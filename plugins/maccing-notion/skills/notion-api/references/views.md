@@ -91,7 +91,7 @@ private_request({ endpoint: "saveTransactions", operations: [
     args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} } ]})
 ```
 - Values: **`"full_page"`** (Full page) · **`"side_peek"`** (Side peek). **Center peek** (a gallery's default) = the field **absent** — to reset, set it back to `null`/drop the key.
-- Read it back: `getRecordValues({requests:[{id:"<view_id>", table:"collection_view"}]})` → `format.collection_peek_mode`. (The `200 {}` write doesn't prove persistence — verify.)
+- Read it back: `private_request({ endpoint:"getRecordValues", body:{ requests:[{ id:"<view_id>", table:"collection_view" }] } })` → `format.collection_peek_mode`. (The `200 {}` write doesn't prove persistence — verify.)
 - **House style:** navigation-hub galleries (an "X Navigation" gallery whose rows are sub-pages) should open **Full page** — set `collection_peek_mode:"full_page"` on every nav-hub gallery view.
 
 **View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) and rename/keep the old one. Live-verified 2026-06-14.
