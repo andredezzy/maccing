@@ -41,13 +41,27 @@ test("preserves each column's visibility and width", () => {
   expect(reordered.find((viewProperty) => viewProperty.property_id === "A")?.width).toBe(100); // width kept
 });
 
-test("title stays first even when absent from the order list", () => {
+test("title stays first when absent from the order list (the default)", () => {
   const current: ViewProperty[] = [{ property_id: "title" }, { property_id: "A" }, { property_id: "B" }];
   expect(reorderViewProperties(current, ["B"]).map((viewProperty) => viewProperty.property_id)).toEqual([
     "title",
     "B",
     "A",
   ]);
+});
+
+test("title is reorderable when explicitly listed — it moves to the requested spot, NOT pinned first", () => {
+  // Notion lets the title column be moved in a table view (live-verified 2026-06-14: Training Log
+  // "Note" title placed after "Hard sets" and rendered there). Listing "title" in `order` positions it.
+  const current: ViewProperty[] = [
+    { property_id: "title" },
+    { property_id: "A" },
+    { property_id: "B" },
+    { property_id: "C" },
+  ];
+  expect(
+    reorderViewProperties(current, ["A", "B", "title", "C"]).map((viewProperty) => viewProperty.property_id),
+  ).toEqual(["A", "B", "title", "C"]);
 });
 
 test("matches encoding-insensitively (view uses decoded ids, order may be encoded)", () => {

@@ -1,8 +1,9 @@
 // Pure planners for re-ordering a property list — used for BOTH a view's columns
 // (configuration.properties: {property_id, visible, width}) and the canonical page order
 // (collection.format.collection_page_properties: {property, visible}). Reorders to a requested
-// sequence with the title pinned first and unlisted entries appended in their current relative order,
-// PRESERVING each entry's visibility/width (the correctness trap: never silently un-hide a column).
+// sequence — title kept first ONLY when unlisted (Notion now lets a table view's title column be
+// reordered; list "title" in `order` to move it), unlisted entries appended in their current relative
+// order, PRESERVING each entry's visibility/width (the correctness trap: never silently un-hide a column).
 // Ordering ONLY — visibility is a separate concern (upsert_property for the canonical default). No API.
 
 export interface ViewProperty {
@@ -28,8 +29,9 @@ export function decodePropertyId(id: string): string {
 }
 
 /**
- * Reorder a view's columns to `order` (ids, encoded or decoded). Title is pinned first; the requested
- * order follows; remaining columns keep their current relative order. Visibility/width are preserved.
+ * Reorder a view's columns to `order` (ids, encoded or decoded). Title is kept first only when it is
+ * NOT in `order` (it can now be moved — list "title" to position it); the requested order follows;
+ * remaining columns keep their current relative order. Visibility/width are preserved.
  */
 export function reorderViewProperties(current: ViewProperty[], order: string[]): ViewProperty[] {
   const byDecoded = new Map<string, ViewProperty>();
@@ -61,7 +63,14 @@ export function reorderViewProperties(current: ViewProperty[], order: string[]):
     reordered.push(entry);
   };
 
-  appendDeduped("title"); // Notion pins the title column first; keep it there
+  // Notion USED to pin the title column first, but a table view now lets the title be reordered
+  // (live-verified 2026-06-14: a Training Log "Note" title column placed after "Hard sets" rendered
+  // there). So keep title first ONLY when the caller didn't explicitly place it; if "title" is in
+  // `order`, honor that position like any other property.
+  const titlePlacedExplicitly = order.some((rawId) => decodePropertyId(rawId) === "title");
+  if (!titlePlacedExplicitly) {
+    appendDeduped("title");
+  }
 
   for (const id of order) {
     appendDeduped(id);

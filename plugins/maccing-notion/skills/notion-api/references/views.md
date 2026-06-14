@@ -112,6 +112,8 @@ private_request({ endpoint: "saveTransactions", operations: [
 PATCH /v1/views/{id}
 { "configuration": { "type": "table", "properties": [{ "property_id": "<id>", "visible": false }] } }
 ```
+
+**Reorder columns** — send the full `configuration.properties` array in the desired left-to-right order (same PATCH; include every property with its `visible`/`width`). **The title column IS reorderable** — placing the `title` entry mid-array renders it there (live-verified 2026-06-14: a Training Log "Note" title column moved to after "Hard sets"); it is NOT pinned first as older Notion behaved. (`order_properties` does this across views — list `title` in `order` to move it.)
 ⚠️ **A freshly API-built DB's default view often renders with ALL columns hidden.** After `POST /v1/databases` + PATCH-adding properties (relations/formulas/rollups) + `order_properties`, the default view's `configuration.properties` can come back all `visible:false` — a blank table. **Always explicitly PATCH each view's full visible-column list** (list the ones you want `visible:true` first, then the rest `false`) — don't assume new properties show. Live-verified 2026-06-14.
 Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. (For column **names** alone, `read_database` output is enough — drop to the schema GET only when a raw **id** is needed for the PATCH body.) May be URL-encoded → `urllib.parse.unquote()`.
 

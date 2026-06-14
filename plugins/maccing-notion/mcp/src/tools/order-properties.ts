@@ -138,8 +138,10 @@ export const orderProperties: ToolModule = {
       "Re-order a database's properties (ORDER only — visibility is a separate concern). One `order` list " +
       '(property names, desired left-to-right) applied to a composable set of `targets`: "all" = every ' +
       'view\'s column order — ALL view types (gallery/board/list card-property order too, not just tables), public; "page" = the canonical property order (the row-detail panel + new-view ' +
-      'default — private app API); or a specific view id. Default targets = ["all"]. Title pinned first; ' +
-      "unlisted properties keep their relative order; each target's existing VISIBILITY/width is PRESERVED " +
+      'default — private app API); or a specific view id. Default targets = ["all"]. Title is kept first ONLY ' +
+      'when unlisted — to MOVE it, list "title" (the Name property) in `order` at the desired spot; the title ' +
+      "column IS reorderable in table views (live-verified 2026-06-14). Unlisted properties keep their relative " +
+      "order; each target's existing VISIBILITY/width is PRESERVED " +
       "(filtered views keep their hidden columns). A column is a property rendered in a view — the property is " +
       "the entity. To change a property's default visibility, use upsert_property's `visible`; to redefine a " +
       "property, upsert_property.",
