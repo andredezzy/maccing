@@ -42,8 +42,12 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 // Auto-computed metadata (no value writes — Notion fills them)
 { "PropName": { "created_time": {} } }   // also created_by · last_edited_time · last_edited_by
+
+// Status (auto-creates default options Not started · In progress · Done) · Unique ID (optional prefix)
+{ "PropName": { "status": {} } }
+{ "PropName": { "unique_id": {} } }      // or { "unique_id": { "prefix": "TASK" } }
 ```
-- **`status` and `unique_id` columns are NOT API-creatable** (verify before relying): a `status` column's option/group set is **UI-managed** — create + curate it in the UI, then write values via the API; a `unique_id` column is created in the UI too. Their *values* read/write fine (shapes below).
+- **`status` and `unique_id` columns ARE API-creatable** (live-verified 2026-06-14): `{"status":{}}` creates a status column auto-populated with Notion's default options/groups (**Not started · In progress · Done**) — add/rename options afterward via `PATCH /v1/data_sources/{id}`; `{"unique_id":{}}` (or `{"unique_id":{"prefix":"TASK"}}`) creates an auto-incrementing id column. Both their *values* read/write fine (shapes below).
 
 ---
 

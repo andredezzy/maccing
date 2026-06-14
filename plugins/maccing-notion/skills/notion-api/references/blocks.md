@@ -42,7 +42,7 @@ PATCH /v1/pages/{id}/markdown
 { "type": "replace_content", "replace_content": { "new_str": "# Full replacement", "allow_deleting_content": false } }
 
 // replace_content_range — replaces a selected range (ellipsis selection); third valid type
-{ "type": "replace_content_range", "replace_content_range": { "old_str": "start...end", "new_str": "replacement", "allow_deleting_content": false } }
+{ "type": "replace_content_range", "replace_content_range": { "content_range": "start...end", "content": "replacement", "allow_deleting_content": false } }  // ⚠️ fields are content_range/content (NOT old_str/new_str) — live-verified 2026-06-14
 
 // update_content — batch find/replace; each pair is an exact-string old_str→new_str swap (NOT additive)
 { "type": "update_content", "update_content": { "content_updates": [{ "old_str": "alpha", "new_str": "beta" }] } }
