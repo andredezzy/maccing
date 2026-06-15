@@ -3,8 +3,35 @@
 import { box } from "../box";
 import { type BlockRenderer, register, renderBlocks } from "../engine";
 import type { MockupBlock } from "../model";
-import { wordWrap } from "../text";
-import { BULLETS, childLines, flow } from "./helpers";
+import { displayWidth, wordWrap } from "../text";
+
+const BULLETS = ["•", "◦", "▪"];
+
+function indent(lines: string[], by: number): string[] {
+  const pad = " ".repeat(by);
+  return lines.map((l) => pad + l);
+}
+/** Render a block's children indented under it (the available width shrinks by the indent). */
+function childLines(children: MockupBlock[] | undefined, width: number, by: number, depth: number): string[] {
+  if (!children || children.length === 0) {
+    return [];
+  }
+  return indent(renderBlocks(children, Math.max(1, width - by), depth), by);
+}
+/** A marker + word-wrapped text, with continuation lines aligned under the text; then children. */
+function flow(
+  marker: string,
+  text: string,
+  width: number,
+  children: MockupBlock[] | undefined,
+  childIndent: number,
+  childDepth: number,
+): string[] {
+  const mw = displayWidth(marker);
+  const wrapped = wordWrap(text ?? "", Math.max(1, width - mw));
+  const lines = wrapped.map((w, i) => (i === 0 ? marker : " ".repeat(mw)) + w);
+  return [...lines, ...childLines(children, width, childIndent, childDepth)];
+}
 
 register("paragraph", (block, width) => [
   ...(block.text ? wordWrap(block.text, width) : [""]),

@@ -3,7 +3,21 @@
 import { box } from "../box";
 import { type BlockRenderer, register } from "../engine";
 import type { MockupBlock } from "../model";
-import { mediaBox } from "./helpers";
+
+/** A captioned media/bookmark box: a label + name/url line, then an optional caption, inside the box. */
+function mediaBox(
+  label: string,
+  url: string | undefined,
+  name: string | undefined,
+  caption: string | undefined,
+  total: number,
+): string[] {
+  const body = [`${label}  ${name ?? url ?? ""}`.trim()];
+  if (caption) {
+    body.push(caption);
+  }
+  return box(body, total - 2);
+}
 
 const media: BlockRenderer<Extract<MockupBlock, { type: "image" | "video" | "audio" | "file" | "pdf" }>> = (
   block,
