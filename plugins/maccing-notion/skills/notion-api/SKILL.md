@@ -113,23 +113,27 @@ while True:
 
 `has_more: true` means you do not yet have the data. Loop on `next_cursor` until it is `false` — for queries, block children, search, views, **and** relation values — *before* any count, sum, filter, or conclusion. Non-negotiable.
 
-## MANDATORY — show every page as a rendered mockup (`render_page`), never hand-drawn
+## MANDATORY — paste every mockup into the chat, verbatim (the MCP tool result is INVISIBLE to the user)
 
-Whenever you show a page's shape in chat — a **proposal** ("how the page will become") OR the **verification** after a structure-changing write ("how it became") — you MUST render it with the **`render_page`** MCP tool and paste its output **verbatim**. NEVER hand-draw the visual (Unicode `├──` tree or box-art): a hand-typed mockup drifts — emoji are double-width, borders miscount, chat fonts substitute box-drawing glyphs — and the user sees broken, unclosed boxes. The renderer OWNS all alignment; you supply only structure. This is the DEFAULT and ONLY page visual — it **replaces** the bare Unicode tree.
+**The user never sees your MCP tool results.** In the Claude Code chat, every tool call's output — including the ASCII a mockup tool returns — is collapsed/hidden; the user reads ONLY the text of your visible reply. So a mockup that lives only in a tool result is a mockup **the user never saw**. Therefore: **every time you produce a mockup, copy its full output verbatim into your visible message** — a one-line caption around it is welcome; replacing it with a prose summary ("all 9 cards render ✓") is a violation, because to the user you showed *nothing*.
+
+This fires for the WHOLE mockup family — **`render_page`**, **`render_database`**, **`render_blocks`**, and **`read_page` / `read_database` with `format:"mockup"`** — in EVERY context that produced one: a **proposal** ("how it will become"), a **post-write verification** ("how it became"), a **bug-fix / render verification** ("confirm it renders"), or simply because the user asked to **see / show / check / confirm** something. Reading "confirm the fix" or "show me" as license to summarize is the exact failure this rule exists to stop.
+
+NEVER hand-draw the visual instead (Unicode `├──` tree or box-art): a hand-typed mockup drifts — emoji are double-width, borders miscount, chat fonts substitute box-drawing glyphs — and the user sees broken, unclosed boxes. The renderer OWNS all alignment; you supply only structure. The rendered mockup is the DEFAULT and ONLY visual — it **replaces** the bare Unicode tree.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO PAGE IS SHOWN IN CHAT EXCEPT AS VERBATIM render_page OUTPUT — NEVER A HAND-DRAWN TREE OR ASCII
+EVERY MOCKUP YOU PRODUCE IS PASTED VERBATIM INTO YOUR VISIBLE REPLY — A MOCKUP LEFT ONLY IN A TOOL RESULT WAS NEVER SHOWN
 ```
 
-### The Gate (every time you'd show a page)
+### The Gate (every time a mockup is produced)
 
-1. **Get the structure.** For a **verification**, first re-read the affected page's live state — `read_page(page_id, "outline")`, fully paginated — so the model reflects VERIFIED reality, never intention. For a **proposal**, use the agreed target design.
-2. **Build the `page_model`** — `{ title, icon?, cover?, description?, blocks[] }`, blocks in document order. Map each: inline DB → `gallery` (cards = `icon`+`name`+metric `lines`) or `table` (`columns`+`rows`) by its default view type; full-page DB or sub-page → `page_link`; profile/info box → `callout`; widget → `embed`; blank spacer → `paragraph`. In a **proposal**, model the RESULTING page and mark each change in the node's own text (a card/line `← NEW`, a `page_link` `note` like `moved here` / `trashed`).
-3. **Call `render_page({ page_model })` and paste its output verbatim.** Never edit the rendered output by hand — that re-introduces drift; fix the model and re-render.
+1. **Produce the mockup.** For an existing object, the one-call path is the live readers — `read_page` / `read_database` with `format:"mockup"`. For a **proposal** or a synthetic target, build the model and call `render_page` / `render_database` / `render_blocks`. For a **post-write verification**, re-read live state first (`read_page(page_id, "outline")`, fully paginated) so it reflects VERIFIED reality, never intention.
+2. **Build the model when rendering one** — `render_page`'s `page_model` is `{ title, icon?, cover?, description?, blocks[] }` in document order: inline DB → `gallery` (cards = `icon`+`name`+metric `lines`) or `table` (`columns`+`rows`) by its default view type; full-page DB or sub-page → `page_link`; profile/info box → `callout`; widget → `embed`; blank spacer → `paragraph`. In a **proposal**, model the RESULTING object and mark each change in the node's own text (a card/line `← NEW`, a `page_link` `note` like `moved here` / `trashed`).
+3. **Paste the tool's output verbatim into your visible reply.** Never edit it by hand — that re-introduces drift; fix the model and re-render.
 
 (A bare `read_page outline` tree stays fine for your OWN block-id lookups — it is just never what you SHOW the user.)
 
@@ -137,8 +141,12 @@ NO PAGE IS SHOWN IN CHAT EXCEPT AS VERBATIM render_page OUTPUT — NEVER A HAND-
 
 | Thought | Reality |
 |---|---|
-| "I'll sketch the boxes by hand, it's faster" | Hand-drawn ASCII drifts (emoji width + miscounts). Use `render_page`. |
-| "A quick Unicode `├──` tree is enough" | The mockup is the DEFAULT now; the tree is for your own id lookups, not the user. |
+| "The user's in a hurry — a one-line confirm is enough" | The tool output is invisible; your one-liner is ALL they get. Paste the mockup. |
+| "Re-printing it adds no value — they already saw it" | They did NOT see it — tool results are hidden in chat. Unpasted = never delivered. |
+| "It's a fix/verification, not a page proposal" | Every produced mockup is pasted — proposal, post-write, AND fix/render verification alike. |
+| "It's a database/blocks mockup, not a page" | Covers `render_page` / `render_database` / `render_blocks` AND `read_*` `format:"mockup"` equally. |
+| "I'll sketch the boxes by hand, it's faster" | Hand-drawn ASCII drifts (emoji width + miscounts). Use the renderer. |
+| "A quick Unicode `├──` tree is enough" | The mockup is the DEFAULT; the tree is for your own id lookups, not the user. |
 | "It's only a proposal, not the real page yet" | Proposals MUST show how it will become — render the target model. |
 | "I'll paste the render but fix one label by hand" | Editing the output re-introduces drift. Fix the model, re-render, paste verbatim. |
 | "`render_page` isn't loaded" | It ships with this skill's MCP server — load it; never fall back to hand-drawing. |
@@ -146,7 +154,7 @@ NO PAGE IS SHOWN IN CHAT EXCEPT AS VERBATIM render_page OUTPUT — NEVER A HAND-
 
 ### The Bottom Line
 
-Show a page → (verification: re-read live state) → build the `page_model` → `render_page` → paste verbatim. Proposals show how it will become; verifications show the live result. Never hand-draw, never edit the output. Non-negotiable.
+Produce a mockup (one-call `read_*` `format:"mockup"`, or build a model → `render_*`) → **paste its output verbatim into your visible reply.** The tool result is invisible to the user; an unpasted mockup was never shown. Proposals show how it will become; verifications (post-write OR fix) show the live result. Never hand-draw, never edit the output, never swap it for a summary. Non-negotiable.
 
 ## MANDATORY — propose and get approval before any write
 
@@ -389,7 +397,7 @@ This skill drives the `notion` MCP, which exposes **nine tools**. Reads default 
 | Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); `.parent` inspection; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
 | Create/update a **property** — a database **column** (name, type, format, options+colors, description, **+ its icon, + default visibility**) or a **page property value** | **`upsert_property({ properties:[{target_id, property, value?, icon?, color?, visible?, remove?, remove_icon?}] })`** — the write-dual of `describe`, **batched** across any mix of data sources + pages. `value` = a verbatim Notion property object (a schema def for a data_source, a value for a page); `icon` sets the **column** icon and `visible` sets the property's **default visibility** (row-detail + new-view default) — both data_source-only private per-property attributes. Replaces `set_property_icon`. To READ current column icons, use `describe`; for per-VIEW column order, `order_properties` |
 | Re-order a database's **properties** (order ONLY — visibility is a separate concern) | **`order_properties({ data_source_id, order:[names], targets? })`** — one `order` list applied to a composable set of `targets`: **`"all"`** = every view's column order — **all view types**, not just tables (gallery/board/list/chart card-property order too; public; incl. any linked-DB views of this data source embedded on other pages) · **`"page"`** = the canonical order (row-detail panel + new-view default — private app API) · a **view id** = one view. Default `["all"]`; `["all","page"]` = everywhere in one call. Title is kept first **only when unlisted** — to move it, list `title` (the Name property) in `order` at the desired spot; the title column **IS reorderable in table views** (live-verified 2026-06-14 — not pinned). Unlisted properties keep their relative order; each target's existing **visibility/width is PRESERVED**. **NB:** a "column" is a property rendered in a view — there's no per-property "order index"; order is a *list* (per-view `configuration.properties` and canonical `collection_page_properties`). For a property's default **visibility**, use `upsert_property.visible`; to redefine a property, `upsert_property` |
-| Show a page in chat — a **proposal** ("how it will become") or a **post-write verification** | **`render_page({ page_model })`** — renders the canonical fixed-width ASCII **page mockup** (cover · icon · title · callouts · inline DBs as galleries/tables with view tabs + `+ New` · full-page-DB & sub-page links). The renderer OWNS alignment (display-width / emoji-safe) — you build the `{title, icon?, cover?, description?, blocks[]}` model, it returns flawless boxes. **MANDATORY** default visual (see "show every page as a rendered mockup"); paste its output verbatim, never hand-draw |
+| Show a page in chat — a **proposal** ("how it will become") or a **post-write verification** | **`render_page({ page_model })`** — renders the canonical fixed-width ASCII **page mockup** (cover · icon · title · callouts · inline DBs as galleries/tables with view tabs + `+ New` · full-page-DB & sub-page links). The renderer OWNS alignment (display-width / emoji-safe) — you build the `{title, icon?, cover?, description?, blocks[]}` model, it returns flawless boxes. **MANDATORY** default visual (see "paste every mockup into the chat, verbatim"); paste its output verbatim into your visible reply — the tool result is invisible to the user — never hand-draw |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
 
 A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on **`read_page`** and **`read_database`** (the other readers take no `format`: `describe`/`read_agents_md` take only `id`; `search` takes `query`); reader output is plain text with a trailing `# …` summary line.
