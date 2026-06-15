@@ -2,7 +2,7 @@
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
-import { iconToString, type NotionIcon } from "../readers/format-object";
+import { iconToString, type NotionIcon } from "../readers/object";
 import type { MockupBlock, PageModel } from "./model";
 
 interface RichTextRun {

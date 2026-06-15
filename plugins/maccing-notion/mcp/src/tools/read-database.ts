@@ -6,9 +6,11 @@ import { z } from "zod";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { iconToString } from "../readers/format-object";
-import { type FlatRow, formatRows, type RowFormat } from "../readers/format-rows";
-import { formatSchema, type PropertiesMap } from "../readers/format-schema";
+import { iconToString } from "../readers/object";
+import { flattenProperty, type NotionPropertyValue } from "../readers/page";
+import { resolveRelations } from "../readers/resolve-relations";
+import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
+import { formatSchema, type PropertiesMap } from "../readers/schema";
 import {
   formatViews,
   type IdToName,
@@ -16,9 +18,7 @@ import {
   type RawView,
   selectViewIndex,
   viewQueryFilter,
-} from "../readers/format-views";
-import { flattenProperty, type NotionPropertyValue } from "../readers/notion-page";
-import { resolveRelations } from "../readers/resolve-relations";
+} from "../readers/views";
 import { renderDatabase } from "../render";
 import { databaseToModel, type RawRow, type ResolvedView } from "../render/database-model";
 import { err, ok, type ToolModule } from "../tool";

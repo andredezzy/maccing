@@ -2,7 +2,7 @@
 // Batched + deduped. Distinguishes 429 (rate limit → throw, caller retries) from 404/403 (→ "[deleted]").
 
 import { publicRequest } from "../notion/public-client";
-import { type NotionPageBase, titleOf } from "./notion-page";
+import { type NotionPageBase, titleOf } from "./page";
 
 const PAGE_FETCH_BATCH_SIZE = 20; // concurrent GET /v1/pages — conservative vs the 180 req/min general limit
 

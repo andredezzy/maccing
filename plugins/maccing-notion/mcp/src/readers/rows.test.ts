@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatRows } from "./format-rows";
+import { formatRows } from "./rows";
 
 const rows = [
   { Name: "A", Value: 10, Cat: "X" },

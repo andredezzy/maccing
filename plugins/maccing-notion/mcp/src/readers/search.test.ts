@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatSearch, type RawSearchResult } from "./format-search";
+import { formatSearch, type RawSearchResult } from "./search";
 
 const results: RawSearchResult[] = [
   {

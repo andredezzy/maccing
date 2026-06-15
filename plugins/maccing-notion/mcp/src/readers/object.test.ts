@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { iconLabel } from "./format-object";
+import { iconLabel } from "./object";
 
 test("emoji icon → the emoji glyph", () => {
   expect(iconLabel({ type: "emoji", emoji: "💰" })).toBe("💰");

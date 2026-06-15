@@ -17,7 +17,7 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { formatIconAssetPath } from "../readers/format-schema";
+import { formatIconAssetPath } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
 import { decodePropertyId } from "../writers/reorder-properties";
 import {

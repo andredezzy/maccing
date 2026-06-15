@@ -8,10 +8,10 @@
 import { z } from "zod";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import type { NotionIcon } from "../readers/format-object";
-import type { NotionChildBlock, NotionChildrenResponse } from "../readers/notion-blocks";
-import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/notion-markdown";
-import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../readers/notion-page";
+import type { NotionChildBlock, NotionChildrenResponse } from "../readers/blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
+import type { NotionIcon } from "../readers/object";
+import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { renderPage } from "../render";
 import { pageToModel, type RawBlock, type RawPage } from "../render/page-model";

@@ -3,7 +3,7 @@
 // instead of tens of KB. No API calls.
 
 import { abbreviateId } from "../notion/ids";
-import { type RichText, richTextToPlain } from "./notion-page";
+import { type RichText, richTextToPlain } from "./page";
 
 interface SearchProperty {
   type?: string;

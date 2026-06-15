@@ -7,9 +7,9 @@ import { z } from "zod";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readCollectionIcons } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { iconLabel, type NotionIcon } from "../readers/format-object";
-import { formatSchema, type PropertiesMap } from "../readers/format-schema";
-import { type RichText, richTextToPlain } from "../readers/notion-page";
+import { iconLabel, type NotionIcon } from "../readers/object";
+import { type RichText, richTextToPlain } from "../readers/page";
+import { formatSchema, type PropertiesMap } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
 
 interface ParentRef {

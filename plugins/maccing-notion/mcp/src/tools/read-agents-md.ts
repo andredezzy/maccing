@@ -6,9 +6,9 @@
 import { z } from "zod";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import type { NotionChildrenResponse } from "../readers/notion-blocks";
-import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/notion-markdown";
-import { type NotionPageBase, titleOf } from "../readers/notion-page";
+import type { NotionChildrenResponse } from "../readers/blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
+import { type NotionPageBase, titleOf } from "../readers/page";
 import { err, ok, type ToolModule } from "../tool";
 
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains

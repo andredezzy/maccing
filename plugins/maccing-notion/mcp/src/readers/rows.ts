@@ -1,7 +1,7 @@
 // Pure row formatters for read_database — no API calls, fully unit-testable.
 // A row is a flat record of scalar property values (the tool flattens Notion props + resolves relations first).
 
-import type { Scalar } from "./notion-page";
+import type { Scalar } from "./page";
 
 // String union (not an enum) because these values ARE the wire-facing read_database `format` parameter (z.enum(FORMATS), lowercase); an UPPERCASE-valued enum would break the wire contract. Input is validated by Zod before formatRows is called.
 export type RowFormat = "table" | "kv" | "tsv" | "summary";

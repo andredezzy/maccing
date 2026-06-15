@@ -2,7 +2,7 @@
 // produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { iconToString } from "../readers/format-object";
+import { iconToString } from "../readers/object";
 import { displayWidth, renderPage } from "./index";
 import { pageToModel, type RawBlock } from "./page-model";
 

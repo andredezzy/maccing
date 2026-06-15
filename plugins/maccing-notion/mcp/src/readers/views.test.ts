@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatViews, type IdToName, orderViews, type RawView, selectViewIndex, viewQueryFilter } from "./format-views";
+import { formatViews, type IdToName, orderViews, type RawView, selectViewIndex, viewQueryFilter } from "./views";
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
 

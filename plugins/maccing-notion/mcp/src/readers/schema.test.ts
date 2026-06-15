@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatSchema, type IconsById, type PropertiesMap } from "./format-schema";
+import { formatSchema, type IconsById, type PropertiesMap } from "./schema";
 
 const properties: PropertiesMap = {
   Name: { id: "title", type: "title" },

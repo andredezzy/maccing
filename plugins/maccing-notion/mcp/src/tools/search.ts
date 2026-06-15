@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { formatSearch, type RawSearchResult } from "../readers/format-search";
+import { formatSearch, type RawSearchResult } from "../readers/search";
 import { err, ok, type ToolModule } from "../tool";
 
 const OBJECT_TYPES = ["page", "data_source"] as const;
