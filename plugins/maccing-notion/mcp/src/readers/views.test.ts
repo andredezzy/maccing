@@ -93,6 +93,7 @@ test("always shows filter and quick_filters lines (— when none)", () => {
     configuration: { type: "table" },
   };
   const output = formatViews([view], {});
+  expect(output).toContain("sorts: —"); // no sorts → the — sentinel
   expect(output).toContain("filter: —");
   expect(output).toContain("quick_filters: —");
 });
@@ -181,4 +182,5 @@ test("selectViewIndex resolves a view by index, exact name, id, or partial name 
   expect(selectViewIndex(views, "c")).toBe(2); // id match
   expect(selectViewIndex(views, "Open")).toBe(2); // partial name
   expect(selectViewIndex(views, "zzz")).toBe(0); // no match → default
+  expect(selectViewIndex([], "Backlog")).toBe(0); // empty views → default, regardless of selector
 });

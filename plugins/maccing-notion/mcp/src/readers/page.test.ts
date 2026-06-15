@@ -65,6 +65,7 @@ test("flattenProperty: rollup (number/date/array) and formula (number/date/strin
   expect(flat({ type: "rollup", rollup: { type: "number", number: 5 } })).toBe(5);
   expect(flat({ type: "rollup", rollup: { type: "date", date: { start: "2025-01-01" } } })).toBe("2025-01-01");
   expect(flat({ type: "rollup", rollup: { type: "array", array: [{}, {}] } })).toBe("[2 items]");
+  expect(flat({ type: "rollup", rollup: { type: "incomplete" } })).toBeNull(); // unhandled rollup type → null
   expect(flat({ type: "formula", formula: { type: "number", number: 190 } })).toBe(190);
   expect(flat({ type: "formula", formula: { type: "date", date: { start: "2025-03-03" } } })).toBe("2025-03-03");
   expect(flat({ type: "formula", formula: { type: "string", string: "x" } })).toBe("x");

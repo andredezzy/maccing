@@ -14,6 +14,15 @@ test("pageToModel: a page with no cover yields no cover band", () => {
   expect(renderPage(model)).not.toContain("▒"); // header draws no ▒ band without a cover
 });
 
+test("a file_upload media block resolves its url to (uploaded)", () => {
+  const model = pageToModel({}, [{ type: "image", image: { type: "file_upload" } } as RawBlock]);
+  const block = model.blocks[0];
+  expect(block.type).toBe("image");
+  if (block.type === "image") {
+    expect(block.url).toBe("(uploaded)"); // no external/file url, but a file_upload → the (uploaded) sentinel
+  }
+});
+
 test("iconGlyph maps emoji, named icon, and image icon", () => {
   expect(iconGlyph({ type: "emoji", emoji: "🏋" })).toBe("🏋");
   expect(iconGlyph({ type: "icon", icon: { name: "cash" } })).toBe("cash");

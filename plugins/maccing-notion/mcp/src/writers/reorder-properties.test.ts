@@ -2,7 +2,19 @@
 
 import { expect, test } from "bun:test";
 
-import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "./reorder-properties";
+import {
+  reorderPageProperties,
+  reorderViewProperties,
+  seedPageOrderFromSchema,
+  type ViewProperty,
+} from "./reorder-properties";
+
+test("seedPageOrderFromSchema: every property, default-visible, with its id url-decoded", () => {
+  expect(seedPageOrderFromSchema({ Name: { id: "title" }, Value: { id: "%3F~%5CG" } })).toEqual([
+    { property: "title", visible: true },
+    { property: "?~\\G", visible: true }, // %3F~%5CG → ?~\G
+  ]);
+});
 
 test("an empty current list returns [] (nothing to reorder)", () => {
   expect(reorderViewProperties([], ["A", "B"])).toEqual([]);
