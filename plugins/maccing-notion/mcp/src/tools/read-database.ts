@@ -6,9 +6,10 @@ import { z } from "zod";
 
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
-import { formatViews, type IdToName, type RawView } from "../lib/format-views";
+import { formatViews, type IdToName, orderViews, type RawView } from "../lib/format-views";
 import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
+import { readViewOrder } from "../lib/notion-private";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { databaseToModel, type RawRow, type ResolvedView } from "../lib/notion-to-database-model";
 import { iconToString } from "../lib/notion-to-page-model";
@@ -141,7 +142,12 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
   const titleColumn =
     Object.entries(schema).find(([, p]) => p.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
 
-  const views = (await fetchViews(dataSourceId)).map((view) => {
+  // Order views the way Notion shows them and render its DEFAULT (first) view. The public API exposes no
+  // tab order or default-view signal, so we read the container block's `view_ids` via private api/v3
+  // (databaseId IS the collection_view block id); that order also excludes views belonging to OTHER
+  // linked-DB containers sharing this data source. Falls back to public order if token_v2 is absent.
+  const rawViews = await fetchViews(dataSourceId);
+  const views = orderViews(rawViews, await readViewOrder(databaseId), databaseId).map((view) => {
     const resolved = resolveView(view, idToName);
     resolved.columns = [titleColumn, ...resolved.columns.filter((c) => c !== titleColumn)];
     return resolved;

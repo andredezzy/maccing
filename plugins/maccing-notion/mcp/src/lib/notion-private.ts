@@ -190,6 +190,28 @@ export async function getRecordValues(requests: RecordRequest[]): Promise<Privat
   return privateCall("getRecordValues", { requests });
 }
 
+/**
+ * Read a collection_view container's ordered `view_ids` (the real tab order; `view_ids[0]` is the default
+ * view). The public API exposes no view order or default-view signal, so this is the only source of truth.
+ * No creds / failure → null (graceful: the caller falls back to public order). Never throws.
+ */
+export async function readViewOrder(blockId: string): Promise<string[] | null> {
+  if (!privateConfig().ok) {
+    return null;
+  }
+  try {
+    const response = await getRecordValues([{ id: blockId, table: "block" }]);
+    if (!response.ok) {
+      return null;
+    }
+    const body = response.body as { results?: { value?: { view_ids?: string[] } }[] };
+    const viewIds = body.results?.[0]?.value?.view_ids;
+    return Array.isArray(viewIds) && viewIds.length > 0 ? viewIds : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface IconReadOk {
   status: "ok";
   byCollection: Record<string, Record<string, string>>;

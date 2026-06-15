@@ -323,3 +323,27 @@ test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned,
   expect(out).toContain("[ Submit ]"); // form
   expect(out).toContain("Su"); // calendar weekday header
 });
+
+test("dbHeader fits the width and collapses overflowing view tabs to '+N more'", () => {
+  const out = renderDatabase({
+    title: "Personal Tasks",
+    icon: "◷",
+    view: 0,
+    views: [
+      {
+        type: "table",
+        name: "Personal Tasks",
+        views: ["Board", "Backlog", "Calendar", "Timeline", "Table", "Open tasks (Status ≠ Done)"],
+        columns: ["Name"],
+        rows: [["Ship it"]],
+      },
+    ],
+  });
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+  const header = out.split("\n").find((l) => l.includes("+ New")) ?? ""; // the view's tab-bar header line
+  expect(header).toContain("‹ Board ›"); // the active/default (first) view is always shown
+  expect(header).toMatch(/\+\d+ more/); // the rest collapse into a count
+  expect(header).toContain("+ New");
+});

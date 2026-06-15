@@ -12,10 +12,31 @@ export interface RawView {
   name?: string;
   type?: string;
   url?: string;
+  parent?: { database_id?: string };
   sorts?: SortEntry[] | null;
   filter?: unknown;
   quick_filters?: unknown;
   configuration?: Record<string, unknown> | null;
+}
+
+/**
+ * Order a data source's views the way Notion shows them, dropping views that belong to OTHER linked-DB
+ * containers sharing this data source (a different `parent.database_id`). `viewIds` is the container
+ * block's `view_ids` (private api/v3) — its order IS the tab order and `viewIds[0]` is the default view;
+ * it also defines membership, so foreign views fall away. When `viewIds` is null (token_v2 absent / private
+ * read failed), fall back to filtering by `parent.database_id`, preserving the public list order; if that
+ * filter would empty the set, keep the unfiltered views rather than render nothing.
+ */
+export function orderViews(views: RawView[], viewIds: string[] | null, databaseId: string): RawView[] {
+  if (viewIds) {
+    const byId = new Map(views.map((v) => [v.id, v]));
+    const ordered = viewIds.map((id) => byId.get(id)).filter((v): v is RawView => Boolean(v));
+    if (ordered.length) {
+      return ordered;
+    }
+  }
+  const own = views.filter((v) => v.parent?.database_id === databaseId);
+  return own.length ? own : views;
 }
 
 interface SortEntry {

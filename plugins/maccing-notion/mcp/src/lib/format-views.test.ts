@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatViews, type IdToName, type RawView } from "./format-views";
+import { formatViews, type IdToName, orderViews, type RawView } from "./format-views";
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
 
@@ -107,4 +107,18 @@ test("a chart view's axes property ids resolve", () => {
   expect(output).toContain('"chart_type": "line"');
   expect(output).toContain('"property_name": "Name"');
   expect(output).toContain('"property_name": "Net worth (R$)"');
+});
+
+test("orderViews orders by the container view_ids and drops foreign-container views", () => {
+  const raw: RawView[] = [
+    { id: "cal", name: "Calendar", type: "calendar", parent: { database_id: "DB" } },
+    { id: "board", name: "Board", type: "board", parent: { database_id: "DB" } },
+    { id: "foreign", name: "Board", type: "board", parent: { database_id: "OTHER" } },
+  ];
+  // With the container's view_ids: exact tab order, foreign view excluded, view_ids[0] is the default.
+  expect(orderViews(raw, ["board", "cal"], "DB").map((v) => v.id)).toEqual(["board", "cal"]);
+  // Fallback (no view_ids — token_v2 absent): filter foreign by parent.database_id, keep public order.
+  expect(orderViews(raw, null, "DB").map((v) => v.id)).toEqual(["cal", "board"]);
+  // Defensive: if the parent filter would drop everything, keep the unfiltered set.
+  expect(orderViews(raw, null, "MISSING").map((v) => v.id)).toEqual(["cal", "board", "foreign"]);
 });

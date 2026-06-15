@@ -1,6 +1,6 @@
 {
   "name": "maccing-notion",
-  "version": "0.29.2",
+  "version": "0.29.3",
   "description": "Notion API engineering reference for coding agents: building/editing databases via the data_sources model, formulas (and their empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning, multi-currency formatting, and debugging Notion API errors — with a MANDATORY ancestral-AGENTS.md sweep before any operation. Ships a self-hosted `notion` MCP server (Bun, official MCP SDK, Notion-Version 2026-03-11) with high-level reader tools (read_agents_md, search, read_page, read_database, describe) plus upsert_property (batched create/update of any property — a database column + its icon, or a page value), order_properties (re-order a database's properties across its views and/or the canonical order), and the render_page / render_database / render_blocks suite — a compounding recursive ASCII renderer for ALL of Notion (every block type, table/gallery/board/list views, standalone databases) — the mandatory default for showing how a page looks/will-look in chat alongside the raw request escape hatches. Complements the official makenotion/claude-code-notion-plugin (high-level workflows) with the low-level API/formula details.",
   "author": {
     "name": "André \"Dezzy\" Victor",
