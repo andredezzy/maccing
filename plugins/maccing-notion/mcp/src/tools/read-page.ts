@@ -11,7 +11,7 @@ import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildBlock, NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
 import type { NotionIcon } from "../readers/object";
-import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../readers/page";
+import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { renderPage } from "../render";
 import { pageToModel, type RawBlock, type RawPage } from "../render/page-model";
@@ -127,8 +127,8 @@ function pageIconLabel(page: PageObject): string | null {
 async function frontmatter(page: PageObject): Promise<string> {
   const properties = page.properties ?? {};
   const flattenedProperties = Object.entries(properties)
-    .filter(([, property]) => (property as NotionPropertyValue).type !== "title")
-    .map(([name, property]) => [name, flattenProperty(property as NotionPropertyValue)] as const);
+    .filter(([, property]) => property.type !== "title")
+    .map(([name, property]) => [name, flattenProperty(property)] as const);
 
   const relationIds = flattenedProperties.flatMap(([, flattenedProperty]) => flattenedProperty.relationIds ?? []);
   const titles = relationIds.length > 0 ? await resolveRelations(relationIds) : new Map<string, string>();

@@ -20,7 +20,7 @@ import {
   viewQueryFilter,
 } from "../readers/views";
 import { renderDatabase } from "../render";
-import { databaseToModel, groupOptionsFor, type RawRow, resolveView } from "../render/database-model";
+import { databaseToModel, groupOptionsFor, resolveView } from "../render/database-model";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
@@ -151,7 +151,7 @@ async function renderDatabaseMockup(
   if (!query.ok && (filter || sorts)) {
     query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: SAMPLE_CAP + 1 });
   }
-  const fetched = (query.ok ? ((query.body as QueryResponse).results ?? []) : []) as RawRow[];
+  const fetched = query.ok ? ((query.body as QueryResponse).results ?? []) : [];
   const truncated = fetched.length > SAMPLE_CAP;
   const rows = truncated ? fetched.slice(0, SAMPLE_CAP) : fetched;
 
