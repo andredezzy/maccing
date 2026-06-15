@@ -41,6 +41,17 @@ test("listViewIds paginates to the end, threading next_cursor", async () => {
   expect(await listViewIds("ds")).toEqual(["v1", "v2", "v3"]);
 });
 
+test("listViewIds stops and returns the partial list on a non-2xx response", async () => {
+  globalThis.fetch = (async () =>
+    ({
+      status: 500,
+      ok: false,
+      text: async () => "{}",
+      headers: { get: () => null },
+    }) as unknown as Response) as unknown as typeof fetch;
+  expect(await listViewIds("ds")).toEqual([]); // first page failed → nothing collected
+});
+
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
 
 test("buildIdToName: skips id-less entries and keys by both the raw and decoded id", () => {
@@ -107,6 +118,15 @@ test("resolves a raw view id against a url-encoded schema id (and vice versa)", 
 
 test("empty view list is reported, not crashed", () => {
   expect(formatViews([], idToName)).toContain("# Views (0)");
+});
+
+test("formatViews renders a non-null quick_filters block, resolving its property ids", () => {
+  const output = formatViews(
+    [{ name: "T", type: "table", quick_filters: { property: "tjUk", checkbox: { equals: false } } }],
+    { tjUk: "Done" },
+  );
+  expect(output).not.toContain("quick_filters: —"); // truthy branch, not the sentinel
+  expect(output).toContain("property_name"); // resolveDeep annotated the `property` id → name
 });
 
 test("formatViews shows the url line when a view carries a url", () => {
