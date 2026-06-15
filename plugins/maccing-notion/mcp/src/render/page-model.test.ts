@@ -23,6 +23,11 @@ test("a file_upload media block resolves its url to (uploaded)", () => {
   }
 });
 
+test("a link_to_page block maps to a page_link (linked page)", () => {
+  const model = pageToModel({}, [{ type: "link_to_page", link_to_page: {} } as RawBlock]);
+  expect(model.blocks[0]).toEqual({ type: "page_link", title: "(linked page)", note: "link" });
+});
+
 test("iconGlyph maps emoji, named icon, and image icon", () => {
   expect(iconGlyph({ type: "emoji", emoji: "🏋" })).toBe("🏋");
   expect(iconGlyph({ type: "icon", icon: { name: "cash" } })).toBe("cash");

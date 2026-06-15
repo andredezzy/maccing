@@ -42,6 +42,12 @@ test("table on no rows still emits the header + separator", () => {
   expect(formatRows([], columns, "table")).toBe("| Name | Value | Cat |\n|---|---|---|");
 });
 
+test("kv/tsv/summary on no rows don't crash (empty kv, header-only tsv, 0-row summary)", () => {
+  expect(formatRows([], columns, "kv")).toBe("");
+  expect(formatRows([], columns, "tsv")).toBe("Name\tValue\tCat");
+  expect(formatRows([], columns, "summary")).toContain("0 rows");
+});
+
 test("summary fallback (no numeric column): per-column value distribution", () => {
   const output = formatRows([{ Cat: "X" }, { Cat: "Y" }, { Cat: "X" }], ["Cat"], "summary");
   expect(output).toContain("3 rows");

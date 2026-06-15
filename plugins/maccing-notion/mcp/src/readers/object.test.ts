@@ -22,3 +22,11 @@ test("no icon → 'none'", () => {
   expect(iconLabel(null)).toBe("none");
   expect(iconLabel(undefined)).toBe("none");
 });
+
+test("a named icon with no name → 'none' (degenerate shape guard)", () => {
+  expect(iconLabel({ type: "icon", icon: {} })).toBe("none");
+});
+
+test("an unrecognized icon type → 'none' (forward-compat default)", () => {
+  expect(iconLabel({ type: "custom_upload" })).toBe("none");
+});
