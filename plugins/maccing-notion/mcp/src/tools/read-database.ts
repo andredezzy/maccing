@@ -3,7 +3,7 @@
 // cursor pagination (or exhaust_all for counts/sums per the skill's pagination law).
 
 import { z } from "zod";
-import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconGlyph, type NotionIcon } from "../readers/object";
@@ -12,8 +12,8 @@ import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
 import {
+  buildIdToName,
   formatViews,
-  type IdToName,
   listViewIds,
   orderViews,
   type RawView,
@@ -43,19 +43,6 @@ async function resolveDataSourceId(databaseId: string): Promise<string> {
     return database.data_sources?.[0]?.id ?? databaseId;
   }
   return databaseId; // the caller may have passed a data_source_id directly
-}
-
-/** Invert the data-source schema into a property-id → name map (covering raw + url-encoded ids). */
-function buildIdToName(schema: PropertiesMap): IdToName {
-  const idToName: IdToName = {};
-  for (const [name, property] of Object.entries(schema)) {
-    if (!property.id) {
-      continue;
-    }
-    idToName[property.id] = name;
-    idToName[decodePropertyId(property.id)] = name; // also key by the decoded form (idempotent if unencoded)
-  }
-  return idToName;
 }
 
 /** List a data source's view ids (paginated), then fetch each view's full configuration. */

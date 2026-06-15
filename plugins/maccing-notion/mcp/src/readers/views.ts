@@ -3,10 +3,24 @@
 // (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
 // opaque property ids resolved to names (formatViews).
 
-import { abbreviateId, idVariants } from "../notion/ids";
+import { abbreviateId, decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
+import type { PropertiesMap } from "./schema";
 
 export type IdToName = Record<string, string>;
+
+/** Invert a data-source schema into a property-id → name map, keyed by BOTH the raw and decoded id forms. */
+export function buildIdToName(schema: PropertiesMap): IdToName {
+  const idToName: IdToName = {};
+  for (const [name, property] of Object.entries(schema)) {
+    if (!property.id) {
+      continue;
+    }
+    idToName[property.id] = name;
+    idToName[decodePropertyId(property.id)] = name; // also key by the decoded form (idempotent if unencoded)
+  }
+  return idToName;
+}
 
 interface ViewIdListResponse {
   results?: { id: string }[];

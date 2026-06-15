@@ -7,17 +7,13 @@
 // Ordering ONLY — visibility is a separate concern (upsert_property for the canonical default). No API.
 
 import { decodePropertyId } from "../notion/ids";
+import type { PageOrderEntry } from "../notion/private-client";
 
 export interface ViewProperty {
   property_id: string;
   visible?: boolean;
   width?: number;
   property_name?: string;
-}
-
-interface PageProperty {
-  property: string;
-  visible?: boolean;
 }
 
 /**
@@ -76,10 +72,10 @@ export function reorderViewProperties(current: ViewProperty[], order: string[]):
 }
 
 /** The canonical-page-order analog: reorder a {property, visible} list, preserving visibility. */
-export function reorderPageProperties(current: PageProperty[], order: string[]): PageProperty[] {
+export function reorderPageProperties(current: PageOrderEntry[], order: string[]): PageOrderEntry[] {
   const asView = current.map((pageProperty) => ({ property_id: pageProperty.property, visible: pageProperty.visible }));
   return reorderViewProperties(asView, order).map((viewProperty) => {
-    const entry: PageProperty = { property: viewProperty.property_id };
+    const entry: PageOrderEntry = { property: viewProperty.property_id };
     if (viewProperty.visible !== undefined) {
       entry.visible = viewProperty.visible;
     }
@@ -89,6 +85,6 @@ export function reorderPageProperties(current: PageProperty[], order: string[]):
 
 /** Seed a page-order list from a data-source schema: every property, default-visible — the starting
  * point when a collection has no saved page order yet (property ids decoded for the write payload). */
-export function seedPageOrderFromSchema(schema: Record<string, { id: string }>): PageProperty[] {
+export function seedPageOrderFromSchema(schema: Record<string, { id: string }>): PageOrderEntry[] {
   return Object.values(schema).map((property) => ({ property: decodePropertyId(property.id), visible: true }));
 }
