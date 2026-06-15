@@ -130,6 +130,7 @@ test("a table spans the full page width", () => {
 
 // ── 360 coverage: every block type + every Phase-1 view, recursion, columns, standalone DB ──
 const SINK: MockupBlock[] = [
+  { type: "heading", text: "H0" },
   { type: "heading_1", text: "H1 toggle", toggle: true, children: [{ type: "paragraph", text: "inside" }] },
   { type: "heading_2", text: "H2" },
   { type: "heading_3", text: "H3" },
@@ -226,6 +227,7 @@ function assertSingleBoxesClose(out: string, width: number): void {
 test("renders EVERY block type + all Phase-1 views with no overflow and every single box closed", () => {
   const out = renderPage({ title: "Kitchen Sink", icon: "🧪", cover: "cover", blocks: SINK });
   assertSingleBoxesClose(out, 70);
+  expect(out).toContain("H0"); // the legacy bare "heading" block type
   // recursion: a nested bullet uses the depth-1 marker, indented
   expect(out).toContain("  ◦ nested");
   expect(out).toContain("    ▪ deep");

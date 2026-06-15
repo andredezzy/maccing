@@ -18,6 +18,23 @@ test("flattenValue handles the common property types", () => {
   expect(flattenValue(undefined)).toBe("");
 });
 
+test("flattenValue handles the remaining property types", () => {
+  expect(flattenValue({ type: "rich_text", rich_text: [{ plain_text: "hi" }] })).toBe("hi");
+  expect(flattenValue({ type: "people", people: [{ name: "Ana" }, { name: "Bo" }] })).toBe("Ana, Bo");
+  expect(flattenValue({ type: "url", url: "https://x" })).toBe("https://x");
+  expect(flattenValue({ type: "email", email: "a@b.com" })).toBe("a@b.com");
+  expect(flattenValue({ type: "phone_number", phone_number: "555" })).toBe("555");
+  expect(flattenValue({ type: "created_time", created_time: "2025-01-01T00:00:00Z" })).toBe("2025-01-01T00:00:00Z");
+  expect(flattenValue({ type: "last_edited_time", last_edited_time: "2025-02-02T00:00:00Z" })).toBe(
+    "2025-02-02T00:00:00Z",
+  );
+  expect(flattenValue({ type: "unique_id", unique_id: { prefix: "TASK", number: 42 } })).toBe("TASK-42");
+  expect(flattenValue({ type: "unique_id", unique_id: { number: 7 } })).toBe("7");
+  expect(flattenValue({ type: "rollup", rollup: { type: "number", number: 5 } })).toBe("5");
+  expect(flattenValue({ type: "rollup", rollup: { type: "array", array: [{}, {}] } })).toBe("2 item(s)");
+  expect(flattenValue({ type: "checkbox", checkbox: false })).toBe("☐");
+});
+
 const rows: RawRow[] = [
   {
     properties: {

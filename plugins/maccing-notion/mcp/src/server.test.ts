@@ -98,3 +98,13 @@ test("withRedact scrubs a secret a handler tries to return", async () => {
   expect(text).toContain("[REDACTED]");
   expect(text).not.toContain(token);
 });
+
+test("withRedact turns a thrown handler error into a graceful redacted error result", async () => {
+  const throwing = withRedact(async () => {
+    throw new Error("boom");
+  });
+  const result = await throwing({});
+
+  expect(result.isError).toBe(true);
+  expect((result.content[0] as { text: string }).text).toContain("boom");
+});
