@@ -4,17 +4,11 @@
 
 import { abbreviateId } from "../notion/ids";
 import { type RichText, richTextToPlain } from "./page";
+import { type NotionParentRef, parentLabel } from "./parent";
 
 interface SearchProperty {
   type?: string;
   title?: RichText[];
-}
-
-interface SearchParentRef {
-  type?: string;
-  page_id?: string;
-  data_source_id?: string;
-  database_id?: string;
 }
 
 export interface RawSearchResult {
@@ -22,7 +16,7 @@ export interface RawSearchResult {
   id?: string;
   title?: RichText[];
   properties?: Record<string, SearchProperty>;
-  parent?: SearchParentRef;
+  parent?: NotionParentRef;
 }
 
 /** A data source carries `.title`; a page's title lives in its title-type property. */
@@ -36,22 +30,6 @@ function titleOf(result: RawSearchResult): string {
     }
   }
   return "(untitled)";
-}
-
-function parentLabel(parent: SearchParentRef | undefined): string {
-  if (!parent) {
-    return "—";
-  }
-  switch (parent.type) {
-    case "page_id":
-      return parent.page_id ? `page ${abbreviateId(parent.page_id)}` : "page";
-    case "data_source_id":
-      return parent.data_source_id ? `data_source ${abbreviateId(parent.data_source_id)}` : "data_source";
-    case "database_id":
-      return parent.database_id ? `database ${abbreviateId(parent.database_id)}` : "database";
-    default:
-      return parent.type ?? "—";
-  }
 }
 
 /** Render search hits as compact, id-bearing lines plus a count trailer. */

@@ -9,21 +9,14 @@ import { readCollectionIcons } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconLabel, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
+import { type NotionParentRef, parentLabel } from "../readers/parent";
 import { formatSchema, type PropertiesMap } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
-
-interface ParentRef {
-  type?: string;
-  page_id?: string;
-  data_source_id?: string;
-  database_id?: string;
-  block_id?: string;
-}
 
 interface DataSourceObject {
   title?: RichText[];
   icon?: NotionIcon | null;
-  parent?: ParentRef;
+  parent?: NotionParentRef;
   properties?: PropertiesMap;
 }
 
@@ -40,26 +33,8 @@ interface PageObject {
   id?: string;
   icon?: NotionIcon | null;
   cover?: NotionIcon | null;
-  parent?: ParentRef;
+  parent?: NotionParentRef;
   properties?: Record<string, PageProperty>;
-}
-
-function parentLabel(parent: ParentRef | undefined): string {
-  if (!parent) {
-    return "—";
-  }
-  switch (parent.type) {
-    case "page_id":
-      return parent.page_id ? `page ${abbreviateId(parent.page_id)}` : "page";
-    case "data_source_id":
-      return parent.data_source_id ? `data_source ${abbreviateId(parent.data_source_id)}` : "data_source";
-    case "database_id":
-      return parent.database_id ? `database ${abbreviateId(parent.database_id)}` : "database";
-    case "block_id":
-      return parent.block_id ? `block ${abbreviateId(parent.block_id)}` : "block";
-    default:
-      return parent.type ?? "—";
-  }
 }
 
 /** Render a data source: metadata header + the column schema, enriched with best-effort column icons. */

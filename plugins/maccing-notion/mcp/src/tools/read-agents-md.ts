@@ -9,21 +9,13 @@ import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
 import { type NotionPageBase, titleOf } from "../readers/page";
+import type { NotionParentRef } from "../readers/parent";
 import { err, ok, type ToolModule } from "../tool";
 
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains
 
-interface ParentRef {
-  type?: string;
-  page_id?: string;
-  block_id?: string;
-  database_id?: string;
-  data_source_id?: string;
-  workspace?: boolean;
-}
-
 interface PageLike extends NotionPageBase {
-  parent?: ParentRef;
+  parent?: NotionParentRef;
 }
 
 interface Ancestor {
