@@ -234,7 +234,7 @@ export const readPage: ToolModule = {
     annotations: { title: "Read a Notion page/row", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       page_id: z.string().describe("The page or database-row id to read."),
-      format: z.enum(FORMATS).describe("markdown | outline | text — required."),
+      format: z.enum(FORMATS).describe("markdown | outline | text | mockup — required."),
       include_properties: z
         .boolean()
         .optional()

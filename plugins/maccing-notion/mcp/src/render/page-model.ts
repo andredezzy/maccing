@@ -98,13 +98,10 @@ function mapBlock(block: RawBlock): MockupBlock {
     case "video":
     case "audio":
     case "file":
-    case "pdf":
-      return {
-        type: block.type,
-        url: sourceUrl(data as NotionFileSource),
-        name: data.name as string,
-        caption: caption((data as NotionFileSource).caption),
-      };
+    case "pdf": {
+      const media = data as NotionFileSource;
+      return { type: block.type, url: sourceUrl(media), name: media.name, caption: caption(media.caption) };
+    }
     case "bookmark":
       return { type: "bookmark", url: (data.url as string) ?? "", caption: caption(data.caption as RichText[]) };
     case "link_preview":

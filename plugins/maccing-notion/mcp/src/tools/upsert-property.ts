@@ -178,7 +178,7 @@ export const upsertProperty: ToolModule = {
       "`icon` is rejected (page values have no icon — set the PAGE icon via request). `visible` (data_source targets) " +
       "sets the property's DEFAULT visibility — the row-detail panel + new-view default (private; per-property, like " +
       "the icon). `remove` deletes the column / clears the value; `remove_icon` clears a column's icon. Mix any " +
-      "targets in one call. (For per-VIEW column order/visibility, use order_properties.) Replaces set_property_icon.",
+      "targets in one call. (For per-VIEW column order/visibility, use order_properties.)",
     annotations: {
       title: "Upsert a Notion property (column or page value)",
       openWorldHint: true,
