@@ -123,30 +123,33 @@ test("orderViews orders by the container view_ids and drops foreign-container vi
   expect(orderViews(raw, null, "MISSING").map((v) => v.id)).toEqual(["cal", "board", "foreign"]);
 });
 
-test("viewQueryFilter merges a view's filter + quick_filters into one /query filter (verbatim)", () => {
+test("viewQueryFilter returns the saved filter VERBATIM (no re-wrapping) or falls back to quick_filters", () => {
   expect(viewQueryFilter({ id: "v" })).toBeUndefined();
   expect(viewQueryFilter({ id: "v", filter: { property: "S", status: { equals: "Done" } } })).toEqual({
     property: "S",
     status: { equals: "Done" },
   });
-  // a quick_filter { propId: condition } becomes { property: propId, ...condition }
+  // a single quick_filter { propId: condition } becomes { property: propId, ...condition }
   expect(viewQueryFilter({ id: "v", quick_filters: { tjUk: { checkbox: { equals: false } } } })).toEqual({
     property: "tjUk",
     checkbox: { equals: false },
   });
-  // both present → AND them together
+  // both present → the saved filter wins VERBATIM (an extra `and` wrapper would exceed Notion's 2-level
+  // nesting limit and 400; the saved filter is already a valid ≤2-level filter)
   expect(
     viewQueryFilter({
       id: "v",
       filter: { property: "S", status: { equals: "Done" } },
       quick_filters: { tjUk: { checkbox: { equals: false } } },
     }),
-  ).toEqual({
-    and: [
-      { property: "S", status: { equals: "Done" } },
-      { property: "tjUk", checkbox: { equals: false } },
-    ],
-  });
+  ).toEqual({ property: "S", status: { equals: "Done" } });
+  // a nested saved filter passes through untouched
+  const nested = { or: [{ and: [{ property: "S", status: { equals: "Complete" } }] }, { property: "S", status: {} }] };
+  expect(viewQueryFilter({ id: "v", filter: nested })).toEqual(nested);
+  // multiple quick_filters (no saved filter) → AND the leaf conditions (1 level, safe)
+  expect(
+    viewQueryFilter({ id: "v", quick_filters: { tjUk: { checkbox: { equals: false } }, aB: { number: { equals: 1 } } } }),
+  ).toEqual({ and: [{ property: "tjUk", checkbox: { equals: false } }, { property: "aB", number: { equals: 1 } }] });
 });
 
 test("selectViewIndex resolves a view by index, exact name, id, or partial name (default 0)", () => {

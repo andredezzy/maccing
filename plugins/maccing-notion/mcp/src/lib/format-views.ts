@@ -40,24 +40,24 @@ export function orderViews(views: RawView[], viewIds: string[] | null, databaseI
 }
 
 /**
- * Merge a view's saved `filter` and `quick_filters` into a single Notion `/query` filter so a mockup
- * samples the rows the VIEW actually shows (not arbitrary rows). A quick_filter `{ propId: condition }`
- * becomes `{ property: propId, ...condition }`; multiple parts are AND-ed. Passed VERBATIM otherwise —
- * the caller falls back to an unfiltered sample if Notion rejects the shape. Returns undefined when the
- * view has no filter at all.
+ * The Notion `/query` filter that reproduces a view's rows, so a mockup samples what the VIEW shows.
+ * A view's saved `filter` is already a valid (≤2-level) filter — pass it VERBATIM. Do NOT wrap it in an
+ * extra `and` to fold in quick_filters: Notion caps filter nesting at 2 levels, so `and → (saved or/and)`
+ * → 400. Quick_filters are therefore a FALLBACK used only when there's no saved filter (they're leaf
+ * conditions — AND-ing several stays at 1 level). The caller falls back to an unfiltered sample if Notion
+ * still rejects the shape. Returns undefined when the view has no filter at all.
  */
 export function viewQueryFilter(view: RawView): unknown | undefined {
-  const parts: unknown[] = [];
   if (view.filter) {
-    parts.push(view.filter);
+    return view.filter;
   }
-  for (const [propertyId, condition] of Object.entries((view.quick_filters ?? {}) as Record<string, object>)) {
-    parts.push({ property: propertyId, ...condition });
-  }
-  if (parts.length === 0) {
+  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, object>).map(
+    ([propertyId, condition]) => ({ property: propertyId, ...condition }),
+  );
+  if (quick.length === 0) {
     return undefined;
   }
-  return parts.length === 1 ? parts[0] : { and: parts };
+  return quick.length === 1 ? quick[0] : { and: quick };
 }
 
 /** Resolve a `view` selector (numeric index | exact name | id | partial name, case-insensitive) to an
