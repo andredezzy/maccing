@@ -8,8 +8,7 @@
 // hand-typed mockups drift, rendered ones never do.
 
 import { z } from "zod";
-import { renderBlocksMockup } from "../render";
-import { mockupSchema } from "../render/schema";
+import { mockupSchema, renderBlocksMockup } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
 export const renderMockup: ToolModule = {
