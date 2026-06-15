@@ -10,10 +10,13 @@ import { formatViews, type IdToName, type RawView } from "../lib/format-views";
 import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { databaseToModel, type RawRow, type ResolvedView } from "../lib/notion-to-database-model";
+import { iconToString } from "../lib/notion-to-page-model";
+import { renderDatabase } from "../lib/render-mockup";
 import { resolveRelations } from "../lib/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
-const FORMATS = ["table", "kv", "tsv", "summary"] as const;
+const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
 
 interface DataSourceSchema {
   properties?: PropertiesMap;
@@ -99,6 +102,65 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
   return views;
 }
 
+/** Resolve a view's config (property ids → names) into a ResolvedView the database-mapper consumes. */
+function resolveView(view: RawView, idToName: IdToName): ResolvedView {
+  const config = (view.configuration ?? {}) as {
+    properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
+    group_by?: { property_id?: string };
+    date_property_id?: string;
+    date_property_name?: string;
+  };
+  const resolve = (id: string | undefined): string | undefined => {
+    if (!id) {
+      return undefined;
+    }
+    try {
+      return idToName[id] ?? idToName[decodeURIComponent(id)];
+    } catch {
+      return idToName[id];
+    }
+  };
+  const columns = (config.properties ?? [])
+    .filter((p) => p.visible !== false)
+    .map((p) => resolve(p.property_id) ?? p.property_name)
+    .filter((name): name is string => Boolean(name));
+  return {
+    name: view.name ?? "View",
+    type: view.type ?? "table",
+    columns,
+    groupBy: resolve(config.group_by?.property_id),
+    dateProp: resolve(config.date_property_id) ?? config.date_property_name,
+  };
+}
+/** Fetch + map a database to the ASCII mockup (title/icon + every view, rows as cards/cells). */
+async function renderDatabaseMockup(databaseId: string, dataSourceId: string, schema: PropertiesMap): Promise<string> {
+  const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
+  const database = dbResponse.ok ? (dbResponse.body as { title?: { plain_text?: string }[]; icon?: unknown }) : {};
+  const title = (database.title ?? []).map((t) => t.plain_text ?? "").join("") || "(database)";
+  const idToName = buildIdToName(schema);
+  const titleColumn =
+    Object.entries(schema).find(([, p]) => p.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
+
+  const views = (await fetchViews(dataSourceId)).map((view) => {
+    const resolved = resolveView(view, idToName);
+    resolved.columns = [titleColumn, ...resolved.columns.filter((c) => c !== titleColumn)];
+    return resolved;
+  });
+
+  const query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: 8 });
+  const rows = (query.ok ? ((query.body as QueryResponse).results ?? []) : []) as RawRow[];
+
+  return renderDatabase(
+    databaseToModel({
+      title,
+      icon: iconToString(database.icon as Parameters<typeof iconToString>[0]),
+      titleColumn,
+      views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
+      rows,
+    }),
+  );
+}
+
 /** Collect every relation target id across the flattened rows. */
 function collectRelationIds(rows: Record<string, ReturnType<typeof flattenProperty>>[]): string[] {
   const ids: string[] = [];
@@ -118,7 +180,7 @@ export const readDatabase: ToolModule = {
     title: "Read a Notion database",
     description:
       "Query a Notion database and render it agent-friendly: relations resolved to titles, rollups/formulas " +
-      "as scalars. format (required): table (GFM pipe table) | kv (key:value per row) | tsv | summary (grouped " +
+      "as scalars. format (required): table | kv | tsv | summary | mockup (render the live DB as the ASCII view mockup). table=GFM, kv, tsv, summary=grouped " +
       "totals, e.g. value-by-category — pass group_by). Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
       "(use for counts/sums per the pagination Iron Law). The output ALSO appends a # Schema section (every " +
@@ -129,7 +191,7 @@ export const readDatabase: ToolModule = {
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
-      format: z.enum(FORMATS).describe("table | kv | tsv | summary — required."),
+      format: z.enum(FORMATS).describe("table | kv | tsv | summary | mockup — required."),
       fields: z.array(z.string()).optional().describe("Project to these property names only (in this order)."),
       filter: z.record(z.string(), z.unknown()).optional().describe("Notion filter object, passed verbatim."),
       sorts: z.array(z.record(z.string(), z.unknown())).optional().describe("Notion sorts array, passed verbatim."),
@@ -148,10 +210,11 @@ export const readDatabase: ToolModule = {
     if (!UUID_PATTERN.test(databaseId)) {
       return err("database_id must be a UUID.");
     }
-    const format = String(args.format) as RowFormat;
-    if (!FORMATS.includes(format)) {
+    const format = String(args.format);
+    if (!FORMATS.includes(format as (typeof FORMATS)[number])) {
       return err(`Invalid format "${String(args.format)}". One of: ${FORMATS.join(", ")}`);
     }
+    const rowFormat = format as RowFormat;
 
     try {
       const dataSourceId = await resolveDataSourceId(databaseId);
@@ -161,6 +224,10 @@ export const readDatabase: ToolModule = {
         return err(`Could not read the data source ${dataSourceId} — check the id and that NOTION_TOKEN has access.`);
       }
       const schema = (schemaResponse.body as DataSourceSchema).properties ?? {};
+
+      if (format === "mockup") {
+        return ok(await renderDatabaseMockup(databaseId, dataSourceId, schema));
+      }
 
       const fields = Array.isArray(args.fields) ? (args.fields as string[]) : null;
       const columns = fields ?? Object.keys(schema);
@@ -222,7 +289,12 @@ export const readDatabase: ToolModule = {
         return row;
       });
 
-      const rendered = formatRows(rows, columns, format, typeof args.group_by === "string" ? args.group_by : undefined);
+      const rendered = formatRows(
+        rows,
+        columns,
+        rowFormat,
+        typeof args.group_by === "string" ? args.group_by : undefined,
+      );
       const paginationSuffix = cursor ? ` | next_cursor: ${cursor}` : exhaustAll ? "" : " | next_cursor: null";
       const rowsSummary = `\n# ${rows.length} rows${paginationSuffix} | fields: [${columns.join(", ")}]`;
 
