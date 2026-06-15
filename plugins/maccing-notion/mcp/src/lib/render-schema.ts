@@ -37,6 +37,37 @@ const listBlock = z.object({
   views,
   items: z.array(z.object({ icon: z.string().optional(), title: z.string(), meta: z.string().optional() })),
 });
+const calendarBlock = z.object({
+  type: z.literal("calendar"),
+  name: z.string(),
+  views,
+  year: z.number(),
+  month: z.number().describe("1-12"),
+  events: z.array(z.object({ day: z.number(), title: z.string() })).optional(),
+});
+const timelineBlock = z.object({
+  type: z.literal("timeline"),
+  name: z.string(),
+  views,
+  axis: z.string().optional(),
+  rows: z.array(z.object({ label: z.string(), start: z.number().describe("0-1"), end: z.number().describe("0-1") })),
+});
+const chartBlock = z.object({
+  type: z.literal("chart"),
+  name: z.string(),
+  views,
+  chartType: z.enum(["bar", "line", "donut", "number"]),
+  data: z.array(z.object({ label: z.string(), value: z.number() })).optional(),
+  value: z.string().optional().describe("for chartType 'number'"),
+  unit: z.string().optional(),
+});
+const formBlock = z.object({
+  type: z.literal("form"),
+  name: z.string(),
+  views,
+  fields: z.array(z.object({ label: z.string(), fieldType: z.string().optional() })),
+});
+const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pins: z.number().optional() });
 
 // biome-ignore lint/suspicious/noExplicitAny: z.lazy recursion needs a loose annotation for children
 export const blockSchema: z.ZodType<any> = z.lazy(() =>
@@ -109,9 +140,32 @@ export const blockSchema: z.ZodType<any> = z.lazy(() =>
     galleryBlock,
     boardBlock,
     listBlock,
+    calendarBlock,
+    timelineBlock,
+    chartBlock,
+    formBlock,
+    mapBlock,
+    z.object({
+      type: z.literal("dashboard"),
+      name: z.string(),
+      views,
+      widgets: z.array(z.object({ title: z.string(), view: blockSchema })),
+    }),
     z.object({ type: z.literal("unsupported"), label: z.string().optional() }),
   ]),
 );
+
+const viewBlock = z.union([
+  tableBlock,
+  galleryBlock,
+  boardBlock,
+  listBlock,
+  calendarBlock,
+  timelineBlock,
+  chartBlock,
+  formBlock,
+  mapBlock,
+]);
 
 export const pageModelSchema = z.object({
   title: z.string(),
@@ -127,7 +181,7 @@ export const databaseModelSchema = z.object({
   icon: z.string().optional(),
   description: z.string().optional(),
   width: z.number().optional(),
-  views: z.array(z.union([tableBlock, galleryBlock, boardBlock, listBlock])),
+  views: z.array(viewBlock),
   view: z
     .union([z.number(), z.literal("all")])
     .optional()

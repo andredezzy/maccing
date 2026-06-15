@@ -253,3 +253,73 @@ test("standalone database renders its views (view:'all')", () => {
   expect(out).toContain("◷ Exercises   ‹ All ›");
   expect(out).toContain("◷ Exercises   ‹ Gallery ›");
 });
+
+test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
+  const out = renderMockup({
+    title: "P2",
+    blocks: [
+      {
+        type: "calendar",
+        name: "Sessions",
+        views: ["Calendar"],
+        year: 2025,
+        month: 6,
+        events: [
+          { day: 9, title: "Push" },
+          { day: 14, title: "Legs" },
+        ],
+      },
+      {
+        type: "timeline",
+        name: "Roadmap",
+        views: ["Timeline"],
+        axis: "Jun — Aug",
+        rows: [
+          { label: "Cut", start: 0, end: 0.4 },
+          { label: "Bulk", start: 0.6, end: 1 },
+        ],
+      },
+      {
+        type: "chart",
+        name: "Volume",
+        views: ["Chart"],
+        chartType: "bar",
+        data: [
+          { label: "Legs", value: 14 },
+          { label: "Chest", value: 6 },
+        ],
+      },
+      { type: "chart", name: "Total", views: ["Number"], chartType: "number", value: "1,302", unit: "sets" },
+      {
+        type: "form",
+        name: "New log",
+        views: ["Form"],
+        fields: [
+          { label: "Exercise", fieldType: "select" },
+          { label: "Done", fieldType: "checkbox" },
+        ],
+      },
+      { type: "map", name: "Gyms", views: ["Map"], pins: 3 },
+      {
+        type: "dashboard",
+        name: "Overview",
+        views: ["Dashboard"],
+        widgets: [
+          {
+            title: "Volume",
+            view: { type: "chart", name: "V", chartType: "bar", data: [{ label: "Legs", value: 14 }] },
+          },
+        ],
+      },
+    ],
+  });
+  assertSingleBoxesClose(out, 70);
+  // every timeline / chart line fits within the page width
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+  expect(out).toContain("June 2025"); // calendar month header
+  expect(out).toContain("█"); // timeline/chart bars drawn
+  expect(out).toContain("[ Submit ]"); // form
+  expect(out).toContain("Su"); // calendar weekday header
+});
