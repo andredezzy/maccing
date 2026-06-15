@@ -10,8 +10,7 @@
 // in ./text + ./box, dispatch in ./engine, and the renderers in ./blocks + ./views (imported here only so
 // their register() calls run).
 
-import "./blocks"; // side-effect: registers the block-leaf renderers
-import { header } from "./box";
+import "./blocks"; // side-effect: registers the block-leaf renderers (incl. the page-container block)
 import { renderBlocks } from "./engine";
 import type { DatabaseModel, MockupBlock, PageModel } from "./model";
 import { renderDatabaseLines } from "./views"; // also registers the database-view renderers
@@ -30,12 +29,18 @@ function finish(lines: string[]): string {
     .trimEnd();
 }
 
-/** Render a full page (header + recursive body). */
+/** Render a full page. Wraps the model into the `page` block (blocks/page.ts owns the chrome) and renders it. */
 export function renderPage(model: PageModel): string {
-  const total = model.width ?? DEFAULT_WIDTH;
-  return finish([
-    ...header(model.icon, model.title, model.cover, model.description, total),
-    ...renderBlocks(model.blocks, total, 0),
+  return renderBlocksMockup([
+    {
+      type: "page",
+      title: model.title,
+      icon: model.icon,
+      cover: model.cover,
+      description: model.description,
+      width: model.width,
+      children: model.blocks,
+    },
   ]);
 }
 

@@ -3,3 +3,4 @@
 import "./text";
 import "./media";
 import "./layout";
+import "./page";

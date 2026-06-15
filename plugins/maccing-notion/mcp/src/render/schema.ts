@@ -1,6 +1,6 @@
-// Zod schemas for the render tools — the recursive Block union (children via z.lazy), the PageModel,
-// and the standalone DatabaseModel. Shared by render_page / render_database / render_blocks so the
-// wire schema (and its self-documentation) stays in one place.
+// Zod schemas for render_mockup — one recursive Block union (children via z.lazy) where EVERY renderable
+// is a block: a `page` and a standalone `database` are block types too, alongside the views and content
+// blocks. `mockupSchema` (a block, or an array of blocks) is the tool's whole input.
 
 import { z } from "zod";
 
@@ -135,6 +135,15 @@ export const blockSchema: z.ZodType<any> = z.lazy(() =>
       note: z.string().optional(),
     }),
     z.object({ type: z.literal("database"), database: z.lazy(() => databaseModelSchema) }),
+    z.object({
+      type: z.literal("page"),
+      title: z.string(),
+      icon: z.string().optional().describe("emoji or gray named-icon name"),
+      cover: z.string().optional().describe("short cover label; rendered as a ▒ band"),
+      description: z.string().optional(),
+      width: z.number().optional().describe("page columns (default 70)"),
+      children: z.array(blockSchema).optional(),
+    }),
     tableBlock,
     galleryBlock,
     boardBlock,
@@ -166,16 +175,8 @@ const viewBlock = z.union([
   mapBlock,
 ]);
 
-export const pageModelSchema = z.object({
-  title: z.string(),
-  icon: z.string().optional().describe("emoji or gray named-icon name"),
-  cover: z.string().optional().describe("short cover label; rendered as a ▒ band"),
-  description: z.string().optional(),
-  width: z.number().optional().describe("page columns (default 70)"),
-  blocks: z.array(blockSchema),
-});
-
-export const databaseModelSchema = z.object({
+// The standalone-database wire shape, referenced (above) by the inline `database` block via z.lazy.
+const databaseModelSchema = z.object({
   title: z.string(),
   icon: z.string().optional(),
   description: z.string().optional(),
@@ -187,14 +188,7 @@ export const databaseModelSchema = z.object({
     .describe("view index, or 'all' to stack every view. Default 0."),
 });
 
-// The render_mockup input: a page, a standalone database, or a bare block subtree — tagged by `kind`
-// so one tool renders every mockup shape. `kind` crosses the wire, so its values stay lowercase.
-export const mockupSchema = z.discriminatedUnion("kind", [
-  pageModelSchema.extend({ kind: z.literal("page") }),
-  databaseModelSchema.extend({ kind: z.literal("database") }),
-  z.object({
-    kind: z.literal("blocks"),
-    blocks: z.array(blockSchema),
-    width: z.number().optional().describe("columns (default 70)"),
-  }),
-]);
+// The render_mockup input — completely flexible: a single block, or an array of blocks. Every renderable
+// IS a block (a `page` and a `database` are blocks too, with their own chrome), so one recursive type
+// covers a whole page, a standalone database, a single view, bare content, or any nesting of them.
+export const mockupSchema = z.union([blockSchema, z.array(blockSchema)]);

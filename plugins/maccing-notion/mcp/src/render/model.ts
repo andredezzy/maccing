@@ -45,6 +45,15 @@ export type MockupBlock =
   | { type: "synced_block"; from?: string; children?: MockupBlock[] }
   | { type: "page_link"; icon?: string; title: string; note?: string }
   | { type: "database"; database: DatabaseModel }
+  | {
+      type: "page";
+      title: string;
+      icon?: string;
+      cover?: string;
+      description?: string;
+      width?: number;
+      children?: MockupBlock[];
+    }
   | TableBlock
   | GalleryBlock
   | BoardBlock

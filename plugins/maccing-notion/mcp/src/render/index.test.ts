@@ -3,7 +3,14 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { displayWidth, type MockupBlock, type PageModel, renderBlocksMockup, renderDatabase, renderPage } from "./index";
+import {
+  displayWidth,
+  type MockupBlock,
+  type PageModel,
+  renderBlocksMockup,
+  renderDatabase,
+  renderPage,
+} from "./index";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -262,6 +269,48 @@ test("renderBlocksMockup falls back to the default width (70) on a non-positive 
   const out = renderBlocksMockup([{ type: "table", name: "T", columns: ["Name", "Status"], rows: [["X", "Y"]] }], 0);
   const top = out.split("\n").find((line) => line.startsWith("┌"));
   expect(displayWidth(top ?? "")).toBe(70);
+});
+
+test("a `page` block renders full page chrome (cover · icon · title · description) — page IS a block", () => {
+  const out = renderBlocksMockup([
+    {
+      type: "page",
+      title: "Demo",
+      icon: "📄",
+      cover: "Sunrise cover",
+      description: "the desc",
+      children: [{ type: "paragraph", text: "hi" }],
+    },
+  ]);
+  expect(out).toContain("▒"); // cover band
+  expect(out).toContain("📄 Demo"); // icon + title
+  expect(out).toContain("the desc"); // description
+  expect(out).toContain("hi"); // recursive body
+});
+
+test("blocks compose to any depth — a page block nesting an inline database block", () => {
+  const out = renderBlocksMockup([
+    {
+      type: "page",
+      title: "Workspace",
+      icon: "🗂",
+      children: [
+        { type: "heading_2", text: "Tasks" },
+        {
+          type: "database",
+          database: {
+            title: "Tasks",
+            icon: "✅",
+            views: [{ type: "table", name: "All", columns: ["Name", "Status"], rows: [["Ship", "Done"]] }],
+          },
+        },
+      ],
+    },
+  ]);
+  assertSingleBoxesClose(out, 70);
+  expect(out).toContain("🗂 Workspace"); // page chrome
+  expect(out).toContain("# Tasks"); // heading in the page body
+  expect(out).toContain("✅ Tasks"); // the nested database's own chrome
 });
 
 test("standalone database renders its views (view:'all')", () => {
