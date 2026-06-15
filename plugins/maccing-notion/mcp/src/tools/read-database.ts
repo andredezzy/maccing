@@ -133,6 +133,18 @@ function resolveView(view: RawView, idToName: IdToName): ResolvedView {
     dateProp: resolve(config.date_property_id) ?? config.date_property_name,
   };
 }
+/** A board's columns are its group-by property's options — return them in schema order so the mockup
+ * draws every status/select column (even empty ones), matching how Notion lays out the board. */
+function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): string[] | undefined {
+  if (!groupBy) {
+    return undefined;
+  }
+  const property = schema[groupBy];
+  const options = (property?.status?.options ?? property?.select?.options) as { name?: string }[] | undefined;
+  const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
+  return names.length ? names : undefined;
+}
+
 /** Fetch + map a database to the ASCII mockup (title/icon + every view, rows as cards/cells). */
 async function renderDatabaseMockup(databaseId: string, dataSourceId: string, schema: PropertiesMap): Promise<string> {
   const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
@@ -150,6 +162,9 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
   const views = orderViews(rawViews, await readViewOrder(databaseId), databaseId).map((view) => {
     const resolved = resolveView(view, idToName);
     resolved.columns = [titleColumn, ...resolved.columns.filter((c) => c !== titleColumn)];
+    if (resolved.type === "board") {
+      resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema);
+    }
     return resolved;
   });
 

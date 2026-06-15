@@ -22,6 +22,7 @@ export interface GalleryCard {
 export interface BoardGroup {
   name: string;
   cards: GalleryCard[];
+  total?: number; // true card count when `cards` is capped (a "+N more" tail card stands in for the rest)
 }
 export interface ListItem {
   icon?: string;
@@ -476,7 +477,7 @@ function renderBoard(block: BoardBlock, total: number): string[] {
     Math.floor((total - (block.groups.length - 1) * GAP) / block.groups.length) - 2,
   );
   const columns = block.groups.map((group) => {
-    const header = box([`${group.name}  (${group.cards.length})`], colInner);
+    const header = box([`${group.name}  (${group.total ?? group.cards.length})`], colInner);
     const cards = group.cards.flatMap((card) =>
       box([card.icon ? `${card.icon} ${card.name}` : card.name, ...(card.lines ?? [])], colInner),
     );

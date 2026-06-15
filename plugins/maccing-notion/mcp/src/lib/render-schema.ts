@@ -29,7 +29,7 @@ const boardBlock = z.object({
   type: z.literal("board"),
   name: z.string(),
   views,
-  groups: z.array(z.object({ name: z.string(), cards: z.array(card) })),
+  groups: z.array(z.object({ name: z.string(), cards: z.array(card), total: z.number().optional() })),
 });
 const listBlock = z.object({
   type: z.literal("list"),

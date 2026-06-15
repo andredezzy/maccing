@@ -91,3 +91,42 @@ test("board groups by the group-by column; calendar derives its month from row d
   );
   expect(cal).toContain("June 2025");
 });
+
+test("board seeds every group-by option as a column (even empty), in order, and caps a dominant column", () => {
+  const manyDone: RawRow[] = Array.from({ length: 9 }, (_, i) => ({
+    properties: {
+      Name: { type: "title", title: [{ plain_text: `Task ${i}` }] },
+      Status: { type: "status", status: { name: "Done" } },
+    },
+  }));
+  const model = databaseToModel({
+    title: "Tasks",
+    titleColumn: "Name",
+    rows: manyDone,
+    views: [
+      {
+        name: "Board",
+        type: "board",
+        columns: ["Name", "Status"],
+        groupBy: "Status",
+        groupOptions: ["Not started", "Next to-do", "In progress", "Done"],
+      },
+    ],
+  });
+  const board = model.views[0];
+  expect(board.type).toBe("board");
+  if (board.type === "board") {
+    // every status column appears, in option order — not just the ones present in the sample
+    expect(board.groups.map((g) => g.name)).toEqual(["Not started", "Next to-do", "In progress", "Done"]);
+    const done = board.groups.find((g) => g.name === "Done");
+    expect(done?.total).toBe(9); // header keeps the TRUE count
+    expect(done?.cards.length).toBeLessThanOrEqual(7); // capped: 6 cards + a "+N more"
+    expect(done?.cards.some((c) => c.name.includes("more"))).toBe(true);
+  }
+  const out = renderDatabase(model);
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+  expect(out).toContain("Not started"); // empty columns still drawn
+  expect(out).toContain("Done  (9)"); // true count in the header
+});

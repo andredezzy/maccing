@@ -22,8 +22,12 @@ export interface ResolvedView {
   type: string;
   columns: string[]; // visible column NAMES (title first)
   groupBy?: string; // board group-by column name
+  groupOptions?: string[]; // board: every group-by option name, in order (seeds empty columns too)
   dateProp?: string; // calendar/timeline date column name
 }
+
+/** A dominant board column would tower over its siblings — cap the visible cards, keep the true count. */
+const BOARD_CARD_CAP = 6;
 export interface DbInput {
   title: string;
   icon?: string;
@@ -124,6 +128,11 @@ function viewToBlock(
     case "board": {
       const groupBy = view.groupBy ?? otherCols[0] ?? titleColumn;
       const groups = new Map<string, GalleryCard[]>();
+      // Seed EVERY group-by option first so empty columns still render, in the schema's option order —
+      // Notion shows all columns; a board mockup that only draws the sampled groups is misleading.
+      for (const option of view.groupOptions ?? []) {
+        groups.set(option, []);
+      }
       for (const r of rows) {
         const key = flattenValue(r.properties?.[groupBy]) || "(empty)";
         if (!groups.has(key)) {
@@ -135,7 +144,17 @@ function viewToBlock(
         type: "board",
         name: dbTitle,
         views: tabs,
-        groups: [...groups].map(([name, cards]) => ({ name, cards })),
+        groups: [...groups].map(([name, cards]) => {
+          if (cards.length <= BOARD_CARD_CAP) {
+            return { name, cards };
+          }
+          // Keep the true count in the header; show a capped set plus a "+N more" tail card.
+          return {
+            name,
+            total: cards.length,
+            cards: [...cards.slice(0, BOARD_CARD_CAP), { name: `+${cards.length - BOARD_CARD_CAP} more` }],
+          };
+        }),
       };
     }
     case "list":
