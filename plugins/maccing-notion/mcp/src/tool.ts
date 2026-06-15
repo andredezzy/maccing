@@ -7,7 +7,7 @@
 //
 // IMPORT CONVENTION — KEEP THIS GOING FORWARD: import specifiers carry NO `.js`/`.ts` extension,
 // anywhere in this server. Our own modules are imported extensionless (`./redact`,
-// `../lib/notion-public`). The official SDK only publishes `.js` subpaths, so we reach them through
+// `../notion/public-client`). The official SDK only publishes `.js` subpaths, so we reach them through
 // the `#sdk/*` alias defined in package.json `imports` (e.g. `#sdk/server/mcp`, `#sdk/types`) — never
 // import a raw `@modelcontextprotocol/sdk/….js` path and never append an extension to any import.
 // New files and new SDK imports must follow this; it keeps every import statement extension-free.

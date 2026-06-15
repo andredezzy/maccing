@@ -104,7 +104,7 @@ async function fetchBody(pageId: string): Promise<FetchedBody> {
 
 /**
  * Compact page-icon label for YAML frontmatter: the emoji, or a named icon's NAME only (no `·color`
- * suffix), or null to omit the line. Deliberately distinct from format-object's `iconLabel`: this
+ * suffix), or null to omit the line. Deliberately distinct from readers/object's `iconLabel`: this
  * suppresses external/file URL icons (a frontmatter URL is noise) and drops the color, keeping the
  * header terse. `describe` uses the verbose `iconLabel` instead.
  */
