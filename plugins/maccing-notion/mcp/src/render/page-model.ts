@@ -1,4 +1,4 @@
-// Live auto-mapper: a raw Notion page object + its fetched block tree → a PageModel that render_page
+// Live auto-mapper: a raw Notion page object + its fetched block tree → a PageModel that render_mockup
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 

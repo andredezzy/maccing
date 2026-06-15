@@ -1,5 +1,5 @@
 // Live auto-mapper: a Notion database's (already id-resolved) views + sample rows → a DatabaseModel
-// that render_database can draw. PURE (no API calls) so it is unit-testable; the read_database tool
+// that render_mockup can draw. PURE (no API calls) so it is unit-testable; the read_database tool
 // does the fetching; resolving a raw view + its rows into a renderable model is all pure and lives here.
 // Unknown view types fall back to a table.
 
