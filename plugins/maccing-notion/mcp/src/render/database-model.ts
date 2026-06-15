@@ -7,7 +7,7 @@ import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
 
-interface RichTextRun {
+interface RichText {
   plain_text?: string;
 }
 /** A raw Notion property value (one entry of a page's `properties`). */
@@ -39,7 +39,7 @@ export interface DbInput {
 }
 
 function runs(value: unknown): string {
-  return ((value as RichTextRun[]) ?? []).map((r) => r.plain_text ?? "").join("");
+  return ((value as RichText[]) ?? []).map((r) => r.plain_text ?? "").join("");
 }
 /** Flatten a Notion property value to a compact display string. */
 export function flattenValue(prop: RawProp | undefined): string {
@@ -85,8 +85,10 @@ export function flattenValue(prop: RawProp | undefined): string {
       const v = formula?.type ? formula[formula.type] : undefined;
       return v == null ? "" : typeof v === "boolean" ? (v ? "☑" : "☐") : String(v);
     }
-    case "relation":
-      return ((prop.relation as unknown[]) ?? []).length ? `${(prop.relation as unknown[]).length} linked` : "";
+    case "relation": {
+      const relations = (prop.relation as { id?: string }[]) ?? [];
+      return relations.length ? `${relations.length} linked` : "";
+    }
     case "rollup": {
       const rollup = prop.rollup as RawProp;
       const v = rollup?.type ? rollup[rollup.type] : undefined;
@@ -100,7 +102,17 @@ export function flattenValue(prop: RawProp | undefined): string {
 function rowTitle(row: RawRow, titleColumn: string): string {
   return flattenValue(row.properties?.[titleColumn]) || "(untitled)";
 }
-function dayOf(dateStr: string): { year: number; month: number; day: number } | null {
+interface DayComponents {
+  year: number;
+  month: number;
+  day: number;
+}
+/** A row that carries a parseable calendar date — the kept subset after dropping undated rows. */
+interface DatedRow {
+  d: DayComponents;
+  title: string;
+}
+function dayOf(dateStr: string): DayComponents | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
   return m ? { year: +m[1], month: +m[2], day: +m[3] } : null;
 }
@@ -176,7 +188,7 @@ function viewToBlock(
       const dateCol = view.dateProp ?? cols.find((c) => flattenValue(rows[0]?.properties?.[c]).match(/^\d{4}-\d{2}/));
       const dated = rows
         .map((r) => ({ d: dayOf(flattenValue(r.properties?.[dateCol ?? ""])), title: rowTitle(r, titleColumn) }))
-        .filter((x): x is { d: { year: number; month: number; day: number }; title: string } => x.d !== null);
+        .filter((x): x is DatedRow => x.d !== null);
       if (dated.length === 0) {
         break; // no usable dates → fall through to table
       }
@@ -227,8 +239,13 @@ export function databaseToModel(input: DbInput): DatabaseModel {
   };
 }
 
+interface ViewConfigProperty {
+  property_id?: string;
+  property_name?: string;
+  visible?: boolean;
+}
 interface ViewConfigShape {
-  properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
+  properties?: ViewConfigProperty[];
   group_by?: { property_id?: string };
   date_property_id?: string;
   date_property_name?: string;

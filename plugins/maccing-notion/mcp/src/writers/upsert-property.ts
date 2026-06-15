@@ -46,7 +46,7 @@ export interface UpsertPlan {
   errors: string[];
 }
 
-export interface SaveOpPointer {
+interface SaveOpPointer {
   table: string;
   id: string;
   spaceId?: string;

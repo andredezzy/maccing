@@ -5,7 +5,7 @@
 import { iconGlyph, type NotionIcon } from "../readers/object";
 import type { MockupBlock, PageModel } from "./model";
 
-interface RichTextRun {
+interface RichText {
   plain_text?: string;
 }
 interface NotionFileSource {
@@ -13,7 +13,7 @@ interface NotionFileSource {
   external?: { url?: string };
   file?: { url?: string };
   name?: string;
-  caption?: RichTextRun[];
+  caption?: RichText[];
 }
 /** A raw Notion block with its children attached by the fetcher. */
 export interface RawBlock {
@@ -23,16 +23,20 @@ export interface RawBlock {
   children?: RawBlock[];
   [key: string]: unknown;
 }
+interface RawPageProperty {
+  type?: string;
+  title?: RichText[];
+}
 export interface RawPage {
   icon?: NotionIcon | null;
   cover?: { type?: string } | null;
-  properties?: Record<string, { type?: string; title?: RichTextRun[] }>;
+  properties?: Record<string, RawPageProperty>;
 }
 
-function plain(runs: RichTextRun[] | undefined): string {
+function plain(runs: RichText[] | undefined): string {
   return (runs ?? []).map((r) => r.plain_text ?? "").join("");
 }
-function caption(runs: RichTextRun[] | undefined): string | undefined {
+function caption(runs: RichText[] | undefined): string | undefined {
   const text = plain(runs);
   return text || undefined;
 }
@@ -58,7 +62,7 @@ const TEXT_TYPES = new Set([
 
 function mapBlock(block: RawBlock): MockupBlock {
   const data = (block[block.type] ?? {}) as Record<string, unknown>;
-  const text = TEXT_TYPES.has(block.type) ? plain(data.rich_text as RichTextRun[]) : "";
+  const text = TEXT_TYPES.has(block.type) ? plain(data.rich_text as RichText[]) : "";
   const kids = block.children?.length ? mapBlocks(block.children) : undefined;
 
   switch (block.type) {
@@ -91,8 +95,8 @@ function mapBlock(block: RawBlock): MockupBlock {
       return {
         type: "code",
         language: data.language as string,
-        text: plain(data.rich_text as RichTextRun[]),
-        caption: caption(data.caption as RichTextRun[]),
+        text: plain(data.rich_text as RichText[]),
+        caption: caption(data.caption as RichText[]),
       };
     case "equation":
       return { type: "equation", expression: (data.expression as string) ?? "" };
@@ -108,7 +112,7 @@ function mapBlock(block: RawBlock): MockupBlock {
         caption: caption((data as NotionFileSource).caption),
       };
     case "bookmark":
-      return { type: "bookmark", url: (data.url as string) ?? "", caption: caption(data.caption as RichTextRun[]) };
+      return { type: "bookmark", url: (data.url as string) ?? "", caption: caption(data.caption as RichText[]) };
     case "link_preview":
       return { type: "link_preview", url: (data.url as string) ?? "" };
     case "embed":
@@ -123,7 +127,7 @@ function mapBlock(block: RawBlock): MockupBlock {
         type: "simple_table",
         hasColumnHeader: Boolean(data.has_column_header),
         rows: (block.children ?? []).map((row) =>
-          ((row.table_row as { cells?: RichTextRun[][] })?.cells ?? []).map((cell) => plain(cell)),
+          ((row.table_row as { cells?: RichText[][] })?.cells ?? []).map((cell) => plain(cell)),
         ),
       };
     case "breadcrumb":

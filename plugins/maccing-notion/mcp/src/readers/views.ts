@@ -50,22 +50,27 @@ export function viewQueryFilter(view: RawView): unknown | undefined {
   if (view.filter) {
     return view.filter;
   }
-  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, object>).map(([propertyId, condition]) => ({
-    property: propertyId,
-    ...condition,
-  }));
+  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, unknown>).map(
+    ([propertyId, condition]) => ({
+      property: propertyId,
+      ...(condition as Record<string, unknown>),
+    }),
+  );
   if (quick.length === 0) {
     return undefined;
   }
   return quick.length === 1 ? quick[0] : { and: quick };
 }
 
+/** The fields selectViewIndex matches a `view` selector against. */
+interface ViewSelector {
+  name?: string;
+  id?: string;
+}
+
 /** Resolve a `view` selector (numeric index | exact name | id | partial name, case-insensitive) to an
  * index into the ordered views. Anything unmatched (or undefined) falls back to 0 (the default view). */
-export function selectViewIndex(
-  views: { name?: string; id?: string }[],
-  selector: string | number | undefined,
-): number {
+export function selectViewIndex(views: ViewSelector[], selector: string | number | undefined): number {
   if (selector === undefined || views.length === 0) {
     return 0;
   }

@@ -13,7 +13,7 @@ export interface ViewProperty {
   property_name?: string;
 }
 
-export interface PageProperty {
+interface PageProperty {
   property: string;
   visible?: boolean;
 }

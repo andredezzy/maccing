@@ -20,7 +20,7 @@ export interface RawSearchResult {
 }
 
 /** A data source carries `.title`; a page's title lives in its title-type property. */
-function titleOf(result: RawSearchResult): string {
+function searchResultTitle(result: RawSearchResult): string {
   if (result.title?.length) {
     return richTextToPlain(result.title);
   }
@@ -43,7 +43,7 @@ export function formatSearch(results: RawSearchResult[]): string {
   const lines = results.map((result) => {
     const object = (result.object ?? "?").padEnd(pad);
     const id = result.id ? abbreviateId(result.id) : "?";
-    return `${object} · "${titleOf(result)}" · id ${id} · parent ${parentLabel(result.parent)}`;
+    return `${object} · "${searchResultTitle(result)}" · id ${id} · parent ${parentLabel(result.parent)}`;
   });
 
   return `${lines.join("\n")}\n# ${results.length} hits`;
