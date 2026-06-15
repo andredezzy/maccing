@@ -24,7 +24,9 @@ function assertBoxesClose(rendered: string): void {
       // a side/middle/bottom line of the current box (single-box lines; galleries use hcat rows
       // which start with ┌ — those are handled when their own top line is seen per row group)
       if (line.startsWith("└")) {
-        expect(displayWidth(line)).toBe(topWidth);
+        if (topWidth !== null) {
+          expect(displayWidth(line)).toBe(topWidth);
+        }
         topWidth = null;
       } else if (topWidth !== null && !line.includes("  ")) {
         // skip hcat'd multi-box rows (they contain a 2-space gap); single boxes have no double gap

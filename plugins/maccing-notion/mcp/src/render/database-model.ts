@@ -3,7 +3,7 @@
 // does the fetching + property-id→name resolution and hands resolved views here. Unknown view types
 // fall back to a table.
 
-import type { DatabaseModel, GalleryCard, ViewBlock } from "./index";
+import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
 
 interface RichTextRun {
   plain_text?: string;
@@ -80,14 +80,14 @@ export function flattenValue(prop: RawProp | undefined): string {
     }
     case "formula": {
       const formula = prop.formula as RawProp;
-      const v = formula?.[formula?.type as string];
+      const v = formula?.type ? formula[formula.type] : undefined;
       return v == null ? "" : typeof v === "boolean" ? (v ? "☑" : "☐") : String(v);
     }
     case "relation":
       return ((prop.relation as unknown[]) ?? []).length ? `${(prop.relation as unknown[]).length} linked` : "";
     case "rollup": {
       const rollup = prop.rollup as RawProp;
-      const v = rollup?.[rollup?.type as string];
+      const v = rollup?.type ? rollup[rollup.type] : undefined;
       return v == null ? "" : Array.isArray(v) ? `${v.length} item(s)` : String(v);
     }
     default:

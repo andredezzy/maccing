@@ -109,14 +109,21 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
   return views;
 }
 
+interface ViewConfigShape {
+  properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
+  group_by?: { property_id?: string };
+  date_property_id?: string;
+  date_property_name?: string;
+}
+
+interface DatabaseTitleBody {
+  title?: { plain_text?: string }[];
+  icon?: unknown;
+}
+
 /** Resolve a view's config (property ids → names) into a ResolvedView the database-mapper consumes. */
 function resolveView(view: RawView, idToName: IdToName): ResolvedView {
-  const config = (view.configuration ?? {}) as {
-    properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
-    group_by?: { property_id?: string };
-    date_property_id?: string;
-    date_property_name?: string;
-  };
+  const config = (view.configuration ?? {}) as ViewConfigShape;
   const resolve = (id: string | undefined): string | undefined => {
     if (!id) {
       return undefined;
@@ -159,7 +166,7 @@ async function renderDatabaseMockup(
   viewSelector: string | number | undefined,
 ): Promise<string> {
   const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
-  const database = dbResponse.ok ? (dbResponse.body as { title?: { plain_text?: string }[]; icon?: unknown }) : {};
+  const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
   const title = (database.title ?? []).map((t) => t.plain_text ?? "").join("") || "(database)";
   const idToName = buildIdToName(schema);
   const titleColumn =

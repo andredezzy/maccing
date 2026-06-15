@@ -2,7 +2,7 @@
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
-import type { MockupBlock, PageModel } from "./index";
+import type { MockupBlock, PageModel } from "./model";
 
 interface RichTextRun {
   plain_text?: string;
