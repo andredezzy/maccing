@@ -6,8 +6,7 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-import { abbreviateId } from "../notion/abbreviate-id";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionIcon } from "../readers/format-object";
 import type { NotionChildBlock, NotionChildrenResponse } from "../readers/notion-blocks";

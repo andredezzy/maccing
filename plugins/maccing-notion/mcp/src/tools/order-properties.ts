@@ -6,8 +6,7 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-import { abbreviateId } from "../notion/abbreviate-id";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
   type PageOrderEntry,
   privateConfig,

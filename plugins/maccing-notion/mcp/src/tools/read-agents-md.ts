@@ -4,8 +4,7 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
-import { abbreviateId } from "../notion/abbreviate-id";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildrenResponse } from "../readers/notion-blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/notion-markdown";

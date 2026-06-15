@@ -2,8 +2,7 @@
 // agent-ready text with EVERY config field shown (cover, card size, layout, group_by, chart axes,
 // visible properties, sorts, filters) and opaque property ids resolved to names. No API calls.
 
-import { abbreviateId } from "../notion/abbreviate-id";
-import { idVariants } from "../notion/id-variants";
+import { abbreviateId, idVariants } from "../notion/ids";
 
 export type IdToName = Record<string, string>;
 

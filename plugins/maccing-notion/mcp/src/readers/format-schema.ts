@@ -3,7 +3,7 @@
 // relations/rollups summarized. Optional per-column icons are INJECTED, not fetched here, so this
 // stays pure and unit-testable with zero network — exactly like format-views.
 
-import { idVariants } from "../notion/id-variants";
+import { idVariants } from "../notion/ids";
 
 interface SchemaRollupConfig {
   function?: string;

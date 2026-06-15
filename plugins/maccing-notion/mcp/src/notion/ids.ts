@@ -1,6 +1,18 @@
-// Shared helper for id-variant expansion — Notion stores property ids in either raw,
-// url-decoded, or url-encoded form depending on the endpoint. Comparing variants prevents
-// silent misses when the caller holds one form and the map uses another.
+// Notion id helpers — normalizing UUIDs for the REST API, abbreviating ids for display, and expanding
+// the raw/decoded/encoded forms a property id can take across endpoints.
+
+/** Trim whitespace and lowercase a UUID so it is accepted by the Notion REST API (it rejects uppercase). */
+export function normalizeUuid(id: string): string {
+  return id.trim().toLowerCase();
+}
+
+/** Matches a normalized Notion UUID — 32–36 hex chars with optional hyphens. */
+export const UUID_PATTERN = /^[0-9a-f-]{32,36}$/i;
+
+/** Abbreviate a Notion id for display: first 8 + last 4 chars via an ellipsis (id ≤ 12 chars: as-is). */
+export function abbreviateId(id: string): string {
+  return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+}
 
 /**
  * Try to url-decode a value; return undefined if the value is malformed percent-encoding.
@@ -16,7 +28,7 @@ function tryDecodeURIComponent(value: string): string | undefined {
 }
 
 /**
- * Return the set of forms a Notion property id may appear in across API endpoints.
+ * Return the set of forms a Notion property id may appear in across API endpoints (raw/decoded/encoded).
  *
  * `includeRaw`:
  *   true  — start with the raw id (format-schema.ts caller: `iconFor` has no direct-lookup guard).

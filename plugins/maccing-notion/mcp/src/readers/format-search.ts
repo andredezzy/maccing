@@ -2,7 +2,7 @@
 // compact line each (object · "title" · short id · parent), so name→id lookups cost a few lines
 // instead of tens of KB. No API calls.
 
-import { abbreviateId } from "../notion/abbreviate-id";
+import { abbreviateId } from "../notion/ids";
 import { type RichText, richTextToPlain } from "./notion-page";
 
 interface SearchProperty {

@@ -4,7 +4,7 @@
 // property object (zero drift). Column icons go through the private app API; everything else public.
 
 import { z } from "zod";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
   activeUserId,
   type IconRead,

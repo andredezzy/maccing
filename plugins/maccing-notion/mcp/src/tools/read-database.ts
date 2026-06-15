@@ -3,7 +3,7 @@
 // cursor pagination (or exhaust_all for counts/sums per the skill's pagination law).
 
 import { z } from "zod";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/format-rows";
