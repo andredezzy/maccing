@@ -3,7 +3,7 @@
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
 import { iconGlyph, type NotionIcon } from "../readers/object";
-import type { RichText } from "../readers/page";
+import { type RichText, richTextToPlain } from "../readers/page";
 import type { MockupBlock, PageModel } from "./model";
 
 interface NotionFileSource {
@@ -31,12 +31,8 @@ export interface RawPage {
   properties?: Record<string, RawPageProperty>;
 }
 
-function plain(runs: RichText[] | undefined): string {
-  return (runs ?? []).map((r) => r.plain_text ?? "").join("");
-}
 function caption(runs: RichText[] | undefined): string | undefined {
-  const text = plain(runs);
-  return text || undefined;
+  return richTextToPlain(runs) || undefined;
 }
 function sourceUrl(media: NotionFileSource | undefined): string | undefined {
   if (!media) {
@@ -60,7 +56,7 @@ const TEXT_TYPES = new Set([
 
 function mapBlock(block: RawBlock): MockupBlock {
   const data = (block[block.type] ?? {}) as Record<string, unknown>;
-  const text = TEXT_TYPES.has(block.type) ? plain(data.rich_text as RichText[]) : "";
+  const text = TEXT_TYPES.has(block.type) ? richTextToPlain(data.rich_text as RichText[]) : "";
   const kids = block.children?.length ? mapBlocks(block.children) : undefined;
 
   switch (block.type) {
@@ -93,7 +89,7 @@ function mapBlock(block: RawBlock): MockupBlock {
       return {
         type: "code",
         language: data.language as string,
-        text: plain(data.rich_text as RichText[]),
+        text: richTextToPlain(data.rich_text as RichText[]),
         caption: caption(data.caption as RichText[]),
       };
     case "equation":
@@ -125,7 +121,7 @@ function mapBlock(block: RawBlock): MockupBlock {
         type: "simple_table",
         hasColumnHeader: Boolean(data.has_column_header),
         rows: (block.children ?? []).map((row) =>
-          ((row.table_row as { cells?: RichText[][] })?.cells ?? []).map((cell) => plain(cell)),
+          ((row.table_row as { cells?: RichText[][] })?.cells ?? []).map((cell) => richTextToPlain(cell)),
         ),
       };
     case "breadcrumb":
@@ -151,7 +147,7 @@ function mapBlocks(blocks: RawBlock[]): MockupBlock[] {
 
 function pageTitle(page: RawPage): string {
   const titleProp = Object.values(page.properties ?? {}).find((p) => p.type === "title");
-  return plain(titleProp?.title) || "(untitled)";
+  return richTextToPlain(titleProp?.title) || "(untitled)";
 }
 
 /** Map a raw Notion page + its fetched block tree to a PageModel. Pure. */

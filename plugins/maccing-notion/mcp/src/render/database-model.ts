@@ -4,7 +4,7 @@
 // Unknown view types fall back to a table.
 
 import { decodePropertyId } from "../notion/ids";
-import type { NotionDateRange, RichText } from "../readers/page";
+import { type NotionDateRange, richTextToPlain } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
@@ -41,9 +41,6 @@ interface DbInput {
   rows: RawRow[];
 }
 
-function plain(richText: unknown): string {
-  return ((richText as RichText[]) ?? []).map((r) => r.plain_text ?? "").join("");
-}
 /** Flatten a Notion property value to a compact display string. */
 export function flattenValue(prop: RawProp | undefined): string {
   if (!prop) {
@@ -52,7 +49,7 @@ export function flattenValue(prop: RawProp | undefined): string {
   switch (prop.type) {
     case "title":
     case "rich_text":
-      return plain(prop[prop.type]);
+      return richTextToPlain(prop[prop.type]);
     case "number":
       return prop.number == null ? "" : String(prop.number);
     case "select":

@@ -7,7 +7,7 @@ import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconGlyph } from "../readers/object";
-import { flattenProperty, type NotionPropertyValue } from "../readers/page";
+import { flattenProperty, type NotionPropertyValue, richTextToPlain } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
@@ -111,7 +111,7 @@ async function renderDatabaseMockup(
 ): Promise<string> {
   const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
   const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
-  const title = (database.title ?? []).map((t) => t.plain_text ?? "").join("") || "(database)";
+  const title = richTextToPlain(database.title) || "(database)";
   const idToName = buildIdToName(schema);
   const titleColumn =
     Object.entries(schema).find(([, p]) => p.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
