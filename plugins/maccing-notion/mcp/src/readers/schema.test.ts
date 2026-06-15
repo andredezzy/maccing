@@ -65,11 +65,15 @@ test("typeDetail: option counts, single relation, suppressed plain number, funct
     Link: { id: "l", type: "relation", relation: { type: "single_property" } },
     Count: { id: "c", type: "number", number: { format: "number" } },
     Roll: { id: "r", type: "rollup", rollup: {} },
+    RollCount: { id: "rc", type: "rollup", rollup: { function: "count_all" } },
+    RollNoVia: { id: "rv", type: "rollup", rollup: { function: "max", rollup_property_name: "USD Rate" } },
   });
   expect(out).toContain("select · 3 options");
   expect(out).toContain("multi_select · 2 options");
   expect(out).toContain("status · 2 options");
   expect(out).toContain("relation · single");
+  expect(out).toContain("rollup · count_all"); // function only — no parens (no rollup_property_name)
+  expect(out).toContain("rollup · max(USD Rate)"); // function + target, no ` via` (no relation_property_name)
   const lines = out.split("\n");
   expect(
     lines

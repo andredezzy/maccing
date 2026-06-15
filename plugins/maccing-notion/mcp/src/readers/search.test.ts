@@ -35,3 +35,8 @@ test("extracts a PAGE title from its title-type property", () => {
 test("empty result set is reported, not crashed", () => {
   expect(formatSearch([])).toContain("# 0 hits");
 });
+
+test("a hit with neither a top-level title nor a title-type property falls back to (untitled)", () => {
+  const output = formatSearch([{ object: "page", id: "abcdef0123456789", properties: { Status: { type: "status" } } }]);
+  expect(output).toContain('"(untitled)"');
+});

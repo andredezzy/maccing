@@ -17,6 +17,7 @@ test("flattenValue handles the common property types", () => {
   expect(flattenValue({ type: "date", date: { start: "2025-06-09" } })).toBe("2025-06-09");
   expect(flattenValue({ type: "formula", formula: { type: "number", number: 190 } })).toBe("190");
   expect(flattenValue({ type: "relation", relation: [{}, {}] })).toBe("2 linked");
+  expect(flattenValue({ type: "relation", relation: [] })).toBe(""); // empty relation → "" (falsy length branch)
   expect(flattenValue(undefined)).toBe("");
 });
 

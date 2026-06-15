@@ -82,11 +82,12 @@ test("planUpserts rejects `visible` on a page target (a value has no visibility)
 
 test("planUpserts: remove deletes a column (null) and clears a page value (null)", () => {
   const plan = planUpserts([
-    { targetId: "ds1", targetType: TargetType.DATA_SOURCE, property: "Old", remove: true },
+    { targetId: "ds1", targetType: TargetType.DATA_SOURCE, property: "Old", remove: true, icon: "cash" },
     { targetId: "pg1", targetType: TargetType.PAGE, property: "Note", remove: true },
   ]);
   expect(plan.dataSourcePatches.ds1.Old).toBeNull();
   expect(plan.pagePatches.pg1.Note).toBeNull();
+  expect(plan.iconPlan).toEqual([]); // removing a column short-circuits any icon op (the `continue`)
 });
 
 test("planUpserts: removeIcon clears a column's icon (data_source only)", () => {

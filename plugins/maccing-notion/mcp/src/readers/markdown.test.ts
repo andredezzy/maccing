@@ -29,6 +29,13 @@ test("multiple callouts in one document are each converted", () => {
   expect(normalizeCallouts(input)).toBe("> a one\n\n> b two");
 });
 
+test("color-before-icon attribute order is NOT normalized (known limitation)", () => {
+  // The CALLOUT regex expects icon before color; a color-first open tag fails to match and passes
+  // through verbatim. Pinned so the limitation is visible — Notion emits icon-first in practice.
+  const input = '<callout color="red" icon="💡">\nhot\n</callout>';
+  expect(normalizeCallouts(input)).toBe(input);
+});
+
 test("text without callouts passes through unchanged", () => {
   const text = "# Heading\n\nA paragraph with no callouts.";
   expect(normalizeCallouts(text)).toBe(text);
