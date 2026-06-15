@@ -39,7 +39,7 @@ test("summarizes number format, relation arity, and rollup function", () => {
   const output = formatSchema(properties);
   expect(output).toContain("number · number_with_commas");
   expect(output).toContain("relation · dual");
-  expect(output).toContain("rollup · max(USD Rate)");
+  expect(output).toContain("rollup · max(USD Rate) via Month"); // full rollup detail incl. the `via <relation>` suffix
 });
 
 test("injects a column icon, matching a RAW private id to the url-encoded schema id", () => {
@@ -60,12 +60,14 @@ test("empty schema is reported, not crashed", () => {
 test("typeDetail: option counts, single relation, suppressed plain number, function-less rollup", () => {
   const out = formatSchema({
     Tags: { id: "t", type: "select", select: { options: [{ name: "A" }, { name: "B" }, { name: "C" }] } },
+    Labels: { id: "ms", type: "multi_select", multi_select: { options: [{ name: "P" }, { name: "Q" }] } },
     Stage: { id: "g", type: "status", status: { options: [{ name: "X" }, { name: "Y" }] } },
     Link: { id: "l", type: "relation", relation: { type: "single_property" } },
     Count: { id: "c", type: "number", number: { format: "number" } },
     Roll: { id: "r", type: "rollup", rollup: {} },
   });
   expect(out).toContain("select · 3 options");
+  expect(out).toContain("multi_select · 2 options");
   expect(out).toContain("status · 2 options");
   expect(out).toContain("relation · single");
   const lines = out.split("\n");

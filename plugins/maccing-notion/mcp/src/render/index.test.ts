@@ -249,6 +249,23 @@ test("renders EVERY block type + all Phase-1 views with no overflow and every si
   expect(out).toContain("Done  (0)");
 });
 
+test("a gallery with no cards renders an (empty) box", () => {
+  const out = renderBlocksMockup([{ type: "gallery", name: "G", views: ["V"], cardSize: "small", cards: [] }]);
+  expect(out).toContain("(empty)");
+  assertSingleBoxesClose(out, 70);
+});
+
+test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
+  const out = renderBlocksMockup([
+    { type: "calendar", name: "C", views: ["V"], year: 2024, month: 2, events: [{ day: 29, title: "Leap day" }] },
+  ]);
+  expect(out).toContain("February 2024");
+  expect(out).toContain("29"); // the leap day is a real cell — not clamped to 28
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+});
+
 test("renderBlocksMockup renders a bare subtree (no page chrome) and honors the given width", () => {
   const blocks: MockupBlock[] = [
     { type: "heading_2", text: "Section" },

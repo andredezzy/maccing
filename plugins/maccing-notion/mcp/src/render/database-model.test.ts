@@ -127,6 +127,34 @@ test("maps every resolved view type to a renderable, aligned DatabaseModel", () 
   }
 });
 
+test("a calendar view with no parseable dates falls through to a table", () => {
+  const model = databaseToModel({
+    title: "E",
+    titleColumn: "Name",
+    rows: [
+      {
+        properties: {
+          Name: { type: "title", title: [{ plain_text: "X" }] },
+          When: { type: "select", select: { name: "TBD" } },
+        },
+      },
+    ],
+    views: [{ name: "C", type: "calendar", columns: ["Name", "When"], dateProp: "When" }],
+  });
+  expect(model.views[0].type).toBe("table");
+});
+
+test("databaseToModel with no views emits a single-column title table fallback", () => {
+  const model = databaseToModel({
+    title: "T",
+    titleColumn: "Name",
+    views: [],
+    rows: [{ properties: { Name: { type: "title", title: [{ plain_text: "Row1" }] } } }],
+  });
+  expect(model.views).toHaveLength(1);
+  expect(model.views[0].type).toBe("table");
+});
+
 test("every view's tab bar lists all sibling view names, not just its own", () => {
   const model = databaseToModel({
     title: "Sessions",
