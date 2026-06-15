@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { abbreviateId, decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
+  describePrivateFailure,
   type PageOrderEntry,
   privateConfig,
   ReadStatus,
@@ -19,7 +20,6 @@ import type { DataSourceBody, SchemaBody, SchemaPropertyRef } from "../readers/s
 import { listViewIds } from "../readers/views";
 import { err, ok, type ToolModule } from "../tool";
 import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "../writers/reorder-properties";
-import { describePrivateFailure } from "../writers/upsert-property";
 
 interface ViewConfiguration {
   type?: string;

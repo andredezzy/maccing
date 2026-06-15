@@ -223,6 +223,22 @@ export enum ReadStatus {
   THROTTLED = "THROTTLED",
 }
 
+const THROTTLE_SIGNATURE =
+  /throttl|bot.?page|bot-protection|rate.?limit|unreachable|connection|socket|closed unexpectedly|non-json|hang up/i;
+
+/**
+ * Turn a failed private-API body into a user-facing message. A connection reset / bot page is the
+ * session's bot-protection, NOT a real failure — say so and reassure that the public schema/value
+ * changes already landed. A genuine API error (a JSON validation body) is surfaced, not masked.
+ */
+export function describePrivateFailure(body: unknown): string {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  if (THROTTLE_SIGNATURE.test(text)) {
+    return "private app API throttled (bot protection) — column icons not applied (any public schema/value changes in this batch are listed under `applied`); retry the icon entries in a moment.";
+  }
+  return `private write failed: ${text.slice(0, 300)}`;
+}
+
 export interface IconReadOk {
   status: ReadStatus.OK;
   byCollection: Record<string, Record<string, string>>;

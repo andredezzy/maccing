@@ -7,6 +7,7 @@ import { z } from "zod";
 import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
   activeUserId,
+  describePrivateFailure,
   type IconRead,
   type PageOrderEntry,
   privateConfig,
@@ -22,7 +23,6 @@ import { type DataSourceBody, formatIconAssetPath, type SchemaBody, type SchemaP
 import { err, ok, type ToolModule } from "../tool";
 import {
   buildIconOperations,
-  describePrivateFailure,
   planUpserts,
   type ResolvedEntry,
   type ResolvedIcon,

@@ -2,10 +2,9 @@
 
 import { expect, test } from "bun:test";
 
-import { parseCollectionIcons } from "../notion/private-client";
+import { describePrivateFailure, parseCollectionIcons } from "../notion/private-client";
 import {
   buildIconOperations,
-  describePrivateFailure,
   iconAssetPath,
   planUpserts,
   type ResolvedEntry,
