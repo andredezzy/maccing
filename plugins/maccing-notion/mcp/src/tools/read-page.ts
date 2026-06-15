@@ -13,10 +13,42 @@ import type { NotionChildBlock, NotionChildrenResponse } from "../lib/notion-blo
 import { type NotionMarkdownResponse, normalizeCallouts } from "../lib/notion-markdown";
 import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../lib/notion-page";
 import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { pageToModel, type RawBlock, type RawPage } from "../lib/notion-to-page-model";
+import { renderPage } from "../lib/render-mockup";
 import { resolveRelations } from "../lib/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
-const FORMATS = ["markdown", "outline", "text"] as const;
+const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
+
+interface RawChildrenResponse {
+  results?: RawBlock[];
+  has_more?: boolean;
+  next_cursor?: string | null;
+}
+/** Fetch a page's block tree (recursing into has_children blocks up to `depth`), for the mockup renderer. */
+async function fetchBlockTree(id: string, depth: number): Promise<RawBlock[]> {
+  const out: RawBlock[] = [];
+  let cursor: string | undefined;
+  do {
+    const query: Record<string, unknown> = { page_size: 100 };
+    if (cursor) {
+      query.start_cursor = cursor;
+    }
+    const response = await publicRequest("GET", `/v1/blocks/${id}/children`, undefined, query);
+    if (!response.ok) {
+      break;
+    }
+    const body = response.body as RawChildrenResponse;
+    for (const block of body.results ?? []) {
+      if (block.has_children && depth > 0 && block.id) {
+        block.children = await fetchBlockTree(block.id, depth - 1);
+      }
+      out.push(block);
+    }
+    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+  return out;
+}
 
 interface SubPageMarkdown {
   markdown: string;
@@ -198,7 +230,9 @@ export const readPage: ToolModule = {
       "YAML frontmatter with the page's properties (relations resolved to titles, rollups/formulas as scalars) " +
       "followed by the Notion-flavored Markdown body — ~22x smaller than raw block JSON, fully recovered. " +
       "format=outline: a compact block tree WITH block ids (use this when you need a block id to edit). " +
-      "format=text: the body with Markdown markup stripped.",
+      "format=text: the body with Markdown markup stripped. " +
+      "format=mockup: render the LIVE page as the canonical fixed-width ASCII page mockup (the deterministic " +
+      "render_page renderer applied to the live block tree) — the one-call way to SHOW how a page looks.",
     annotations: { title: "Read a Notion page/row", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       page_id: z.string().describe("The page or database-row id to read."),
@@ -228,6 +262,18 @@ export const readPage: ToolModule = {
       if (format === "outline") {
         const depth = typeof args.depth === "number" && args.depth > 0 ? Math.min(args.depth, 5) : 2;
         return ok(await buildOutline(pageId, depth));
+      }
+
+      if (format === "mockup") {
+        const depth = typeof args.depth === "number" && args.depth > 0 ? Math.min(args.depth, 5) : 3;
+        const [pageResponse, tree] = await Promise.all([
+          publicRequest("GET", `/v1/pages/${pageId}`),
+          fetchBlockTree(pageId, depth),
+        ]);
+        if (!pageResponse.ok) {
+          return err("Could not read the page — check the id and that NOTION_TOKEN has access.");
+        }
+        return ok(renderPage(pageToModel(pageResponse.body as RawPage, tree)));
       }
 
       const includeProps = args.include_properties !== false;
