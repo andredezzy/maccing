@@ -46,6 +46,12 @@ test("flattenValue: date ranges, formula booleans, and null/unknown edge cases",
   expect(flattenValue({ type: "number", number: null })).toBe("");
   expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: true } })).toBe("☑");
   expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: false } })).toBe("☐");
+  expect(flattenValue({ type: "formula", formula: { type: "string", string: "hello" } })).toBe("hello");
+  // KNOWN LIMITATION: a formula returning a DATE renders "[object Object]" — v is the date-range object,
+  // String()'d (flattenValue has no date sub-case in the formula branch). Pinned; fix is behavior-changing.
+  expect(flattenValue({ type: "formula", formula: { type: "date", date: { start: "2025-06-09" } } })).toBe(
+    "[object Object]",
+  );
   expect(flattenValue({ type: "some_future_type" })).toBe(""); // unknown type → empty default
 });
 
@@ -72,6 +78,13 @@ test("resolveView resolves visible columns (id → name) with decoded + property
 test("resolveView resolves group_by + dateProp, falling back to date_property_name and 'View'", () => {
   const grouped = resolveView({ type: "board", configuration: { group_by: { property_id: "s" } } }, { s: "Status" });
   expect(grouped.groupBy).toBe("Status");
+
+  // date_property_id present → resolved name wins over the verbatim date_property_name fallback
+  const withDateId = resolveView(
+    { configuration: { date_property_id: "d", date_property_name: "Fallback" } },
+    { d: "When" },
+  );
+  expect(withDateId.dateProp).toBe("When");
 
   // date_property_id absent → dateProp falls back to date_property_name verbatim; no name → "View"; no type → "table"
   const dated = resolveView({ configuration: { date_property_name: "When" } }, {});
