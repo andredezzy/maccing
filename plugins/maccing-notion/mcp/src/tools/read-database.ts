@@ -3,9 +3,14 @@
 // cursor pagination (or exhaust_all for counts/sums per the skill's pagination law).
 
 import { z } from "zod";
-
-import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
-import { formatSchema, type PropertiesMap } from "../lib/format-schema";
+import { databaseToModel, type RawRow, type ResolvedView } from "../lib/notion-to-database-model";
+import { iconToString } from "../lib/notion-to-page-model";
+import { renderDatabase } from "../lib/render-mockup";
+import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { readViewOrder } from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
+import { type FlatRow, formatRows, type RowFormat } from "../readers/format-rows";
+import { formatSchema, type PropertiesMap } from "../readers/format-schema";
 import {
   formatViews,
   type IdToName,
@@ -13,15 +18,9 @@ import {
   type RawView,
   selectViewIndex,
   viewQueryFilter,
-} from "../lib/format-views";
-import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
-import { databaseToModel, type RawRow, type ResolvedView } from "../lib/notion-to-database-model";
-import { iconToString } from "../lib/notion-to-page-model";
-import { renderDatabase } from "../lib/render-mockup";
-import { resolveRelations } from "../lib/resolve-relations";
-import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
-import { readViewOrder } from "../notion/private-client";
-import { hasPublicToken, publicRequest } from "../notion/public-client";
+} from "../readers/format-views";
+import { flattenProperty, type NotionPropertyValue } from "../readers/notion-page";
+import { resolveRelations } from "../readers/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;

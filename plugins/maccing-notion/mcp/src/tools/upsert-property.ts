@@ -4,7 +4,6 @@
 // property object (zero drift). Column icons go through the private app API; everything else public.
 
 import { z } from "zod";
-import { formatIconAssetPath } from "../lib/format-schema";
 import { decodePropertyId } from "../lib/reorder-properties";
 import {
   buildIconOperations,
@@ -31,6 +30,7 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import { formatIconAssetPath } from "../readers/format-schema";
 import { err, ok, type ToolModule } from "../tool";
 
 const COLORS = ["gray", "lightgray", "brown", "yellow", "orange", "green", "blue", "purple", "pink", "red"] as const;

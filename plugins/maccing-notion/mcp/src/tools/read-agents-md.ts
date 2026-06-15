@@ -4,12 +4,12 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
-import type { NotionChildrenResponse } from "../lib/notion-blocks";
-import { type NotionMarkdownResponse, normalizeCallouts } from "../lib/notion-markdown";
-import { type NotionPageBase, titleOf } from "../lib/notion-page";
 import { abbreviateId } from "../notion/abbreviate-id";
 import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import type { NotionChildrenResponse } from "../readers/notion-blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/notion-markdown";
+import { type NotionPageBase, titleOf } from "../readers/notion-page";
 import { err, ok, type ToolModule } from "../tool";
 
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains

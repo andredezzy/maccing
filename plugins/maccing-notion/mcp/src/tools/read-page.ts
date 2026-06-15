@@ -6,16 +6,16 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-import type { NotionIcon } from "../lib/format-object";
-import type { NotionChildBlock, NotionChildrenResponse } from "../lib/notion-blocks";
-import { type NotionMarkdownResponse, normalizeCallouts } from "../lib/notion-markdown";
-import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../lib/notion-page";
 import { pageToModel, type RawBlock, type RawPage } from "../lib/notion-to-page-model";
 import { renderPage } from "../lib/render-mockup";
-import { resolveRelations } from "../lib/resolve-relations";
 import { abbreviateId } from "../notion/abbreviate-id";
 import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import type { NotionIcon } from "../readers/format-object";
+import type { NotionChildBlock, NotionChildrenResponse } from "../readers/notion-blocks";
+import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/notion-markdown";
+import { flattenProperty, type NotionPageBase, type NotionPropertyValue, titleOf } from "../readers/notion-page";
+import { resolveRelations } from "../readers/resolve-relations";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;

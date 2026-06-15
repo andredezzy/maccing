@@ -2,9 +2,8 @@
 // Returns ranked hits as a few lines instead of the raw endpoint's tens-of-KB page objects.
 
 import { z } from "zod";
-
-import { formatSearch, type RawSearchResult } from "../lib/format-search";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import { formatSearch, type RawSearchResult } from "../readers/format-search";
 import { err, ok, type ToolModule } from "../tool";
 
 const OBJECT_TYPES = ["page", "data_source"] as const;
