@@ -41,3 +41,30 @@ test("summary groups by the given column and sums numeric columns + total", () =
 test("table on no rows still emits the header + separator", () => {
   expect(formatRows([], columns, "table")).toBe("| Name | Value | Cat |\n|---|---|---|");
 });
+
+test("summary fallback (no numeric column): per-column value distribution", () => {
+  const output = formatRows([{ Cat: "X" }, { Cat: "Y" }, { Cat: "X" }], ["Cat"], "summary");
+  expect(output).toContain("3 rows");
+  expect(output).toContain("Cat: X(2) Y(1)");
+  expect(output).not.toContain("group by"); // fallback path, not the grouped path
+});
+
+test("summary fallback (group candidate is all-unique): numeric columns are summed", () => {
+  const output = formatRows(
+    [
+      { Name: "A", Value: 10 },
+      { Name: "B", Value: 20 },
+    ],
+    ["Name", "Value"],
+    "summary",
+  );
+  expect(output).toContain("Value: sum 30");
+  expect(output).toContain("Name: A(1) B(1)");
+  expect(output).not.toContain("group by");
+});
+
+test("summary fallback (only numeric columns): sum with no grouping", () => {
+  const output = formatRows([{ Value: 10 }, { Value: 20 }], ["Value"], "summary");
+  expect(output).toContain("Value: sum 30");
+  expect(output).not.toContain("group by");
+});

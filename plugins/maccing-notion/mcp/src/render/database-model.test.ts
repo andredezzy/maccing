@@ -2,7 +2,9 @@
 // the produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { databaseToModel, flattenValue, type RawRow } from "./database-model";
+import type { PropertiesMap } from "../readers/schema";
+import type { IdToName, RawView } from "../readers/views";
+import { databaseToModel, flattenValue, groupOptionsFor, type RawRow, resolveView } from "./database-model";
 import { displayWidth, renderDatabase } from "./index";
 
 test("flattenValue handles the common property types", () => {
@@ -33,6 +35,61 @@ test("flattenValue handles the remaining property types", () => {
   expect(flattenValue({ type: "rollup", rollup: { type: "number", number: 5 } })).toBe("5");
   expect(flattenValue({ type: "rollup", rollup: { type: "array", array: [{}, {}] } })).toBe("2 item(s)");
   expect(flattenValue({ type: "checkbox", checkbox: false })).toBe("☐");
+});
+
+test("flattenValue: date ranges, formula booleans, and null/unknown edge cases", () => {
+  expect(flattenValue({ type: "date", date: { start: "2025-06-09", end: "2025-06-11" } })).toBe(
+    "2025-06-09 → 2025-06-11",
+  );
+  expect(flattenValue({ type: "date", date: null })).toBe("");
+  expect(flattenValue({ type: "number", number: null })).toBe("");
+  expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: true } })).toBe("☑");
+  expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: false } })).toBe("☐");
+  expect(flattenValue({ type: "some_future_type" })).toBe(""); // unknown type → empty default
+});
+
+test("resolveView resolves visible columns (id → name) with decoded + property_name fallbacks", () => {
+  const idToName: IdToName = { a: "Alpha", b: "Beta", ">": "Greater" };
+  const view: RawView = {
+    name: "My view",
+    type: "table",
+    configuration: {
+      properties: [
+        { property_id: "a" }, // direct id lookup
+        { property_id: "b", visible: false }, // hidden → excluded
+        { property_id: "%3E" }, // decoded variant ('%3E' → '>')
+        { property_id: "z", property_name: "Zeta" }, // unknown id → property_name fallback
+      ],
+    },
+  };
+  const resolved = resolveView(view, idToName);
+  expect(resolved.name).toBe("My view");
+  expect(resolved.type).toBe("table");
+  expect(resolved.columns).toEqual(["Alpha", "Greater", "Zeta"]); // Beta excluded (visible:false)
+});
+
+test("resolveView resolves group_by + dateProp, falling back to date_property_name and 'View'", () => {
+  const grouped = resolveView({ type: "board", configuration: { group_by: { property_id: "s" } } }, { s: "Status" });
+  expect(grouped.groupBy).toBe("Status");
+
+  // date_property_id absent → dateProp falls back to date_property_name verbatim; no name → "View"; no type → "table"
+  const dated = resolveView({ configuration: { date_property_name: "When" } }, {});
+  expect(dated.dateProp).toBe("When");
+  expect(dated.name).toBe("View");
+  expect(dated.type).toBe("table");
+});
+
+test("groupOptionsFor returns the group-by property's status/select options in order, else undefined", () => {
+  const schema: PropertiesMap = {
+    Status: { type: "status", status: { options: [{ name: "To do" }, { name: "Done" }] } },
+    Tag: { type: "select", select: { options: [{ name: "A" }] } },
+    Empty: { type: "status", status: { options: [] } },
+  };
+  expect(groupOptionsFor("Status", schema)).toEqual(["To do", "Done"]);
+  expect(groupOptionsFor("Tag", schema)).toEqual(["A"]);
+  expect(groupOptionsFor("Empty", schema)).toBeUndefined(); // present but no options
+  expect(groupOptionsFor("Missing", schema)).toBeUndefined(); // not in the schema
+  expect(groupOptionsFor(undefined, schema)).toBeUndefined(); // no group-by column
 });
 
 const rows: RawRow[] = [
