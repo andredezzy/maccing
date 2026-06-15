@@ -39,6 +39,48 @@ export function orderViews(views: RawView[], viewIds: string[] | null, databaseI
   return own.length ? own : views;
 }
 
+/**
+ * Merge a view's saved `filter` and `quick_filters` into a single Notion `/query` filter so a mockup
+ * samples the rows the VIEW actually shows (not arbitrary rows). A quick_filter `{ propId: condition }`
+ * becomes `{ property: propId, ...condition }`; multiple parts are AND-ed. Passed VERBATIM otherwise —
+ * the caller falls back to an unfiltered sample if Notion rejects the shape. Returns undefined when the
+ * view has no filter at all.
+ */
+export function viewQueryFilter(view: RawView): unknown | undefined {
+  const parts: unknown[] = [];
+  if (view.filter) {
+    parts.push(view.filter);
+  }
+  for (const [propertyId, condition] of Object.entries((view.quick_filters ?? {}) as Record<string, object>)) {
+    parts.push({ property: propertyId, ...condition });
+  }
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.length === 1 ? parts[0] : { and: parts };
+}
+
+/** Resolve a `view` selector (numeric index | exact name | id | partial name, case-insensitive) to an
+ * index into the ordered views. Anything unmatched (or undefined) falls back to 0 (the default view). */
+export function selectViewIndex(
+  views: { name?: string; id?: string }[],
+  selector: string | number | undefined,
+): number {
+  if (selector === undefined || views.length === 0) {
+    return 0;
+  }
+  if (typeof selector === "number") {
+    return selector >= 0 && selector < views.length ? selector : 0;
+  }
+  const needle = selector.toLowerCase();
+  const exact = views.findIndex((v) => v.name?.toLowerCase() === needle || v.id === selector);
+  if (exact >= 0) {
+    return exact;
+  }
+  const partial = views.findIndex((v) => v.name?.toLowerCase().includes(needle));
+  return partial >= 0 ? partial : 0;
+}
+
 interface SortEntry {
   property?: string;
   direction?: string;

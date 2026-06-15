@@ -6,7 +6,14 @@ import { z } from "zod";
 
 import { type FlatRow, formatRows, type RowFormat } from "../lib/format-rows";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
-import { formatViews, type IdToName, orderViews, type RawView } from "../lib/format-views";
+import {
+  formatViews,
+  type IdToName,
+  orderViews,
+  type RawView,
+  selectViewIndex,
+  viewQueryFilter,
+} from "../lib/format-views";
 import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
 import { readViewOrder } from "../lib/notion-private";
@@ -145,8 +152,13 @@ function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): st
   return names.length ? names : undefined;
 }
 
-/** Fetch + map a database to the ASCII mockup (title/icon + every view, rows as cards/cells). */
-async function renderDatabaseMockup(databaseId: string, dataSourceId: string, schema: PropertiesMap): Promise<string> {
+/** Fetch + map a database to the ASCII mockup (title/icon + the selected view, rows as cards/cells). */
+async function renderDatabaseMockup(
+  databaseId: string,
+  dataSourceId: string,
+  schema: PropertiesMap,
+  viewSelector: string | number | undefined,
+): Promise<string> {
   const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
   const database = dbResponse.ok ? (dbResponse.body as { title?: { plain_text?: string }[]; icon?: unknown }) : {};
   const title = (database.title ?? []).map((t) => t.plain_text ?? "").join("") || "(database)";
@@ -154,12 +166,13 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
   const titleColumn =
     Object.entries(schema).find(([, p]) => p.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
 
-  // Order views the way Notion shows them and render its DEFAULT (first) view. The public API exposes no
-  // tab order or default-view signal, so we read the container block's `view_ids` via private api/v3
-  // (databaseId IS the collection_view block id); that order also excludes views belonging to OTHER
-  // linked-DB containers sharing this data source. Falls back to public order if token_v2 is absent.
+  // Order views the way Notion shows them. The public API exposes no tab order or default-view signal, so
+  // we read the container block's `view_ids` via private api/v3 (databaseId IS the collection_view block
+  // id); that order also excludes views belonging to OTHER linked-DB containers sharing this data source.
+  // Falls back to public order if token_v2 is absent. `viewSelector` picks which view to render.
   const rawViews = await fetchViews(dataSourceId);
-  const views = orderViews(rawViews, await readViewOrder(databaseId), databaseId).map((view) => {
+  const ordered = orderViews(rawViews, await readViewOrder(databaseId), databaseId);
+  const views = ordered.map((view) => {
     const resolved = resolveView(view, idToName);
     resolved.columns = [titleColumn, ...resolved.columns.filter((c) => c !== titleColumn)];
     if (resolved.type === "board") {
@@ -167,24 +180,39 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
     }
     return resolved;
   });
+  const selectedIndex = selectViewIndex(ordered, viewSelector);
 
-  // Mockup is a compact preview, so we sample rather than exhaust — but never SILENTLY. Fetch one past
-  // the cap to detect "there are more", slice to the cap, and surface the truncation as a footer line.
+  // Sample the rows the SELECTED view actually shows — apply its filter + sorts + quick_filters so the
+  // mockup matches the live view (a board's filtered-out rows must NOT appear). Compact preview, so we
+  // cap; fetch one past the cap to flag "there are more". A filter Notion rejects → unfiltered fallback.
   const SAMPLE_CAP = 24;
-  const query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: SAMPLE_CAP + 1 });
+  const selected = ordered[selectedIndex];
+  const filter = selected ? viewQueryFilter(selected) : undefined;
+  const sorts = selected?.sorts ?? undefined;
+  const queryBody: Record<string, unknown> = { page_size: SAMPLE_CAP + 1 };
+  if (filter) {
+    queryBody.filter = filter;
+  }
+  if (sorts) {
+    queryBody.sorts = sorts;
+  }
+  let query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, queryBody);
+  if (!query.ok && (filter || sorts)) {
+    query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: SAMPLE_CAP + 1 });
+  }
   const fetched = (query.ok ? ((query.body as QueryResponse).results ?? []) : []) as RawRow[];
   const truncated = fetched.length > SAMPLE_CAP;
   const rows = truncated ? fetched.slice(0, SAMPLE_CAP) : fetched;
 
-  const body = renderDatabase(
-    databaseToModel({
-      title,
-      icon: iconToString(database.icon as Parameters<typeof iconToString>[0]),
-      titleColumn,
-      views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
-      rows,
-    }),
-  );
+  const model = databaseToModel({
+    title,
+    icon: iconToString(database.icon as Parameters<typeof iconToString>[0]),
+    titleColumn,
+    views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
+    rows,
+  });
+  model.view = views.length ? selectedIndex : 0;
+  const body = renderDatabase(model);
 
   return truncated ? `${body}\n\n(mockup preview — showing the first ${SAMPLE_CAP} rows; the database has more)` : body;
 }
@@ -208,7 +236,7 @@ export const readDatabase: ToolModule = {
     title: "Read a Notion database",
     description:
       "Query a Notion database and render it agent-friendly: relations resolved to titles, rollups/formulas " +
-      "as scalars. format (required): table | kv | tsv | summary | mockup (render the live DB as the ASCII view mockup). table=GFM, kv, tsv, summary=grouped " +
+      "as scalars. format (required): table | kv | tsv | summary | mockup (render the live DB as the ASCII view mockup — its DEFAULT view, or pass `view` by name/id/index; samples the rows that view actually shows, with its filter+sorts applied). table=GFM, kv, tsv, summary=grouped " +
       "totals, e.g. value-by-category — pass group_by). Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
       "(use for counts/sums per the pagination Iron Law). The output ALSO appends a # Schema section (every " +
@@ -227,6 +255,10 @@ export const readDatabase: ToolModule = {
       cursor: z.string().optional().describe("Opaque next_cursor from a prior call."),
       exhaust_all: z.boolean().optional().describe("Loop to the end and return every row (for counts/sums)."),
       group_by: z.string().optional().describe("summary only: the property to group by."),
+      view: z
+        .union([z.string(), z.number()])
+        .optional()
+        .describe("mockup only: render a specific view by name, id, or index (default: the DB's default view)."),
     },
   },
 
@@ -254,7 +286,8 @@ export const readDatabase: ToolModule = {
       const schema = (schemaResponse.body as DataSourceSchema).properties ?? {};
 
       if (format === "mockup") {
-        return ok(await renderDatabaseMockup(databaseId, dataSourceId, schema));
+        const viewSelector = typeof args.view === "string" || typeof args.view === "number" ? args.view : undefined;
+        return ok(await renderDatabaseMockup(databaseId, dataSourceId, schema, viewSelector));
       }
 
       const fields = Array.isArray(args.fields) ? (args.fields as string[]) : null;

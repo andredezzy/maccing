@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatViews, type IdToName, orderViews, type RawView } from "./format-views";
+import { formatViews, type IdToName, orderViews, type RawView, selectViewIndex, viewQueryFilter } from "./format-views";
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
 
@@ -121,4 +121,46 @@ test("orderViews orders by the container view_ids and drops foreign-container vi
   expect(orderViews(raw, null, "DB").map((v) => v.id)).toEqual(["cal", "board"]);
   // Defensive: if the parent filter would drop everything, keep the unfiltered set.
   expect(orderViews(raw, null, "MISSING").map((v) => v.id)).toEqual(["cal", "board", "foreign"]);
+});
+
+test("viewQueryFilter merges a view's filter + quick_filters into one /query filter (verbatim)", () => {
+  expect(viewQueryFilter({ id: "v" })).toBeUndefined();
+  expect(viewQueryFilter({ id: "v", filter: { property: "S", status: { equals: "Done" } } })).toEqual({
+    property: "S",
+    status: { equals: "Done" },
+  });
+  // a quick_filter { propId: condition } becomes { property: propId, ...condition }
+  expect(viewQueryFilter({ id: "v", quick_filters: { tjUk: { checkbox: { equals: false } } } })).toEqual({
+    property: "tjUk",
+    checkbox: { equals: false },
+  });
+  // both present → AND them together
+  expect(
+    viewQueryFilter({
+      id: "v",
+      filter: { property: "S", status: { equals: "Done" } },
+      quick_filters: { tjUk: { checkbox: { equals: false } } },
+    }),
+  ).toEqual({
+    and: [
+      { property: "S", status: { equals: "Done" } },
+      { property: "tjUk", checkbox: { equals: false } },
+    ],
+  });
+});
+
+test("selectViewIndex resolves a view by index, exact name, id, or partial name (default 0)", () => {
+  const views = [
+    { id: "a", name: "Board" },
+    { id: "b", name: "Backlog" },
+    { id: "c", name: "Open tasks" },
+  ];
+  expect(selectViewIndex(views, undefined)).toBe(0); // default → the default view
+  expect(selectViewIndex(views, 2)).toBe(2); // index
+  expect(selectViewIndex(views, 9)).toBe(0); // out of range → default
+  expect(selectViewIndex(views, "Backlog")).toBe(1); // exact name
+  expect(selectViewIndex(views, "backlog")).toBe(1); // case-insensitive
+  expect(selectViewIndex(views, "c")).toBe(2); // id match
+  expect(selectViewIndex(views, "Open")).toBe(2); // partial name
+  expect(selectViewIndex(views, "zzz")).toBe(0); // no match → default
 });
