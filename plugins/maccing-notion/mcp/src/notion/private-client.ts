@@ -184,7 +184,7 @@ interface RecordRequest {
 
 /** Read internal records (e.g. a `collection` schema) — used to verify a private write persisted.
  * Retries with backoff via `postWithRetry` (the read-back is the bot-throttle-prone half of the private API). */
-export async function getRecordValues(requests: RecordRequest[]): Promise<PrivateResponse> {
+async function getRecordValues(requests: RecordRequest[]): Promise<PrivateResponse> {
   return privateCall("getRecordValues", { requests });
 }
 

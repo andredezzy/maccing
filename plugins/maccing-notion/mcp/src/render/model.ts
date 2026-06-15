@@ -57,7 +57,7 @@ export type MockupBlock =
   | TableBlock
   | GalleryBlock
   | BoardBlock
-  | ListViewBlock
+  | ListBlock
   | CalendarBlock
   | TimelineBlock
   | ChartBlock
@@ -86,7 +86,7 @@ export interface BoardBlock {
   views?: string[];
   groups: BoardGroup[];
 }
-export interface ListViewBlock {
+export interface ListBlock {
   type: "list";
   name: string;
   views?: string[];
@@ -159,7 +159,7 @@ export type ViewBlock =
   | TableBlock
   | GalleryBlock
   | BoardBlock
-  | ListViewBlock
+  | ListBlock
   | CalendarBlock
   | TimelineBlock
   | ChartBlock

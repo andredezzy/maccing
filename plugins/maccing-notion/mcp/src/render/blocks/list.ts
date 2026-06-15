@@ -1,11 +1,11 @@
 // List view renderer — one line per row: `• [icon] Title   meta`.
 
 import { register } from "../engine";
-import type { ListViewBlock } from "../model";
+import type { ListBlock } from "../model";
 import { clip } from "../text";
 import { databaseHeader } from "./database-header";
 
-function renderListView(block: ListViewBlock, total: number): string[] {
+function renderList(block: ListBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total)];
   if (block.items.length === 0) {
     return [...lines, "(empty)"];
@@ -17,4 +17,4 @@ function renderListView(block: ListViewBlock, total: number): string[] {
   return lines;
 }
 
-register("list", (block, width) => renderListView(block, width));
+register("list", (block, width) => renderList(block, width));

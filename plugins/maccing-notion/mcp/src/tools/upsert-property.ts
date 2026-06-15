@@ -276,6 +276,7 @@ export const upsertProperty: ToolModule = {
           errors.push(`PATCH data_source ${dataSourceId} failed: ${JSON.stringify(response.body)}`);
         }
       }
+
       for (const [pageId, properties] of Object.entries(plan.pagePatches)) {
         const response = await publicRequest("PATCH", `/v1/pages/${pageId}`, { properties });
         if (response.ok) {

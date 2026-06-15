@@ -145,7 +145,7 @@ function resolveDeep(value: unknown, idToName: IdToName): unknown {
 
   if (value && typeof value === "object") {
     const annotated: Record<string, unknown> = {};
-    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, inner] of Object.entries(value)) {
       annotated[key] = resolveDeep(inner, idToName);
       if ((key === "property_id" || key === "property") && typeof inner === "string") {
         annotated.property_name = nameFor(inner, idToName);
