@@ -87,7 +87,7 @@ async function fetchBody(pageId: string): Promise<FetchedBody> {
     const subPageResults = await Promise.all(
       unseenBlockIds.map(async (id): Promise<SubPageMarkdown> => {
         const response = await publicRequest("GET", `/v1/pages/${id}/markdown`);
-        const subMarkdown = response.ok ? (response.body as NotionMarkdownResponse) : {};
+        const subMarkdown = response.ok ? (response.body as NotionMarkdownResponse) : ({} as NotionMarkdownResponse);
         return { markdown: subMarkdown.markdown ?? "", unknownBlockIds: subMarkdown.unknown_block_ids ?? [] };
       }),
     );
@@ -251,8 +251,8 @@ export const readPage: ToolModule = {
     if (!UUID_PATTERN.test(pageId)) {
       return err("page_id must be a UUID.");
     }
-    const format = String(args.format) as (typeof FORMATS)[number];
-    if (!FORMATS.includes(format)) {
+    const format = String(args.format);
+    if (!FORMATS.includes(format as (typeof FORMATS)[number])) {
       return err(`Invalid format "${String(args.format)}". One of: ${FORMATS.join(", ")}`);
     }
 

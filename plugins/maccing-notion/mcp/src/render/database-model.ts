@@ -109,7 +109,7 @@ interface DayComponents {
 }
 /** A row that carries a parseable calendar date — the kept subset after dropping undated rows. */
 interface DatedRow {
-  d: DayComponents;
+  date: DayComponents;
   title: string;
 }
 function dayOf(dateStr: string): DayComponents | null {
@@ -187,12 +187,12 @@ function viewToBlock(
     case "calendar": {
       const dateCol = view.dateProp ?? cols.find((c) => flattenValue(rows[0]?.properties?.[c]).match(/^\d{4}-\d{2}/));
       const dated = rows
-        .map((r) => ({ d: dayOf(flattenValue(r.properties?.[dateCol ?? ""])), title: rowTitle(r, titleColumn) }))
-        .filter((x): x is DatedRow => x.d !== null);
+        .map((r) => ({ date: dayOf(flattenValue(r.properties?.[dateCol ?? ""])), title: rowTitle(r, titleColumn) }))
+        .filter((x): x is DatedRow => x.date !== null);
       if (dated.length === 0) {
         break; // no usable dates → fall through to table
       }
-      const { year, month } = dated[0].d;
+      const { year, month } = dated[0].date;
       return {
         type: "calendar",
         name: dbTitle,
@@ -200,8 +200,8 @@ function viewToBlock(
         year,
         month,
         events: dated
-          .filter((x) => x.d.year === year && x.d.month === month)
-          .map((x) => ({ day: x.d.day, title: x.title })),
+          .filter((x) => x.date.year === year && x.date.month === month)
+          .map((x) => ({ day: x.date.day, title: x.title })),
       };
     }
     default:

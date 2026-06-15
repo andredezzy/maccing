@@ -224,7 +224,6 @@ export const readDatabase: ToolModule = {
     if (!FORMATS.includes(format as (typeof FORMATS)[number])) {
       return err(`Invalid format "${String(args.format)}". One of: ${FORMATS.join(", ")}`);
     }
-    const rowFormat = format as RowFormat;
 
     try {
       const dataSourceId = await resolveDataSourceId(databaseId);
@@ -240,6 +239,8 @@ export const readDatabase: ToolModule = {
         return ok(await renderDatabaseMockup(databaseId, dataSourceId, schema, viewSelector));
       }
 
+      // Past the mockup early-return, format is one of the row formats — the cast is now sound.
+      const rowFormat = format as RowFormat;
       const fields = Array.isArray(args.fields) ? (args.fields as string[]) : null;
       const columns = fields ?? Object.keys(schema);
 
