@@ -3,7 +3,7 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderPage } from "./index";
+import { displayWidth, type MockupBlock, type PageModel, renderBlocksMockup, renderDatabase, renderPage } from "./index";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -240,6 +240,28 @@ test("renders EVERY block type + all Phase-1 views with no overflow and every si
   // board groups render side by side via hcat
   expect(out).toContain("To do  (2)");
   expect(out).toContain("Done  (0)");
+});
+
+test("renderBlocksMockup renders a bare subtree (no page chrome) and honors the given width", () => {
+  const blocks: MockupBlock[] = [
+    { type: "heading_2", text: "Section" },
+    { type: "bulleted_list_item", text: "alpha" },
+  ];
+  const bare = renderBlocksMockup(blocks, 50);
+  const page = renderPage({ title: "My Page", blocks });
+
+  expect(page).toContain("My Page"); // the page has its title header…
+  expect(bare).not.toContain("My Page"); // …the bare subtree has no page chrome
+  expect(bare).toContain("alpha"); // but the blocks themselves render
+  for (const line of bare.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(50);
+  }
+});
+
+test("renderBlocksMockup falls back to the default width (70) on a non-positive width", () => {
+  const out = renderBlocksMockup([{ type: "table", name: "T", columns: ["Name", "Status"], rows: [["X", "Y"]] }], 0);
+  const top = out.split("\n").find((line) => line.startsWith("┌"));
+  expect(displayWidth(top ?? "")).toBe(70);
 });
 
 test("standalone database renders its views (view:'all')", () => {

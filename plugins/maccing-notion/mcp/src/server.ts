@@ -23,9 +23,7 @@ import { privateRequest } from "./tools/private-request";
 import { readAgentsMd } from "./tools/read-agents-md";
 import { readDatabase } from "./tools/read-database";
 import { readPage } from "./tools/read-page";
-import { renderBlocksTool } from "./tools/render-blocks";
-import { renderDatabaseTool } from "./tools/render-database";
-import { renderPageTool } from "./tools/render-page";
+import { renderMockupTool } from "./tools/render-mockup";
 import { request } from "./tools/request";
 import { search } from "./tools/search";
 import { upsertProperty } from "./tools/upsert-property";
@@ -46,9 +44,7 @@ export const TOOLS: ToolModule[] = [
   readAgentsMd,
   readPage,
   readDatabase,
-  renderPageTool,
-  renderDatabaseTool,
-  renderBlocksTool,
+  renderMockupTool,
 ];
 
 async function main(): Promise<void> {

@@ -186,3 +186,15 @@ export const databaseModelSchema = z.object({
     .optional()
     .describe("view index, or 'all' to stack every view. Default 0."),
 });
+
+// The render_mockup input: a page, a standalone database, or a bare block subtree — tagged by `kind`
+// so one tool renders every mockup shape. `kind` crosses the wire, so its values stay lowercase.
+export const mockupSchema = z.discriminatedUnion("kind", [
+  pageModelSchema.extend({ kind: z.literal("page") }),
+  databaseModelSchema.extend({ kind: z.literal("database") }),
+  z.object({
+    kind: z.literal("blocks"),
+    blocks: z.array(blockSchema),
+    width: z.number().optional().describe("columns (default 70)"),
+  }),
+]);

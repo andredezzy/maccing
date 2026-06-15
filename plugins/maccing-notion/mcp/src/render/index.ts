@@ -5,14 +5,15 @@
 // and never count a character. Every bordered box closes; that invariant holds under recursion (children
 // shrink width), columns (width splits + hcat), and database views (table/gallery/board/list).
 //
-// This file is the thin entry: renderPage(PageModel) · renderDatabase(DatabaseModel) · renderBlocks.
-// The model lives in ./model, primitives in ./text + ./box, dispatch in ./engine, and the renderers in
-// ./blocks + ./views (imported here only so their register() calls run).
+// This file is the thin entry — three symmetric (model → finished string) renderers: renderPage(PageModel) ·
+// renderDatabase(DatabaseModel) · renderBlocksMockup(MockupBlock[]). The model lives in ./model, primitives
+// in ./text + ./box, dispatch in ./engine, and the renderers in ./blocks + ./views (imported here only so
+// their register() calls run).
 
 import "./blocks"; // side-effect: registers the block-leaf renderers
 import { header } from "./box";
 import { renderBlocks } from "./engine";
-import type { DatabaseModel, PageModel } from "./model";
+import type { DatabaseModel, MockupBlock, PageModel } from "./model";
 import { renderDatabaseLines } from "./views"; // also registers the database-view renderers
 
 export { renderBlocks } from "./engine";
@@ -21,24 +22,29 @@ export { displayWidth } from "./text";
 
 const DEFAULT_WIDTH = 70;
 
-/** Render a full page (header + recursive body). */
-export function renderPage(model: PageModel): string {
-  const total = model.width ?? DEFAULT_WIDTH;
-  const out = [
-    ...header(model.icon, model.title, model.cover, model.description, total),
-    ...renderBlocks(model.blocks, total, 0),
-  ];
-  return out
+/** Join rendered lines, collapse runs of 3+ blank lines, and trim the trailing edge — the final mockup string. */
+function finish(lines: string[]): string {
+  return lines
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
 }
 
+/** Render a full page (header + recursive body). */
+export function renderPage(model: PageModel): string {
+  const total = model.width ?? DEFAULT_WIDTH;
+  return finish([
+    ...header(model.icon, model.title, model.cover, model.description, total),
+    ...renderBlocks(model.blocks, total, 0),
+  ]);
+}
+
 /** Render a standalone database (its own header + selected view, or all views). */
 export function renderDatabase(db: DatabaseModel): string {
-  const total = db.width ?? DEFAULT_WIDTH;
-  return renderDatabaseLines(db, total)
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trimEnd();
+  return finish(renderDatabaseLines(db, db.width ?? DEFAULT_WIDTH));
+}
+
+/** Render a bare block subtree — no page/database chrome. Non-positive widths fall back to the default. */
+export function renderBlocksMockup(blocks: MockupBlock[], width?: number): string {
+  return finish(renderBlocks(blocks, width && width > 0 ? width : DEFAULT_WIDTH, 0));
 }
