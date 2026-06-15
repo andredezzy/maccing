@@ -3,7 +3,7 @@
 import { box, COVER, cardsPerRow, GAP, hcat, MEDIUM_CARD, SMALL_CARD } from "../box";
 import { register } from "../engine";
 import type { BoardBlock, GalleryBlock } from "../model";
-import { databaseHeader } from "./chrome";
+import { databaseHeader } from "./database-header";
 
 function renderGallery(block: GalleryBlock, total: number): string[] {
   const inner = block.cardSize === "medium" ? MEDIUM_CARD : SMALL_CARD;

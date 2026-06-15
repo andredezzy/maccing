@@ -3,7 +3,7 @@
 import { register } from "../engine";
 import type { ListViewBlock } from "../model";
 import { clip } from "../text";
-import { databaseHeader } from "./chrome";
+import { databaseHeader } from "./database-header";
 
 function renderListView(block: ListViewBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total)];

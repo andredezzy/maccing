@@ -5,7 +5,7 @@ import { box, renderTableGrid } from "../box";
 import { register, renderBlock } from "../engine";
 import type { ChartBlock, DashboardBlock, FormBlock, MapBlock } from "../model";
 import { clip, displayWidth, padRight } from "../text";
-import { databaseHeader } from "./chrome";
+import { databaseHeader } from "./database-header";
 
 function renderChart(block: ChartBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total)];

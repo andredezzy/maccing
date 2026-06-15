@@ -4,7 +4,7 @@ import { renderTableGrid } from "../box";
 import { register } from "../engine";
 import type { CalendarBlock, TimelineBlock } from "../model";
 import { clip, padRight } from "../text";
-import { databaseHeader } from "./chrome";
+import { databaseHeader } from "./database-header";
 
 const MONTHS = [
   "January",
