@@ -8,6 +8,12 @@ import { pageToModel, type RawBlock } from "./page-model";
 
 const rt = (s: string) => [{ plain_text: s }];
 
+test("pageToModel: a page with no cover yields no cover band", () => {
+  const model = pageToModel({ properties: { Name: { type: "title", title: rt("T") } } }, []);
+  expect(model.cover).toBeUndefined();
+  expect(renderPage(model)).not.toContain("▒"); // header draws no ▒ band without a cover
+});
+
 test("iconGlyph maps emoji, named icon, and image icon", () => {
   expect(iconGlyph({ type: "emoji", emoji: "🏋" })).toBe("🏋");
   expect(iconGlyph({ type: "icon", icon: { name: "cash" } })).toBe("cash");

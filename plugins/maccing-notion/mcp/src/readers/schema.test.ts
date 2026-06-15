@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 
-import { formatSchema, type IconsById, type PropertiesMap } from "./schema";
+import { formatIconAssetPath, formatSchema, type IconsById, type PropertiesMap } from "./schema";
 
 const properties: PropertiesMap = {
   Name: { id: "title", type: "title" },
@@ -55,4 +55,35 @@ test("no icons map → no icon markers at all", () => {
 
 test("empty schema is reported, not crashed", () => {
   expect(formatSchema({})).toContain("# Schema (0 columns)");
+});
+
+test("typeDetail: option counts, single relation, suppressed plain number, function-less rollup", () => {
+  const out = formatSchema({
+    Tags: { id: "t", type: "select", select: { options: [{ name: "A" }, { name: "B" }, { name: "C" }] } },
+    Stage: { id: "g", type: "status", status: { options: [{ name: "X" }, { name: "Y" }] } },
+    Link: { id: "l", type: "relation", relation: { type: "single_property" } },
+    Count: { id: "c", type: "number", number: { format: "number" } },
+    Roll: { id: "r", type: "rollup", rollup: {} },
+  });
+  expect(out).toContain("select · 3 options");
+  expect(out).toContain("status · 2 options");
+  expect(out).toContain("relation · single");
+  const lines = out.split("\n");
+  expect(
+    lines
+      .find((line) => line.startsWith("Count"))
+      ?.trimEnd()
+      .endsWith("number"),
+  ).toBe(true); // format "number" → no suffix
+  expect(
+    lines
+      .find((line) => line.startsWith("Roll"))
+      ?.trimEnd()
+      .endsWith("rollup"),
+  ).toBe(true); // no function → no suffix
+});
+
+test("formatIconAssetPath splits color on the last underscore, else returns the stem as-is", () => {
+  expect(formatIconAssetPath("/icons/arrows-swap-horizontally_gray.svg")).toBe("arrows-swap-horizontally·gray");
+  expect(formatIconAssetPath("/icons/cash.svg")).toBe("cash"); // no underscore → no color separator
 });

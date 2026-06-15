@@ -4,6 +4,16 @@ import { expect, test } from "bun:test";
 
 import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "./reorder-properties";
 
+test("an empty current list returns [] (nothing to reorder)", () => {
+  expect(reorderViewProperties([], ["A", "B"])).toEqual([]);
+  expect(reorderPageProperties([], ["A"])).toEqual([]);
+});
+
+test("no title entry + title not in order → nothing is prepended, remainder keeps relative order", () => {
+  const current: ViewProperty[] = [{ property_id: "A" }, { property_id: "B" }];
+  expect(reorderViewProperties(current, ["B"]).map((property) => property.property_id)).toEqual(["B", "A"]);
+});
+
 test("reorderPageProperties reorders the canonical {property, visible} list, title first, visibility preserved", () => {
   const current = [
     { property: "title", visible: true },

@@ -64,6 +64,11 @@ test("empty view list is reported, not crashed", () => {
   expect(formatViews([], idToName)).toContain("# Views (0)");
 });
 
+test("formatViews shows the url line when a view carries a url", () => {
+  const view: RawView = { name: "Board", type: "board", url: "https://notion.so/abc" };
+  expect(formatViews([view], {})).toContain("url: https://notion.so/abc");
+});
+
 test("resolves the `property` id inside a view filter (and shows it)", () => {
   const view: RawView = {
     name: "Holdings",
