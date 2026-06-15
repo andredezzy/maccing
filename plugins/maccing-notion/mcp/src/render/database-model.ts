@@ -57,7 +57,7 @@ export function flattenValue(prop: RawProp | undefined): string {
     case "status":
       return (prop.status as { name?: string })?.name ?? "";
     case "multi_select":
-      return ((prop.multi_select as { name?: string }[]) ?? []).map((s) => s.name).join(", ");
+      return ((prop.multi_select as { name?: string }[]) ?? []).map((option) => option.name).join(", ");
     case "date": {
       const date = prop.date as NotionDateRange | null;
       return date?.start ? date.start + (date.end ? ` → ${date.end}` : "") : "";
@@ -65,7 +65,7 @@ export function flattenValue(prop: RawProp | undefined): string {
     case "checkbox":
       return prop.checkbox ? "☑" : "☐";
     case "people":
-      return ((prop.people as { name?: string }[]) ?? []).map((p) => p.name ?? "user").join(", ");
+      return ((prop.people as { name?: string }[]) ?? []).map((person) => person.name ?? "user").join(", ");
     case "url":
       return (prop.url as string) ?? "";
     case "email":
@@ -256,8 +256,8 @@ export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
   const resolve = (id: string | undefined): string | undefined =>
     id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
   const columns = (config.properties ?? [])
-    .filter((p) => p.visible !== false)
-    .map((p) => resolve(p.property_id) ?? p.property_name)
+    .filter((viewProp) => viewProp.visible !== false)
+    .map((viewProp) => resolve(viewProp.property_id) ?? viewProp.property_name)
     .filter((name): name is string => Boolean(name));
   return {
     name: view.name ?? "View",

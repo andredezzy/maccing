@@ -31,7 +31,7 @@ export interface RawPage {
   properties?: Record<string, RawPageProperty>;
 }
 
-function caption(runs: RichText[] | undefined): string | undefined {
+function caption(runs: unknown): string | undefined {
   return richTextToPlain(runs) || undefined;
 }
 function sourceUrl(media: NotionFileSource | undefined): string | undefined {
@@ -90,7 +90,7 @@ function mapBlock(block: RawBlock): MockupBlock {
         type: "code",
         language: data.language as string,
         text: richTextToPlain(data.rich_text),
-        caption: caption(data.caption as RichText[]),
+        caption: caption(data.caption),
       };
     case "equation":
       return { type: "equation", expression: (data.expression as string) ?? "" };
@@ -103,7 +103,7 @@ function mapBlock(block: RawBlock): MockupBlock {
       return { type: block.type, url: sourceUrl(media), name: media.name, caption: caption(media.caption) };
     }
     case "bookmark":
-      return { type: "bookmark", url: (data.url as string) ?? "", caption: caption(data.caption as RichText[]) };
+      return { type: "bookmark", url: (data.url as string) ?? "", caption: caption(data.caption) };
     case "link_preview":
       return { type: "link_preview", url: (data.url as string) ?? "" };
     case "embed":
