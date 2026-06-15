@@ -1,6 +1,15 @@
-// Block renderers aggregator — importing this module runs every family's register() calls. Add a new
-// block family by creating a file here and adding its import below.
+// Block renderers aggregator — importing this module runs every family's register() calls, so the
+// engine can dispatch every block type. EVERYTHING Notion renders is a block: content (text · media ·
+// layout), the page & database containers, and the database views (cards · list · time · data). Add a
+// new block family by creating a file here and adding its import below.
 import "./text";
 import "./media";
 import "./layout";
 import "./page";
+import "./cards";
+import "./list";
+import "./time";
+import "./data";
+import "./database";
+
+export { renderDatabaseLines } from "./database";

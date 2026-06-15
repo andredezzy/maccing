@@ -7,13 +7,13 @@
 //
 // This file is the thin entry — three symmetric (model → finished string) renderers: renderPage(PageModel) ·
 // renderDatabase(DatabaseModel) · renderBlocksMockup(MockupBlock[]). The model lives in ./model, primitives
-// in ./text + ./box, dispatch in ./engine, and the renderers in ./blocks + ./views (imported here only so
-// their register() calls run).
+// in ./text + ./box, dispatch in ./engine, and EVERY renderer in ./blocks (content, page/database
+// containers, and db views alike — they are all blocks).
 
-import "./blocks"; // side-effect: registers the block-leaf renderers (incl. the page-container block)
+// importing ./blocks runs every renderer's register() call (content · containers · db views).
+import { renderDatabaseLines } from "./blocks";
 import { renderBlocks } from "./engine";
 import type { DatabaseModel, MockupBlock, PageModel } from "./model";
-import { renderDatabaseLines } from "./views"; // also registers the database-view renderers
 
 export { renderBlocks } from "./engine";
 export * from "./model";
