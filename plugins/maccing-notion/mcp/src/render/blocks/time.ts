@@ -22,9 +22,19 @@ const MONTHS = [
 ];
 /** Day of week (0=Sun) via Sakamoto — pure, no ambient Date. */
 function dayOfWeek(year: number, month: number, day: number): number {
-  const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-  const y = month < 3 ? year - 1 : year;
-  return (((y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + t[month - 1] + day) % 7) + 7) % 7;
+  const monthOffsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+  const adjustedYear = month < 3 ? year - 1 : year;
+  return (
+    (((adjustedYear +
+      Math.floor(adjustedYear / 4) -
+      Math.floor(adjustedYear / 100) +
+      Math.floor(adjustedYear / 400) +
+      monthOffsets[month - 1] +
+      day) %
+      7) +
+      7) %
+    7
+  );
 }
 function daysInMonth(year: number, month: number): number {
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -35,20 +45,20 @@ function renderCalendar(block: CalendarBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total), `${MONTHS[month - 1]} ${block.year}`];
   const first = dayOfWeek(block.year, month, 1);
   const days = daysInMonth(block.year, month);
-  const eventDays = new Set((block.events ?? []).map((e) => e.day));
+  const eventDays = new Set((block.events ?? []).map((event) => event.day));
   const cells: string[] = [];
-  for (let i = 0; i < first; i++) {
+  for (let index = 0; index < first; index++) {
     cells.push("");
   }
-  for (let d = 1; d <= days; d++) {
-    cells.push(eventDays.has(d) ? `${d} •` : `${d}`);
+  for (let day = 1; day <= days; day++) {
+    cells.push(eventDays.has(day) ? `${day} •` : `${day}`);
   }
   while (cells.length % 7 !== 0) {
     cells.push("");
   }
   const weeks: string[][] = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
+  for (let weekStart = 0; weekStart < cells.length; weekStart += 7) {
+    weeks.push(cells.slice(weekStart, weekStart + 7));
   }
   lines.push(...renderTableGrid(["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"], weeks, total, "─"));
   for (const event of block.events ?? []) {
@@ -58,16 +68,18 @@ function renderCalendar(block: CalendarBlock, total: number): string[] {
 }
 function renderTimeline(block: TimelineBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total)];
-  const nameW = Math.max(8, Math.floor(total * 0.3));
-  const barW = Math.max(1, total - nameW - 1);
+  const nameWidth = Math.max(8, Math.floor(total * 0.3));
+  const barWidth = Math.max(1, total - nameWidth - 1);
   if (block.axis) {
-    lines.push(`${padRight("", nameW)}│${padRight(block.axis, barW)}`);
+    lines.push(`${padRight("", nameWidth)}│${padRight(block.axis, barWidth)}`);
   }
   for (const row of block.rows) {
-    const startCol = Math.max(0, Math.min(barW, Math.round((row.start || 0) * barW)));
-    const endCol = Math.max(startCol, Math.min(barW, Math.round((row.end || 0) * barW)));
-    const bar = Array.from({ length: barW }, (_, col) => (col >= startCol && col < endCol ? "█" : "·")).join("");
-    lines.push(`${padRight(row.label, nameW)}│${bar}`);
+    const startColumn = Math.max(0, Math.min(barWidth, Math.round((row.start || 0) * barWidth)));
+    const endColumn = Math.max(startColumn, Math.min(barWidth, Math.round((row.end || 0) * barWidth)));
+    const bar = Array.from({ length: barWidth }, (_, column) =>
+      column >= startColumn && column < endColumn ? "█" : "·",
+    ).join("");
+    lines.push(`${padRight(row.label, nameWidth)}│${bar}`);
   }
   return lines;
 }

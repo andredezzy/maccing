@@ -82,8 +82,8 @@ export function flattenValue(prop: RawProp | undefined): string {
     }
     case "formula": {
       const formula = prop.formula as RawProp;
-      const v = formula?.type ? formula[formula.type] : undefined;
-      return v == null ? "" : typeof v === "boolean" ? (v ? "☑" : "☐") : String(v);
+      const value = formula?.type ? formula[formula.type] : undefined;
+      return value == null ? "" : typeof value === "boolean" ? (value ? "☑" : "☐") : String(value);
     }
     case "relation": {
       const relations = (prop.relation as { id?: string }[]) ?? [];
@@ -91,8 +91,8 @@ export function flattenValue(prop: RawProp | undefined): string {
     }
     case "rollup": {
       const rollup = prop.rollup as RawProp;
-      const v = rollup?.type ? rollup[rollup.type] : undefined;
-      return v == null ? "" : Array.isArray(v) ? `${v.length} item(s)` : String(v);
+      const value = rollup?.type ? rollup[rollup.type] : undefined;
+      return value == null ? "" : Array.isArray(value) ? `${value.length} item(s)` : String(value);
     }
     default:
       return "";
@@ -116,8 +116,8 @@ interface DatedRow {
 }
 
 function dayOf(dateStr: string): DayComponents | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
-  return m ? { year: +m[1], month: +m[2], day: +m[3] } : null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  return match ? { year: +match[1], month: +match[2], day: +match[3] } : null;
 }
 
 function viewToBlock(
@@ -128,7 +128,7 @@ function viewToBlock(
   tabs: string[],
 ): ViewBlock {
   const columns = view.columns.length ? view.columns : [titleColumn];
-  const otherColumns = columns.filter((c) => c !== titleColumn);
+  const otherColumns = columns.filter((column) => column !== titleColumn);
 
   switch (view.type) {
     case "gallery":
@@ -137,9 +137,9 @@ function viewToBlock(
         name: dbTitle,
         views: tabs,
         cardSize: "medium",
-        cards: rows.map((r) => ({
-          name: rowTitle(r, titleColumn),
-          lines: otherColumns.map((c) => flattenValue(r.properties?.[c])).filter(Boolean),
+        cards: rows.map((row) => ({
+          name: rowTitle(row, titleColumn),
+          lines: otherColumns.map((column) => flattenValue(row.properties?.[column])).filter(Boolean),
         })),
       };
     case "board": {
@@ -151,12 +151,12 @@ function viewToBlock(
       for (const option of view.groupOptions ?? []) {
         groups.set(option, []);
       }
-      for (const r of rows) {
-        const key = flattenValue(r.properties?.[groupBy]) || "(empty)";
+      for (const row of rows) {
+        const key = flattenValue(row.properties?.[groupBy]) || "(empty)";
         if (!groups.has(key)) {
           groups.set(key, []);
         }
-        groups.get(key)?.push({ name: rowTitle(r, titleColumn) });
+        groups.get(key)?.push({ name: rowTitle(row, titleColumn) });
       }
       return {
         type: "board",
@@ -180,20 +180,23 @@ function viewToBlock(
         type: "list",
         name: dbTitle,
         views: tabs,
-        items: rows.map((r) => ({
-          title: rowTitle(r, titleColumn),
+        items: rows.map((row) => ({
+          title: rowTitle(row, titleColumn),
           meta: otherColumns
-            .map((c) => flattenValue(r.properties?.[c]))
+            .map((column) => flattenValue(row.properties?.[column]))
             .filter(Boolean)
             .join(" · "),
         })),
       };
     case "calendar": {
       const dateCol =
-        view.dateProp ?? columns.find((c) => flattenValue(rows[0]?.properties?.[c]).match(/^\d{4}-\d{2}/));
+        view.dateProp ?? columns.find((column) => flattenValue(rows[0]?.properties?.[column]).match(/^\d{4}-\d{2}/));
       const dated = rows
-        .map((r) => ({ date: dayOf(flattenValue(r.properties?.[dateCol ?? ""])), title: rowTitle(r, titleColumn) }))
-        .filter((x): x is DatedRow => x.date !== null);
+        .map((row) => ({
+          date: dayOf(flattenValue(row.properties?.[dateCol ?? ""])),
+          title: rowTitle(row, titleColumn),
+        }))
+        .filter((datedRow): datedRow is DatedRow => datedRow.date !== null);
       if (dated.length === 0) {
         break; // no usable dates → fall through to table
       }
@@ -205,8 +208,8 @@ function viewToBlock(
         year,
         month,
         events: dated
-          .filter((x) => x.date.year === year && x.date.month === month)
-          .map((x) => ({ day: x.date.day, title: x.title })),
+          .filter((datedRow) => datedRow.date.year === year && datedRow.date.month === month)
+          .map((datedRow) => ({ day: datedRow.date.day, title: datedRow.title })),
       };
     }
     default:
@@ -218,21 +221,21 @@ function viewToBlock(
     name: dbTitle,
     views: tabs,
     columns: columns,
-    rows: rows.map((r) => columns.map((c) => flattenValue(r.properties?.[c]))),
+    rows: rows.map((row) => columns.map((column) => flattenValue(row.properties?.[column]))),
   };
 }
 
 /** Map a database's resolved views + sample rows to a renderable DatabaseModel. Pure. */
 export function databaseToModel(input: DatabaseModelInput): DatabaseModel {
-  const tabs = input.views.map((v) => v.name); // every view's tab bar lists all sibling names
+  const tabs = input.views.map((view) => view.name); // every view's tab bar lists all sibling names
   const views: ViewBlock[] = input.views.length
-    ? input.views.map((v) => viewToBlock(v, input.rows, input.titleColumn, input.title, tabs))
+    ? input.views.map((view) => viewToBlock(view, input.rows, input.titleColumn, input.title, tabs))
     : [
         {
           type: "table",
           name: input.title,
           columns: [input.titleColumn],
-          rows: input.rows.map((r) => [rowTitle(r, input.titleColumn)]),
+          rows: input.rows.map((row) => [rowTitle(row, input.titleColumn)]),
         },
       ];
   return { title: input.title, icon: input.icon, view: 0, views };

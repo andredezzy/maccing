@@ -19,8 +19,8 @@ function renderGallery(block: GalleryBlock, total: number): string[] {
   if (cardBoxes.length === 0) {
     return [...lines, ...box(["(empty)"], total - 2)];
   }
-  for (let i = 0; i < cardBoxes.length; i += perRow) {
-    lines.push(...hcat(cardBoxes.slice(i, i + perRow), GAP));
+  for (let index = 0; index < cardBoxes.length; index += perRow) {
+    lines.push(...hcat(cardBoxes.slice(index, index + perRow), GAP));
   }
   return lines;
 }
@@ -29,14 +29,14 @@ function renderBoard(block: BoardBlock, total: number): string[] {
   if (block.groups.length === 0) {
     return [...lines, ...box(["(no groups)"], total - 2)];
   }
-  const colInner = Math.max(
+  const columnInner = Math.max(
     SMALL_CARD,
     Math.floor((total - (block.groups.length - 1) * GAP) / block.groups.length) - 2,
   );
   const columns = block.groups.map((group) => {
-    const head = box([`${group.name}  (${group.total ?? group.cards.length})`], colInner);
+    const head = box([`${group.name}  (${group.total ?? group.cards.length})`], columnInner);
     const cards = group.cards.flatMap((card) =>
-      box([card.icon ? `${card.icon} ${card.name}` : card.name, ...(card.lines ?? [])], colInner),
+      box([card.icon ? `${card.icon} ${card.name}` : card.name, ...(card.lines ?? [])], columnInner),
     );
     return [...head, ...cards];
   });

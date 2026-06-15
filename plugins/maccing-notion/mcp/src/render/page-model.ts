@@ -111,7 +111,7 @@ function mapBlock(block: RawBlock): MockupBlock {
     case "column_list":
       return {
         type: "column_list",
-        columns: (block.children ?? []).map((col) => ({ children: mapBlocks(col.children ?? []) })),
+        columns: (block.children ?? []).map((column) => ({ children: mapBlocks(column.children ?? []) })),
       };
     case "table":
       return {
@@ -143,7 +143,7 @@ function mapBlocks(blocks: RawBlock[]): MockupBlock[] {
 }
 
 function pageTitle(page: RawPage): string {
-  const titleProp = Object.values(page.properties ?? {}).find((p) => p.type === "title");
+  const titleProp = Object.values(page.properties ?? {}).find((property) => property.type === "title");
   return richTextToPlain(titleProp?.title) || "(untitled)";
 }
 

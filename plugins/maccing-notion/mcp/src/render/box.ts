@@ -20,38 +20,41 @@ export function hcat(boxes: string[][], gap: number): string[] {
   if (boxes.length === 0) {
     return [];
   }
-  const height = Math.max(...boxes.map((b) => b.length));
-  const padded = boxes.map((b) => {
-    const w = b.length > 0 ? displayWidth(b[0]) : 0;
-    return [...b, ...Array(height - b.length).fill(" ".repeat(w))];
+  const height = Math.max(...boxes.map((boxLines) => boxLines.length));
+  const padded = boxes.map((boxLines) => {
+    const width = boxLines.length > 0 ? displayWidth(boxLines[0]) : 0;
+    return [...boxLines, ...Array(height - boxLines.length).fill(" ".repeat(width))];
   });
   const rows: string[] = [];
-  for (let r = 0; r < height; r++) {
-    rows.push(padded.map((b) => b[r]).join(" ".repeat(gap)));
+  for (let rowIndex = 0; rowIndex < height; rowIndex++) {
+    rows.push(padded.map((boxLines) => boxLines[rowIndex]).join(" ".repeat(gap)));
   }
   return rows;
 }
 export function cardsPerRow(inner: number, total: number): number {
-  let n = 1;
-  while ((n + 1) * (inner + 2) + n * GAP <= total) {
-    n++;
+  let count = 1;
+  while ((count + 1) * (inner + 2) + count * GAP <= total) {
+    count++;
   }
-  return n;
+  return count;
 }
 function fitColumns(natural: number[], total: number): number[] {
   const widths = [...natural];
-  let extra = total - (3 * widths.length + 1) - widths.reduce((a, b) => a + b, 0);
-  for (let i = 0; extra > 0; i = (i + 1) % widths.length, extra--) {
-    widths[i]++;
+  let extra = total - (3 * widths.length + 1) - widths.reduce((acc, width) => acc + width, 0);
+  for (let index = 0; extra > 0; index = (index + 1) % widths.length, extra--) {
+    widths[index]++;
   }
   return widths;
 }
 export function renderTableGrid(columns: string[], rows: string[][], total: number, headerSep: string): string[] {
-  const natural = columns.map((col, i) => Math.max(displayWidth(col), ...rows.map((r) => displayWidth(r[i] ?? ""))));
+  const natural = columns.map((column, index) =>
+    Math.max(displayWidth(column), ...rows.map((row) => displayWidth(row[index] ?? ""))),
+  );
   const widths = fitColumns(natural, total);
-  const rule = (l: string, m: string, r: string, ch: string): string =>
-    l + widths.map((w) => ch.repeat(w + 2)).join(m) + r;
-  const line = (cells: string[]): string => `│${widths.map((w, i) => ` ${padRight(cells[i] ?? "", w)} `).join("│")}│`;
+  const rule = (left: string, junction: string, right: string, fillChar: string): string =>
+    left + widths.map((width) => fillChar.repeat(width + 2)).join(junction) + right;
+  const line = (cells: string[]): string =>
+    `│${widths.map((width, index) => ` ${padRight(cells[index] ?? "", width)} `).join("│")}│`;
   return [
     rule("┌", "┬", "┐", "─"),
     line(columns),

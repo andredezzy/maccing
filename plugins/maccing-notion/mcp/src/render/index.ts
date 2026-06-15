@@ -51,8 +51,8 @@ export function renderPage(model: PageModel): string {
 }
 
 /** Render a standalone database. A database IS a block too — wrap the model and dispatch it the same way. */
-export function renderDatabase(db: DatabaseModel): string {
-  return renderRoot({ type: "database", database: db }, db.width);
+export function renderDatabase(database: DatabaseModel): string {
+  return renderRoot({ type: "database", database }, database.width);
 }
 
 /** Render a bare block subtree — no page/database chrome. Non-positive widths fall back to the default. */

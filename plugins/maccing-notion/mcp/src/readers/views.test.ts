@@ -201,13 +201,13 @@ test("orderViews orders by the container view_ids and drops foreign-container vi
     { id: "foreign", name: "Board", type: "board", parent: { database_id: "OTHER" } },
   ];
   // With the container's view_ids: exact tab order, foreign view excluded, view_ids[0] is the default.
-  expect(orderViews(raw, ["board", "cal"], "DB").map((v) => v.id)).toEqual(["board", "cal"]);
+  expect(orderViews(raw, ["board", "cal"], "DB").map((view) => view.id)).toEqual(["board", "cal"]);
   // Fallback (no view_ids — token_v2 absent): filter foreign by parent.database_id, keep public order.
-  expect(orderViews(raw, null, "DB").map((v) => v.id)).toEqual(["cal", "board"]);
+  expect(orderViews(raw, null, "DB").map((view) => view.id)).toEqual(["cal", "board"]);
   // Defensive: if the parent filter would drop everything, keep the unfiltered set.
-  expect(orderViews(raw, null, "MISSING").map((v) => v.id)).toEqual(["cal", "board", "foreign"]);
+  expect(orderViews(raw, null, "MISSING").map((view) => view.id)).toEqual(["cal", "board", "foreign"]);
   // Defensive: view_ids present but NONE match → fall through to the parent filter (same as the null path).
-  expect(orderViews(raw, ["nonexistent"], "DB").map((v) => v.id)).toEqual(["cal", "board"]);
+  expect(orderViews(raw, ["nonexistent"], "DB").map((view) => view.id)).toEqual(["cal", "board"]);
 });
 
 test("viewQueryFilter returns the saved filter VERBATIM (no re-wrapping) or falls back to quick_filters", () => {

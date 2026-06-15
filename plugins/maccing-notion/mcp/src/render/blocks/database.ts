@@ -7,15 +7,15 @@ import { register, renderBlock } from "../engine";
 import type { DatabaseModel } from "../model";
 
 /** Render a database body (header + the selected view, or all views stacked). */
-function renderDatabaseLines(db: DatabaseModel, total: number): string[] {
-  const out = header(db.icon, db.title, undefined, db.description, total);
-  const which = db.view ?? 0;
-  const views = which === "all" ? db.views : [db.views[which]].filter(Boolean);
-  for (let i = 0; i < views.length; i++) {
-    if (i > 0) {
+function renderDatabaseLines(database: DatabaseModel, total: number): string[] {
+  const out = header(database.icon, database.title, undefined, database.description, total);
+  const which = database.view ?? 0;
+  const views = which === "all" ? database.views : [database.views[which]].filter(Boolean);
+  for (let index = 0; index < views.length; index++) {
+    if (index > 0) {
       out.push("");
     }
-    out.push(...renderBlock(views[i], total, 0, 0));
+    out.push(...renderBlock(views[index], total, 0, 0));
   }
   return out;
 }

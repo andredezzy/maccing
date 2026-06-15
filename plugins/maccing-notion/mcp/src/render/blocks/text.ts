@@ -9,7 +9,7 @@ const BULLETS = ["•", "◦", "▪"];
 
 function indent(lines: string[], by: number): string[] {
   const pad = " ".repeat(by);
-  return lines.map((l) => pad + l);
+  return lines.map((line) => pad + line);
 }
 /** Render a block's children indented under it (the available width shrinks by the indent). */
 function childLines(children: MockupBlock[] | undefined, width: number, by: number, depth: number): string[] {
@@ -27,9 +27,9 @@ function flow(
   childIndent: number,
   childDepth: number,
 ): string[] {
-  const mw = displayWidth(marker);
-  const wrapped = wordWrap(text ?? "", Math.max(1, width - mw));
-  const lines = wrapped.map((w, i) => (i === 0 ? marker : " ".repeat(mw)) + w);
+  const markerWidth = displayWidth(marker);
+  const wrapped = wordWrap(text ?? "", Math.max(1, width - markerWidth));
+  const lines = wrapped.map((line, index) => (index === 0 ? marker : " ".repeat(markerWidth)) + line);
   return [...lines, ...childLines(children, width, childIndent, childDepth)];
 }
 
@@ -60,8 +60,8 @@ register("numbered_list_item", (block, width, _depth, ordinal) =>
 register("to_do", (block, width) => flow(`[${block.checked ? "x" : " "}] `, block.text, width, block.children, 4, 0));
 register("toggle", (block, width) => flow("▸ ", block.text, width, block.children, 2, 0));
 register("quote", (block, width) => {
-  const wrapped = wordWrap(block.text, Math.max(1, width - 2)).map((l) => `│ ${l}`);
-  const kids = childLines(block.children, width - 2, 0, 0).map((l) => `│ ${l}`);
+  const wrapped = wordWrap(block.text, Math.max(1, width - 2)).map((line) => `│ ${line}`);
+  const kids = childLines(block.children, width - 2, 0, 0).map((line) => `│ ${line}`);
   return [...wrapped, ...kids];
 });
 register("callout", (block, width) => {

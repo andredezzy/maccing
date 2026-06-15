@@ -34,11 +34,11 @@ const TIGHT = new Set(["bulleted_list_item", "numbered_list_item", "to_do"]);
 export function renderBlocks(blocks: MockupBlock[], width: number, depth: number): string[] {
   const out: string[] = [];
   let ordinal = 0;
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
     ordinal = block.type === "numbered_list_item" ? ordinal + 1 : 0;
-    if (i > 0) {
-      const prev = blocks[i - 1];
+    if (index > 0) {
+      const prev = blocks[index - 1];
       const tight = TIGHT.has(prev.type) && TIGHT.has(block.type);
       if (!tight) {
         out.push("");

@@ -81,7 +81,7 @@ async function renderDatabaseMockup(
   const title = richTextToPlain(database.title) || "(database)";
   const idToName = buildIdToName(schema);
   const titleColumn =
-    Object.entries(schema).find(([, p]) => p.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
+    Object.entries(schema).find(([, property]) => property.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
 
   // Order views the way Notion shows them. The public API exposes no tab order or default-view signal, so
   // we read the container block's `view_ids` via private api/v3 (databaseId IS the collection_view block
@@ -91,7 +91,7 @@ async function renderDatabaseMockup(
   const ordered = orderViews(rawViews, await readViewOrder(databaseId), databaseId);
   const views = ordered.map((view) => {
     const resolved = resolveView(view, idToName);
-    resolved.columns = [titleColumn, ...resolved.columns.filter((c) => c !== titleColumn)];
+    resolved.columns = [titleColumn, ...resolved.columns.filter((column) => column !== titleColumn)];
     if (resolved.type === "board") {
       resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema);
     }

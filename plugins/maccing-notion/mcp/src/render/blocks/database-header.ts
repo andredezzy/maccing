@@ -6,7 +6,7 @@ import { clip, displayWidth, spread } from "../text";
 export function databaseHeader(name: string, views: string[] | undefined, total: number): string {
   const right = "+ New";
   const prefix = `◷ ${name}`;
-  const tokens = (views ?? []).map((v) => `‹ ${v} ›`);
+  const tokens = (views ?? []).map((view) => `‹ ${view} ›`);
   if (tokens.length === 0) {
     return spread(prefix, right, total);
   }

@@ -4,53 +4,53 @@
 // ── display width (grapheme-cluster aware) ────────────────────────────────────
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 
-function isZeroWidth(cp: number): boolean {
+function isZeroWidth(codePoint: number): boolean {
   return (
-    cp === 0x200d ||
-    (cp >= 0xfe00 && cp <= 0xfe0f) ||
-    (cp >= 0x1f3fb && cp <= 0x1f3ff) ||
-    (cp >= 0x0300 && cp <= 0x036f) ||
-    cp === 0x00ad
+    codePoint === 0x200d ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff) ||
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    codePoint === 0x00ad
   );
 }
-function isWide(cp: number): boolean {
+function isWide(codePoint: number): boolean {
   return (
-    (cp >= 0x1100 && cp <= 0x115f) ||
-    (cp >= 0x2e80 && cp <= 0x303e) ||
-    (cp >= 0x3041 && cp <= 0x33ff) ||
-    (cp >= 0x3400 && cp <= 0x4dbf) ||
-    (cp >= 0x4e00 && cp <= 0x9fff) ||
-    (cp >= 0xa000 && cp <= 0xa4cf) ||
-    (cp >= 0xac00 && cp <= 0xd7a3) ||
-    (cp >= 0xf900 && cp <= 0xfaff) ||
-    (cp >= 0xfe30 && cp <= 0xfe4f) ||
-    (cp >= 0xff00 && cp <= 0xff60) ||
-    (cp >= 0xffe0 && cp <= 0xffe6)
+    (codePoint >= 0x1100 && codePoint <= 0x115f) ||
+    (codePoint >= 0x2e80 && codePoint <= 0x303e) ||
+    (codePoint >= 0x3041 && codePoint <= 0x33ff) ||
+    (codePoint >= 0x3400 && codePoint <= 0x4dbf) ||
+    (codePoint >= 0x4e00 && codePoint <= 0x9fff) ||
+    (codePoint >= 0xa000 && codePoint <= 0xa4cf) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe30 && codePoint <= 0xfe4f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6)
   );
 }
-function isEmoji(cp: number): boolean {
+function isEmoji(codePoint: number): boolean {
   return (
-    (cp >= 0x1f000 && cp <= 0x1faff) ||
-    (cp >= 0x2600 && cp <= 0x27bf) ||
-    (cp >= 0x2b00 && cp <= 0x2bff) ||
-    cp === 0x231a ||
-    cp === 0x231b ||
-    (cp >= 0x23e9 && cp <= 0x23fa) ||
-    (cp >= 0x25fd && cp <= 0x25fe) ||
-    cp === 0x2614 ||
-    cp === 0x2615 ||
-    (cp >= 0x1f1e6 && cp <= 0x1f1ff)
+    (codePoint >= 0x1f000 && codePoint <= 0x1faff) ||
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+    (codePoint >= 0x2b00 && codePoint <= 0x2bff) ||
+    codePoint === 0x231a ||
+    codePoint === 0x231b ||
+    (codePoint >= 0x23e9 && codePoint <= 0x23fa) ||
+    (codePoint >= 0x25fd && codePoint <= 0x25fe) ||
+    codePoint === 0x2614 ||
+    codePoint === 0x2615 ||
+    (codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff)
   );
 }
 function clusterWidth(cluster: string): number {
   let wide = false;
   let base = false;
-  for (const ch of cluster) {
-    const cp = ch.codePointAt(0) ?? 0;
-    if (isZeroWidth(cp)) {
+  for (const char of cluster) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (isZeroWidth(codePoint)) {
       continue;
     }
-    if (isWide(cp) || isEmoji(cp)) {
+    if (isWide(codePoint) || isEmoji(codePoint)) {
       wide = true;
     }
     base = true;
@@ -72,12 +72,12 @@ export function clip(text: string, width: number): string {
   let out = "";
   let used = 0;
   for (const { segment } of segmenter.segment(text)) {
-    const cw = clusterWidth(segment);
-    if (used + cw > Math.max(0, width - 1)) {
+    const clusterColumns = clusterWidth(segment);
+    if (used + clusterColumns > Math.max(0, width - 1)) {
       break;
     }
     out += segment;
-    used += cw;
+    used += clusterColumns;
   }
   return `${out}…`;
 }
@@ -93,7 +93,7 @@ export function spread(left: string, right: string, width: number): string {
 }
 /** Word-wrap `text` to lines of at most `width` display columns (hard-breaks over-long words). */
 export function wordWrap(text: string, width: number): string[] {
-  const w = Math.max(1, width);
+  const wrapWidth = Math.max(1, width);
   const out: string[] = [];
   for (const para of text.split("\n")) {
     if (para === "") {
@@ -103,7 +103,7 @@ export function wordWrap(text: string, width: number): string[] {
     let line = "";
     for (const word of para.split(" ")) {
       const candidate = line ? `${line} ${word}` : word;
-      if (displayWidth(candidate) <= w) {
+      if (displayWidth(candidate) <= wrapWidth) {
         line = candidate;
         continue;
       }
@@ -112,9 +112,9 @@ export function wordWrap(text: string, width: number): string[] {
         line = "";
       }
       let rest = word;
-      while (displayWidth(rest) > w) {
-        const head = clip(rest, w + 1).replace(/…$/, "");
-        const piece = head === rest ? rest : clipHard(rest, w);
+      while (displayWidth(rest) > wrapWidth) {
+        const head = clip(rest, wrapWidth + 1).replace(/…$/, "");
+        const piece = head === rest ? rest : clipHard(rest, wrapWidth);
         out.push(piece);
         rest = rest.slice(piece.length);
       }
@@ -131,12 +131,12 @@ function clipHard(text: string, width: number): string {
   let out = "";
   let used = 0;
   for (const { segment } of segmenter.segment(text)) {
-    const cw = clusterWidth(segment);
-    if (used + cw > width) {
+    const clusterColumns = clusterWidth(segment);
+    if (used + clusterColumns > width) {
       break;
     }
     out += segment;
-    used += cw;
+    used += clusterColumns;
   }
   return out || text.slice(0, 1);
 }

@@ -70,13 +70,13 @@ export interface RawView {
  */
 export function orderViews(views: RawView[], viewIds: string[] | null, databaseId: string): RawView[] {
   if (viewIds) {
-    const byId = new Map(views.map((v) => [v.id, v]));
-    const ordered = viewIds.map((id) => byId.get(id)).filter((v): v is RawView => Boolean(v));
+    const byId = new Map(views.map((view) => [view.id, view]));
+    const ordered = viewIds.map((id) => byId.get(id)).filter((view): view is RawView => Boolean(view));
     if (ordered.length) {
       return ordered;
     }
   }
-  const own = views.filter((v) => v.parent?.database_id === databaseId);
+  const own = views.filter((view) => view.parent?.database_id === databaseId);
   return own.length ? own : views;
 }
 
@@ -120,11 +120,11 @@ export function selectViewIndex(views: ViewSelector[], selector: string | number
     return selector >= 0 && selector < views.length ? selector : 0;
   }
   const needle = selector.toLowerCase();
-  const exact = views.findIndex((v) => v.name?.toLowerCase() === needle || v.id === selector);
+  const exact = views.findIndex((view) => view.name?.toLowerCase() === needle || view.id === selector);
   if (exact >= 0) {
     return exact;
   }
-  const partial = views.findIndex((v) => v.name?.toLowerCase().includes(needle));
+  const partial = views.findIndex((view) => view.name?.toLowerCase().includes(needle));
   return partial >= 0 ? partial : 0;
 }
 

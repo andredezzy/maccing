@@ -17,15 +17,15 @@ function renderChart(block: ChartBlock, total: number): string[] {
   if (data.length === 0) {
     return [...lines, ...box(["(no data)"], total - 2)];
   }
-  const labelW = Math.min(20, Math.max(...data.map((d) => displayWidth(d.label))));
-  const valStrs = data.map((d) => String(d.value));
-  const valW = Math.max(...valStrs.map(displayWidth));
-  const barW = Math.max(1, total - labelW - valW - 2);
-  const max = Math.max(1, ...data.map((d) => d.value));
-  for (let i = 0; i < data.length; i++) {
-    const filled = Math.round((data[i].value / max) * barW);
-    const bar = "█".repeat(filled) + "·".repeat(Math.max(0, barW - filled));
-    lines.push(`${padRight(data[i].label, labelW)} ${bar} ${padRight(valStrs[i], valW)}`);
+  const labelWidth = Math.min(20, Math.max(...data.map((point) => displayWidth(point.label))));
+  const valueStrings = data.map((point) => String(point.value));
+  const valueWidth = Math.max(...valueStrings.map(displayWidth));
+  const barWidth = Math.max(1, total - labelWidth - valueWidth - 2);
+  const max = Math.max(1, ...data.map((point) => point.value));
+  for (let index = 0; index < data.length; index++) {
+    const filled = Math.round((data[index].value / max) * barWidth);
+    const bar = "█".repeat(filled) + "·".repeat(Math.max(0, barWidth - filled));
+    lines.push(`${padRight(data[index].label, labelWidth)} ${bar} ${padRight(valueStrings[index], valueWidth)}`);
   }
   return lines;
 }
@@ -41,7 +41,7 @@ function renderForm(block: FormBlock, total: number): string[] {
           : fieldType === "person"
             ? "[ @ ]"
             : "[ _____ ]";
-  const fields = block.fields.map((f) => clip(`${f.label}:  ${widget(f.fieldType)}`, total - 2));
+  const fields = block.fields.map((field) => clip(`${field.label}:  ${widget(field.fieldType)}`, total - 2));
   return [databaseHeader(block.name, block.views, total), ...box([...fields, "", "[ Submit ]"], total - 2)];
 }
 

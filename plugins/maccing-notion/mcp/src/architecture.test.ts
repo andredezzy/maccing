@@ -31,8 +31,10 @@ test("the src/ import graph is acyclic (no module cycles)", async () => {
   const graph = new Map<string, string[]>();
   for (const file of files) {
     const source = await Bun.file(file).text();
-    const fromImports = [...source.matchAll(/(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g)].map((m) => m[1]);
-    const sideEffectImports = [...source.matchAll(/^import\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]);
+    const fromImports = [...source.matchAll(/(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g)].map(
+      (match) => match[1],
+    );
+    const sideEffectImports = [...source.matchAll(/^import\s+["']([^"']+)["'];?\s*$/gm)].map((match) => match[1]);
     const deps = [...fromImports, ...sideEffectImports]
       .map((spec) => resolveImport(file, spec))
       .filter((dep): dep is string => dep !== null);

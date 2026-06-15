@@ -90,9 +90,9 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
     title: "X",
     blocks: [{ type: "callout", icon: "👦", lines: ["@andre.dezzy", "Age: 22"] }],
   }).split("\n");
-  const top = lines.find((l) => l.startsWith("┌"));
-  const emojiLine = lines.find((l) => l.includes("@andre.dezzy"));
-  const bottom = lines.find((l) => l.startsWith("└"));
+  const top = lines.find((line) => line.startsWith("┌"));
+  const emojiLine = lines.find((line) => line.includes("@andre.dezzy"));
+  const bottom = lines.find((line) => line.startsWith("└"));
   expect(top && emojiLine && bottom).toBeTruthy();
   expect(displayWidth(emojiLine ?? "")).toBe(displayWidth(top ?? ""));
   expect(displayWidth(bottom ?? "")).toBe(displayWidth(top ?? ""));
@@ -101,7 +101,7 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
 test("every database header carries a right-aligned + New", () => {
   const out = renderPage(model);
   for (const dbName of ["Gym Navigation", "Muscle Groups", "Weeks"]) {
-    const header = out.split("\n").find((l) => l.includes(`◷ ${dbName}`));
+    const header = out.split("\n").find((line) => line.includes(`◷ ${dbName}`));
     expect(header).toBeTruthy();
     expect(header?.endsWith("+ New")).toBe(true);
   }
@@ -122,15 +122,15 @@ test("over-long content is truncated with … so the box still closes", () => {
   assertBoxesClose(out);
   expect(out).toContain("…"); // the long name/description got clipped
   // no content line is wider than its box
-  const top = out.split("\n").find((l) => l.startsWith("┌"));
-  for (const line of out.split("\n").filter((l) => l.startsWith("│"))) {
+  const top = out.split("\n").find((line) => line.startsWith("┌"));
+  for (const line of out.split("\n").filter((line) => line.startsWith("│"))) {
     expect(displayWidth(line)).toBeLessThanOrEqual(displayWidth(top ?? ""));
   }
 });
 
 test("a table spans the full page width", () => {
   const out = renderPage(model).split("\n");
-  const topRule = out.find((l) => l.startsWith("┌─") && l.includes("┬"));
+  const topRule = out.find((line) => line.startsWith("┌─") && line.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
 });
@@ -484,7 +484,7 @@ test("databaseHeader fits the width and collapses overflowing view tabs to '+N m
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
-  const header = out.split("\n").find((l) => l.includes("+ New")) ?? ""; // the view's tab-bar header line
+  const header = out.split("\n").find((line) => line.includes("+ New")) ?? ""; // the view's tab-bar header line
   expect(header).toContain("‹ Board ›"); // the active/default (first) view is always shown
   expect(header).toMatch(/\+\d+ more/); // the rest collapse into a count
   expect(header).toContain("+ New");
