@@ -23,6 +23,79 @@ test("a file_upload media block resolves its url to (uploaded)", () => {
   }
 });
 
+test("mapBlock maps every raw Notion block type to its MockupBlock type", () => {
+  const rt = (s: string) => ({ rich_text: [{ plain_text: s }] });
+  const raw: RawBlock[] = [
+    { type: "paragraph", paragraph: rt("p") },
+    {
+      type: "heading_1",
+      heading_1: { ...rt("h1"), is_toggleable: true },
+      children: [{ type: "paragraph", paragraph: rt("in") }],
+    },
+    { type: "heading_2", heading_2: rt("h2") },
+    { type: "heading_3", heading_3: rt("h3") },
+    { type: "bulleted_list_item", bulleted_list_item: rt("b") },
+    { type: "numbered_list_item", numbered_list_item: rt("n") },
+    { type: "to_do", to_do: { ...rt("t"), checked: true } },
+    { type: "toggle", toggle: rt("tog") },
+    { type: "quote", quote: rt("q") },
+    { type: "callout", callout: { ...rt("c"), icon: { type: "emoji", emoji: "💡" } } },
+    { type: "divider", divider: {} },
+    { type: "code", code: { ...rt("x"), language: "ts", caption: [{ plain_text: "cap" }] } },
+    { type: "equation", equation: { expression: "E=mc^2" } },
+    {
+      type: "image",
+      image: { type: "external", external: { url: "https://x/i.png" }, caption: [{ plain_text: "pic" }] },
+    },
+    { type: "bookmark", bookmark: { url: "https://b", caption: [{ plain_text: "bm" }] } },
+    { type: "link_preview", link_preview: { url: "https://lp" } },
+    { type: "embed", embed: { url: "https://e" } },
+    {
+      type: "column_list",
+      column_list: {},
+      children: [{ type: "column", column: {}, children: [{ type: "paragraph", paragraph: rt("col") }] }],
+    },
+    {
+      type: "table",
+      table: { has_column_header: true },
+      children: [{ type: "table_row", table_row: { cells: [[{ plain_text: "A" }]] } }],
+    },
+    { type: "breadcrumb", breadcrumb: {} },
+    { type: "table_of_contents", table_of_contents: {} },
+    { type: "synced_block", synced_block: {} },
+    { type: "child_page", child_page: { title: "Sub" } },
+    { type: "child_database", child_database: { title: "DB" } },
+    { type: "future_unknown_block", future_unknown_block: {} },
+  ] as RawBlock[];
+  expect(pageToModel({}, raw).blocks.map((block) => block.type)).toEqual([
+    "paragraph",
+    "heading_1",
+    "heading_2",
+    "heading_3",
+    "bulleted_list_item",
+    "numbered_list_item",
+    "to_do",
+    "toggle",
+    "quote",
+    "callout",
+    "divider",
+    "code",
+    "equation",
+    "image",
+    "bookmark",
+    "link_preview",
+    "embed",
+    "column_list",
+    "simple_table",
+    "breadcrumb",
+    "table_of_contents",
+    "synced_block",
+    "page_link",
+    "page_link",
+    "unsupported",
+  ]);
+});
+
 test("a link_to_page block maps to a page_link (linked page)", () => {
   const model = pageToModel({}, [{ type: "link_to_page", link_to_page: {} } as RawBlock]);
   expect(model.blocks[0]).toEqual({ type: "page_link", title: "(linked page)", note: "link" });

@@ -1,0 +1,27 @@
+// Unit tests for the render_mockup tool handler — pure (no Notion API). Run with `bun test`.
+
+import { expect, test } from "bun:test";
+
+import { renderMockup } from "./render-mockup";
+
+async function run(mockup: unknown): Promise<{ text: string; isError: boolean }> {
+  const result = await renderMockup.handler({ mockup });
+  return { text: (result.content[0] as { text: string }).text, isError: result.isError ?? false };
+}
+
+test("render_mockup renders a page block (chrome + body)", async () => {
+  const { text, isError } = await run({ type: "page", title: "P", children: [{ type: "paragraph", text: "hi" }] });
+  expect(isError).toBe(false);
+  expect(text).toContain("P");
+  expect(text).toContain("hi");
+});
+
+test("render_mockup renders a bare array of blocks", async () => {
+  const { text } = await run([{ type: "callout", icon: "💡", lines: ["x"] }]);
+  expect(text).toContain("💡");
+});
+
+test("render_mockup returns an error on input that matches no block shape", async () => {
+  const { isError } = await run({ type: "nonsense_block" });
+  expect(isError).toBe(true); // zod parse throws → err()
+});

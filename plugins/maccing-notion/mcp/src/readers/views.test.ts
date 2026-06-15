@@ -129,6 +129,20 @@ test("formatViews renders a non-null quick_filters block, resolving its property
   expect(output).toContain("property_name"); // resolveDeep annotated the `property` id → name
 });
 
+test("renderSorts resolves a sort property id via an encoded id variant", () => {
+  // idToName is keyed by the ENCODED id; the sort's raw id "M>L>" resolves only through idVariants
+  const output = formatViews([{ name: "T", type: "table", sorts: [{ property: "M>L>", direction: "ascending" }] }], {
+    "M%3EL%3E": "Net worth (R$)",
+  });
+  expect(output).toContain("sorts: Net worth (R$) ↑ ascending");
+});
+
+test("renderSorts falls back to the raw id when it resolves to nothing", () => {
+  expect(formatViews([{ name: "T", type: "table", sorts: [{ property: "UNRESOLVED" }] }], {})).toContain(
+    "sorts: UNRESOLVED",
+  );
+});
+
 test("formatViews shows the url line when a view carries a url", () => {
   const view: RawView = { name: "Board", type: "board", url: "https://notion.so/abc" };
   expect(formatViews([view], {})).toContain("url: https://notion.so/abc");

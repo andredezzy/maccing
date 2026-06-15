@@ -266,6 +266,56 @@ test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
   }
 });
 
+test("render edge branches: empty column_list, group-less board, data-less chart, every form widget", () => {
+  expect(renderBlocksMockup([{ type: "column_list", columns: [] }])).toBe(""); // no columns → nothing
+  expect(renderBlocksMockup([{ type: "board", name: "B", views: ["V"], groups: [] }])).toContain("(no groups)");
+  expect(renderBlocksMockup([{ type: "chart", name: "C", views: ["V"], chartType: "bar", data: [] }])).toContain(
+    "(no data)",
+  );
+  const form = renderBlocksMockup([
+    {
+      type: "form",
+      name: "F",
+      views: ["V"],
+      fields: [
+        { label: "When", fieldType: "date" },
+        { label: "Who", fieldType: "person" },
+        { label: "Free", fieldType: "text" },
+      ],
+    },
+  ]);
+  expect(form).toContain("[ 📅 ]"); // date widget
+  expect(form).toContain("[ @ ]"); // person widget
+  expect(form).toContain("[ _____ ]"); // text/default widget
+});
+
+test("render fallback branches: empty list, and bare breadcrumb / toc / synced_block", () => {
+  expect(renderBlocksMockup([{ type: "list", name: "L", views: ["V"], items: [] }])).toContain("(empty)");
+  expect(renderBlocksMockup([{ type: "breadcrumb" }])).toContain("…"); // no path → the … placeholder
+  expect(renderBlocksMockup([{ type: "table_of_contents" }])).toContain("[ Table of contents ]"); // no headings
+  expect(renderBlocksMockup([{ type: "synced_block" }])).toContain("[ synced block ]"); // no children
+});
+
+test("the database tab-bar header clips the active tab when even it alone won't fit", () => {
+  const out = renderDatabase({
+    title: "T",
+    views: [
+      {
+        type: "table",
+        name: "T",
+        views: ["A view name so long that not even the active tab fits the budget, which forces a hard clip", "B", "C"],
+        columns: ["Name"],
+        rows: [["x"]],
+      },
+    ],
+  });
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+  expect(out).toContain("…"); // the active tab itself is clipped
+  expect(out).toContain("+2 more"); // the other two tabs collapse into a count
+});
+
 test("renderBlocksMockup renders a bare subtree (no page chrome) and honors the given width", () => {
   const blocks: MockupBlock[] = [
     { type: "heading_2", text: "Section" },
