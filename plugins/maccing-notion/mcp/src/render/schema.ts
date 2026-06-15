@@ -120,7 +120,6 @@ export const blockSchema: z.ZodType<any> = z.lazy(() =>
       type: z.literal("simple_table"),
       rows: z.array(z.array(z.string())),
       hasColumnHeader: z.boolean().optional(),
-      hasRowHeader: z.boolean().optional(),
     }),
     z.object({ type: z.literal("breadcrumb"), path: z.array(z.string()).optional() }),
     z.object({ type: z.literal("table_of_contents"), headings: z.array(z.string()).optional() }),

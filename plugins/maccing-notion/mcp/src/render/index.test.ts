@@ -3,7 +3,7 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderMockup } from "./index";
+import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderPage } from "./index";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -75,11 +75,11 @@ const model: PageModel = {
 };
 
 test("renders a full page with every box closing on display width (incl. emoji lines)", () => {
-  assertBoxesClose(renderMockup(model));
+  assertBoxesClose(renderPage(model));
 });
 
 test("the callout's emoji line has the SAME display width as its borders", () => {
-  const lines = renderMockup({
+  const lines = renderPage({
     title: "X",
     blocks: [{ type: "callout", icon: "👦", lines: ["@andre.dezzy", "Age: 22"] }],
   }).split("\n");
@@ -92,7 +92,7 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
 });
 
 test("every database header carries a right-aligned + New", () => {
-  const out = renderMockup(model);
+  const out = renderPage(model);
   for (const dbName of ["Gym Navigation", "Muscle Groups", "Weeks"]) {
     const header = out.split("\n").find((l) => l.includes(`◷ ${dbName}`));
     expect(header).toBeTruthy();
@@ -101,7 +101,7 @@ test("every database header carries a right-aligned + New", () => {
 });
 
 test("over-long content is truncated with … so the box still closes", () => {
-  const out = renderMockup({
+  const out = renderPage({
     title: "X",
     blocks: [
       {
@@ -122,7 +122,7 @@ test("over-long content is truncated with … so the box still closes", () => {
 });
 
 test("a table spans the full page width", () => {
-  const out = renderMockup(model).split("\n");
+  const out = renderPage(model).split("\n");
   const topRule = out.find((l) => l.startsWith("┌─") && l.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
@@ -224,7 +224,7 @@ function assertSingleBoxesClose(out: string, width: number): void {
 }
 
 test("renders EVERY block type + all Phase-1 views with no overflow and every single box closed", () => {
-  const out = renderMockup({ title: "Kitchen Sink", icon: "🧪", cover: "cover", blocks: SINK });
+  const out = renderPage({ title: "Kitchen Sink", icon: "🧪", cover: "cover", blocks: SINK });
   assertSingleBoxesClose(out, 70);
   // recursion: a nested bullet uses the depth-1 marker, indented
   expect(out).toContain("  ◦ nested");
@@ -257,7 +257,7 @@ test("standalone database renders its views (view:'all')", () => {
 });
 
 test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
-  const out = renderMockup({
+  const out = renderPage({
     title: "P2",
     blocks: [
       {

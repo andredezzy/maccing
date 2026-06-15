@@ -7,7 +7,7 @@
 //
 // This file is the thin entry: renderPage(PageModel) · renderDatabase(DatabaseModel) · renderBlocks.
 // The model lives in ./model, primitives in ./text + ./box, dispatch in ./engine, and the renderers in
-// ./blocks + ./views (imported here only so their register() calls run). `renderMockup` aliases renderPage.
+// ./blocks + ./views (imported here only so their register() calls run).
 
 import "./blocks"; // side-effect: registers the block-leaf renderers
 import { header } from "./box";
@@ -33,8 +33,6 @@ export function renderPage(model: PageModel): string {
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
 }
-/** @deprecated alias of renderPage — kept for back-compat. */
-export const renderMockup = renderPage;
 
 /** Render a standalone database (its own header + selected view, or all views). */
 export function renderDatabase(db: DatabaseModel): string {

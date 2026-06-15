@@ -39,7 +39,7 @@ export type MockupBlock =
   | { type: "bookmark" | "link_preview"; url: string; caption?: string }
   | { type: "embed"; label: string }
   | { type: "column_list"; columns: ColumnDef[] }
-  | { type: "simple_table"; rows: string[][]; hasColumnHeader?: boolean; hasRowHeader?: boolean }
+  | { type: "simple_table"; rows: string[][]; hasColumnHeader?: boolean }
   | { type: "breadcrumb"; path?: string[] }
   | { type: "table_of_contents"; headings?: string[] }
   | { type: "synced_block"; from?: string; children?: MockupBlock[] }
