@@ -10,8 +10,6 @@
 //  - x-notion-active-user-header must be the account (a session can hold several) that has edit
 //    access to NOTION_SPACE_ID — resolved from getSpaces by matching the space, then cached.
 
-import { parseCollectionIcons } from "../writers/upsert-property";
-
 const TOKEN_V2 = process.env.NOTION_TOKEN_V2;
 const SPACE_ID = process.env.NOTION_SPACE_ID;
 const BASE = "https://www.notion.so/api/v3";
@@ -222,6 +220,29 @@ export interface IconReadThrottled {
 }
 
 export type IconRead = IconReadOk | IconReadThrottled;
+
+interface GetRecordValuesCollectionBody {
+  results?: { value?: { schema?: Record<string, { icon?: string }> } }[];
+}
+
+/** Parse a getRecordValues collection read into { dataSourceId → { rawPropertyId → iconAsset } }. */
+export function parseCollectionIcons(body: unknown, dataSourceIds: string[]): Record<string, Record<string, string>> {
+  const results = (body as GetRecordValuesCollectionBody).results ?? [];
+  const byCollection: Record<string, Record<string, string>> = {};
+
+  dataSourceIds.forEach((dataSourceId, index) => {
+    const schema = results[index]?.value?.schema ?? {};
+    const icons: Record<string, string> = {};
+    for (const [propertyId, definition] of Object.entries(schema)) {
+      if (definition?.icon) {
+        icons[propertyId] = definition.icon;
+      }
+    }
+    byCollection[dataSourceId] = icons;
+  });
+
+  return byCollection;
+}
 
 /**
  * Best-effort read of column icons for one or more collections (the public API can't see them).

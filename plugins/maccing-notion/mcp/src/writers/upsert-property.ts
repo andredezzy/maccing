@@ -189,26 +189,3 @@ export function buildIconOperations(icons: ResolvedIcon[], spaceId: string | und
 
   return operations;
 }
-
-interface GetRecordValuesCollectionBody {
-  results?: { value?: { schema?: Record<string, { icon?: string }> } }[];
-}
-
-/** Parse a getRecordValues collection read into { dataSourceId → { rawPropertyId → iconAsset } }. */
-export function parseCollectionIcons(body: unknown, dataSourceIds: string[]): Record<string, Record<string, string>> {
-  const results = (body as GetRecordValuesCollectionBody).results ?? [];
-  const byCollection: Record<string, Record<string, string>> = {};
-
-  dataSourceIds.forEach((dataSourceId, index) => {
-    const schema = results[index]?.value?.schema ?? {};
-    const icons: Record<string, string> = {};
-    for (const [propertyId, definition] of Object.entries(schema)) {
-      if (definition?.icon) {
-        icons[propertyId] = definition.icon;
-      }
-    }
-    byCollection[dataSourceId] = icons;
-  });
-
-  return byCollection;
-}
