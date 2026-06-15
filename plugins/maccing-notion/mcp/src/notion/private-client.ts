@@ -268,7 +268,9 @@ export async function readCollectionIcons(dataSourceIds: string[]): Promise<Icon
       return { status: ReadStatus.THROTTLED };
     }
     return { status: ReadStatus.OK, byCollection: parseCollectionIcons(response.body, dataSourceIds) };
-  } catch {
+  } catch (error) {
+    // Transform to THROTTLED so callers degrade gracefully — but log, so a genuine bug isn't masked as a throttle.
+    console.error("readCollectionIcons failed:", error);
     return { status: ReadStatus.THROTTLED };
   }
 }
@@ -311,7 +313,9 @@ export async function readCollectionPageProperties(dataSourceId: string): Promis
     const pageProperties = (response.body as CollectionFormatBody).results?.[0]?.value?.format
       ?.collection_page_properties;
     return { status: ReadStatus.OK, pageProperties: pageProperties ?? [] };
-  } catch {
+  } catch (error) {
+    // Transform to THROTTLED so callers degrade gracefully — but log, so a genuine bug isn't masked as a throttle.
+    console.error("readCollectionPageProperties failed:", error);
     return { status: ReadStatus.THROTTLED };
   }
 }
