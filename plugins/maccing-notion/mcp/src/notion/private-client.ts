@@ -205,7 +205,10 @@ export async function readViewOrder(blockId: string): Promise<string[] | null> {
     const body = response.body as { results?: { value?: { view_ids?: string[] } }[] };
     const viewIds = body.results?.[0]?.value?.view_ids;
     return Array.isArray(viewIds) && viewIds.length > 0 ? viewIds : null;
-  } catch {
+  } catch (error) {
+    // Non-fatal: callers treat null as "no private view order" and fall back to the public list.
+    // Log so a genuine failure is distinguishable from a legitimately-absent order (CLAUDE.md: never swallow).
+    console.error("readViewOrder failed:", error);
     return null;
   }
 }

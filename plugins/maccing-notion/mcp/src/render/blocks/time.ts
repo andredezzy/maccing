@@ -64,9 +64,9 @@ function renderTimeline(block: TimelineBlock, total: number): string[] {
     lines.push(`${padRight("", nameW)}│${padRight(block.axis, barW)}`);
   }
   for (const row of block.rows) {
-    const s = Math.max(0, Math.min(barW, Math.round((row.start || 0) * barW)));
-    const e = Math.max(s, Math.min(barW, Math.round((row.end || 0) * barW)));
-    const bar = Array.from({ length: barW }, (_, i) => (i >= s && i < e ? "█" : "·")).join("");
+    const startCol = Math.max(0, Math.min(barW, Math.round((row.start || 0) * barW)));
+    const endCol = Math.max(startCol, Math.min(barW, Math.round((row.end || 0) * barW)));
+    const bar = Array.from({ length: barW }, (_, col) => (col >= startCol && col < endCol ? "█" : "·")).join("");
     lines.push(`${padRight(row.label, nameW)}│${bar}`);
   }
   return lines;
