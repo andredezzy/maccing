@@ -13,8 +13,7 @@ import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markd
 import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
-import { renderPage } from "../render";
-import { pageToModel, type RawBlock, type RawPage } from "../render/page-model";
+import { pageToModel, type RawBlock, type RawPage, renderPage } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;

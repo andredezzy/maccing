@@ -14,8 +14,10 @@ import "./blocks"; // side-effect: registers every block renderer (content · pa
 import { renderBlock, renderBlocks } from "./engine";
 import type { DatabaseModel, MockupBlock, PageModel } from "./model";
 
+export { databaseToModel, groupOptionsFor, resolveView } from "./database-model";
 export { renderBlocks } from "./engine";
 export * from "./model";
+export { pageToModel, type RawBlock, type RawPage } from "./page-model";
 export { displayWidth } from "./text";
 
 const DEFAULT_WIDTH = 70;

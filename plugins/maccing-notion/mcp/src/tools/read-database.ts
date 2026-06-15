@@ -19,8 +19,7 @@ import {
   selectViewIndex,
   viewQueryFilter,
 } from "../readers/views";
-import { renderDatabase } from "../render";
-import { databaseToModel, groupOptionsFor, resolveView } from "../render/database-model";
+import { databaseToModel, groupOptionsFor, renderDatabase, resolveView } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
