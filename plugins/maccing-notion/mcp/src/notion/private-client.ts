@@ -10,7 +10,7 @@
 //  - x-notion-active-user-header must be the account (a session can hold several) that has edit
 //    access to NOTION_SPACE_ID — resolved from getSpaces by matching the space, then cached.
 
-import { parseCollectionIcons } from "../lib/upsert-property";
+import { parseCollectionIcons } from "../writers/upsert-property";
 
 const TOKEN_V2 = process.env.NOTION_TOKEN_V2;
 const SPACE_ID = process.env.NOTION_SPACE_ID;

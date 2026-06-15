@@ -4,19 +4,6 @@
 // property object (zero drift). Column icons go through the private app API; everything else public.
 
 import { z } from "zod";
-import { decodePropertyId } from "../lib/reorder-properties";
-import {
-  buildIconOperations,
-  type DataSourceBody,
-  describePrivateFailure,
-  planUpserts,
-  type ResolvedEntry,
-  type ResolvedIcon,
-  type SchemaBody,
-  type SchemaPropertyRef,
-  TargetType,
-  type VisiblePlanEntry,
-} from "../lib/upsert-property";
 import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
 import {
   activeUserId,
@@ -32,6 +19,19 @@ import {
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { formatIconAssetPath } from "../readers/format-schema";
 import { err, ok, type ToolModule } from "../tool";
+import { decodePropertyId } from "../writers/reorder-properties";
+import {
+  buildIconOperations,
+  type DataSourceBody,
+  describePrivateFailure,
+  planUpserts,
+  type ResolvedEntry,
+  type ResolvedIcon,
+  type SchemaBody,
+  type SchemaPropertyRef,
+  TargetType,
+  type VisiblePlanEntry,
+} from "../writers/upsert-property";
 
 const COLORS = ["gray", "lightgray", "brown", "yellow", "orange", "green", "blue", "purple", "pink", "red"] as const;
 
