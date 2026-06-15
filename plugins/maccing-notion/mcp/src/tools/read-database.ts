@@ -6,7 +6,7 @@ import { z } from "zod";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { iconToString } from "../readers/object";
+import { iconGlyph } from "../readers/object";
 import { flattenProperty, type NotionPropertyValue } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
@@ -212,7 +212,7 @@ async function renderDatabaseMockup(
 
   const model = databaseToModel({
     title,
-    icon: iconToString(database.icon as Parameters<typeof iconToString>[0]),
+    icon: iconGlyph(database.icon as Parameters<typeof iconGlyph>[0]),
     titleColumn,
     views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
     rows,

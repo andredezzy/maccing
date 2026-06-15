@@ -2,7 +2,7 @@
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
-import { iconToString, type NotionIcon } from "../readers/object";
+import { iconGlyph, type NotionIcon } from "../readers/object";
 import type { MockupBlock, PageModel } from "./model";
 
 interface RichTextRun {
@@ -84,7 +84,7 @@ function mapBlock(block: RawBlock): MockupBlock {
     case "quote":
       return { type: "quote", text, children: kids };
     case "callout":
-      return { type: "callout", icon: iconToString(data.icon as NotionIcon), lines: text.split("\n"), children: kids };
+      return { type: "callout", icon: iconGlyph(data.icon as NotionIcon), lines: text.split("\n"), children: kids };
     case "divider":
       return { type: "divider" };
     case "code":
@@ -156,7 +156,7 @@ function pageTitle(page: RawPage): string {
 export function pageToModel(page: RawPage, blocks: RawBlock[]): PageModel {
   return {
     title: pageTitle(page),
-    icon: iconToString(page.icon),
+    icon: iconGlyph(page.icon),
     cover: page.cover ? "cover" : undefined,
     blocks: mapBlocks(blocks),
   };

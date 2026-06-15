@@ -2,17 +2,17 @@
 // produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { iconToString } from "../readers/object";
+import { iconGlyph } from "../readers/object";
 import { displayWidth, renderPage } from "./index";
 import { pageToModel, type RawBlock } from "./page-model";
 
 const rt = (s: string) => [{ plain_text: s }];
 
-test("iconToString maps emoji, named icon, and image icon", () => {
-  expect(iconToString({ type: "emoji", emoji: "🏋" })).toBe("🏋");
-  expect(iconToString({ type: "icon", icon: { name: "cash" } })).toBe("cash");
-  expect(iconToString({ type: "external" })).toBe("🖼");
-  expect(iconToString(null)).toBeUndefined();
+test("iconGlyph maps emoji, named icon, and image icon", () => {
+  expect(iconGlyph({ type: "emoji", emoji: "🏋" })).toBe("🏋");
+  expect(iconGlyph({ type: "icon", icon: { name: "cash" } })).toBe("cash");
+  expect(iconGlyph({ type: "external" })).toBe("🖼");
+  expect(iconGlyph(null)).toBeUndefined();
 });
 
 const TREE: RawBlock[] = [

@@ -42,7 +42,7 @@ export function iconLabel(icon: NotionIcon | null | undefined): string {
 
 /** Map a Notion icon to a compact string for the render model: emoji, named-icon name, or 🖼 for any
  * image (external/file/custom). Distinct from `iconLabel`, which returns 'none'/urls for the `describe` tool. */
-export function iconToString(icon: NotionIcon | null | undefined): string | undefined {
+export function iconGlyph(icon: NotionIcon | null | undefined): string | undefined {
   if (!icon) {
     return undefined;
   }
