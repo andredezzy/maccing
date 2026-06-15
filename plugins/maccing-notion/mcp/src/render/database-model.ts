@@ -127,8 +127,8 @@ function viewToBlock(
   dbTitle: string,
   tabs: string[],
 ): ViewBlock {
-  const cols = view.columns.length ? view.columns : [titleColumn];
-  const otherCols = cols.filter((c) => c !== titleColumn);
+  const columns = view.columns.length ? view.columns : [titleColumn];
+  const otherColumns = columns.filter((c) => c !== titleColumn);
 
   switch (view.type) {
     case "gallery":
@@ -139,11 +139,11 @@ function viewToBlock(
         cardSize: "medium",
         cards: rows.map((r) => ({
           name: rowTitle(r, titleColumn),
-          lines: otherCols.map((c) => flattenValue(r.properties?.[c])).filter(Boolean),
+          lines: otherColumns.map((c) => flattenValue(r.properties?.[c])).filter(Boolean),
         })),
       };
     case "board": {
-      const groupBy = view.groupBy ?? otherCols[0] ?? titleColumn;
+      const groupBy = view.groupBy ?? otherColumns[0] ?? titleColumn;
       const groups = new Map<string, GalleryCard[]>();
 
       // Seed EVERY group-by option first so empty columns still render, in the schema's option order —
@@ -182,14 +182,15 @@ function viewToBlock(
         views: tabs,
         items: rows.map((r) => ({
           title: rowTitle(r, titleColumn),
-          meta: otherCols
+          meta: otherColumns
             .map((c) => flattenValue(r.properties?.[c]))
             .filter(Boolean)
             .join(" · "),
         })),
       };
     case "calendar": {
-      const dateCol = view.dateProp ?? cols.find((c) => flattenValue(rows[0]?.properties?.[c]).match(/^\d{4}-\d{2}/));
+      const dateCol =
+        view.dateProp ?? columns.find((c) => flattenValue(rows[0]?.properties?.[c]).match(/^\d{4}-\d{2}/));
       const dated = rows
         .map((r) => ({ date: dayOf(flattenValue(r.properties?.[dateCol ?? ""])), title: rowTitle(r, titleColumn) }))
         .filter((x): x is DatedRow => x.date !== null);
@@ -216,8 +217,8 @@ function viewToBlock(
     type: "table",
     name: dbTitle,
     views: tabs,
-    columns: cols,
-    rows: rows.map((r) => cols.map((c) => flattenValue(r.properties?.[c]))),
+    columns: columns,
+    rows: rows.map((r) => columns.map((c) => flattenValue(r.properties?.[c]))),
   };
 }
 

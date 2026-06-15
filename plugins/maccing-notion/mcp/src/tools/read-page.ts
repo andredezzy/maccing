@@ -87,8 +87,8 @@ async function fetchBody(pageId: string): Promise<FetchedBody> {
     const subPageResults = await Promise.all(
       unseenBlockIds.map(async (id): Promise<SubPageMarkdown> => {
         const response = await publicRequest("GET", `/v1/pages/${id}/markdown`);
-        const subMarkdown = response.ok ? (response.body as NotionMarkdownResponse) : ({} as NotionMarkdownResponse);
-        return { markdown: subMarkdown.markdown ?? "", unknownBlockIds: subMarkdown.unknown_block_ids ?? [] };
+        const subMarkdown = response.ok ? (response.body as NotionMarkdownResponse) : null;
+        return { markdown: subMarkdown?.markdown ?? "", unknownBlockIds: subMarkdown?.unknown_block_ids ?? [] };
       }),
     );
     for (const subPageResult of subPageResults) {

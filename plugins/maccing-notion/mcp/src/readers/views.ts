@@ -1,4 +1,4 @@
-// read_database's view layer: fetch a data source's view ids (listViewIds — the one network call here),
+// View-layer utilities: fetch a data source's view ids (listViewIds — the one network call here),
 // then PURE transforms over raw Notion view objects — order them as Notion shows (orderViews), pick one
 // (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
 // opaque property ids resolved to names (formatViews).

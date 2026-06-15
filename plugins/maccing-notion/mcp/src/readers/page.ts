@@ -130,7 +130,9 @@ export function flattenProperty(property: NotionPropertyValue): FlattenedPropert
     case "relation":
       return {
         value: null,
-        relationIds: ((property.relation as { id: string }[]) ?? []).map((relation) => relation.id),
+        relationIds: ((property.relation as { id?: string }[]) ?? [])
+          .map((relation) => relation.id)
+          .filter((id): id is string => Boolean(id)),
       };
     case "rollup":
       return { value: flattenRollup(property.rollup) };
