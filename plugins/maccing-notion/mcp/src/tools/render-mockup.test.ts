@@ -4,7 +4,12 @@ import { expect, test } from "bun:test";
 
 import { renderMockup } from "./render-mockup";
 
-async function run(mockup: unknown): Promise<{ text: string; isError: boolean }> {
+interface RunResult {
+  text: string;
+  isError: boolean;
+}
+
+async function run(mockup: unknown): Promise<RunResult> {
   const result = await renderMockup.handler({ mockup });
   return { text: (result.content[0] as { text: string }).text, isError: result.isError ?? false };
 }

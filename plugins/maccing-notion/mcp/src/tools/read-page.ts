@@ -224,7 +224,7 @@ export const readPage: ToolModule = {
   config: {
     title: "Read a Notion page/row",
     description:
-      "Read any Notion page or database row in an agent-friendly format. format=markdown (default-style): " +
+      "Read any Notion page or database row in an agent-friendly format. format=markdown: " +
       "YAML frontmatter with the page's properties (relations resolved to titles, rollups/formulas as scalars) " +
       "followed by the Notion-flavored Markdown body — ~22x smaller than raw block JSON, fully recovered. " +
       "format=outline: a compact block tree WITH block ids (use this when you need a block id to edit). " +

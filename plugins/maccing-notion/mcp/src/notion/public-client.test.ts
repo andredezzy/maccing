@@ -211,3 +211,19 @@ test("publicRequest honors Retry-After over the exponential backoff", async () =
   await publicRequest("GET", "/v1/x");
   expect(delays[0]).toBe(2000);
 });
+
+test("publicRequest returns a non-JSON body verbatim as a string (HTML bot-protection degrades, no throw)", async () => {
+  // Notion can serve an HTML bot-protection page instead of JSON; JSON.parse throws and the body
+  // must degrade to the raw string rather than crash the request.
+  globalThis.fetch = (async () =>
+    ({
+      status: 200,
+      ok: true,
+      text: async () => "<!DOCTYPE html>",
+      headers: { get: () => null },
+    }) as unknown as Response) as unknown as typeof fetch;
+  const response = await publicRequest("GET", "/v1/x");
+  expect(response.ok).toBe(true);
+  expect(typeof response.body).toBe("string");
+  expect(response.body).toBe("<!DOCTYPE html>");
+});
