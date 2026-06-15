@@ -2,9 +2,25 @@
 
 import { expect, test } from "bun:test";
 
-import { formatViews, type IdToName, orderViews, type RawView, selectViewIndex, viewQueryFilter } from "./views";
+import {
+  buildIdToName,
+  formatViews,
+  type IdToName,
+  orderViews,
+  type RawView,
+  selectViewIndex,
+  viewQueryFilter,
+} from "./views";
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
+
+test("buildIdToName: skips id-less entries and keys by both the raw and decoded id", () => {
+  const map = buildIdToName({ Name: { id: "title" }, Value: { id: "%3F~%5CG" }, NoId: {} });
+  expect(map.title).toBe("Name");
+  expect(map["%3F~%5CG"]).toBe("Value"); // raw id key
+  expect(map["?~\\G"]).toBe("Value"); // decoded id key (%3F~%5CG → ?~\G)
+  expect("NoId" in map).toBe(false); // id-less entry skipped
+});
 
 const gallery: RawView = {
   id: "37c99f0d-0a4a-8183-8b2c-000c97b6d0d0",

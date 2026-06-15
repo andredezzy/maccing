@@ -56,7 +56,7 @@ const TEXT_TYPES = new Set([
 
 function mapBlock(block: RawBlock): MockupBlock {
   const data = (block[block.type] ?? {}) as Record<string, unknown>;
-  const text = TEXT_TYPES.has(block.type) ? richTextToPlain(data.rich_text as RichText[]) : "";
+  const text = TEXT_TYPES.has(block.type) ? richTextToPlain(data.rich_text) : "";
   const kids = block.children?.length ? mapBlocks(block.children) : undefined;
 
   switch (block.type) {
@@ -89,7 +89,7 @@ function mapBlock(block: RawBlock): MockupBlock {
       return {
         type: "code",
         language: data.language as string,
-        text: richTextToPlain(data.rich_text as RichText[]),
+        text: richTextToPlain(data.rich_text),
         caption: caption(data.caption as RichText[]),
       };
     case "equation":
