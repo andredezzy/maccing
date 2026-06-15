@@ -19,7 +19,12 @@ import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { DataSourceBody, SchemaBody, SchemaPropertyRef } from "../readers/schema";
 import { listViewIds } from "../readers/views";
 import { err, ok, type ToolModule } from "../tool";
-import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "../writers/reorder-properties";
+import {
+  reorderPageProperties,
+  reorderViewProperties,
+  seedPageOrderFromSchema,
+  type ViewProperty,
+} from "../writers/reorder-properties";
 
 interface ViewConfiguration {
   type?: string;
@@ -85,9 +90,7 @@ async function reorderPage(
     }
     // Seed from the schema (all properties, default-visible) when the collection has no page order yet.
     const current: PageOrderEntry[] =
-      read.pageProperties.length > 0
-        ? read.pageProperties
-        : Object.values(schema).map((propertyRef) => ({ property: decodePropertyId(propertyRef.id), visible: true }));
+      read.pageProperties.length > 0 ? read.pageProperties : seedPageOrderFromSchema(schema);
 
     const reordered = reorderPageProperties(current, orderIds);
     const setResponse = await writeCollectionFormat(dataSourceId, { collection_page_properties: reordered });

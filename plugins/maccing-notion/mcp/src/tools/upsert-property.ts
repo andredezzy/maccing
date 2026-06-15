@@ -21,6 +21,7 @@ import {
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { type DataSourceBody, formatIconAssetPath, type SchemaBody, type SchemaPropertyRef } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
+import { seedPageOrderFromSchema } from "../writers/reorder-properties";
 import {
   buildIconOperations,
   planUpserts,
@@ -95,7 +96,7 @@ async function applyCanonicalVisibility(visiblePlan: VisiblePlanEntry[]): Promis
     const pageProperties: PageOrderEntry[] =
       read.pageProperties.length > 0
         ? read.pageProperties.map((entry) => ({ ...entry }))
-        : Object.values(schema).map((propertyRef) => ({ property: decodePropertyId(propertyRef.id), visible: true }));
+        : seedPageOrderFromSchema(schema);
 
     for (const entry of entries) {
       const rawId = resolvePropertyId(schema, entry.property);

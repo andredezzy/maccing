@@ -86,3 +86,9 @@ export function reorderPageProperties(current: PageProperty[], order: string[]):
     return entry;
   });
 }
+
+/** Seed a page-order list from a data-source schema: every property, default-visible — the starting
+ * point when a collection has no saved page order yet (property ids decoded for the write payload). */
+export function seedPageOrderFromSchema(schema: Record<string, { id: string }>): PageProperty[] {
+  return Object.values(schema).map((property) => ({ property: decodePropertyId(property.id), visible: true }));
+}
