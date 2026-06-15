@@ -5,10 +5,10 @@ import { box, renderTableGrid } from "../box";
 import { register, renderBlock } from "../engine";
 import type { ChartBlock, DashboardBlock, FormBlock, MapBlock } from "../model";
 import { clip, displayWidth, padRight } from "../text";
-import { dbHeader } from "./chrome";
+import { databaseHeader } from "./chrome";
 
 function renderChart(block: ChartBlock, total: number): string[] {
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   if (block.chartType === "number") {
     const value = block.value ?? String(block.data?.[0]?.value ?? 0);
     return [...lines, ...box([`  ${value}${block.unit ? ` ${block.unit}` : ""}`], total - 2)];
@@ -29,6 +29,7 @@ function renderChart(block: ChartBlock, total: number): string[] {
   }
   return lines;
 }
+
 function renderForm(block: FormBlock, total: number): string[] {
   const widget = (fieldType?: string): string =>
     fieldType === "checkbox"
@@ -41,13 +42,18 @@ function renderForm(block: FormBlock, total: number): string[] {
             ? "[ @ ]"
             : "[ _____ ]";
   const fields = block.fields.map((f) => clip(`${f.label}:  ${widget(f.fieldType)}`, total - 2));
-  return [dbHeader(block.name, block.views, total), ...box([...fields, "", "[ Submit ]"], total - 2)];
+  return [databaseHeader(block.name, block.views, total), ...box([...fields, "", "[ Submit ]"], total - 2)];
 }
+
 function renderMap(block: MapBlock, total: number): string[] {
-  return [dbHeader(block.name, block.views, total), ...box(["[ map view ]", `  ${block.pins ?? 0} pin(s)`], total - 2)];
+  return [
+    databaseHeader(block.name, block.views, total),
+    ...box(["[ map view ]", `  ${block.pins ?? 0} pin(s)`], total - 2),
+  ];
 }
+
 function renderDashboard(block: DashboardBlock, total: number): string[] {
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   for (const widget of block.widgets) {
     lines.push("", `▸ ${widget.title}`, ...renderBlock(widget.view, total, 0, 0));
   }
@@ -55,7 +61,7 @@ function renderDashboard(block: DashboardBlock, total: number): string[] {
 }
 
 register("table", (block, width) => [
-  dbHeader(block.name, block.views, width),
+  databaseHeader(block.name, block.views, width),
   ...renderTableGrid(block.columns, block.rows, width, "─"),
 ]);
 register("chart", (block, width) => renderChart(block, width));

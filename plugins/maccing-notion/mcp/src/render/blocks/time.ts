@@ -4,7 +4,7 @@ import { renderTableGrid } from "../box";
 import { register } from "../engine";
 import type { CalendarBlock, TimelineBlock } from "../model";
 import { clip, padRight } from "../text";
-import { dbHeader } from "./chrome";
+import { databaseHeader } from "./chrome";
 
 const MONTHS = [
   "January",
@@ -32,7 +32,7 @@ function daysInMonth(year: number, month: number): number {
 }
 function renderCalendar(block: CalendarBlock, total: number): string[] {
   const month = ((block.month - 1 + 12) % 12) + 1;
-  const lines = [dbHeader(block.name, block.views, total), `${MONTHS[month - 1]} ${block.year}`];
+  const lines = [databaseHeader(block.name, block.views, total), `${MONTHS[month - 1]} ${block.year}`];
   const first = dayOfWeek(block.year, month, 1);
   const days = daysInMonth(block.year, month);
   const eventDays = new Set((block.events ?? []).map((e) => e.day));
@@ -57,7 +57,7 @@ function renderCalendar(block: CalendarBlock, total: number): string[] {
   return lines;
 }
 function renderTimeline(block: TimelineBlock, total: number): string[] {
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   const nameW = Math.max(8, Math.floor(total * 0.3));
   const barW = Math.max(1, total - nameW - 1);
   if (block.axis) {

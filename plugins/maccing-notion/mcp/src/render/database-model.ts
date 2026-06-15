@@ -102,16 +102,19 @@ export function flattenValue(prop: RawProp | undefined): string {
 function rowTitle(row: RawRow, titleColumn: string): string {
   return flattenValue(row.properties?.[titleColumn]) || "(untitled)";
 }
+
 interface DayComponents {
   year: number;
   month: number;
   day: number;
 }
+
 /** A row that carries a parseable calendar date — the kept subset after dropping undated rows. */
 interface DatedRow {
   date: DayComponents;
   title: string;
 }
+
 function dayOf(dateStr: string): DayComponents | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
   return m ? { year: +m[1], month: +m[2], day: +m[3] } : null;
@@ -142,6 +145,7 @@ function viewToBlock(
     case "board": {
       const groupBy = view.groupBy ?? otherCols[0] ?? titleColumn;
       const groups = new Map<string, GalleryCard[]>();
+
       // Seed EVERY group-by option first so empty columns still render, in the schema's option order —
       // Notion shows all columns; a board mockup that only draws the sampled groups is misleading.
       for (const option of view.groupOptions ?? []) {

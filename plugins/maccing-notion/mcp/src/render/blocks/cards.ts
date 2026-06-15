@@ -3,7 +3,7 @@
 import { box, COVER, cardsPerRow, GAP, hcat, MEDIUM_CARD, SMALL_CARD } from "../box";
 import { register } from "../engine";
 import type { BoardBlock, GalleryBlock } from "../model";
-import { dbHeader } from "./chrome";
+import { databaseHeader } from "./chrome";
 
 function renderGallery(block: GalleryBlock, total: number): string[] {
   const inner = block.cardSize === "medium" ? MEDIUM_CARD : SMALL_CARD;
@@ -15,7 +15,7 @@ function renderGallery(block: GalleryBlock, total: number): string[] {
       inner,
     ),
   );
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   if (cardBoxes.length === 0) {
     return [...lines, ...box(["(empty)"], total - 2)];
   }
@@ -25,7 +25,7 @@ function renderGallery(block: GalleryBlock, total: number): string[] {
   return lines;
 }
 function renderBoard(block: BoardBlock, total: number): string[] {
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   if (block.groups.length === 0) {
     return [...lines, ...box(["(no groups)"], total - 2)];
   }

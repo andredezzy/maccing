@@ -328,6 +328,7 @@ export const upsertProperty: ToolModule = {
                 errors.push(`Column icons not applied — ${icons}`);
               } else {
                 anyWrite = true;
+
                 const idToName: Record<string, string> = {};
                 for (const schema of schemaById.values()) {
                   for (const propertyRef of Object.values(schema)) {

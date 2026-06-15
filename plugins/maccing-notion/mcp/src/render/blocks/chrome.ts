@@ -3,7 +3,7 @@
 
 import { clip, displayWidth, spread } from "../text";
 
-export function dbHeader(name: string, views: string[] | undefined, total: number): string {
+export function databaseHeader(name: string, views: string[] | undefined, total: number): string {
   const right = "+ New";
   const prefix = `◷ ${name}`;
   const tokens = (views ?? []).map((v) => `‹ ${v} ›`);

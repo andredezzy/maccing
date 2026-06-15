@@ -3,10 +3,10 @@
 import { register } from "../engine";
 import type { ListViewBlock } from "../model";
 import { clip } from "../text";
-import { dbHeader } from "./chrome";
+import { databaseHeader } from "./chrome";
 
 function renderListView(block: ListViewBlock, total: number): string[] {
-  const lines = [dbHeader(block.name, block.views, total)];
+  const lines = [databaseHeader(block.name, block.views, total)];
   if (block.items.length === 0) {
     return [...lines, "(empty)"];
   }

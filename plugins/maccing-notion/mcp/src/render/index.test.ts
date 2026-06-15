@@ -416,7 +416,7 @@ test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned,
   expect(out).toContain("Su"); // calendar weekday header
 });
 
-test("dbHeader fits the width and collapses overflowing view tabs to '+N more'", () => {
+test("databaseHeader fits the width and collapses overflowing view tabs to '+N more'", () => {
   const out = renderDatabase({
     title: "Personal Tasks",
     icon: "◷",
