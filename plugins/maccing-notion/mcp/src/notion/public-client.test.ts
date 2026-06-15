@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
-import { backoffMs, publicRequest, shouldRetryPublic } from "./notion-public";
+import { backoffMs, publicRequest, shouldRetryPublic } from "./public-client";
 
 // 429 — always retry regardless of method
 test("429 is retried for GET", () => {

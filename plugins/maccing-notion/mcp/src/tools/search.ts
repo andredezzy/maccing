@@ -4,7 +4,7 @@
 import { z } from "zod";
 
 import { formatSearch, type RawSearchResult } from "../lib/format-search";
-import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
 
 const OBJECT_TYPES = ["page", "data_source"] as const;

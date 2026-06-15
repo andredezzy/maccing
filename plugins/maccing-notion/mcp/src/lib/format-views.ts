@@ -2,8 +2,8 @@
 // agent-ready text with EVERY config field shown (cover, card size, layout, group_by, chart axes,
 // visible properties, sorts, filters) and opaque property ids resolved to names. No API calls.
 
-import { abbreviateId } from "./abbreviate-id";
-import { idVariants } from "./id-variants";
+import { abbreviateId } from "../notion/abbreviate-id";
+import { idVariants } from "../notion/id-variants";
 
 export type IdToName = Record<string, string>;
 
@@ -51,9 +51,10 @@ export function viewQueryFilter(view: RawView): unknown | undefined {
   if (view.filter) {
     return view.filter;
   }
-  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, object>).map(
-    ([propertyId, condition]) => ({ property: propertyId, ...condition }),
-  );
+  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, object>).map(([propertyId, condition]) => ({
+    property: propertyId,
+    ...condition,
+  }));
   if (quick.length === 0) {
     return undefined;
   }

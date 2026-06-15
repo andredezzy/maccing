@@ -1,7 +1,7 @@
 // Public-API passthrough tool — call any Notion REST endpoint (api.notion.com/v1).
 
 import { z } from "zod";
-import { hasPublicToken, publicRequest, VERSION } from "../lib/notion-public";
+import { hasPublicToken, publicRequest, VERSION } from "../notion/public-client";
 import { err, type ToolModule } from "../tool";
 
 const METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;

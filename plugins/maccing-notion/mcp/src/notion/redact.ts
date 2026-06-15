@@ -4,7 +4,7 @@
 //   withRedact(handler) — middleware wrapping every tool handler so ALL returned text AND any thrown
 //                         error flow through redact() at the single registration chokepoint in server.ts.
 
-import type { ToolHandler } from "./tool";
+import type { ToolHandler } from "../tool";
 
 const SECRETS: string[] = ["NOTION_TOKEN_V2", "NOTION_TOKEN"]
   .map((name) => process.env[name])

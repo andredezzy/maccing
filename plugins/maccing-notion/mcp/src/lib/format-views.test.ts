@@ -148,8 +148,16 @@ test("viewQueryFilter returns the saved filter VERBATIM (no re-wrapping) or fall
   expect(viewQueryFilter({ id: "v", filter: nested })).toEqual(nested);
   // multiple quick_filters (no saved filter) → AND the leaf conditions (1 level, safe)
   expect(
-    viewQueryFilter({ id: "v", quick_filters: { tjUk: { checkbox: { equals: false } }, aB: { number: { equals: 1 } } } }),
-  ).toEqual({ and: [{ property: "tjUk", checkbox: { equals: false } }, { property: "aB", number: { equals: 1 } }] });
+    viewQueryFilter({
+      id: "v",
+      quick_filters: { tjUk: { checkbox: { equals: false } }, aB: { number: { equals: 1 } } },
+    }),
+  ).toEqual({
+    and: [
+      { property: "tjUk", checkbox: { equals: false } },
+      { property: "aB", number: { equals: 1 } },
+    ],
+  });
 });
 
 test("selectViewIndex resolves a view by index, exact name, id, or partial name (default 0)", () => {

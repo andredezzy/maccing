@@ -6,15 +6,6 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-import { abbreviateId } from "../lib/abbreviate-id";
-import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
-import {
-  type PageOrderEntry,
-  privateConfig,
-  readCollectionPageProperties,
-  writeCollectionFormat,
-} from "../lib/notion-private";
-import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import {
   decodePropertyId,
   reorderPageProperties,
@@ -27,6 +18,15 @@ import {
   type SchemaBody,
   type SchemaPropertyRef,
 } from "../lib/upsert-property";
+import { abbreviateId } from "../notion/abbreviate-id";
+import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import {
+  type PageOrderEntry,
+  privateConfig,
+  readCollectionPageProperties,
+  writeCollectionFormat,
+} from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
 
 interface ViewListBody {

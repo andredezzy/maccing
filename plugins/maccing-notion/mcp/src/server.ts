@@ -14,8 +14,8 @@
 
 import { McpServer } from "#sdk/server/mcp";
 import { StdioServerTransport } from "#sdk/server/stdio";
-import { VERSION } from "./lib/notion-public";
-import { withRedact } from "./redact";
+import { VERSION } from "./notion/public-client";
+import { withRedact } from "./notion/redact";
 import type { ToolModule } from "./tool";
 import { describe } from "./tools/describe";
 import { orderProperties } from "./tools/order-properties";

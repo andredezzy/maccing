@@ -14,14 +14,14 @@ import {
   selectViewIndex,
   viewQueryFilter,
 } from "../lib/format-views";
-import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import { flattenProperty, type NotionPropertyValue } from "../lib/notion-page";
-import { readViewOrder } from "../lib/notion-private";
-import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { databaseToModel, type RawRow, type ResolvedView } from "../lib/notion-to-database-model";
 import { iconToString } from "../lib/notion-to-page-model";
 import { renderDatabase } from "../lib/render-mockup";
 import { resolveRelations } from "../lib/resolve-relations";
+import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { readViewOrder } from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;

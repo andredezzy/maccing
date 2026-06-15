@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { Client } from "#sdk/client/index";
 import { InMemoryTransport } from "#sdk/inMemory";
 import { McpServer } from "#sdk/server/mcp";
-import { redact, withRedact } from "./redact";
+import { redact, withRedact } from "./notion/redact";
 import { TOOLS } from "./server";
 import { ok } from "./tool";
 

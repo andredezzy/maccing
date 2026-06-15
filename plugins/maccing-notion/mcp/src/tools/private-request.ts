@@ -2,7 +2,7 @@
 // Open/closed: any UI-only capability works by passing the right operations — no new server code.
 
 import { z } from "zod";
-import { privateCall, privateConfig, saveTransactions } from "../lib/notion-private";
+import { privateCall, privateConfig, saveTransactions } from "../notion/private-client";
 import { err, type ToolModule } from "../tool";
 
 // api/v3 endpoints are camelCase identifiers (getSpaces, saveTransactions, …). The allowlist

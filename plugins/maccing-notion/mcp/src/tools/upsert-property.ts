@@ -5,19 +5,6 @@
 
 import { z } from "zod";
 import { formatIconAssetPath } from "../lib/format-schema";
-import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
-import {
-  activeUserId,
-  type IconRead,
-  type PageOrderEntry,
-  privateConfig,
-  readCollectionIcons,
-  readCollectionPageProperties,
-  saveTransactions,
-  spaceId,
-  writeCollectionFormat,
-} from "../lib/notion-private";
-import { hasPublicToken, publicRequest } from "../lib/notion-public";
 import { decodePropertyId } from "../lib/reorder-properties";
 import {
   buildIconOperations,
@@ -31,6 +18,19 @@ import {
   TargetType,
   type VisiblePlanEntry,
 } from "../lib/upsert-property";
+import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import {
+  activeUserId,
+  type IconRead,
+  type PageOrderEntry,
+  privateConfig,
+  readCollectionIcons,
+  readCollectionPageProperties,
+  saveTransactions,
+  spaceId,
+  writeCollectionFormat,
+} from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
 
 const COLORS = ["gray", "lightgray", "brown", "yellow", "orange", "green", "blue", "purple", "pink", "red"] as const;

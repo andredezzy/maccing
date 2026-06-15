@@ -4,14 +4,13 @@
 // properties as name · type. Complements read_page (content+values) and read_database (rows+views).
 
 import { z } from "zod";
-
-import { abbreviateId } from "../lib/abbreviate-id";
 import { iconLabel, type NotionIcon } from "../lib/format-object";
 import { formatSchema, type PropertiesMap } from "../lib/format-schema";
-import { normalizeUuid, UUID_PATTERN } from "../lib/normalize-uuid";
 import { type RichText, richTextToPlain } from "../lib/notion-page";
-import { readCollectionIcons } from "../lib/notion-private";
-import { hasPublicToken, publicRequest } from "../lib/notion-public";
+import { abbreviateId } from "../notion/abbreviate-id";
+import { normalizeUuid, UUID_PATTERN } from "../notion/normalize-uuid";
+import { readCollectionIcons } from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
 
 interface ParentRef {
