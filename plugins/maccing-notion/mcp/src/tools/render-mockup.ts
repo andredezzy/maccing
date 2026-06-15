@@ -8,7 +8,7 @@
 // hand-typed mockups drift, rendered ones never do.
 
 import { z } from "zod";
-import { type MockupBlock, renderBlocksMockup } from "../render";
+import { renderBlocksMockup } from "../render";
 import { mockupSchema } from "../render/schema";
 import { err, ok, type ToolModule } from "../tool";
 
@@ -46,7 +46,7 @@ export const renderMockupTool: ToolModule = {
   handler: async (args) => {
     try {
       const parsed = mockupSchema.parse(args.mockup);
-      const blocks = (Array.isArray(parsed) ? parsed : [parsed]) as MockupBlock[];
+      const blocks = Array.isArray(parsed) ? parsed : [parsed];
       const width = typeof args.width === "number" && args.width > 0 ? args.width : undefined;
       return ok(renderBlocksMockup(blocks, width));
     } catch (error) {

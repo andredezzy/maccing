@@ -3,6 +3,7 @@
 // blocks. `mockupSchema` (a block, or an array of blocks) is the tool's whole input.
 
 import { z } from "zod";
+import type { MockupBlock } from "./model";
 
 const card = z.object({
   icon: z.string().optional().describe("emoji or gray named-icon name before the card name"),
@@ -69,8 +70,9 @@ const formBlock = z.object({
 });
 const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pins: z.number().optional() });
 
-// biome-ignore lint/suspicious/noExplicitAny: z.lazy recursion needs a loose annotation for children
-export const blockSchema: z.ZodType<any> = z.lazy(() =>
+// The recursive block union. The z.ZodType<MockupBlock> annotation is required for z.lazy self-reference
+// AND ties the wire schema to the TS model — a drift between them becomes a compile error here.
+export const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
   z.union([
     z.object({ type: z.literal("paragraph"), text: z.string().optional(), children: z.array(blockSchema).optional() }),
     z.object({ type: z.literal("heading"), text: z.string() }),
