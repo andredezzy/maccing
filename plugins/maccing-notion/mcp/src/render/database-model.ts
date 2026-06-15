@@ -4,20 +4,22 @@
 // Unknown view types fall back to a table.
 
 import { decodePropertyId } from "../notion/ids";
+import type { NotionDateRange, RichText } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
 
-interface RichText {
-  plain_text?: string;
-}
 /** A raw Notion property value (one entry of a page's `properties`). */
-export interface RawProp {
+interface RawProp {
   type?: string;
   [key: string]: unknown;
 }
 export interface RawRow {
   properties?: Record<string, RawProp>;
+}
+interface NotionUniqueId {
+  prefix?: string;
+  number?: number;
 }
 /** A view with its property IDs already resolved to names by the caller. */
 export interface ResolvedView {
@@ -31,7 +33,7 @@ export interface ResolvedView {
 
 /** A dominant board column would tower over its siblings — cap the visible cards, keep the true count. */
 const BOARD_CARD_CAP = 6;
-export interface DbInput {
+interface DbInput {
   title: string;
   icon?: string;
   titleColumn: string;
@@ -39,8 +41,8 @@ export interface DbInput {
   rows: RawRow[];
 }
 
-function runs(value: unknown): string {
-  return ((value as RichText[]) ?? []).map((r) => r.plain_text ?? "").join("");
+function plain(richText: unknown): string {
+  return ((richText as RichText[]) ?? []).map((r) => r.plain_text ?? "").join("");
 }
 /** Flatten a Notion property value to a compact display string. */
 export function flattenValue(prop: RawProp | undefined): string {
@@ -50,7 +52,7 @@ export function flattenValue(prop: RawProp | undefined): string {
   switch (prop.type) {
     case "title":
     case "rich_text":
-      return runs(prop[prop.type]);
+      return plain(prop[prop.type]);
     case "number":
       return prop.number == null ? "" : String(prop.number);
     case "select":
@@ -60,7 +62,7 @@ export function flattenValue(prop: RawProp | undefined): string {
     case "multi_select":
       return ((prop.multi_select as { name?: string }[]) ?? []).map((s) => s.name).join(", ");
     case "date": {
-      const date = prop.date as { start?: string; end?: string } | null;
+      const date = prop.date as NotionDateRange | null;
       return date?.start ? date.start + (date.end ? ` → ${date.end}` : "") : "";
     }
     case "checkbox":
@@ -78,7 +80,7 @@ export function flattenValue(prop: RawProp | undefined): string {
     case "last_edited_time":
       return (prop.last_edited_time as string) ?? "";
     case "unique_id": {
-      const uid = prop.unique_id as { prefix?: string; number?: number } | null;
+      const uid = prop.unique_id as NotionUniqueId | null;
       return uid?.number != null ? `${uid.prefix ? `${uid.prefix}-` : ""}${uid.number}` : "";
     }
     case "formula": {

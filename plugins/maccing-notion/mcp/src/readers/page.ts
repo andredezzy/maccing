@@ -47,7 +47,7 @@ interface RollupValue {
   array?: unknown[];
 }
 
-interface NotionDateRange {
+export interface NotionDateRange {
   start?: string;
   end?: string;
 }

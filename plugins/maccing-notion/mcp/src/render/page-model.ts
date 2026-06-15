@@ -3,11 +3,9 @@
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
 import { iconGlyph, type NotionIcon } from "../readers/object";
+import type { RichText } from "../readers/page";
 import type { MockupBlock, PageModel } from "./model";
 
-interface RichText {
-  plain_text?: string;
-}
 interface NotionFileSource {
   type?: string;
   external?: { url?: string };
