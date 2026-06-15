@@ -1,4 +1,5 @@
-// Shared helpers for reading Notion page/property objects into agent-friendly scalars.
+// Notion page/property-value readers: plain-text extraction, the page title, and flattening a property
+// value to an agent-friendly scalar (relations surfaced as ids for the caller to resolve to titles).
 
 export interface RichText {
   plain_text?: string;

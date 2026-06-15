@@ -57,14 +57,14 @@ interface PageObject extends NotionPageBase {
   icon?: NotionIcon | null;
 }
 
-interface FetchBodyResult {
+interface FetchedBody {
   markdown: string;
   rounds: number;
   unfetchable: string[];
 }
 
 /** Page body as markdown, recovering unknown_block_ids until no round makes progress. */
-async function fetchBody(pageId: string): Promise<FetchBodyResult> {
+async function fetchBody(pageId: string): Promise<FetchedBody> {
   const first = await publicRequest("GET", `/v1/pages/${pageId}/markdown`);
   if (!first.ok) {
     return { markdown: "(could not read this page as markdown)", rounds: 1, unfetchable: [] };

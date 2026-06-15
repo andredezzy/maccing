@@ -1,7 +1,7 @@
 // The render dispatch engine — a type→renderer registry plus the recursive block walker. This is the
-// seam that keeps blocks/ and views/ from importing each other: each registers its renderers here, and
+// seam that keeps the block-renderer families from importing each other: each registers here, and
 // dispatch is a Map lookup, so the dependency graph stays a DAG (renderers → engine → model). Adding a
-// block or view type = one register() call + its renderer — never an edit to a growing switch.
+// block type (content, container, or view — all blocks) = one register() call + its renderer, never a switch edit.
 
 import type { MockupBlock } from "./model";
 

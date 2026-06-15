@@ -12,7 +12,7 @@ import { renderBlocksMockup } from "../render";
 import { mockupSchema } from "../render/schema";
 import { err, ok, type ToolModule } from "../tool";
 
-export const renderMockupTool: ToolModule = {
+export const renderMockup: ToolModule = {
   name: "render_mockup",
   config: {
     title: "Render a Notion mockup",

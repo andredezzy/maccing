@@ -33,7 +33,7 @@ export interface ResolvedView {
 
 /** A dominant board column would tower over its siblings — cap the visible cards, keep the true count. */
 const BOARD_CARD_CAP = 6;
-interface DbInput {
+interface DatabaseModelInput {
   title: string;
   icon?: string;
   titleColumn: string;
@@ -218,25 +218,19 @@ function viewToBlock(
 }
 
 /** Map a database's resolved views + sample rows to a renderable DatabaseModel. Pure. */
-export function databaseToModel(input: DbInput): DatabaseModel {
-  return {
-    title: input.title,
-    icon: input.icon,
-    view: 0,
-    views: input.views.length
-      ? (() => {
-          const tabs = input.views.map((v) => v.name);
-          return input.views.map((v) => viewToBlock(v, input.rows, input.titleColumn, input.title, tabs));
-        })()
-      : [
-          {
-            type: "table",
-            name: input.title,
-            columns: [input.titleColumn],
-            rows: input.rows.map((r) => [rowTitle(r, input.titleColumn)]),
-          },
-        ],
-  };
+export function databaseToModel(input: DatabaseModelInput): DatabaseModel {
+  const tabs = input.views.map((v) => v.name); // every view's tab bar lists all sibling names
+  const views: ViewBlock[] = input.views.length
+    ? input.views.map((v) => viewToBlock(v, input.rows, input.titleColumn, input.title, tabs))
+    : [
+        {
+          type: "table",
+          name: input.title,
+          columns: [input.titleColumn],
+          rows: input.rows.map((r) => [rowTitle(r, input.titleColumn)]),
+        },
+      ];
+  return { title: input.title, icon: input.icon, view: 0, views };
 }
 
 interface ViewConfigProperty {

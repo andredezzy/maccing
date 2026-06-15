@@ -23,7 +23,7 @@ import { privateRequest } from "./tools/private-request";
 import { readAgentsMd } from "./tools/read-agents-md";
 import { readDatabase } from "./tools/read-database";
 import { readPage } from "./tools/read-page";
-import { renderMockupTool } from "./tools/render-mockup";
+import { renderMockup } from "./tools/render-mockup";
 import { request } from "./tools/request";
 import { search } from "./tools/search";
 import { upsertProperty } from "./tools/upsert-property";
@@ -44,7 +44,7 @@ export const TOOLS: ToolModule[] = [
   readAgentsMd,
   readPage,
   readDatabase,
-  renderMockupTool,
+  renderMockup,
 ];
 
 async function main(): Promise<void> {
