@@ -10,7 +10,7 @@ import type { DatabaseModel } from "../model";
 function renderDatabaseLines(db: DatabaseModel, total: number): string[] {
   const out = header(db.icon, db.title, undefined, db.description, total);
   const which = db.view ?? 0;
-  const views = which === "all" ? db.views : [db.views[typeof which === "number" ? which : 0]].filter(Boolean);
+  const views = which === "all" ? db.views : [db.views[which]].filter(Boolean);
   for (let i = 0; i < views.length; i++) {
     if (i > 0) {
       out.push("");

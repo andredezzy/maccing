@@ -32,13 +32,13 @@ export interface VisiblePlanEntry {
 }
 
 /** A column-icon assignment, keyed by property NAME — the handler resolves the name to a raw id. */
-export interface IconPlanEntry {
+interface IconPlanEntry {
   dataSourceId: string;
   property: string;
   iconAssetPath: string | null;
 }
 
-export interface UpsertPlan {
+interface UpsertPlan {
   dataSourcePatches: Record<string, Record<string, unknown>>;
   pagePatches: Record<string, Record<string, unknown>>;
   iconPlan: IconPlanEntry[];

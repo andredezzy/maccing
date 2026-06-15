@@ -74,7 +74,7 @@ export function orderViews(views: RawView[], viewIds: string[] | null, databaseI
  * conditions — AND-ing several stays at 1 level). The caller falls back to an unfiltered sample if Notion
  * still rejects the shape. Returns undefined when the view has no filter at all.
  */
-export function viewQueryFilter(view: RawView): unknown | undefined {
+export function viewQueryFilter(view: RawView): unknown {
   if (view.filter) {
     return view.filter;
   }
