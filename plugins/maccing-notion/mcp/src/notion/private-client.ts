@@ -332,7 +332,7 @@ export async function writeCollectionFormat(
  * Commit op required after any schema mutation: without this trailing `update` bumping the
  * collection's editor, saveTransactions returns 200 but silently does NOT persist.
  */
-export function collectionCommitOp(dataSourceId: string, activeUser: string): Record<string, unknown> {
+function collectionCommitOp(dataSourceId: string, activeUser: string): Record<string, unknown> {
   return {
     pointer: { table: "collection", id: dataSourceId, spaceId: SPACE_ID },
     path: [],

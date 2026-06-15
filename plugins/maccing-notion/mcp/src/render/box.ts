@@ -38,7 +38,7 @@ export function cardsPerRow(inner: number, total: number): number {
   }
   return n;
 }
-export function fitColumns(natural: number[], total: number): number[] {
+function fitColumns(natural: number[], total: number): number[] {
   const widths = [...natural];
   let extra = total - (3 * widths.length + 1) - widths.reduce((a, b) => a + b, 0);
   for (let i = 0; extra > 0; i = (i + 1) % widths.length, extra--) {
