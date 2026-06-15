@@ -10,9 +10,8 @@
 // in ./text + ./box, dispatch in ./engine, and EVERY renderer in ./blocks (content, page/database
 // containers, and db views alike — they are all blocks).
 
-// importing ./blocks runs every renderer's register() call (content · containers · db views).
-import { renderDatabaseLines } from "./blocks";
-import { renderBlocks } from "./engine";
+import "./blocks"; // side-effect: registers every block renderer (content · page/database containers · db views)
+import { renderBlock, renderBlocks } from "./engine";
 import type { DatabaseModel, MockupBlock, PageModel } from "./model";
 
 export { renderBlocks } from "./engine";
@@ -29,24 +28,29 @@ function finish(lines: string[]): string {
     .trimEnd();
 }
 
-/** Render a full page. Wraps the model into the `page` block (blocks/page.ts owns the chrome) and renders it. */
+/** Render a top-level container block (a page or a standalone database) at its width, through the registry. */
+function renderRoot(block: MockupBlock, width: number | undefined): string {
+  return finish(renderBlock(block, width ?? DEFAULT_WIDTH, 0, 0));
+}
+
+/** Render a full page. The page IS a block (blocks/page.ts owns the chrome) — wrap the model and dispatch it. */
 export function renderPage(model: PageModel): string {
-  return renderBlocksMockup([
+  return renderRoot(
     {
       type: "page",
       title: model.title,
       icon: model.icon,
       cover: model.cover,
       description: model.description,
-      width: model.width,
       children: model.blocks,
     },
-  ]);
+    model.width,
+  );
 }
 
-/** Render a standalone database (its own header + selected view, or all views). */
+/** Render a standalone database. A database IS a block too — wrap the model and dispatch it the same way. */
 export function renderDatabase(db: DatabaseModel): string {
-  return finish(renderDatabaseLines(db, db.width ?? DEFAULT_WIDTH));
+  return renderRoot({ type: "database", database: db }, db.width);
 }
 
 /** Render a bare block subtree — no page/database chrome. Non-positive widths fall back to the default. */

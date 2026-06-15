@@ -11,5 +11,3 @@ import "./list";
 import "./time";
 import "./data";
 import "./database";
-
-export { renderDatabaseLines } from "./database";
