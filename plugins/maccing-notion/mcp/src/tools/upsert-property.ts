@@ -17,17 +17,14 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { formatIconAssetPath } from "../readers/schema";
+import { type DataSourceBody, formatIconAssetPath, type SchemaBody, type SchemaPropertyRef } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
 import {
   buildIconOperations,
-  type DataSourceBody,
   describePrivateFailure,
   planUpserts,
   type ResolvedEntry,
   type ResolvedIcon,
-  type SchemaBody,
-  type SchemaPropertyRef,
   TargetType,
   type VisiblePlanEntry,
 } from "../writers/upsert-property";

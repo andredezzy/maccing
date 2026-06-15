@@ -10,7 +10,7 @@ import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconLabel, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
 import { type NotionParentRef, parentLabel } from "../readers/parent";
-import { formatSchema, type PropertiesMap } from "../readers/schema";
+import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
 
 interface DataSourceObject {
@@ -18,10 +18,6 @@ interface DataSourceObject {
   icon?: NotionIcon | null;
   parent?: NotionParentRef;
   properties?: PropertiesMap;
-}
-
-interface DatabaseObject {
-  data_sources?: { id: string }[];
 }
 
 interface PageProperty {
@@ -111,7 +107,7 @@ export const describe: ToolModule = {
 
       const databaseResponse = await publicRequest("GET", `/v1/databases/${id}`);
       if (databaseResponse.ok) {
-        const dataSourceId = (databaseResponse.body as DatabaseObject).data_sources?.[0]?.id;
+        const dataSourceId = (databaseResponse.body as DataSourceBody).data_sources?.[0]?.id;
         if (dataSourceId) {
           const resolvedDataSourceResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
           if (resolvedDataSourceResponse.ok) {

@@ -10,7 +10,7 @@ import { iconGlyph } from "../readers/object";
 import { flattenProperty, type NotionPropertyValue } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
-import { formatSchema, type PropertiesMap } from "../readers/schema";
+import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
 import {
   formatViews,
   type IdToName,
@@ -29,10 +29,6 @@ interface DataSourceSchema {
   properties?: PropertiesMap;
 }
 
-interface DatabaseObject {
-  data_sources?: { id: string }[];
-}
-
 interface QueryResponse {
   results?: { properties?: Record<string, NotionPropertyValue> }[];
   has_more?: boolean;
@@ -49,7 +45,7 @@ interface ViewListResponse {
 async function resolveDataSourceId(databaseId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/databases/${databaseId}`);
   if (response.ok) {
-    const database = response.body as DatabaseObject;
+    const database = response.body as DataSourceBody;
     return database.data_sources?.[0]?.id ?? databaseId;
   }
   return databaseId; // the caller may have passed a data_source_id directly

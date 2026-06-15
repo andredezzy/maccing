@@ -14,14 +14,10 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import type { DataSourceBody, SchemaBody, SchemaPropertyRef } from "../readers/schema";
 import { err, ok, type ToolModule } from "../tool";
 import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "../writers/reorder-properties";
-import {
-  type DataSourceBody,
-  describePrivateFailure,
-  type SchemaBody,
-  type SchemaPropertyRef,
-} from "../writers/upsert-property";
+import { describePrivateFailure } from "../writers/upsert-property";
 
 interface ViewListBody {
   results?: { id: string }[];

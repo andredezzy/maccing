@@ -26,6 +26,22 @@ export interface SchemaProperty {
 
 export type PropertiesMap = Record<string, SchemaProperty>;
 
+/** Minimal id+name reference for a schema property — the projection the upsert/order tools map names↔ids with. */
+export interface SchemaPropertyRef {
+  id: string;
+  name: string;
+}
+
+/** The GET /v1/data_sources/{id} response envelope, projected to the property id+name refs. */
+export interface SchemaBody {
+  properties?: Record<string, SchemaPropertyRef>;
+}
+
+/** The GET /v1/databases/{id} response envelope — links a database to its canonical data source(s). */
+export interface DataSourceBody {
+  data_sources?: { id: string }[];
+}
+
 /** property id (any variant — raw, url-decoded, or url-encoded) → "/icons/<file>_<color>.svg". */
 export type IconsById = Record<string, string>;
 

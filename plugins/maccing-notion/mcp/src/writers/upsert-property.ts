@@ -94,22 +94,6 @@ function writeToPatchBucket(
   buckets[id][key] = value;
 }
 
-/** Minimal id+name reference for a schema property — shared by upsert-property and order-properties tools. */
-export interface SchemaPropertyRef {
-  id: string;
-  name: string;
-}
-
-/** Shared schema body shape returned by GET /v1/data_sources/{id}. */
-export interface SchemaBody {
-  properties?: Record<string, SchemaPropertyRef>;
-}
-
-/** Shared data-source body shape — links a database to its canonical data source. */
-export interface DataSourceBody {
-  data_sources?: { id: string }[];
-}
-
 /** Split a resolved batch into public PATCH bodies (per data source / per page) + the icon plan. */
 export function planUpserts(entries: ResolvedEntry[]): UpsertPlan {
   const dataSourcePatches: Record<string, Record<string, unknown>> = {};
