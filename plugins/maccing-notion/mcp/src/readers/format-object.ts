@@ -39,3 +39,18 @@ export function iconLabel(icon: NotionIcon | null | undefined): string {
       return "none";
   }
 }
+
+/** Map a Notion icon to a compact string for the render model: emoji, named-icon name, or 🖼 for any
+ * image (external/file/custom). Distinct from `iconLabel`, which returns 'none'/urls for the `describe` tool. */
+export function iconToString(icon: NotionIcon | null | undefined): string | undefined {
+  if (!icon) {
+    return undefined;
+  }
+  if (icon.type === "emoji") {
+    return icon.emoji;
+  }
+  if (icon.type === "icon") {
+    return icon.icon?.name;
+  }
+  return icon.type ? "🖼" : undefined; // external/file/custom image icon
+}

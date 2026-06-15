@@ -2,15 +2,11 @@
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
+import { iconToString, type NotionIcon } from "../readers/format-object";
 import type { MockupBlock, PageModel } from "./model";
 
 interface RichTextRun {
   plain_text?: string;
-}
-interface NotionIcon {
-  type?: string;
-  emoji?: string;
-  icon?: { name?: string };
 }
 interface NotionFileSource {
   type?: string;
@@ -39,18 +35,6 @@ function plain(runs: RichTextRun[] | undefined): string {
 function caption(runs: RichTextRun[] | undefined): string | undefined {
   const text = plain(runs);
   return text || undefined;
-}
-export function iconToString(icon: NotionIcon | null | undefined): string | undefined {
-  if (!icon) {
-    return undefined;
-  }
-  if (icon.type === "emoji") {
-    return icon.emoji;
-  }
-  if (icon.type === "icon") {
-    return icon.icon?.name;
-  }
-  return icon.type ? "🖼" : undefined; // external/file/custom image icon
 }
 function sourceUrl(media: NotionFileSource | undefined): string | undefined {
   if (!media) {

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
+import { iconToString } from "../readers/format-object";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/format-rows";
 import { formatSchema, type PropertiesMap } from "../readers/format-schema";
 import {
@@ -20,7 +21,6 @@ import { flattenProperty, type NotionPropertyValue } from "../readers/notion-pag
 import { resolveRelations } from "../readers/resolve-relations";
 import { renderDatabase } from "../render";
 import { databaseToModel, type RawRow, type ResolvedView } from "../render/database-model";
-import { iconToString } from "../render/page-model";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
