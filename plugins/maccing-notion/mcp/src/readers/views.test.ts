@@ -126,6 +126,8 @@ test("orderViews orders by the container view_ids and drops foreign-container vi
   expect(orderViews(raw, null, "DB").map((v) => v.id)).toEqual(["cal", "board"]);
   // Defensive: if the parent filter would drop everything, keep the unfiltered set.
   expect(orderViews(raw, null, "MISSING").map((v) => v.id)).toEqual(["cal", "board", "foreign"]);
+  // Defensive: view_ids present but NONE match → fall through to the parent filter (same as the null path).
+  expect(orderViews(raw, ["nonexistent"], "DB").map((v) => v.id)).toEqual(["cal", "board"]);
 });
 
 test("viewQueryFilter returns the saved filter VERBATIM (no re-wrapping) or falls back to quick_filters", () => {

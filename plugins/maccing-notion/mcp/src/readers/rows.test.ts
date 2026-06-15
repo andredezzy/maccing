@@ -68,3 +68,44 @@ test("summary fallback (only numeric columns): sum with no grouping", () => {
   expect(output).toContain("Value: sum 30");
   expect(output).not.toContain("group by");
 });
+
+test("summary: a null/empty group value lands in the (empty) bucket", () => {
+  const output = formatRows(
+    [
+      { Cat: null, Value: 10 },
+      { Cat: "X", Value: 5 },
+    ],
+    ["Cat", "Value"],
+    "summary",
+    "Cat",
+  );
+  expect(output).toContain("group by: Cat");
+  expect(output).toContain("(empty)"); // the null Cat row groups under (empty)
+});
+
+test("summary: an explicit groupBy absent from columns is ignored → auto-detect", () => {
+  const output = formatRows(rows, columns, "summary", "NotAColumn");
+  expect(output).toContain("group by: Cat"); // falls back to the low-cardinality non-numeric column
+});
+
+test("table escapes pipes (\\|) and flattens newlines to spaces in cells", () => {
+  expect(formatRows([{ Name: "A|B" }], ["Name"], "table")).toContain("A\\|B");
+  expect(formatRows([{ Name: "A\nB" }], ["Name"], "table")).toContain("| A B |");
+});
+
+test("tsv flattens an embedded tab to a space (column structure stays intact)", () => {
+  const dataRow = formatRows([{ Name: "A\tB" }], ["Name"], "tsv").split("\n")[1];
+  expect(dataRow).toBe("A B"); // the in-cell tab became a space; only column-separator tabs remain
+});
+
+test("kv separates multiple rows with a blank line", () => {
+  const output = formatRows(
+    [
+      { Name: "A", Value: 1, Cat: "X" },
+      { Name: "B", Value: 2, Cat: "Y" },
+    ],
+    columns,
+    "kv",
+  );
+  expect(output).toContain("\n\n"); // blank line between the two row blocks
+});
