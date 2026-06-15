@@ -213,13 +213,19 @@ export async function readViewOrder(blockId: string): Promise<string[] | null> {
   }
 }
 
+/** Outcome of a best-effort private read — distinguishes a real empty from a throttled/failed read. */
+export enum ReadStatus {
+  OK = "OK",
+  THROTTLED = "THROTTLED",
+}
+
 export interface IconReadOk {
-  status: "ok";
+  status: ReadStatus.OK;
   byCollection: Record<string, Record<string, string>>;
 }
 
 export interface IconReadThrottled {
-  status: "throttled";
+  status: ReadStatus.THROTTLED;
 }
 
 export type IconRead = IconReadOk | IconReadThrottled;
@@ -254,16 +260,16 @@ export function parseCollectionIcons(body: unknown, dataSourceIds: string[]): Re
  */
 export async function readCollectionIcons(dataSourceIds: string[]): Promise<IconRead> {
   if (!privateConfig().ok || dataSourceIds.length === 0) {
-    return { status: "ok", byCollection: {} };
+    return { status: ReadStatus.OK, byCollection: {} };
   }
   try {
     const response = await getRecordValues(dataSourceIds.map((id) => ({ id, table: "collection" })));
     if (!response.ok) {
-      return { status: "throttled" };
+      return { status: ReadStatus.THROTTLED };
     }
-    return { status: "ok", byCollection: parseCollectionIcons(response.body, dataSourceIds) };
+    return { status: ReadStatus.OK, byCollection: parseCollectionIcons(response.body, dataSourceIds) };
   } catch {
-    return { status: "throttled" };
+    return { status: ReadStatus.THROTTLED };
   }
 }
 
@@ -273,12 +279,12 @@ export interface PageOrderEntry {
 }
 
 export interface PageOrderReadOk {
-  status: "ok";
+  status: ReadStatus.OK;
   pageProperties: PageOrderEntry[];
 }
 
 export interface PageOrderReadThrottled {
-  status: "throttled";
+  status: ReadStatus.THROTTLED;
 }
 
 export type PageOrderRead = PageOrderReadOk | PageOrderReadThrottled;
@@ -295,18 +301,18 @@ interface CollectionFormatBody {
  */
 export async function readCollectionPageProperties(dataSourceId: string): Promise<PageOrderRead> {
   if (!privateConfig().ok) {
-    return { status: "ok", pageProperties: [] };
+    return { status: ReadStatus.OK, pageProperties: [] };
   }
   try {
     const response = await getRecordValues([{ id: dataSourceId, table: "collection" }]);
     if (!response.ok) {
-      return { status: "throttled" };
+      return { status: ReadStatus.THROTTLED };
     }
     const pageProperties = (response.body as CollectionFormatBody).results?.[0]?.value?.format
       ?.collection_page_properties;
-    return { status: "ok", pageProperties: pageProperties ?? [] };
+    return { status: ReadStatus.OK, pageProperties: pageProperties ?? [] };
   } catch {
-    return { status: "throttled" };
+    return { status: ReadStatus.THROTTLED };
   }
 }
 

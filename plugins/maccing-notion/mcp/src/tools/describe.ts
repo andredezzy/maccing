@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
-import { readCollectionIcons } from "../notion/private-client";
+import { ReadStatus, readCollectionIcons } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconLabel, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
@@ -36,7 +36,7 @@ interface PageObject {
 /** Render a data source: metadata header + the column schema, enriched with best-effort column icons. */
 async function describeDataSource(dataSourceId: string, dataSource: DataSourceObject, note = ""): Promise<string> {
   const iconRead = await readCollectionIcons([dataSourceId]);
-  const icons = iconRead.status === "ok" ? (iconRead.byCollection[dataSourceId] ?? {}) : {};
+  const icons = iconRead.status === ReadStatus.OK ? (iconRead.byCollection[dataSourceId] ?? {}) : {};
 
   const header = [
     `# Data source: ${richTextToPlain(dataSource.title) || "(untitled)"}${note ? ` ${note}` : ""}`,
@@ -46,7 +46,7 @@ async function describeDataSource(dataSourceId: string, dataSource: DataSourceOb
   ].join("\n");
 
   const throttled =
-    iconRead.status === "throttled" ? "\n\n(column icons unavailable — private read throttled; retry)" : "";
+    iconRead.status === ReadStatus.THROTTLED ? "\n\n(column icons unavailable — private read throttled; retry)" : "";
   return `${header}\n\n${formatSchema(dataSource.properties ?? {}, icons)}${throttled}`;
 }
 

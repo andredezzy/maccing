@@ -10,6 +10,7 @@ import { abbreviateId, decodePropertyId, normalizeUuid, UUID_PATTERN } from "../
 import {
   type PageOrderEntry,
   privateConfig,
+  ReadStatus,
   readCollectionPageProperties,
   writeCollectionFormat,
 } from "../notion/private-client";
@@ -103,7 +104,7 @@ async function reorderPage(
   }
   try {
     const read = await readCollectionPageProperties(dataSourceId);
-    if (read.status === "throttled") {
+    if (read.status === ReadStatus.THROTTLED) {
       return describePrivateFailure("throttled");
     }
     // Seed from the schema (all properties, default-visible) when the collection has no page order yet.

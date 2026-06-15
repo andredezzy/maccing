@@ -10,6 +10,7 @@ import {
   type IconRead,
   type PageOrderEntry,
   privateConfig,
+  ReadStatus,
   readCollectionIcons,
   readCollectionPageProperties,
   saveTransactions,
@@ -86,7 +87,7 @@ async function applyCanonicalVisibility(visiblePlan: VisiblePlanEntry[]): Promis
     const schema = schemaResponse.ok ? ((schemaResponse.body as SchemaBody).properties ?? {}) : {};
 
     const read = await readCollectionPageProperties(dataSourceId);
-    if (read.status === "throttled") {
+    if (read.status === ReadStatus.THROTTLED) {
       lines.push(describePrivateFailure("throttled"));
       errors.push(`Default visibility not applied on ${dataSourceId} — private read throttled.`);
       continue;
@@ -144,7 +145,7 @@ async function resolveTarget(id: string): Promise<ResolvedTarget | null> {
 
 /** Per-icon verification line distinguishing confirmed / read-throttled / did-not-persist (no-op name). */
 function verifyIcons(icons: ResolvedIcon[], read: IconRead, idToName: Record<string, string>): string {
-  if (read.status === "throttled") {
+  if (read.status === ReadStatus.THROTTLED) {
     return `${icons.length} column icon(s) written (saveTransactions 200) — verification read throttled; re-run describe to confirm.`;
   }
   return icons
