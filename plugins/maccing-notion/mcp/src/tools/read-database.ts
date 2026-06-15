@@ -20,7 +20,7 @@ import {
   viewQueryFilter,
 } from "../readers/views";
 import { renderDatabase } from "../render";
-import { databaseToModel, type RawRow, type ResolvedView } from "../render/database-model";
+import { databaseToModel, groupOptionsFor, type RawRow, resolveView } from "../render/database-model";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
@@ -109,53 +109,9 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
   return views;
 }
 
-interface ViewConfigShape {
-  properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
-  group_by?: { property_id?: string };
-  date_property_id?: string;
-  date_property_name?: string;
-}
-
 interface DatabaseTitleBody {
   title?: { plain_text?: string }[];
   icon?: unknown;
-}
-
-/** Resolve a view's config (property ids → names) into a ResolvedView the database-mapper consumes. */
-function resolveView(view: RawView, idToName: IdToName): ResolvedView {
-  const config = (view.configuration ?? {}) as ViewConfigShape;
-  const resolve = (id: string | undefined): string | undefined => {
-    if (!id) {
-      return undefined;
-    }
-    try {
-      return idToName[id] ?? idToName[decodeURIComponent(id)];
-    } catch {
-      return idToName[id];
-    }
-  };
-  const columns = (config.properties ?? [])
-    .filter((p) => p.visible !== false)
-    .map((p) => resolve(p.property_id) ?? p.property_name)
-    .filter((name): name is string => Boolean(name));
-  return {
-    name: view.name ?? "View",
-    type: view.type ?? "table",
-    columns,
-    groupBy: resolve(config.group_by?.property_id),
-    dateProp: resolve(config.date_property_id) ?? config.date_property_name,
-  };
-}
-/** A board's columns are its group-by property's options — return them in schema order so the mockup
- * draws every status/select column (even empty ones), matching how Notion lays out the board. */
-function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): string[] | undefined {
-  if (!groupBy) {
-    return undefined;
-  }
-  const property = schema[groupBy];
-  const options = (property?.status?.options ?? property?.select?.options) as { name?: string }[] | undefined;
-  const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
-  return names.length ? names : undefined;
 }
 
 /** Fetch + map a database to the ASCII mockup (title/icon + the selected view, rows as cards/cells). */

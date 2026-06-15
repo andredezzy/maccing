@@ -1,8 +1,10 @@
 // Live auto-mapper: a Notion database's (already id-resolved) views + sample rows → a DatabaseModel
 // that render_database can draw. PURE (no API calls) so it is unit-testable; the read_database tool
-// does the fetching + property-id→name resolution and hands resolved views here. Unknown view types
-// fall back to a table.
+// does the fetching; resolving a raw view + its rows into a renderable model is all pure and lives here.
+// Unknown view types fall back to a table.
 
+import type { PropertiesMap } from "../readers/schema";
+import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
 
 interface RichTextRun {
@@ -223,4 +225,49 @@ export function databaseToModel(input: DbInput): DatabaseModel {
           },
         ],
   };
+}
+
+interface ViewConfigShape {
+  properties?: { property_id?: string; property_name?: string; visible?: boolean }[];
+  group_by?: { property_id?: string };
+  date_property_id?: string;
+  date_property_name?: string;
+}
+
+/** Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes. */
+export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
+  const config = (view.configuration ?? {}) as ViewConfigShape;
+  const resolve = (id: string | undefined): string | undefined => {
+    if (!id) {
+      return undefined;
+    }
+    try {
+      return idToName[id] ?? idToName[decodeURIComponent(id)];
+    } catch {
+      return idToName[id];
+    }
+  };
+  const columns = (config.properties ?? [])
+    .filter((p) => p.visible !== false)
+    .map((p) => resolve(p.property_id) ?? p.property_name)
+    .filter((name): name is string => Boolean(name));
+  return {
+    name: view.name ?? "View",
+    type: view.type ?? "table",
+    columns,
+    groupBy: resolve(config.group_by?.property_id),
+    dateProp: resolve(config.date_property_id) ?? config.date_property_name,
+  };
+}
+
+/** A board's columns are its group-by property's options — return them in schema order so the mockup
+ * draws every status/select column (even empty ones), matching how Notion lays out the board. */
+export function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): string[] | undefined {
+  if (!groupBy) {
+    return undefined;
+  }
+  const property = schema[groupBy];
+  const options = (property?.status?.options ?? property?.select?.options) as { name?: string }[] | undefined;
+  const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
+  return names.length ? names : undefined;
 }
