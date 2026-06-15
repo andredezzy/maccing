@@ -1,16 +1,45 @@
 // Pure unit tests for the views renderer — no Notion API. Run with `bun test`.
 
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 
 import {
   buildIdToName,
   formatViews,
   type IdToName,
+  listViewIds,
   orderViews,
   type RawView,
   selectViewIndex,
   viewQueryFilter,
 } from "./views";
+
+const realFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
+/** Replace fetch with a scripted sequence of 200 JSON bodies (the last repeats). */
+function mockJsonBodies(bodies: unknown[]): void {
+  let index = 0;
+  globalThis.fetch = (async () => {
+    const body = bodies[Math.min(index, bodies.length - 1)];
+    index += 1;
+    return {
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify(body),
+      headers: { get: () => null },
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+}
+
+test("listViewIds paginates to the end, threading next_cursor", async () => {
+  mockJsonBodies([
+    { results: [{ id: "v1" }, { id: "v2" }], has_more: true, next_cursor: "c1" },
+    { results: [{ id: "v3" }], has_more: false },
+  ]);
+  expect(await listViewIds("ds")).toEqual(["v1", "v2", "v3"]);
+});
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
 
