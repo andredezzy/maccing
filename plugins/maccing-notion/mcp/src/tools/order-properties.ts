@@ -16,15 +16,10 @@ import {
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { DataSourceBody, SchemaBody, SchemaPropertyRef } from "../readers/schema";
+import { listViewIds } from "../readers/views";
 import { err, ok, type ToolModule } from "../tool";
 import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "../writers/reorder-properties";
 import { describePrivateFailure } from "../writers/upsert-property";
-
-interface ViewListBody {
-  results?: { id: string }[];
-  has_more?: boolean;
-  next_cursor?: string | null;
-}
 
 interface ViewConfiguration {
   type?: string;
@@ -54,25 +49,6 @@ function namesToDecodedIds(names: string[], schema: Record<string, SchemaPropert
     byName.set(propertyRef.name, decodePropertyId(propertyRef.id));
   }
   return names.map((name) => byName.get(name) ?? decodePropertyId(name));
-}
-
-async function listViewIds(dataSourceId: string): Promise<string[]> {
-  const ids: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const query: Record<string, unknown> = { data_source_id: dataSourceId, page_size: 100 };
-    if (cursor) {
-      query.start_cursor = cursor;
-    }
-    const response = await publicRequest("GET", "/v1/views", undefined, query);
-    if (!response.ok) {
-      break;
-    }
-    const body = response.body as ViewListBody;
-    ids.push(...(body.results ?? []).map((view) => view.id));
-    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
-  } while (cursor);
-  return ids;
 }
 
 /** Reorder one view's columns (public). */

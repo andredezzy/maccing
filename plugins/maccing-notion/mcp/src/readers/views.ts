@@ -1,10 +1,38 @@
-// Pure renderer for read_database's include_views output — turns raw Notion view objects into
-// agent-ready text with EVERY config field shown (cover, card size, layout, group_by, chart axes,
-// visible properties, sorts, filters) and opaque property ids resolved to names. No API calls.
+// read_database's view layer: fetch a data source's view ids (listViewIds — the one network call here),
+// then PURE transforms over raw Notion view objects — order them as Notion shows (orderViews), pick one
+// (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
+// opaque property ids resolved to names (formatViews).
 
 import { abbreviateId, idVariants } from "../notion/ids";
+import { publicRequest } from "../notion/public-client";
 
 export type IdToName = Record<string, string>;
+
+interface ViewIdListResponse {
+  results?: { id: string }[];
+  has_more?: boolean;
+  next_cursor?: string | null;
+}
+
+/** List a data source's view ids, paginated to the end (the public API caps each page at 100). */
+export async function listViewIds(dataSourceId: string): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const query: Record<string, unknown> = { data_source_id: dataSourceId, page_size: 100 };
+    if (cursor) {
+      query.start_cursor = cursor;
+    }
+    const response = await publicRequest("GET", "/v1/views", undefined, query);
+    if (!response.ok) {
+      break;
+    }
+    const body = response.body as ViewIdListResponse;
+    ids.push(...(body.results ?? []).map((view) => view.id));
+    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+  return ids;
+}
 
 export interface RawView {
   id?: string;

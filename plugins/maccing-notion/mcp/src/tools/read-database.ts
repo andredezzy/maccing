@@ -14,6 +14,7 @@ import { type DataSourceBody, formatSchema, type PropertiesMap } from "../reader
 import {
   formatViews,
   type IdToName,
+  listViewIds,
   orderViews,
   type RawView,
   selectViewIndex,
@@ -30,12 +31,6 @@ interface DataSourceSchema {
 
 interface QueryResponse {
   results?: { properties?: Record<string, NotionPropertyValue> }[];
-  has_more?: boolean;
-  next_cursor?: string | null;
-}
-
-interface ViewListResponse {
-  results?: { id: string }[];
   has_more?: boolean;
   next_cursor?: string | null;
 }
@@ -65,22 +60,7 @@ function buildIdToName(schema: PropertiesMap): IdToName {
 
 /** List a data source's view ids (paginated), then fetch each view's full configuration. */
 async function fetchViews(dataSourceId: string): Promise<RawView[]> {
-  const ids: string[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const query: Record<string, unknown> = { data_source_id: dataSourceId, page_size: 100 };
-    if (cursor) {
-      query.start_cursor = cursor;
-    }
-    const response = await publicRequest("GET", "/v1/views", undefined, query);
-    if (!response.ok) {
-      break;
-    }
-    const body = response.body as ViewListResponse;
-    ids.push(...(body.results ?? []).map((view) => view.id));
-    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
-  } while (cursor);
+  const ids = await listViewIds(dataSourceId);
 
   const views: RawView[] = [];
   const VIEW_FETCH_BATCH_SIZE = 10;
