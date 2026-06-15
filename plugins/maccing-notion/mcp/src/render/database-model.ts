@@ -3,6 +3,7 @@
 // does the fetching; resolving a raw view + its rows into a renderable model is all pure and lives here.
 // Unknown view types fall back to a table.
 
+import { decodePropertyId } from "../notion/ids";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
@@ -254,16 +255,8 @@ interface ViewConfigShape {
 /** Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes. */
 export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
   const config = (view.configuration ?? {}) as ViewConfigShape;
-  const resolve = (id: string | undefined): string | undefined => {
-    if (!id) {
-      return undefined;
-    }
-    try {
-      return idToName[id] ?? idToName[decodeURIComponent(id)];
-    } catch {
-      return idToName[id];
-    }
-  };
+  const resolve = (id: string | undefined): string | undefined =>
+    id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
   const columns = (config.properties ?? [])
     .filter((p) => p.visible !== false)
     .map((p) => resolve(p.property_id) ?? p.property_name)

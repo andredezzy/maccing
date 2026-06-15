@@ -3,7 +3,7 @@
 // cursor pagination (or exhaust_all for counts/sums per the skill's pagination law).
 
 import { z } from "zod";
-import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconGlyph } from "../readers/object";
@@ -63,14 +63,7 @@ function buildIdToName(schema: PropertiesMap): IdToName {
       continue;
     }
     idToName[property.id] = name;
-    try {
-      idToName[decodeURIComponent(property.id)] = name;
-    } catch (error) {
-      if (!(error instanceof URIError)) {
-        throw error;
-      }
-      // expected: id was not percent-encoded
-    }
+    idToName[decodePropertyId(property.id)] = name; // also key by the decoded form (idempotent if unencoded)
   }
   return idToName;
 }

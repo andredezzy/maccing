@@ -6,7 +6,7 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { abbreviateId, decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
   type PageOrderEntry,
   privateConfig,
@@ -15,12 +15,7 @@ import {
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { err, ok, type ToolModule } from "../tool";
-import {
-  decodePropertyId,
-  reorderPageProperties,
-  reorderViewProperties,
-  type ViewProperty,
-} from "../writers/reorder-properties";
+import { reorderPageProperties, reorderViewProperties, type ViewProperty } from "../writers/reorder-properties";
 import {
   type DataSourceBody,
   describePrivateFailure,

@@ -27,12 +27,19 @@ function tryDecodeURIComponent(value: string): string | undefined {
   }
 }
 
+/** Decode a url-encoded Notion property id for matching; returns the id as-is on malformed encoding
+ * (which means it was never encoded). View configs reference decoded ids while the schema stores them
+ * encoded, so matching one against the other goes through here. */
+export function decodePropertyId(id: string): string {
+  return tryDecodeURIComponent(id) ?? id;
+}
+
 /**
  * Return the set of forms a Notion property id may appear in across API endpoints (raw/decoded/encoded).
  *
  * `includeRaw`:
- *   true  — start with the raw id (format-schema.ts caller: `iconFor` has no direct-lookup guard).
- *   false — omit the raw id (format-views.ts caller: `nameFor` guards with a direct lookup before
+ *   true  — start with the raw id (schema.ts caller: `iconFor` has no direct-lookup guard).
+ *   false — omit the raw id (views.ts caller: `nameFor` guards with a direct lookup before
  *           calling idVariants, so re-including raw would cause a harmless but redundant lookup).
  *
  * Decoded form is pushed only when it differs from the raw id (i.e. the id was encoded).

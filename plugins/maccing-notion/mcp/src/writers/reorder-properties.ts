@@ -6,6 +6,8 @@
 // order, PRESERVING each entry's visibility/width (the correctness trap: never silently un-hide a column).
 // Ordering ONLY — visibility is a separate concern (upsert_property for the canonical default). No API.
 
+import { decodePropertyId } from "../notion/ids";
+
 export interface ViewProperty {
   property_id: string;
   visible?: boolean;
@@ -16,16 +18,6 @@ export interface ViewProperty {
 interface PageProperty {
   property: string;
   visible?: boolean;
-}
-
-/** Property ids appear url-encoded on the schema but decoded in view configs — decode for matching.
- * Degrades gracefully on malformed percent-encoding: returns the id as-is (never encoded). */
-export function decodePropertyId(id: string): string {
-  try {
-    return decodeURIComponent(id);
-  } catch {
-    return id; // intentional: malformed percent-encoding means the id was never encoded — return as-is
-  }
 }
 
 /**
