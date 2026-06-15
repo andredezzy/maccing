@@ -5,7 +5,7 @@ const BASE = "https://api.notion.com";
 
 export const VERSION = process.env.NOTION_VERSION ?? "2026-03-11";
 
-export interface PublicResponse {
+interface PublicResponse {
   status: number;
   ok: boolean;
   body: unknown;

@@ -7,12 +7,12 @@ export interface GalleryCard {
   name: string;
   lines?: string[];
 }
-export interface BoardGroup {
+interface BoardGroup {
   name: string;
   cards: GalleryCard[];
   total?: number; // true card count when `cards` is capped (a "+N more" tail card stands in for the rest)
 }
-export interface ListItem {
+interface ListItem {
   icon?: string;
   title: string;
   meta?: string;
@@ -66,7 +66,7 @@ export type MockupBlock =
   | DashboardBlock
   | { type: "unsupported"; label?: string };
 
-export interface TableBlock {
+interface TableBlock {
   type: "table";
   name: string;
   views?: string[];
@@ -92,7 +92,7 @@ export interface ListViewBlock {
   views?: string[];
   items: ListItem[];
 }
-export interface CalendarEvent {
+interface CalendarEvent {
   day: number;
   title: string;
 }
@@ -104,7 +104,7 @@ export interface CalendarBlock {
   month: number; // 1-12
   events?: CalendarEvent[];
 }
-export interface TimelineRow {
+interface TimelineRow {
   label: string;
   start: number; // fraction 0-1 of the axis
   end: number; // fraction 0-1
@@ -116,7 +116,7 @@ export interface TimelineBlock {
   axis?: string;
   rows: TimelineRow[];
 }
-export interface ChartDatum {
+interface ChartDatum {
   label: string;
   value: number;
 }
@@ -129,7 +129,7 @@ export interface ChartBlock {
   value?: string; // for chartType "number"
   unit?: string;
 }
-export interface FormField {
+interface FormField {
   label: string;
   fieldType?: string; // text | checkbox | select | date | person | number
 }
@@ -145,7 +145,7 @@ export interface MapBlock {
   views?: string[];
   pins?: number;
 }
-export interface DashboardWidget {
+interface DashboardWidget {
   title: string;
   view: MockupBlock;
 }

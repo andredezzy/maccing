@@ -11,7 +11,7 @@ interface SchemaRollupConfig {
   relation_property_name?: string;
 }
 
-export interface SchemaProperty {
+interface SchemaProperty {
   id?: string;
   name?: string;
   type?: string;

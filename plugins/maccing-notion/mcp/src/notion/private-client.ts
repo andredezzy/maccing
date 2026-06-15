@@ -34,13 +34,13 @@ async function pacePrivate(): Promise<void> {
   return privateGate;
 }
 
-export interface PrivateResponse {
+interface PrivateResponse {
   status: number;
   ok: boolean;
   body: unknown;
 }
 
-export interface PrivateConfigStatus {
+interface PrivateConfigStatus {
   ok: boolean;
   missing: string[];
 }
@@ -177,7 +177,7 @@ export async function saveTransactions(operations: unknown[]): Promise<PrivateRe
   return postWithRetry("saveTransactions", envelope, activeUser);
 }
 
-export interface RecordRequest {
+interface RecordRequest {
   id: string;
   table: string;
 }
@@ -239,12 +239,12 @@ export function describePrivateFailure(body: unknown): string {
   return `private write failed: ${text.slice(0, 300)}`;
 }
 
-export interface IconReadOk {
+interface IconReadOk {
   status: ReadStatus.OK;
   byCollection: Record<string, Record<string, string>>;
 }
 
-export interface IconReadThrottled {
+interface IconReadThrottled {
   status: ReadStatus.THROTTLED;
 }
 
@@ -300,16 +300,16 @@ export interface PageOrderEntry {
   visible?: boolean;
 }
 
-export interface PageOrderReadOk {
+interface PageOrderReadOk {
   status: ReadStatus.OK;
   pageProperties: PageOrderEntry[];
 }
 
-export interface PageOrderReadThrottled {
+interface PageOrderReadThrottled {
   status: ReadStatus.THROTTLED;
 }
 
-export type PageOrderRead = PageOrderReadOk | PageOrderReadThrottled;
+type PageOrderRead = PageOrderReadOk | PageOrderReadThrottled;
 
 interface CollectionFormatBody {
   results?: { value?: { format?: { collection_page_properties?: PageOrderEntry[] } } }[];

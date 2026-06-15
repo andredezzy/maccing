@@ -72,7 +72,7 @@ const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pin
 
 // The recursive block union. The z.ZodType<MockupBlock> annotation is required for z.lazy self-reference
 // AND ties the wire schema to the TS model — a drift between them becomes a compile error here.
-export const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
+const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
   z.union([
     z.object({ type: z.literal("paragraph"), text: z.string().optional(), children: z.array(blockSchema).optional() }),
     z.object({ type: z.literal("heading"), text: z.string() }),

@@ -24,7 +24,7 @@ import type { CallToolResult, ToolAnnotations } from "#sdk/types";
 // camelCase (the *Hint annotations, `isError`, `serverInfo`, … — owned by the SDK types), and keys
 // mirroring Notion's API keep Notion's casing verbatim (`spaceId`, `requestId`, `saveTransactions`).
 // Internal TS identifiers remain camelCase — they never serialize.
-export interface ToolConfig {
+interface ToolConfig {
   title?: string;
   description: string;
   inputSchema: ZodRawShape;

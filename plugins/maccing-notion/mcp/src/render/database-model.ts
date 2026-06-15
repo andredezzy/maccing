@@ -22,7 +22,7 @@ interface NotionUniqueId {
   number?: number;
 }
 /** A view with its property IDs already resolved to names by the caller. */
-export interface ResolvedView {
+interface ResolvedView {
   name: string;
   type: string;
   columns: string[]; // visible column NAMES (title first)
