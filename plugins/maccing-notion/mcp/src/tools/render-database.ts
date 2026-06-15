@@ -2,8 +2,8 @@
 // stacked) as the fixed-width ASCII mockup. For previewing/proposing a database on its own, not inside
 // a page. Each view is a table/gallery/board/list block; the renderer owns all alignment.
 
-import { type DatabaseModel, renderDatabase } from "../lib/render-mockup";
-import { databaseModelSchema } from "../lib/render-schema";
+import { type DatabaseModel, renderDatabase } from "../render";
+import { databaseModelSchema } from "../render/schema";
 import { err, ok, type ToolModule } from "../tool";
 
 export const renderDatabaseTool: ToolModule = {

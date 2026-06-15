@@ -2,8 +2,8 @@
 // as the fixed-width ASCII mockup. Handy for previewing a block subtree or a synced block's children.
 
 import { z } from "zod";
-import { type MockupBlock, renderBlocks } from "../lib/render-mockup";
-import { blockSchema } from "../lib/render-schema";
+import { type MockupBlock, renderBlocks } from "../render";
+import { blockSchema } from "../render/schema";
 import { err, ok, type ToolModule } from "../tool";
 
 export const renderBlocksTool: ToolModule = {

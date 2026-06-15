@@ -2,8 +2,8 @@
 // produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { iconToString, pageToModel, type RawBlock } from "./notion-to-page-model";
-import { displayWidth, renderPage } from "./render-mockup";
+import { displayWidth, renderPage } from "./index";
+import { iconToString, pageToModel, type RawBlock } from "./page-model";
 
 const rt = (s: string) => [{ plain_text: s }];
 

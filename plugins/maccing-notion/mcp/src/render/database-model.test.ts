@@ -2,8 +2,8 @@
 // the produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { databaseToModel, flattenValue, type RawRow } from "./notion-to-database-model";
-import { displayWidth, renderDatabase } from "./render-mockup";
+import { databaseToModel, flattenValue, type RawRow } from "./database-model";
+import { displayWidth, renderDatabase } from "./index";
 
 test("flattenValue handles the common property types", () => {
   expect(flattenValue({ type: "title", title: [{ plain_text: "Hi" }] })).toBe("Hi");

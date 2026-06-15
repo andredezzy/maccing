@@ -3,7 +3,7 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderMockup } from "./render-mockup";
+import { displayWidth, type MockupBlock, type PageModel, renderDatabase, renderMockup } from "./index";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);

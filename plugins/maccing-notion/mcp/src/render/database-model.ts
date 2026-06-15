@@ -3,7 +3,7 @@
 // does the fetching + property-id→name resolution and hands resolved views here. Unknown view types
 // fall back to a table.
 
-import type { DatabaseModel, GalleryCard, ViewBlock } from "./render-mockup";
+import type { DatabaseModel, GalleryCard, ViewBlock } from "./index";
 
 interface RichTextRun {
   plain_text?: string;

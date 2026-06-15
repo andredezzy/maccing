@@ -5,8 +5,8 @@
 // table/gallery/board/list · full-page-DB & sub-page links. The renderer owns all alignment (display-width
 // padding, truncation, word-wrap), so the caller supplies only structure. See lib/render-mockup.ts.
 
-import { type PageModel, renderPage } from "../lib/render-mockup";
-import { pageModelSchema } from "../lib/render-schema";
+import { type PageModel, renderPage } from "../render";
+import { pageModelSchema } from "../render/schema";
 import { err, ok, type ToolModule } from "../tool";
 
 export const renderPageTool: ToolModule = {
