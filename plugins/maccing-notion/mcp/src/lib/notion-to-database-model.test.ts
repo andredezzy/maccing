@@ -53,6 +53,22 @@ test("maps every resolved view type to a renderable, aligned DatabaseModel", () 
   }
 });
 
+test("every view's tab bar lists all sibling view names, not just its own", () => {
+  const model = databaseToModel({
+    title: "Sessions",
+    titleColumn: "Name",
+    rows,
+    views: [
+      { name: "All logs", type: "table", columns: ["Name", "Status"] },
+      { name: "By muscle", type: "gallery", columns: ["Name"] },
+      { name: "By status", type: "board", columns: ["Name", "Status"], groupBy: "Status" },
+    ],
+  });
+  for (const view of model.views) {
+    expect(view.views).toEqual(["All logs", "By muscle", "By status"]);
+  }
+});
+
 test("board groups by the group-by column; calendar derives its month from row dates", () => {
   const board = renderDatabase(
     databaseToModel({

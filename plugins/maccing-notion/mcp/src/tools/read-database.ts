@@ -147,10 +147,15 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
     return resolved;
   });
 
-  const query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: 8 });
-  const rows = (query.ok ? ((query.body as QueryResponse).results ?? []) : []) as RawRow[];
+  // Mockup is a compact preview, so we sample rather than exhaust — but never SILENTLY. Fetch one past
+  // the cap to detect "there are more", slice to the cap, and surface the truncation as a footer line.
+  const SAMPLE_CAP = 24;
+  const query = await publicRequest("POST", `/v1/data_sources/${dataSourceId}/query`, { page_size: SAMPLE_CAP + 1 });
+  const fetched = (query.ok ? ((query.body as QueryResponse).results ?? []) : []) as RawRow[];
+  const truncated = fetched.length > SAMPLE_CAP;
+  const rows = truncated ? fetched.slice(0, SAMPLE_CAP) : fetched;
 
-  return renderDatabase(
+  const body = renderDatabase(
     databaseToModel({
       title,
       icon: iconToString(database.icon as Parameters<typeof iconToString>[0]),
@@ -159,6 +164,8 @@ async function renderDatabaseMockup(databaseId: string, dataSourceId: string, sc
       rows,
     }),
   );
+
+  return truncated ? `${body}\n\n(mockup preview — showing the first ${SAMPLE_CAP} rows; the database has more)` : body;
 }
 
 /** Collect every relation target id across the flattened rows. */

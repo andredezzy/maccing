@@ -99,10 +99,15 @@ function dayOf(dateStr: string): { year: number; month: number; day: number } | 
   return m ? { year: +m[1], month: +m[2], day: +m[3] } : null;
 }
 
-function viewToBlock(view: ResolvedView, rows: RawRow[], titleColumn: string, dbTitle: string): ViewBlock {
+function viewToBlock(
+  view: ResolvedView,
+  rows: RawRow[],
+  titleColumn: string,
+  dbTitle: string,
+  tabs: string[],
+): ViewBlock {
   const cols = view.columns.length ? view.columns : [titleColumn];
   const otherCols = cols.filter((c) => c !== titleColumn);
-  const tabs = [view.name];
 
   switch (view.type) {
     case "gallery":
@@ -186,7 +191,10 @@ export function databaseToModel(input: DbInput): DatabaseModel {
     icon: input.icon,
     view: 0,
     views: input.views.length
-      ? input.views.map((v) => viewToBlock(v, input.rows, input.titleColumn, input.title))
+      ? (() => {
+          const tabs = input.views.map((v) => v.name);
+          return input.views.map((v) => viewToBlock(v, input.rows, input.titleColumn, input.title, tabs));
+        })()
       : [
           {
             type: "table",
