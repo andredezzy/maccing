@@ -6,8 +6,8 @@ import { z } from "zod";
 import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { iconGlyph } from "../readers/object";
-import { flattenProperty, type NotionPropertyValue, richTextToPlain } from "../readers/page";
+import { iconGlyph, type NotionIcon } from "../readers/object";
+import { type FlattenedProperty, flattenProperty, type NotionPropertyValue, richTextToPlain } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
@@ -99,7 +99,7 @@ async function fetchViews(dataSourceId: string): Promise<RawView[]> {
 
 interface DatabaseTitleBody {
   title?: { plain_text?: string }[];
-  icon?: unknown;
+  icon?: NotionIcon | null;
 }
 
 /** Fetch + map a database to the ASCII mockup (title/icon + the selected view, rows as cards/cells). */
@@ -156,7 +156,7 @@ async function renderDatabaseMockup(
 
   const model = databaseToModel({
     title,
-    icon: iconGlyph(database.icon as Parameters<typeof iconGlyph>[0]),
+    icon: iconGlyph(database.icon),
     titleColumn,
     views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
     rows,
@@ -168,7 +168,7 @@ async function renderDatabaseMockup(
 }
 
 /** Collect every relation target id across the flattened rows. */
-function collectRelationIds(rows: Record<string, ReturnType<typeof flattenProperty>>[]): string[] {
+function collectRelationIds(rows: Record<string, FlattenedProperty>[]): string[] {
   const ids: string[] = [];
   for (const row of rows) {
     for (const flattenedProperty of Object.values(row)) {
@@ -280,7 +280,7 @@ export const readDatabase: ToolModule = {
       // Flatten + collect relation ids, resolve once, build display rows.
       const flattenedRows = rawRows.map((row) => {
         const properties = row.properties ?? {};
-        const flatRow: Record<string, ReturnType<typeof flattenProperty>> = {};
+        const flatRow: Record<string, FlattenedProperty> = {};
         for (const column of columns) {
           flatRow[column] = properties[column] ? flattenProperty(properties[column]) : { value: null };
         }

@@ -18,9 +18,9 @@ export interface SchemaProperty {
   number?: { format?: string };
   rollup?: SchemaRollupConfig;
   relation?: { type?: string };
-  select?: { options?: unknown[] };
-  multi_select?: { options?: unknown[] };
-  status?: { options?: unknown[] };
+  select?: { options?: { name?: string }[] };
+  multi_select?: { options?: { name?: string }[] };
+  status?: { options?: { name?: string }[] };
   formula?: unknown;
 }
 
