@@ -30,6 +30,9 @@ interface QueryResponse {
   next_cursor?: string | null;
 }
 
+// One cheap GET, optimistic fallback: a READ can treat an unrecognized id as a data_source_id directly —
+// a wrong id just yields a query error, no harm. (order-properties uses a STRICTER resolver — probes
+// /data_sources first, returns null on failure — because a WRITE must validate the target before mutating.)
 /** Resolve a database id to its data source id (falls back to treating the id as a data source). */
 async function resolveDataSourceId(databaseId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/databases/${databaseId}`);

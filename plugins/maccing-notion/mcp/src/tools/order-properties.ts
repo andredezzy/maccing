@@ -36,6 +36,9 @@ interface ViewBody {
   configuration?: ViewConfiguration;
 }
 
+// Stricter than read-database's optimistic resolver, by design: this tool WRITES, so probe /data_sources
+// FIRST (confirm the id is a real data source before mutating), then fall back to /databases, and return
+// null on failure so the caller errors cleanly instead of PATCHing a bogus id.
 async function resolveDataSourceId(id: string): Promise<string | null> {
   const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
   if (dataSource.ok) {
