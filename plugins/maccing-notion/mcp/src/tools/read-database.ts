@@ -11,15 +11,7 @@ import { type FlattenedProperty, flattenProperty, type NotionPropertyValue, rich
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
-import {
-  buildIdToName,
-  formatViews,
-  listViewIds,
-  orderViews,
-  type RawView,
-  selectViewIndex,
-  viewQueryFilter,
-} from "../readers/views";
+import { buildIdToName, fetchViews, formatViews, orderViews, selectViewIndex, viewQueryFilter } from "../readers/views";
 import { databaseToModel, groupOptionsFor, renderDatabase, resolveView } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
@@ -43,25 +35,6 @@ async function resolveDataSourceId(databaseId: string): Promise<string> {
     return database.data_sources?.[0]?.id ?? databaseId;
   }
   return databaseId; // the caller may have passed a data_source_id directly
-}
-
-/** List a data source's view ids (paginated), then fetch each view's full configuration. */
-async function fetchViews(dataSourceId: string): Promise<RawView[]> {
-  const ids = await listViewIds(dataSourceId);
-
-  const views: RawView[] = [];
-  const VIEW_FETCH_BATCH_SIZE = 10;
-  for (let start = 0; start < ids.length; start += VIEW_FETCH_BATCH_SIZE) {
-    const responses = await Promise.all(
-      ids.slice(start, start + VIEW_FETCH_BATCH_SIZE).map((id) => publicRequest("GET", `/v1/views/${id}`)),
-    );
-    for (const response of responses) {
-      if (response.ok) {
-        views.push(response.body as RawView);
-      }
-    }
-  }
-  return views;
 }
 
 interface DatabaseTitleBody {

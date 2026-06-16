@@ -1,5 +1,6 @@
-// View-layer utilities: fetch a data source's view ids (listViewIds — the one network call here),
-// then PURE transforms over raw Notion view objects — order them as Notion shows (orderViews), pick one
+// View-layer utilities: fetch a data source's view ids then each view's full config (listViewIds +
+// fetchViews — the two network calls here), then PURE transforms over raw Notion view objects — order
+// them as Notion shows (orderViews), pick one
 // (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
 // opaque property ids resolved to names (formatViews).
 
@@ -58,6 +59,25 @@ export interface RawView {
   filter?: unknown;
   quick_filters?: unknown;
   configuration?: Record<string, unknown> | null;
+}
+
+/** List a data source's view ids (paginated), then fetch each view's full configuration. */
+export async function fetchViews(dataSourceId: string): Promise<RawView[]> {
+  const ids = await listViewIds(dataSourceId);
+
+  const views: RawView[] = [];
+  const VIEW_FETCH_BATCH_SIZE = 10;
+  for (let start = 0; start < ids.length; start += VIEW_FETCH_BATCH_SIZE) {
+    const responses = await Promise.all(
+      ids.slice(start, start + VIEW_FETCH_BATCH_SIZE).map((id) => publicRequest("GET", `/v1/views/${id}`)),
+    );
+    for (const response of responses) {
+      if (response.ok) {
+        views.push(response.body as RawView);
+      }
+    }
+  }
+  return views;
 }
 
 /**
