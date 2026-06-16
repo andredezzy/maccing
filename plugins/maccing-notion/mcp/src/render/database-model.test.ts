@@ -208,6 +208,23 @@ test("board groups by the group-by column; calendar derives its month from row d
   expect(cal).toContain("June 2025");
 });
 
+test("calendar auto-detects the date column via the regex fallback when no dateProp is given", () => {
+  // No dateProp → viewToBlock scans the columns for the first date-shaped value (/^\d{4}-\d{2}/).
+  const model = databaseToModel({
+    title: "S",
+    titleColumn: "Name",
+    rows,
+    views: [{ name: "C", type: "calendar", columns: ["Name", "Date"] }],
+  });
+  const view = model.views[0];
+  expect(view.type).toBe("calendar");
+  if (view.type === "calendar") {
+    expect(view.year).toBe(2025);
+    expect(view.month).toBe(6);
+    expect((view.events ?? []).map((event) => event.day).sort((first, second) => first - second)).toEqual([9, 11]);
+  }
+});
+
 test("board seeds every group-by option as a column (even empty), in order, and caps a dominant column", () => {
   const manyDone: RawRow[] = Array.from({ length: 9 }, (_, index) => ({
     properties: {
