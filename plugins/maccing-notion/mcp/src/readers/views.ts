@@ -8,6 +8,9 @@ import { abbreviateId, decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
 import type { PropertiesMap } from "./schema";
 
+/** Concurrent GET /v1/views/{id} per batch — conservative vs the general rate limit (cf. PAGE_FETCH_BATCH_SIZE). */
+const VIEW_FETCH_BATCH_SIZE = 10;
+
 export type IdToName = Record<string, string>;
 
 /** Invert a data-source schema into a property-id → name map, keyed by BOTH the raw and decoded id forms. */
@@ -66,7 +69,6 @@ export async function fetchViews(dataSourceId: string): Promise<RawView[]> {
   const ids = await listViewIds(dataSourceId);
 
   const views: RawView[] = [];
-  const VIEW_FETCH_BATCH_SIZE = 10;
   for (let start = 0; start < ids.length; start += VIEW_FETCH_BATCH_SIZE) {
     const responses = await Promise.all(
       ids.slice(start, start + VIEW_FETCH_BATCH_SIZE).map((id) => publicRequest("GET", `/v1/views/${id}`)),

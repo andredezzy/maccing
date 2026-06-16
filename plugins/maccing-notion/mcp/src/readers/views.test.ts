@@ -4,6 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 
 import {
   buildIdToName,
+  fetchViews,
   formatViews,
   type IdToName,
   listViewIds,
@@ -18,18 +19,23 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
+/** Build a fetch Response stub carrying a JSON body at the given status. */
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    text: async () => JSON.stringify(body),
+    headers: { get: () => null },
+  } as unknown as Response;
+}
+
 /** Replace fetch with a scripted sequence of 200 JSON bodies (the last repeats). */
 function mockJsonBodies(bodies: unknown[]): void {
   let index = 0;
   globalThis.fetch = (async () => {
     const body = bodies[Math.min(index, bodies.length - 1)];
     index += 1;
-    return {
-      status: 200,
-      ok: true,
-      text: async () => JSON.stringify(body),
-      headers: { get: () => null },
-    } as unknown as Response;
+    return jsonResponse(200, body);
   }) as unknown as typeof fetch;
 }
 
@@ -42,14 +48,33 @@ test("listViewIds paginates to the end, threading next_cursor", async () => {
 });
 
 test("listViewIds stops and returns the partial list on a non-2xx response", async () => {
-  globalThis.fetch = (async () =>
-    ({
-      status: 500,
-      ok: false,
-      text: async () => "{}",
-      headers: { get: () => null },
-    }) as unknown as Response) as unknown as typeof fetch;
+  globalThis.fetch = (async () => jsonResponse(500, {})) as unknown as typeof fetch;
   expect(await listViewIds("ds")).toEqual([]); // first page failed → nothing collected
+});
+
+test("fetchViews lists the view ids, then batch-fetches each view's full config", async () => {
+  mockJsonBodies([
+    { results: [{ id: "v1" }, { id: "v2" }, { id: "v3" }], has_more: false }, // listViewIds page
+    { id: "v1", name: "Board", type: "board" },
+    { id: "v2", name: "Calendar", type: "calendar" },
+    { id: "v3", name: "List", type: "list" },
+  ]);
+  const views = await fetchViews("ds");
+  expect(views.map((view) => view.id)).toEqual(["v1", "v2", "v3"]);
+  expect(views.map((view) => view.type)).toEqual(["board", "calendar", "list"]);
+});
+
+test("fetchViews silently drops a view whose individual fetch fails, keeping the rest in order", async () => {
+  globalThis.fetch = (async (url: string | URL) => {
+    const idMatch = String(url).match(/\/v1\/views\/([^?]+)$/);
+    if (!idMatch) {
+      return jsonResponse(200, { results: [{ id: "v1" }, { id: "v2" }, { id: "v3" }], has_more: false });
+    }
+    const id = idMatch[1];
+    return id === "v2" ? jsonResponse(500, {}) : jsonResponse(200, { id, name: id, type: "table" });
+  }) as unknown as typeof fetch;
+  const views = await fetchViews("ds");
+  expect(views.map((view) => view.id)).toEqual(["v1", "v3"]); // v2's failed fetch dropped; order preserved
 });
 
 const idToName: IdToName = { CtfH: "Net worth (last month)", "M>L>": "Net worth (R$)", title: "Name" };
