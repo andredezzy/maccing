@@ -151,6 +151,3 @@ export function pageFromNotion(page: RawPage, blocks: RawBlock[]): Page {
     children: blocks.map(mapBlock),
   };
 }
-
-/** @deprecated Use pageFromNotion instead. */
-export const pageToBlock = pageFromNotion;

@@ -13,7 +13,7 @@ import { type Block, renderBlock, renderBlocks } from "./blocks/engine";
 import { type Page, renderPage } from "./page";
 
 export { databaseToModel, groupOptionsFor, resolveView } from "./database-model";
-export { pageFromNotion, pageToBlock, type RawBlock, type RawPage } from "./page-model";
+export { pageFromNotion, type RawBlock, type RawPage } from "./page-model";
 export { mockupSchema } from "./schema";
 export { displayWidth } from "./text";
 export type { Block, Page };
