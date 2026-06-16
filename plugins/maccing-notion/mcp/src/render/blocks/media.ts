@@ -1,8 +1,7 @@
 // Media + embed block renderers — image/video/audio/file/pdf, bookmarks, embeds, code, equations.
 
 import { box } from "../box";
-import { type BlockRenderer, register } from "../engine";
-import type { MockupBlock } from "../model";
+import { type BlockRenderer, type MockupBlock, register } from "../engine";
 
 /** A captioned media/bookmark box: a label + name/url line, then an optional caption, inside the box. */
 function mediaBox(

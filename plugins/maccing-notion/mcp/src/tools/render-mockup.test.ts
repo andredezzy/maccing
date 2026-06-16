@@ -30,3 +30,22 @@ test("render_mockup returns an error on input that matches no block shape", asyn
   const { isError } = await run({ type: "nonsense_block" });
   expect(isError).toBe(true); // zod parse throws → err()
 });
+
+test("render_mockup accepts a database whose views include a dashboard (wire schema mirrors the ViewBlock type)", async () => {
+  const { isError } = await run({
+    type: "database",
+    database: {
+      title: "Ops",
+      views: [
+        {
+          type: "dashboard",
+          name: "Overview",
+          widgets: [
+            { title: "Volume", view: { type: "chart", name: "V", chartType: "bar", data: [{ label: "A", value: 1 }] } },
+          ],
+        },
+      ],
+    },
+  });
+  expect(isError).toBe(false); // dashboard is a valid ViewBlock — the zod viewBlock union must include it
+});

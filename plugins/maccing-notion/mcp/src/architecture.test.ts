@@ -1,5 +1,8 @@
-// Architecture invariant: the module import graph must stay ACYCLIC (CLAUDE.md: no circular imports —
-// extract a shared dep into a third module instead). This builds the graph from the actual `from "./…"`
+// Architecture invariant: the RUNTIME module import graph must stay ACYCLIC (CLAUDE.md: no circular imports —
+// extract a shared dep into a third module instead). `import type` / `export type` statements are EXCLUDED:
+// they erase at compile time, form no runtime edge, and so cannot cause the init-order / shared-instance
+// cycles this rule targets — which lets a recursive type union (MockupBlock) legitimately reference its
+// members across the renderer files that own them. This builds the graph from the actual runtime `from "./…"`
 // imports across src/ and fails with the offending chain if any cycle appears. Run with `bun test`.
 
 import { expect, test } from "bun:test";
@@ -31,9 +34,12 @@ test("the src/ import graph is acyclic (no module cycles)", async () => {
   const graph = new Map<string, string[]>();
   for (const file of files) {
     const source = await Bun.file(file).text();
-    const fromImports = [...source.matchAll(/(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g)].map(
-      (match) => match[1],
-    );
+    // Only RUNTIME imports are real edges. A leading `type` keyword (`import type …` / `export type …`) marks a
+    // fully type-only statement that erases at compile time — skip it. Mixed imports (`import { type X, foo }`)
+    // keep their edge via the runtime binding `foo`.
+    const fromImports = [...source.matchAll(/(?:import|export)\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/g)]
+      .filter((match) => !match[1])
+      .map((match) => match[2]);
     const sideEffectImports = [...source.matchAll(/^import\s+["']([^"']+)["'];?\s*$/gm)].map((match) => match[1]);
     const deps = [...fromImports, ...sideEffectImports]
       .map((spec) => resolveImport(file, spec))

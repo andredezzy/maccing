@@ -1,8 +1,7 @@
 // Rich-text block renderers — paragraphs, headings, lists, to-dos, toggles, quotes, callouts.
 
 import { box } from "../box";
-import { type BlockRenderer, register, renderBlocks } from "../engine";
-import type { MockupBlock } from "../model";
+import { type BlockRenderer, type MockupBlock, register, renderBlocks } from "../engine";
 import { displayWidth, wordWrap } from "../text";
 
 const BULLETS = ["•", "◦", "▪"];

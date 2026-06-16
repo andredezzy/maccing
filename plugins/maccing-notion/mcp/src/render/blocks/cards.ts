@@ -2,8 +2,31 @@
 
 import { box, COVER, cardsPerRow, GAP, hcat, MEDIUM_CARD, SMALL_CARD } from "../box";
 import { register } from "../engine";
-import type { BoardBlock, GalleryBlock } from "../model";
 import { databaseHeader } from "./database-header";
+
+export interface GalleryCard {
+  icon?: string;
+  name: string;
+  lines?: string[];
+}
+export interface GalleryBlock {
+  type: "gallery";
+  name: string;
+  views?: string[];
+  cardSize?: "small" | "medium";
+  cards: GalleryCard[];
+}
+interface BoardGroup {
+  name: string;
+  cards: GalleryCard[];
+  total?: number; // true card count when `cards` is capped (a "+N more" tail card stands in for the rest)
+}
+export interface BoardBlock {
+  type: "board";
+  name: string;
+  views?: string[];
+  groups: BoardGroup[];
+}
 
 function renderGallery(block: GalleryBlock, total: number): string[] {
   const inner = block.cardSize === "medium" ? MEDIUM_CARD : SMALL_CARD;
@@ -43,5 +66,5 @@ function renderBoard(block: BoardBlock, total: number): string[] {
   return [...lines, ...hcat(columns, GAP)];
 }
 
-register("gallery", (block, width) => renderGallery(block, width));
-register("board", (block, width) => renderBoard(block, width));
+register("gallery", renderGallery);
+register("board", renderBoard);

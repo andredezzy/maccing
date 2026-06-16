@@ -2,10 +2,56 @@
 // and dashboard (a stack of titled widgets, each recursing through the engine).
 
 import { box, renderTableGrid } from "../box";
-import { register, renderBlock } from "../engine";
-import type { ChartBlock, DashboardBlock, FormBlock, MapBlock } from "../model";
+import { type MockupBlock, register, renderBlock } from "../engine";
 import { clip, displayWidth, padRight } from "../text";
 import { databaseHeader } from "./database-header";
+
+export interface TableBlock {
+  type: "table";
+  name: string;
+  views?: string[];
+  columns: string[];
+  rows: string[][];
+}
+interface ChartDatum {
+  label: string;
+  value: number;
+}
+export interface ChartBlock {
+  type: "chart";
+  name: string;
+  views?: string[];
+  chartType: "bar" | "line" | "donut" | "number";
+  data?: ChartDatum[];
+  value?: string; // for chartType "number"
+  unit?: string;
+}
+interface FormField {
+  label: string;
+  fieldType?: string; // text | checkbox | select | date | person | number
+}
+export interface FormBlock {
+  type: "form";
+  name: string;
+  views?: string[];
+  fields: FormField[];
+}
+export interface MapBlock {
+  type: "map";
+  name: string;
+  views?: string[];
+  pins?: number;
+}
+interface DashboardWidget {
+  title: string;
+  view: MockupBlock;
+}
+export interface DashboardBlock {
+  type: "dashboard";
+  name: string;
+  views?: string[];
+  widgets: DashboardWidget[];
+}
 
 function renderChart(block: ChartBlock, total: number): string[] {
   const lines = [databaseHeader(block.name, block.views, total)];
@@ -64,7 +110,7 @@ register("table", (block, width) => [
   databaseHeader(block.name, block.views, width),
   ...renderTableGrid(block.columns, block.rows, width, "─"),
 ]);
-register("chart", (block, width) => renderChart(block, width));
-register("form", (block, width) => renderForm(block, width));
-register("map", (block, width) => renderMap(block, width));
-register("dashboard", (block, width) => renderDashboard(block, width));
+register("chart", renderChart);
+register("form", renderForm);
+register("map", renderMap);
+register("dashboard", renderDashboard);

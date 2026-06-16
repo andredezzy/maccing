@@ -3,14 +3,7 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
-import {
-  displayWidth,
-  type MockupBlock,
-  type PageModel,
-  renderBlocksMockup,
-  renderDatabase,
-  renderPage,
-} from "./index";
+import { displayWidth, type MockupBlock, render } from "./index";
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -43,12 +36,13 @@ function assertBoxesClose(rendered: string): void {
   }
 }
 
-const model: PageModel = {
+const model: MockupBlock = {
+  type: "page",
   title: "Gym",
   icon: "🏋",
   cover: "B&W dumbbell-rack cover",
   description: "Document your gym life",
-  blocks: [
+  children: [
     { type: "callout", icon: "👦", lines: ["@andre.dezzy", "", "Height: 1,65m", "Age: 22"] },
     {
       type: "gallery",
@@ -82,13 +76,14 @@ const model: PageModel = {
 };
 
 test("renders a full page with every box closing on display width (incl. emoji lines)", () => {
-  assertBoxesClose(renderPage(model));
+  assertBoxesClose(render(model));
 });
 
 test("the callout's emoji line has the SAME display width as its borders", () => {
-  const lines = renderPage({
+  const lines = render({
+    type: "page",
     title: "X",
-    blocks: [{ type: "callout", icon: "👦", lines: ["@andre.dezzy", "Age: 22"] }],
+    children: [{ type: "callout", icon: "👦", lines: ["@andre.dezzy", "Age: 22"] }],
   }).split("\n");
   const top = lines.find((line) => line.startsWith("┌"));
   const emojiLine = lines.find((line) => line.includes("@andre.dezzy"));
@@ -99,7 +94,7 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
 });
 
 test("every database header carries a right-aligned + New", () => {
-  const out = renderPage(model);
+  const out = render(model);
   for (const dbName of ["Gym Navigation", "Muscle Groups", "Weeks"]) {
     const header = out.split("\n").find((line) => line.includes(`◷ ${dbName}`));
     expect(header).toBeTruthy();
@@ -108,9 +103,10 @@ test("every database header carries a right-aligned + New", () => {
 });
 
 test("over-long content is truncated with … so the box still closes", () => {
-  const out = renderPage({
+  const out = render({
+    type: "page",
     title: "X",
-    blocks: [
+    children: [
       {
         type: "gallery",
         name: "Areas",
@@ -129,7 +125,7 @@ test("over-long content is truncated with … so the box still closes", () => {
 });
 
 test("a table spans the full page width", () => {
-  const out = renderPage(model).split("\n");
+  const out = render(model).split("\n");
   const topRule = out.find((line) => line.startsWith("┌─") && line.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
@@ -232,7 +228,7 @@ function assertSingleBoxesClose(out: string, width: number): void {
 }
 
 test("renders EVERY block type + all Phase-1 views with no overflow and every single box closed", () => {
-  const out = renderPage({ title: "Kitchen Sink", icon: "🧪", cover: "cover", blocks: SINK });
+  const out = render({ type: "page", title: "Kitchen Sink", icon: "🧪", cover: "cover", children: SINK });
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("H0"); // the legacy bare "heading" block type
   // recursion: a nested bullet uses the depth-1 marker, indented
@@ -250,13 +246,13 @@ test("renders EVERY block type + all Phase-1 views with no overflow and every si
 });
 
 test("a gallery with no cards renders an (empty) box", () => {
-  const out = renderBlocksMockup([{ type: "gallery", name: "G", views: ["V"], cardSize: "small", cards: [] }]);
+  const out = render([{ type: "gallery", name: "G", views: ["V"], cardSize: "small", cards: [] }]);
   expect(out).toContain("(empty)");
   assertSingleBoxesClose(out, 70);
 });
 
 test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
-  const out = renderBlocksMockup([
+  const out = render([
     { type: "calendar", name: "C", views: ["V"], year: 2024, month: 2, events: [{ day: 29, title: "Leap day" }] },
   ]);
   expect(out).toContain("February 2024");
@@ -267,12 +263,10 @@ test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
 });
 
 test("render edge branches: empty column_list, group-less board, data-less chart, every form widget", () => {
-  expect(renderBlocksMockup([{ type: "column_list", columns: [] }])).toBe(""); // no columns → nothing
-  expect(renderBlocksMockup([{ type: "board", name: "B", views: ["V"], groups: [] }])).toContain("(no groups)");
-  expect(renderBlocksMockup([{ type: "chart", name: "C", views: ["V"], chartType: "bar", data: [] }])).toContain(
-    "(no data)",
-  );
-  const form = renderBlocksMockup([
+  expect(render([{ type: "column_list", columns: [] }])).toBe(""); // no columns → nothing
+  expect(render([{ type: "board", name: "B", views: ["V"], groups: [] }])).toContain("(no groups)");
+  expect(render([{ type: "chart", name: "C", views: ["V"], chartType: "bar", data: [] }])).toContain("(no data)");
+  const form = render([
     {
       type: "form",
       name: "F",
@@ -290,24 +284,31 @@ test("render edge branches: empty column_list, group-less board, data-less chart
 });
 
 test("render fallback branches: empty list, and bare breadcrumb / toc / synced_block", () => {
-  expect(renderBlocksMockup([{ type: "list", name: "L", views: ["V"], items: [] }])).toContain("(empty)");
-  expect(renderBlocksMockup([{ type: "breadcrumb" }])).toContain("…"); // no path → the … placeholder
-  expect(renderBlocksMockup([{ type: "table_of_contents" }])).toContain("[ Table of contents ]"); // no headings
-  expect(renderBlocksMockup([{ type: "synced_block" }])).toContain("[ synced block ]"); // no children
+  expect(render([{ type: "list", name: "L", views: ["V"], items: [] }])).toContain("(empty)");
+  expect(render([{ type: "breadcrumb" }])).toContain("…"); // no path → the … placeholder
+  expect(render([{ type: "table_of_contents" }])).toContain("[ Table of contents ]"); // no headings
+  expect(render([{ type: "synced_block" }])).toContain("[ synced block ]"); // no children
 });
 
 test("the database tab-bar header clips the active tab when even it alone won't fit", () => {
-  const out = renderDatabase({
-    title: "T",
-    views: [
-      {
-        type: "table",
-        name: "T",
-        views: ["A view name so long that not even the active tab fits the budget, which forces a hard clip", "B", "C"],
-        columns: ["Name"],
-        rows: [["x"]],
-      },
-    ],
+  const out = render({
+    type: "database",
+    database: {
+      title: "T",
+      views: [
+        {
+          type: "table",
+          name: "T",
+          views: [
+            "A view name so long that not even the active tab fits the budget, which forces a hard clip",
+            "B",
+            "C",
+          ],
+          columns: ["Name"],
+          rows: [["x"]],
+        },
+      ],
+    },
   });
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
@@ -316,13 +317,13 @@ test("the database tab-bar header clips the active tab when even it alone won't 
   expect(out).toContain("+2 more"); // the other two tabs collapse into a count
 });
 
-test("renderBlocksMockup renders a bare subtree (no page chrome) and honors the given width", () => {
+test("render renders a bare block subtree (no page chrome) and honors the given width", () => {
   const blocks: MockupBlock[] = [
     { type: "heading_2", text: "Section" },
     { type: "bulleted_list_item", text: "alpha" },
   ];
-  const bare = renderBlocksMockup(blocks, 50);
-  const page = renderPage({ title: "My Page", blocks });
+  const bare = render(blocks, 50);
+  const page = render({ type: "page", title: "My Page", children: blocks });
 
   expect(page).toContain("My Page"); // the page has its title header…
   expect(bare).not.toContain("My Page"); // …the bare subtree has no page chrome
@@ -332,14 +333,14 @@ test("renderBlocksMockup renders a bare subtree (no page chrome) and honors the 
   }
 });
 
-test("renderBlocksMockup falls back to the default width (70) on a non-positive width", () => {
-  const out = renderBlocksMockup([{ type: "table", name: "T", columns: ["Name", "Status"], rows: [["X", "Y"]] }], 0);
+test("render falls back to the default width (70) on a non-positive width", () => {
+  const out = render([{ type: "table", name: "T", columns: ["Name", "Status"], rows: [["X", "Y"]] }], 0);
   const top = out.split("\n").find((line) => line.startsWith("┌"));
   expect(displayWidth(top ?? "")).toBe(70);
 });
 
 test("a `page` block renders full page chrome (cover · icon · title · description) — page IS a block", () => {
-  const out = renderBlocksMockup([
+  const out = render([
     {
       type: "page",
       title: "Demo",
@@ -356,7 +357,7 @@ test("a `page` block renders full page chrome (cover · icon · title · descrip
 });
 
 test("blocks compose to any depth — a page block nesting an inline database block", () => {
-  const out = renderBlocksMockup([
+  const out = render([
     {
       type: "page",
       title: "Workspace",
@@ -381,14 +382,17 @@ test("blocks compose to any depth — a page block nesting an inline database bl
 });
 
 test("standalone database renders its views (view:'all')", () => {
-  const out = renderDatabase({
-    title: "Exercises",
-    icon: "🏋",
-    view: "all",
-    views: [
-      { type: "table", name: "Exercises", views: ["All"], columns: ["Name", "Max"], rows: [["45° Leg Press", "80"]] },
-      { type: "gallery", name: "Exercises", views: ["Gallery"], cardSize: "small", cards: [{ name: "A" }] },
-    ],
+  const out = render({
+    type: "database",
+    database: {
+      title: "Exercises",
+      icon: "🏋",
+      view: "all",
+      views: [
+        { type: "table", name: "Exercises", views: ["All"], columns: ["Name", "Max"], rows: [["45° Leg Press", "80"]] },
+        { type: "gallery", name: "Exercises", views: ["Gallery"], cardSize: "small", cards: [{ name: "A" }] },
+      ],
+    },
   });
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("🏋 Exercises");
@@ -397,9 +401,10 @@ test("standalone database renders its views (view:'all')", () => {
 });
 
 test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
-  const out = renderPage({
+  const out = render({
+    type: "page",
     title: "P2",
-    blocks: [
+    children: [
       {
         type: "calendar",
         name: "Sessions",
@@ -467,19 +472,22 @@ test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned,
 });
 
 test("databaseHeader fits the width and collapses overflowing view tabs to '+N more'", () => {
-  const out = renderDatabase({
-    title: "Personal Tasks",
-    icon: "◷",
-    view: 0,
-    views: [
-      {
-        type: "table",
-        name: "Personal Tasks",
-        views: ["Board", "Backlog", "Calendar", "Timeline", "Table", "Open tasks (Status ≠ Done)"],
-        columns: ["Name"],
-        rows: [["Ship it"]],
-      },
-    ],
+  const out = render({
+    type: "database",
+    database: {
+      title: "Personal Tasks",
+      icon: "◷",
+      view: 0,
+      views: [
+        {
+          type: "table",
+          name: "Personal Tasks",
+          views: ["Board", "Backlog", "Calendar", "Timeline", "Table", "Open tasks (Status ≠ Done)"],
+          columns: ["Name"],
+          rows: [["Ship it"]],
+        },
+      ],
+    },
   });
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);

@@ -12,7 +12,7 @@ import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
 import { buildIdToName, fetchViews, formatViews, orderViews, selectViewIndex, viewQueryFilter } from "../readers/views";
-import { databaseToModel, groupOptionsFor, renderDatabase, resolveView } from "../render";
+import { databaseToModel, groupOptionsFor, render, resolveView } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
@@ -120,7 +120,7 @@ async function renderDatabaseMockup(
     rows,
   });
   model.view = views.length ? selectedIndex : 0;
-  const body = renderDatabase(model);
+  const body = render({ type: "database", database: model });
 
   return truncated ? `${body}\n\n(mockup preview — showing the first ${SAMPLE_CAP} rows; the database has more)` : body;
 }

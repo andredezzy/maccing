@@ -2,9 +2,33 @@
 
 import { renderTableGrid } from "../box";
 import { register } from "../engine";
-import type { CalendarBlock, TimelineBlock } from "../model";
 import { clip, padRight } from "../text";
 import { databaseHeader } from "./database-header";
+
+interface CalendarEvent {
+  day: number;
+  title: string;
+}
+export interface CalendarBlock {
+  type: "calendar";
+  name: string;
+  views?: string[];
+  year: number;
+  month: number; // 1-12
+  events?: CalendarEvent[];
+}
+interface TimelineRow {
+  label: string;
+  start: number; // fraction 0-1 of the axis
+  end: number; // fraction 0-1
+}
+export interface TimelineBlock {
+  type: "timeline";
+  name: string;
+  views?: string[];
+  axis?: string;
+  rows: TimelineRow[];
+}
 
 const MONTHS = [
   "January",
@@ -84,5 +108,5 @@ function renderTimeline(block: TimelineBlock, total: number): string[] {
   return lines;
 }
 
-register("calendar", (block, width) => renderCalendar(block, width));
-register("timeline", (block, width) => renderTimeline(block, width));
+register("calendar", renderCalendar);
+register("timeline", renderTimeline);

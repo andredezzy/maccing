@@ -1,9 +1,53 @@
-// The render dispatch engine — a type→renderer registry plus the recursive block walker. This is the
-// seam that keeps the block-renderer families from importing each other: each registers here, and
-// dispatch is a Map lookup, so the dependency graph stays a DAG (renderers → engine → model). Adding a
-// block type (content, container, or view — all blocks) = one register() call + its renderer, never a switch edit.
+// The render dispatch engine — it owns the block CONTRACT (the recursive `MockupBlock` union) plus a
+// type→renderer registry and the recursive walker. Each block's SHAPE lives with its renderer (in ./blocks/*)
+// and is imported here type-only to assemble the union; each renderer registers itself via register(). So the
+// RUNTIME graph stays a clean DAG (renderers → engine; the type imports erase), and adding a block type =
+// one new shape + one register() call in its own file, never a switch edit. EVERYTHING is a block: content,
+// a standalone `database`, a whole `page`, and every db view all flow through here keyed by `type`.
 
-import type { MockupBlock } from "./model";
+import type { BoardBlock, GalleryBlock } from "./blocks/cards";
+import type { ChartBlock, DashboardBlock, FormBlock, MapBlock, TableBlock } from "./blocks/data";
+import type { DatabaseBlock } from "./blocks/database";
+import type { ColumnDef } from "./blocks/layout";
+import type { ListBlock } from "./blocks/list";
+import type { PageBlock } from "./blocks/page";
+import type { CalendarBlock, TimelineBlock } from "./blocks/time";
+
+export type MockupBlock =
+  | { type: "paragraph"; text?: string; children?: MockupBlock[] }
+  | { type: "heading"; text: string } // legacy: bare heading
+  | { type: "heading_1" | "heading_2" | "heading_3"; text: string; toggle?: boolean; children?: MockupBlock[] }
+  | { type: "bulleted_list_item"; text: string; children?: MockupBlock[] }
+  | { type: "numbered_list_item"; text: string; children?: MockupBlock[] }
+  | { type: "to_do"; text: string; checked?: boolean; children?: MockupBlock[] }
+  | { type: "toggle"; text: string; children?: MockupBlock[] }
+  | { type: "quote"; text: string; children?: MockupBlock[] }
+  | { type: "callout"; icon?: string; lines: string[]; children?: MockupBlock[] }
+  | { type: "divider" }
+  | { type: "code"; language?: string; text: string; caption?: string }
+  | { type: "equation"; expression: string }
+  | { type: "image" | "video" | "audio" | "file" | "pdf"; url?: string; name?: string; caption?: string }
+  | { type: "bookmark" | "link_preview"; url: string; caption?: string }
+  | { type: "embed"; label: string }
+  | { type: "column_list"; columns: ColumnDef[] }
+  | { type: "simple_table"; rows: string[][]; hasColumnHeader?: boolean }
+  | { type: "breadcrumb"; path?: string[] }
+  | { type: "table_of_contents"; headings?: string[] }
+  | { type: "synced_block"; from?: string; children?: MockupBlock[] }
+  | { type: "page_link"; icon?: string; title: string; note?: string }
+  | DatabaseBlock
+  | PageBlock
+  | TableBlock
+  | GalleryBlock
+  | BoardBlock
+  | ListBlock
+  | CalendarBlock
+  | TimelineBlock
+  | ChartBlock
+  | FormBlock
+  | MapBlock
+  | DashboardBlock
+  | { type: "unsupported"; label?: string };
 
 /** A renderer for one block/view type. `T` narrows the block to that type at the registration site. */
 export type BlockRenderer<T extends MockupBlock = MockupBlock> = (

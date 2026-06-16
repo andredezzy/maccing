@@ -7,7 +7,8 @@ import { decodePropertyId } from "../notion/ids";
 import { type NotionDateRange, richTextToPlain } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
-import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
+import type { GalleryCard } from "./blocks/cards";
+import type { DatabaseModel, ViewBlock } from "./blocks/database";
 
 /** A raw Notion property value (one entry of a page's `properties`). */
 interface RawProperty {

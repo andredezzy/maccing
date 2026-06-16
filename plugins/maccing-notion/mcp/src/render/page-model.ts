@@ -1,10 +1,11 @@
-// Live auto-mapper: a raw Notion page object + its fetched block tree → a PageModel that render_mockup
+// Live auto-mapper: a raw Notion page object + its fetched block tree → a `page` block that render()
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
 import { iconGlyph, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
-import type { MockupBlock, PageModel } from "./model";
+import type { PageBlock } from "./blocks/page";
+import type { MockupBlock } from "./engine";
 
 interface NotionFileSource {
   type?: string;
@@ -54,7 +55,7 @@ const TEXT_TYPES = new Set([
 function mapBlock(block: RawBlock): MockupBlock {
   const data = (block[block.type] ?? {}) as Record<string, unknown>;
   const text = TEXT_TYPES.has(block.type) ? richTextToPlain(data.rich_text) : "";
-  const kids = block.children?.length ? mapBlocks(block.children) : undefined;
+  const kids = block.children?.length ? block.children.map(mapBlock) : undefined;
 
   switch (block.type) {
     case "paragraph":
@@ -108,7 +109,7 @@ function mapBlock(block: RawBlock): MockupBlock {
     case "column_list":
       return {
         type: "column_list",
-        columns: (block.children ?? []).map((column) => ({ children: mapBlocks(column.children ?? []) })),
+        columns: (block.children ?? []).map((column) => ({ children: (column.children ?? []).map(mapBlock) })),
       };
     case "table":
       return {
@@ -135,21 +136,18 @@ function mapBlock(block: RawBlock): MockupBlock {
   }
 }
 
-function mapBlocks(blocks: RawBlock[]): MockupBlock[] {
-  return blocks.map(mapBlock);
-}
-
 function pageTitle(page: RawPage): string {
   const titleProperty = Object.values(page.properties ?? {}).find((property) => property.type === "title");
   return richTextToPlain(titleProperty?.title) || "(untitled)";
 }
 
-/** Map a raw Notion page + its fetched block tree to a PageModel. Pure. */
-export function pageToModel(page: RawPage, blocks: RawBlock[]): PageModel {
+/** Map a raw Notion page + its fetched block tree to a `page` block (chrome + recursive body). Pure. */
+export function pageToBlock(page: RawPage, blocks: RawBlock[]): PageBlock {
   return {
+    type: "page",
     title: pageTitle(page),
     icon: iconGlyph(page.icon),
     cover: page.cover ? "cover" : undefined,
-    blocks: mapBlocks(blocks),
+    children: blocks.map(mapBlock),
   };
 }

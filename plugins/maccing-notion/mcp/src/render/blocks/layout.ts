@@ -2,9 +2,13 @@
 // synced blocks, page links, and the unsupported-block fallback.
 
 import { renderTableGrid } from "../box";
-import { register, renderBlocks } from "../engine";
-import type { ColumnDef } from "../model";
+import { type MockupBlock, register, renderBlocks } from "../engine";
 import { clip, displayWidth, padRight } from "../text";
+
+export interface ColumnDef {
+  ratio?: number;
+  children: MockupBlock[];
+}
 
 /** Render column_list children side by side, each padded to its ratio-allocated width, joined by " │ ". */
 function renderColumns(columns: ColumnDef[], total: number): string[] {

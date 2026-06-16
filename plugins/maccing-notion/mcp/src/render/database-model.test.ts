@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import { databaseToModel, flattenValue, groupOptionsFor, type RawRow, resolveView } from "./database-model";
-import { displayWidth, renderDatabase } from "./index";
+import { displayWidth, render } from "./index";
 
 test("flattenValue handles the common property types", () => {
   expect(flattenValue({ type: "title", title: [{ plain_text: "Hi" }] })).toBe("Hi");
@@ -136,7 +136,7 @@ test("maps every resolved view type to a renderable, aligned DatabaseModel", () 
     { name: "Timeline", type: "timeline", columns: ["Name", "Date"] }, // unknown-for-mapping → table fallback
   ]) {
     const model = databaseToModel({ title: "Sessions", icon: "🏋", titleColumn: "Name", views: [view], rows });
-    const out = renderDatabase(model);
+    const out = render({ type: "database", database: model });
     for (const line of out.split("\n")) {
       expect(displayWidth(line)).toBeLessThanOrEqual(70);
     }
@@ -189,25 +189,27 @@ test("every view's tab bar lists all sibling view names, not just its own", () =
 });
 
 test("board groups by the group-by column; calendar derives its month from row dates", () => {
-  const board = renderDatabase(
-    databaseToModel({
+  const board = render({
+    type: "database",
+    database: databaseToModel({
       title: "S",
       titleColumn: "Name",
       rows,
       views: [{ name: "B", type: "board", columns: ["Name", "Status"], groupBy: "Status" }],
     }),
-  );
+  });
   expect(board).toContain("Done  (1)");
   expect(board).toContain("To do  (1)");
 
-  const cal = renderDatabase(
-    databaseToModel({
+  const cal = render({
+    type: "database",
+    database: databaseToModel({
       title: "S",
       titleColumn: "Name",
       rows,
       views: [{ name: "C", type: "calendar", columns: ["Name", "Date"], dateProperty: "Date" }],
     }),
-  );
+  });
   expect(cal).toContain("June 2025");
 });
 
@@ -259,7 +261,7 @@ test("board seeds every group-by option as a column (even empty), in order, and 
     expect(done?.cards.length).toBeLessThanOrEqual(7); // capped: 6 cards + a "+N more"
     expect(done?.cards.some((card) => card.name.includes("more"))).toBe(true);
   }
-  const out = renderDatabase(model);
+  const out = render({ type: "database", database: model });
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
