@@ -247,7 +247,7 @@ interface ViewConfigProperty {
   property_name?: string;
   visible?: boolean;
 }
-interface ViewConfigShape {
+interface ViewConfig {
   properties?: ViewConfigProperty[];
   group_by?: { property_id?: string };
   date_property_id?: string;
@@ -256,7 +256,7 @@ interface ViewConfigShape {
 
 /** Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes. */
 export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
-  const config = (view.configuration ?? {}) as ViewConfigShape;
+  const config = (view.configuration ?? {}) as ViewConfig;
   const resolve = (id: string | undefined): string | undefined =>
     id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
   const columns = (config.properties ?? [])
