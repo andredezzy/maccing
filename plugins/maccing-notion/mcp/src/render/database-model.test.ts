@@ -75,7 +75,7 @@ test("resolveView resolves visible columns (id → name) with decoded + property
   expect(resolved.columns).toEqual(["Alpha", "Greater", "Zeta"]); // Beta excluded (visible:false)
 });
 
-test("resolveView resolves group_by + dateProp, falling back to date_property_name and 'View'", () => {
+test("resolveView resolves group_by + dateProperty, falling back to date_property_name and 'View'", () => {
   const grouped = resolveView({ type: "board", configuration: { group_by: { property_id: "s" } } }, { s: "Status" });
   expect(grouped.groupBy).toBe("Status");
 
@@ -84,11 +84,11 @@ test("resolveView resolves group_by + dateProp, falling back to date_property_na
     { configuration: { date_property_id: "d", date_property_name: "Fallback" } },
     { d: "When" },
   );
-  expect(withDateId.dateProp).toBe("When");
+  expect(withDateId.dateProperty).toBe("When");
 
-  // date_property_id absent → dateProp falls back to date_property_name verbatim; no name → "View"; no type → "table"
+  // date_property_id absent → dateProperty falls back to date_property_name verbatim; no name → "View"; no type → "table"
   const dated = resolveView({ configuration: { date_property_name: "When" } }, {});
-  expect(dated.dateProp).toBe("When");
+  expect(dated.dateProperty).toBe("When");
   expect(dated.name).toBe("View");
   expect(dated.type).toBe("table");
 });
@@ -129,7 +129,7 @@ test("maps every resolved view type to a renderable, aligned DatabaseModel", () 
     { name: "Gallery", type: "gallery", columns: ["Name", "Status"] },
     { name: "Board", type: "board", columns: ["Name", "Status"], groupBy: "Status" },
     { name: "List", type: "list", columns: ["Name", "Status"] },
-    { name: "Calendar", type: "calendar", columns: ["Name", "Date"], dateProp: "Date" },
+    { name: "Calendar", type: "calendar", columns: ["Name", "Date"], dateProperty: "Date" },
     { name: "Timeline", type: "timeline", columns: ["Name", "Date"] }, // unknown-for-mapping → table fallback
   ]) {
     const model = databaseToModel({ title: "Sessions", icon: "🏋", titleColumn: "Name", views: [view], rows });
@@ -153,7 +153,7 @@ test("a calendar view with no parseable dates falls through to a table", () => {
         },
       },
     ],
-    views: [{ name: "C", type: "calendar", columns: ["Name", "When"], dateProp: "When" }],
+    views: [{ name: "C", type: "calendar", columns: ["Name", "When"], dateProperty: "When" }],
   });
   expect(model.views[0].type).toBe("table");
 });
@@ -202,14 +202,14 @@ test("board groups by the group-by column; calendar derives its month from row d
       title: "S",
       titleColumn: "Name",
       rows,
-      views: [{ name: "C", type: "calendar", columns: ["Name", "Date"], dateProp: "Date" }],
+      views: [{ name: "C", type: "calendar", columns: ["Name", "Date"], dateProperty: "Date" }],
     }),
   );
   expect(cal).toContain("June 2025");
 });
 
-test("calendar auto-detects the date column via the regex fallback when no dateProp is given", () => {
-  // No dateProp → viewToBlock scans the columns for the first date-shaped value (/^\d{4}-\d{2}/).
+test("calendar auto-detects the date column via the regex fallback when no dateProperty is given", () => {
+  // No dateProperty → viewToBlock scans the columns for the first date-shaped value (/^\d{4}-\d{2}/).
   const model = databaseToModel({
     title: "S",
     titleColumn: "Name",

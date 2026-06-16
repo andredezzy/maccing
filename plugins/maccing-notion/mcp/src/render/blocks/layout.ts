@@ -12,8 +12,8 @@ function renderColumns(columns: ColumnDef[], total: number): string[] {
   if (count === 0) {
     return [];
   }
-  const sep = " │ ";
-  const content = total - (count - 1) * displayWidth(sep);
+  const separator = " │ ";
+  const content = total - (count - 1) * displayWidth(separator);
   const totalRatio = columns.reduce((acc, column) => acc + (column.ratio ?? 1), 0);
   const widths = columns.map((column) => Math.max(3, Math.floor((content * (column.ratio ?? 1)) / totalRatio)));
   const rendered = columns.map((column, index) =>
@@ -22,7 +22,7 @@ function renderColumns(columns: ColumnDef[], total: number): string[] {
   const height = Math.max(0, ...rendered.map((columnLines) => columnLines.length));
   const out: string[] = [];
   for (let rowIndex = 0; rowIndex < height; rowIndex++) {
-    out.push(rendered.map((columnLines, index) => columnLines[rowIndex] ?? " ".repeat(widths[index])).join(sep));
+    out.push(rendered.map((columnLines, index) => columnLines[rowIndex] ?? " ".repeat(widths[index])).join(separator));
   }
   return out;
 }

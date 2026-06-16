@@ -140,8 +140,8 @@ function mapBlocks(blocks: RawBlock[]): MockupBlock[] {
 }
 
 function pageTitle(page: RawPage): string {
-  const titleProp = Object.values(page.properties ?? {}).find((property) => property.type === "title");
-  return richTextToPlain(titleProp?.title) || "(untitled)";
+  const titleProperty = Object.values(page.properties ?? {}).find((property) => property.type === "title");
+  return richTextToPlain(titleProperty?.title) || "(untitled)";
 }
 
 /** Map a raw Notion page + its fetched block tree to a PageModel. Pure. */

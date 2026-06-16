@@ -28,7 +28,7 @@ interface ResolvedView {
   columns: string[]; // visible column NAMES (title first)
   groupBy?: string; // board group-by column name
   groupOptions?: string[]; // board: every group-by option name, in order (seeds empty columns too)
-  dateProp?: string; // calendar/timeline date column name
+  dateProperty?: string; // calendar/timeline date column name
 }
 
 /** A dominant board column would tower over its siblings — cap the visible cards, keep the true count. */
@@ -115,8 +115,8 @@ interface DatedRow {
   title: string;
 }
 
-function dayOf(dateStr: string): DayComponents | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+function dayOf(dateString: string): DayComponents | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
   return match ? { year: +match[1], month: +match[2], day: +match[3] } : null;
 }
 
@@ -189,11 +189,12 @@ function viewToBlock(
         })),
       };
     case "calendar": {
-      const dateCol =
-        view.dateProp ?? columns.find((column) => flattenValue(rows[0]?.properties?.[column]).match(/^\d{4}-\d{2}/));
+      const dateColumn =
+        view.dateProperty ??
+        columns.find((column) => flattenValue(rows[0]?.properties?.[column]).match(/^\d{4}-\d{2}/));
       const dated = rows
         .map((row) => ({
-          date: dayOf(flattenValue(row.properties?.[dateCol ?? ""])),
+          date: dayOf(flattenValue(row.properties?.[dateColumn ?? ""])),
           title: rowTitle(row, titleColumn),
         }))
         .filter((datedRow): datedRow is DatedRow => datedRow.date !== null);
@@ -259,15 +260,15 @@ export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
   const resolve = (id: string | undefined): string | undefined =>
     id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
   const columns = (config.properties ?? [])
-    .filter((viewProp) => viewProp.visible !== false)
-    .map((viewProp) => resolve(viewProp.property_id) ?? viewProp.property_name)
+    .filter((viewProperty) => viewProperty.visible !== false)
+    .map((viewProperty) => resolve(viewProperty.property_id) ?? viewProperty.property_name)
     .filter((name): name is string => Boolean(name));
   return {
     name: view.name ?? "View",
     type: view.type ?? "table",
     columns,
     groupBy: resolve(config.group_by?.property_id),
-    dateProp: resolve(config.date_property_id) ?? config.date_property_name,
+    dateProperty: resolve(config.date_property_id) ?? config.date_property_name,
   };
 }
 

@@ -274,9 +274,9 @@ export const readPage: ToolModule = {
         return ok(renderPage(pageToModel(pageResponse.body as RawPage, tree)));
       }
 
-      const includeProps = args.include_properties !== false;
+      const includeProperties = args.include_properties !== false;
       const [pageResponse, body] = await Promise.all([
-        includeProps ? publicRequest("GET", `/v1/pages/${pageId}`) : Promise.resolve(null),
+        includeProperties ? publicRequest("GET", `/v1/pages/${pageId}`) : Promise.resolve(null),
         fetchBody(pageId),
       ]);
 
@@ -284,7 +284,7 @@ export const readPage: ToolModule = {
       const content = format === "text" ? toText(normalizedMarkdown) : normalizedMarkdown;
 
       const yamlFrontmatter =
-        includeProps && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageObject)}\n\n` : "";
+        includeProperties && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageObject)}\n\n` : "";
 
       const completionNote =
         body.unfetchable.length > 0
