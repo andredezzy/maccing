@@ -2,12 +2,12 @@
 // synced blocks, page links, and the unsupported-block fallback.
 
 import { renderTableGrid } from "../box";
-import { type MockupBlock, register, renderBlocks } from "../engine";
 import { clip, displayWidth, padRight } from "../text";
+import { type Block, registerBlock, renderBlocks } from "./engine";
 
 export interface ColumnDef {
   ratio?: number;
-  children: MockupBlock[];
+  children: Block[];
 }
 
 /** Render column_list children side by side, each padded to its ratio-allocated width, joined by " │ ". */
@@ -31,21 +31,21 @@ function renderColumns(columns: ColumnDef[], total: number): string[] {
   return out;
 }
 
-register("divider", (_block, width) => ["─".repeat(width)]);
-register("column_list", (block, width) => renderColumns(block.columns, width));
-register("simple_table", (block, width) =>
+registerBlock("divider", (_block, width) => ["─".repeat(width)]);
+registerBlock("column_list", (block, width) => renderColumns(block.columns, width));
+registerBlock("simple_table", (block, width) =>
   renderTableGrid(block.rows[0] ?? [], block.rows.slice(1), width, block.hasColumnHeader === false ? "─" : "═"),
 );
-register("breadcrumb", (block, width) => [clip((block.path ?? ["…"]).join("  /  "), width)]);
-register("table_of_contents", (block, width) =>
+registerBlock("breadcrumb", (block, width) => [clip((block.path ?? ["…"]).join("  /  "), width)]);
+registerBlock("table_of_contents", (block, width) =>
   block.headings?.length ? block.headings.map((heading) => clip(`  • ${heading}`, width)) : ["[ Table of contents ]"],
 );
-register("synced_block", (block, width) =>
+registerBlock("synced_block", (block, width) =>
   block.children?.length
     ? renderBlocks(block.children, width, 0)
     : [`[ synced block${block.from ? ` ← ${block.from}` : ""} ]`],
 );
-register("page_link", (block) => [
+registerBlock("page_link", (block) => [
   `${block.icon ? `${block.icon} ` : "▤ "}${block.title}${block.note ? `     (${block.note})` : ""}`,
 ]);
-register("unsupported", (block) => [`[ ${block.label ?? "unsupported block"} ]`]);
+registerBlock("unsupported", (block) => [`[ ${block.label ?? "unsupported block"} ]`]);

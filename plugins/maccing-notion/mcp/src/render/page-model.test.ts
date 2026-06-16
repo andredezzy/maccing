@@ -4,26 +4,26 @@
 import { expect, test } from "bun:test";
 import { iconGlyph } from "../readers/object";
 import { displayWidth, render } from "./index";
-import { pageToBlock, type RawBlock } from "./page-model";
+import { pageFromNotion, type RawBlock } from "./page-model";
 
 const rt = (s: string) => [{ plain_text: s }];
 
-test("pageToBlock: a page with no cover yields no cover band", () => {
-  const model = pageToBlock({ properties: { Name: { type: "title", title: rt("T") } } }, []);
+test("pageFromNotion: a page with no cover yields no cover band", () => {
+  const model = pageFromNotion({ properties: { Name: { type: "title", title: rt("T") } } }, []);
   expect(model.cover).toBeUndefined();
   expect(render(model)).not.toContain("▒"); // header draws no ▒ band without a cover
 });
 
 test("a file_upload media block resolves its url to (uploaded)", () => {
-  const model = pageToBlock({}, [{ type: "image", image: { type: "file_upload" } } as RawBlock]);
-  const block = (model.children ?? [])[0];
+  const model = pageFromNotion({}, [{ type: "image", image: { type: "file_upload" } } as RawBlock]);
+  const block = model.children[0];
   expect(block.type).toBe("image");
   if (block.type === "image") {
     expect(block.url).toBe("(uploaded)"); // no external/file url, but a file_upload → the (uploaded) sentinel
   }
 });
 
-test("mapBlock maps every raw Notion block type to its MockupBlock type", () => {
+test("mapBlock maps every raw Notion block type to its Block type", () => {
   const rt = (s: string) => ({ rich_text: [{ plain_text: s }] });
   const raw: RawBlock[] = [
     { type: "paragraph", paragraph: rt("p") },
@@ -71,7 +71,7 @@ test("mapBlock maps every raw Notion block type to its MockupBlock type", () => 
     { type: "child_database", child_database: { title: "DB" } },
     { type: "future_unknown_block", future_unknown_block: {} },
   ] as RawBlock[];
-  expect((pageToBlock({}, raw).children ?? []).map((block) => block.type)).toEqual([
+  expect(pageFromNotion({}, raw).children.map((block) => block.type)).toEqual([
     "paragraph",
     "heading_1",
     "heading_2",
@@ -105,8 +105,8 @@ test("mapBlock maps every raw Notion block type to its MockupBlock type", () => 
 });
 
 test("a link_to_page block maps to a page_link (linked page)", () => {
-  const model = pageToBlock({}, [{ type: "link_to_page", link_to_page: {} } as RawBlock]);
-  expect((model.children ?? [])[0]).toEqual({ type: "page_link", title: "(linked page)", note: "link" });
+  const model = pageFromNotion({}, [{ type: "link_to_page", link_to_page: {} } as RawBlock]);
+  expect(model.children[0]).toEqual({ type: "page_link", title: "(linked page)", note: "link" });
 });
 
 test("iconGlyph maps emoji, named icon, and image icon", () => {
@@ -169,8 +169,8 @@ const PAGE = {
   properties: { Name: { type: "title", title: rt("My Page") } },
 };
 
-test("maps a full block tree to a renderable, aligned page block", () => {
-  const model = pageToBlock(PAGE, TREE);
+test("maps a full block tree to a renderable, aligned Page", () => {
+  const model = pageFromNotion(PAGE, TREE);
   expect(model.title).toBe("My Page");
   expect(model.icon).toBe("🧪");
   expect(model.cover).toBe("cover");

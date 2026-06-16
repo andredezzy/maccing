@@ -1,9 +1,16 @@
-// Zod schemas for render_mockup — one recursive Block union (children via z.lazy) where EVERY renderable
-// is a block: a `page` and a standalone `database` are block types too, alongside the views and content
-// blocks. `mockupSchema` (a block, or an array of blocks) is the tool's whole input.
+// Zod schemas for render_mockup — split into three layers:
+//   blockSchema: z.ZodType<Block>   — all content/media/structural blocks + `database`; recursive
+//   pageSchema:  z.ZodType<Page>    — the page root (cover · icon · title · body of blocks)
+//   viewSchema:  z.ZodType<DatabaseView> — the 10 database-view objects (table, gallery, …)
+//
+// mockupSchema = z.union([pageSchema, blockSchema, z.array(blockSchema)]) — the tool's whole input.
+// A bare view at the top level is intentionally NOT accepted (must be wrapped in a `database` block).
 
 import { z } from "zod";
-import type { DatabaseView, MockupBlock } from "./engine";
+import type { Block, DatabaseView } from "./blocks/engine";
+import type { Page } from "./page";
+
+// ── View object schemas (used by viewSchema AND by databaseModelSchema.views) ──────────────────────
 
 const card = z.object({
   icon: z.string().optional().describe("emoji or gray named-icon name before the card name"),
@@ -72,7 +79,7 @@ const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pin
 
 // The view union is recursive because DashboardBlock.widgets[].view is a DatabaseView.
 // z.lazy with an explicit ZodType<DatabaseView> annotation breaks the circularity for the type checker.
-const viewBlock: z.ZodType<DatabaseView> = z.lazy(() =>
+export const viewSchema: z.ZodType<DatabaseView> = z.lazy(() =>
   z.union([
     tableBlock,
     galleryBlock,
@@ -87,21 +94,29 @@ const viewBlock: z.ZodType<DatabaseView> = z.lazy(() =>
       type: z.literal("dashboard"),
       name: z.string(),
       views,
-      widgets: z.array(z.object({ title: z.string(), view: viewBlock })),
+      widgets: z.array(z.object({ title: z.string(), view: viewSchema })),
     }),
   ]),
 );
 
-const dashboardBlock = z.object({
-  type: z.literal("dashboard"),
-  name: z.string(),
-  views,
-  widgets: z.array(z.object({ title: z.string(), view: viewBlock })),
+// ── Block schema (recursive; no views, no page) ──────────────────────────────────────────────────
+
+// The standalone-database wire shape, referenced by the inline `database` block via z.lazy.
+const databaseModelSchema = z.object({
+  title: z.string(),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  width: z.number().optional(),
+  views: z.array(viewSchema),
+  view: z
+    .union([z.number(), z.literal("all")])
+    .optional()
+    .describe("view index, or 'all' to stack every view. Default 0."),
 });
 
-// The recursive block union. The z.ZodType<MockupBlock> annotation is required for z.lazy self-reference
+// The recursive block union. The z.ZodType<Block> annotation is required for z.lazy self-reference
 // AND ties the wire schema to the TS model — a drift between them becomes a compile error here.
-const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
+export const blockSchema: z.ZodType<Block> = z.lazy(() =>
   z.union([
     z.object({ type: z.literal("paragraph"), text: z.string().optional(), children: z.array(blockSchema).optional() }),
     z.object({ type: z.literal("heading"), text: z.string() }),
@@ -166,43 +181,24 @@ const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
       note: z.string().optional(),
     }),
     z.object({ type: z.literal("database"), database: z.lazy(() => databaseModelSchema) }),
-    z.object({
-      type: z.literal("page"),
-      title: z.string(),
-      icon: z.string().optional().describe("emoji or gray named-icon name"),
-      cover: z.string().optional().describe("short cover label; rendered as a ▒ band"),
-      description: z.string().optional(),
-      width: z.number().optional().describe("page columns (default 70)"),
-      children: z.array(blockSchema).optional(),
-    }),
-    tableBlock,
-    galleryBlock,
-    boardBlock,
-    listBlock,
-    calendarBlock,
-    timelineBlock,
-    chartBlock,
-    formBlock,
-    mapBlock,
-    dashboardBlock,
     z.object({ type: z.literal("unsupported"), label: z.string().optional() }),
   ]),
 );
 
-// The standalone-database wire shape, referenced (above) by the inline `database` block via z.lazy.
-const databaseModelSchema = z.object({
+// ── Page schema ───────────────────────────────────────────────────────────────────────────────────
+
+export const pageSchema: z.ZodType<Page> = z.object({
+  type: z.literal("page"),
   title: z.string(),
-  icon: z.string().optional(),
+  icon: z.string().optional().describe("emoji or gray named-icon name"),
+  cover: z.string().optional().describe("short cover label; rendered as a ▒ band"),
   description: z.string().optional(),
-  width: z.number().optional(),
-  views: z.array(viewBlock),
-  view: z
-    .union([z.number(), z.literal("all")])
-    .optional()
-    .describe("view index, or 'all' to stack every view. Default 0."),
+  width: z.number().optional().describe("page columns (default 70)"),
+  children: z.array(blockSchema),
 });
 
-// The render_mockup input — completely flexible: a single block, or an array of blocks. Every renderable
-// IS a block (a `page` and a `database` are blocks too, with their own chrome), so one recursive type
-// covers a whole page, a standalone database, a single view, bare content, or any nesting of them.
-export const mockupSchema = z.union([blockSchema, z.array(blockSchema)]);
+// ── Mockup schema (the render_mockup tool's full input) ───────────────────────────────────────────
+
+// A Page, a single Block, or an array of Blocks. Bare views are intentionally excluded — wrap them
+// in a { type: "database", database: { ... } } block to use them in a mockup.
+export const mockupSchema = z.union([pageSchema, blockSchema, z.array(blockSchema)]);

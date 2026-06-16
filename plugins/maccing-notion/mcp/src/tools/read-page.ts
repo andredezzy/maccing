@@ -13,7 +13,7 @@ import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markd
 import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
-import { pageToBlock, type RawBlock, type RawPage, render } from "../render";
+import { pageFromNotion, type RawBlock, type RawPage, render } from "../render";
 import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
@@ -274,7 +274,7 @@ export const readPage: ToolModule = {
         if (!pageResponse.ok) {
           return err("Could not read the page — check the id and that NOTION_TOKEN has access.");
         }
-        return ok(render(pageToBlock(pageResponse.body as RawPage, tree)));
+        return ok(render(pageFromNotion(pageResponse.body as RawPage, tree)));
       }
 
       const includeProperties = args.include_properties !== false;

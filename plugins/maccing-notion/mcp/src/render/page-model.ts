@@ -1,11 +1,11 @@
-// Live auto-mapper: a raw Notion page object + its fetched block tree → a `page` block that render()
+// Live auto-mapper: a raw Notion page object + its fetched block tree → a Page that render()
 // can draw. PURE (no API calls) so it is unit-testable on synthetic payloads; the read_page tool does
 // the fetching (recursive children) and hands the tree here. Unknown blocks degrade to `unsupported`.
 
 import { iconGlyph, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
-import type { PageBlock } from "./blocks/page";
-import type { MockupBlock } from "./engine";
+import type { Block } from "./blocks/engine";
+import type { Page } from "./page";
 
 interface NotionFileSource {
   type?: string;
@@ -52,7 +52,7 @@ const TEXT_TYPES = new Set([
   "callout",
 ]);
 
-function mapBlock(block: RawBlock): MockupBlock {
+function mapBlock(block: RawBlock): Block {
   const data = (block[block.type] ?? {}) as Record<string, unknown>;
   const text = TEXT_TYPES.has(block.type) ? richTextToPlain(data.rich_text) : "";
   const kids = block.children?.length ? block.children.map(mapBlock) : undefined;
@@ -141,8 +141,8 @@ function pageTitle(page: RawPage): string {
   return richTextToPlain(titleProperty?.title) || "(untitled)";
 }
 
-/** Map a raw Notion page + its fetched block tree to a `page` block (chrome + recursive body). Pure. */
-export function pageToBlock(page: RawPage, blocks: RawBlock[]): PageBlock {
+/** Map a raw Notion page + its fetched block tree to a Page (chrome + recursive body). Pure. */
+export function pageFromNotion(page: RawPage, blocks: RawBlock[]): Page {
   return {
     type: "page",
     title: pageTitle(page),
@@ -151,3 +151,6 @@ export function pageToBlock(page: RawPage, blocks: RawBlock[]): PageBlock {
     children: blocks.map(mapBlock),
   };
 }
+
+/** @deprecated Use pageFromNotion instead. */
+export const pageToBlock = pageFromNotion;

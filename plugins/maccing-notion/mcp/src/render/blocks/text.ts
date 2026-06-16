@@ -1,8 +1,8 @@
 // Rich-text block renderers — paragraphs, headings, lists, to-dos, toggles, quotes, callouts.
 
 import { box } from "../box";
-import { type BlockRenderer, type MockupBlock, register, renderBlocks } from "../engine";
 import { displayWidth, wordWrap } from "../text";
+import { type Block, type BlockRenderer, registerBlock, renderBlocks } from "./engine";
 
 const BULLETS = ["•", "◦", "▪"];
 
@@ -11,7 +11,7 @@ function indent(lines: string[], by: number): string[] {
   return lines.map((line) => pad + line);
 }
 /** Render a block's children indented under it (the available width shrinks by the indent). */
-function childLines(children: MockupBlock[] | undefined, width: number, by: number, depth: number): string[] {
+function childLines(children: Block[] | undefined, width: number, by: number, depth: number): string[] {
   if (!children || children.length === 0) {
     return [];
   }
@@ -22,7 +22,7 @@ function flow(
   marker: string,
   text: string,
   width: number,
-  children: MockupBlock[] | undefined,
+  children: Block[] | undefined,
   childIndent: number,
   childDepth: number,
 ): string[] {
@@ -32,38 +32,37 @@ function flow(
   return [...lines, ...childLines(children, width, childIndent, childDepth)];
 }
 
-register("paragraph", (block, width) => [
+registerBlock("paragraph", (block, width) => [
   ...(block.text ? wordWrap(block.text, width) : [""]),
   ...childLines(block.children, width, 2, 0),
 ]);
-register("heading", (block) => ["", block.text]);
+registerBlock("heading", (block) => ["", block.text]);
 
-const heading: BlockRenderer<Extract<MockupBlock, { type: "heading_1" | "heading_2" | "heading_3" }>> = (
-  block,
-  width,
-) => {
+const heading: BlockRenderer<Extract<Block, { type: "heading_1" | "heading_2" | "heading_3" }>> = (block, width) => {
   const level = block.type === "heading_1" ? 1 : block.type === "heading_2" ? 2 : 3;
   const marker = `${"#".repeat(level)} ${block.toggle ? "▸ " : ""}`;
   return ["", ...flow(marker, block.text, width, block.toggle ? block.children : undefined, 2, 0)];
 };
-register("heading_1", heading);
-register("heading_2", heading);
-register("heading_3", heading);
+registerBlock("heading_1", heading);
+registerBlock("heading_2", heading);
+registerBlock("heading_3", heading);
 
-register("bulleted_list_item", (block, width, depth) =>
+registerBlock("bulleted_list_item", (block, width, depth) =>
   flow(`${BULLETS[Math.min(depth, 2)]} `, block.text, width, block.children, 2, depth + 1),
 );
-register("numbered_list_item", (block, width, _depth, ordinal) =>
+registerBlock("numbered_list_item", (block, width, _depth, ordinal) =>
   flow(`${ordinal || 1}. `, block.text, width, block.children, 3, 0),
 );
-register("to_do", (block, width) => flow(`[${block.checked ? "x" : " "}] `, block.text, width, block.children, 4, 0));
-register("toggle", (block, width) => flow("▸ ", block.text, width, block.children, 2, 0));
-register("quote", (block, width) => {
+registerBlock("to_do", (block, width) =>
+  flow(`[${block.checked ? "x" : " "}] `, block.text, width, block.children, 4, 0),
+);
+registerBlock("toggle", (block, width) => flow("▸ ", block.text, width, block.children, 2, 0));
+registerBlock("quote", (block, width) => {
   const wrapped = wordWrap(block.text, Math.max(1, width - 2)).map((line) => `│ ${line}`);
   const kids = childLines(block.children, width - 2, 0, 0).map((line) => `│ ${line}`);
   return [...wrapped, ...kids];
 });
-register("callout", (block, width) => {
+registerBlock("callout", (block, width) => {
   const head = block.icon ? `${block.icon} ${block.lines[0] ?? ""}` : (block.lines[0] ?? "");
   const body = [head, ...block.lines.slice(1)];
   const kids = block.children ? renderBlocks(block.children, width - 4, 0) : [];

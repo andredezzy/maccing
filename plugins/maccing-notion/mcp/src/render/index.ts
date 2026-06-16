@@ -5,20 +5,20 @@
 // and never count a character. Every bordered box closes; that invariant holds under recursion (children
 // shrink width), columns (width splits + hcat), and database views (table/gallery/board/list).
 //
-// This file is the thin entry — ONE renderer, render(mockup), because EVERYTHING is a block: a whole page
-// and a standalone database are blocks too (with their own chrome). It resolves the canvas width, dispatches
-// a single block (or a smart-spaced list) through the registry, and finishes the lines. The block shapes
-// live in ./model, primitives in ./text + ./box, dispatch in ./engine, and EVERY renderer in ./blocks
-// (content, page/database containers, and db views alike — they are all blocks).
+// This file is the thin entry — ONE renderer, render(mockup). It resolves the canvas width, dispatches
+// a Page, a single Block, or a list of Blocks through the registry, and finishes the lines.
 
-import "./blocks"; // side-effect: registers every block renderer (content · page/database containers · db views)
-import { type MockupBlock, renderBlock, renderBlocks } from "./engine";
+import "./blocks"; // side-effect: registers every block renderer (content · database container · db views)
+import { type Block, renderBlock, renderBlocks } from "./blocks/engine";
+import { type Page, renderPage } from "./page";
 
 export { databaseToModel, groupOptionsFor, resolveView } from "./database-model";
-export type { MockupBlock } from "./engine";
-export { pageToBlock, type RawBlock, type RawPage } from "./page-model";
+export { pageFromNotion, pageToBlock, type RawBlock, type RawPage } from "./page-model";
 export { mockupSchema } from "./schema";
 export { displayWidth } from "./text";
+export type { Block, Page };
+
+export type Mockup = Page | Block | Block[];
 
 const DEFAULT_WIDTH = 70;
 
@@ -31,12 +31,16 @@ function finish(lines: string[]): string {
 }
 
 /**
- * Render a mockup — a single block OR a list of blocks — to the finished fixed-width string. The one render
- * entry: EVERYTHING is a block (a page and a standalone database included), so it resolves the canvas width
- * (default DEFAULT_WIDTH), dispatches through the registry (one block, or a smart-spaced list), and finishes.
+ * Render a mockup — a Page, a single Block, or a list of Blocks — to the finished fixed-width string.
+ * A Page gets its own chrome (cover · icon · title · description · body). A Block (or array) renders
+ * body-only. Resolves the canvas width (default DEFAULT_WIDTH) and dispatches through the registry.
  */
-export function render(mockup: MockupBlock | MockupBlock[], width?: number): string {
+export function render(mockup: Mockup, width?: number): string {
   const total = width && width > 0 ? width : DEFAULT_WIDTH;
-  const lines = Array.isArray(mockup) ? renderBlocks(mockup, total, 0) : renderBlock(mockup, total, 0, 0);
+  const lines = Array.isArray(mockup)
+    ? renderBlocks(mockup, total, 0)
+    : mockup.type === "page"
+      ? renderPage(mockup, total)
+      : renderBlock(mockup, total, 0, 0);
   return finish(lines);
 }

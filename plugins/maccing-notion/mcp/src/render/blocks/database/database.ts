@@ -3,7 +3,7 @@
 // top-level database block render() dispatches); each view recurses through the view engine.
 
 import { header } from "../../box";
-import { registerBlock } from "../../engine";
+import { registerBlock } from "../engine";
 import { type DatabaseView, renderViews } from "./views/engine";
 
 export interface DatabaseModel {
