@@ -9,6 +9,9 @@
 # Node — dev-only type deps for the MCP servers (@types/bun); the servers run with zero runtime deps
 node_modules/
 
+# Test coverage output (`bun test --coverage`)
+**/coverage/
+
 # Python
 __pycache__/
 *.pyc
