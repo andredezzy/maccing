@@ -239,7 +239,10 @@ export const readPage: ToolModule = {
         .boolean()
         .optional()
         .describe("markdown only: prepend YAML frontmatter of properties (default true)."),
-      depth: z.number().optional().describe("outline only: block-nesting levels to include (default 2)."),
+      depth: z
+        .number()
+        .optional()
+        .describe("outline + mockup: block-nesting levels to include (default 2 for outline, 3 for mockup)."),
     },
   },
 
