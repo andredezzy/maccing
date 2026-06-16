@@ -1,4 +1,4 @@
-# maccing-notion · v0.8.0
+# maccing-notion · v0.30.0
 
 Notion API engineering reference for coding agents — the low-level details for building and editing Notion databases programmatically, and debugging Notion API errors. Ships a self-hosted `notion` MCP server so the agent can call the Notion REST API directly.
 
