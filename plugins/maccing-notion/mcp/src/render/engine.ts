@@ -12,6 +12,7 @@ import type { ColumnDef } from "./blocks/layout";
 import type { ListBlock } from "./blocks/list";
 import type { PageBlock } from "./blocks/page";
 import type { CalendarBlock, TimelineBlock } from "./blocks/time";
+import { createRegistry, type Renderer } from "./registry";
 
 export type MockupBlock =
   | { type: "paragraph"; text?: string; children?: MockupBlock[] }
@@ -50,27 +51,18 @@ export type MockupBlock =
   | { type: "unsupported"; label?: string };
 
 /** A renderer for one block/view type. `T` narrows the block to that type at the registration site. */
-export type BlockRenderer<T extends MockupBlock = MockupBlock> = (
-  block: T,
-  width: number,
-  depth: number,
-  ordinal: number,
-) => string[];
+export type BlockRenderer<T extends MockupBlock = MockupBlock> = Renderer<T>;
 
-const registry = new Map<string, BlockRenderer>();
+const blocks = createRegistry<MockupBlock>();
 
 /** Register the renderer for a block/view `type`. The handler receives the block already narrowed to it. */
-export function register<T extends MockupBlock["type"]>(
-  type: T,
-  render: BlockRenderer<Extract<MockupBlock, { type: T }>>,
-): void {
-  registry.set(type, render as BlockRenderer);
-}
+export const registerBlock = blocks.register;
+
+/** Temporary alias — existing block files import `register`; later tasks will migrate them. */
+export const register = blocks.register;
 
 /** Dispatch one block to its registered renderer; an unregistered type renders nothing. */
-export function renderBlock(block: MockupBlock, width: number, depth: number, ordinal: number): string[] {
-  return registry.get(block.type)?.(block, width, depth, ordinal) ?? [];
-}
+export const renderBlock = blocks.render;
 
 const TIGHT = new Set(["bulleted_list_item", "numbered_list_item", "to_do"]);
 
