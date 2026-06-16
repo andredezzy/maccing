@@ -1,7 +1,7 @@
 // Pure renderer for a data source's SCHEMA — the column definitions as `name · type · detail`, with
 // formula bodies ELIDED (never the compiled {{notion:…}} blob that bloats the raw GET) and
 // relations/rollups summarized. Optional per-column icons are INJECTED, not fetched here, so this
-// stays pure and unit-testable with zero network — exactly like readers/views.ts.
+// stays pure and unit-testable with zero network calls.
 
 import { idVariants } from "../notion/ids";
 
