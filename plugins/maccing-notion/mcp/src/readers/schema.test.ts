@@ -53,6 +53,17 @@ test("no icons map → no icon markers at all", () => {
   expect(formatSchema(properties)).not.toContain("[icon ");
 });
 
+test("an id-less property gets no icon even when the icons map is non-empty (the !id guard)", () => {
+  // Name (id "title") resolves its icon; Computed has no id → iconFor short-circuits to null.
+  const output = formatSchema(
+    { Name: { id: "title", type: "title" }, Computed: { type: "checkbox" } },
+    { title: "/icons/cash_gray.svg" },
+  );
+  expect(output).toContain("[icon cash·gray]"); // the id-bearing column resolved its icon
+  const computedLine = output.split("\n").find((line) => line.startsWith("Computed"));
+  expect(computedLine).not.toContain("[icon "); // id-less column → no icon marker
+});
+
 test("empty schema is reported, not crashed", () => {
   expect(formatSchema({})).toContain("# Schema (0 columns)");
 });

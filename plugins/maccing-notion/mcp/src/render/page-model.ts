@@ -34,10 +34,7 @@ export interface RawPage {
 function caption(runs: unknown): string | undefined {
   return richTextToPlain(runs) || undefined;
 }
-function sourceUrl(media: NotionFileSource | undefined): string | undefined {
-  if (!media) {
-    return undefined;
-  }
+function sourceUrl(media: NotionFileSource): string | undefined {
   return media.external?.url ?? media.file?.url ?? (media.type === "file_upload" ? "(uploaded)" : undefined);
 }
 

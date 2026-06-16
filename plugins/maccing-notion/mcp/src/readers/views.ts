@@ -140,12 +140,8 @@ function nameFor(id: string, idToName: IdToName): string {
   if (idToName[id]) {
     return idToName[id];
   }
-  for (const variant of idVariants(id, false)) {
-    if (idToName[variant]) {
-      return idToName[variant];
-    }
-  }
-  return id;
+  const variant = idVariants(id, false).find((candidate) => idToName[candidate]);
+  return variant ? idToName[variant] : id;
 }
 
 /**
