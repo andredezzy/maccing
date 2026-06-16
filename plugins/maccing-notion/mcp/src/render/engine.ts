@@ -14,7 +14,21 @@ import type { PageBlock } from "./blocks/page";
 import type { CalendarBlock, TimelineBlock } from "./blocks/time";
 import { createRegistry, type Renderer } from "./registry";
 
-export type MockupBlock =
+/** The ten database-view block types — rendered as full data views, not as content blocks. */
+export type DatabaseView =
+  | TableBlock
+  | GalleryBlock
+  | BoardBlock
+  | ListBlock
+  | CalendarBlock
+  | TimelineBlock
+  | ChartBlock
+  | FormBlock
+  | MapBlock
+  | DashboardBlock;
+
+/** All content, media, and structural blocks (including DatabaseBlock and PageBlock). Children are always Blocks, never views. */
+export type Block =
   | { type: "paragraph"; text?: string; children?: MockupBlock[] }
   | { type: "heading"; text: string } // legacy: bare heading
   | { type: "heading_1" | "heading_2" | "heading_3"; text: string; toggle?: boolean; children?: MockupBlock[] }
@@ -38,17 +52,10 @@ export type MockupBlock =
   | { type: "page_link"; icon?: string; title: string; note?: string }
   | DatabaseBlock
   | PageBlock
-  | TableBlock
-  | GalleryBlock
-  | BoardBlock
-  | ListBlock
-  | CalendarBlock
-  | TimelineBlock
-  | ChartBlock
-  | FormBlock
-  | MapBlock
-  | DashboardBlock
   | { type: "unsupported"; label?: string };
+
+/** Transitional alias — existing code (blocks/*.ts, schema.ts, index.ts, etc.) still references MockupBlock. */
+export type MockupBlock = Block | DatabaseView;
 
 /** A renderer for one block/view type. `T` narrows the block to that type at the registration site. */
 export type BlockRenderer<T extends MockupBlock = MockupBlock> = Renderer<T>;
