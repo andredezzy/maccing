@@ -10,12 +10,12 @@ import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel, GalleryCard, ViewBlock } from "./model";
 
 /** A raw Notion property value (one entry of a page's `properties`). */
-interface RawProp {
+interface RawProperty {
   type?: string;
   [key: string]: unknown;
 }
 export interface RawRow {
-  properties?: Record<string, RawProp>;
+  properties?: Record<string, RawProperty>;
 }
 interface NotionUniqueId {
   prefix?: string;
@@ -42,7 +42,7 @@ interface DatabaseModelInput {
 }
 
 /** Flatten a Notion property value to a compact display string. */
-export function flattenValue(property: RawProp | undefined): string {
+export function flattenValue(property: RawProperty | undefined): string {
   if (!property) {
     return "";
   }
@@ -81,7 +81,7 @@ export function flattenValue(property: RawProp | undefined): string {
       return uniqueId?.number != null ? `${uniqueId.prefix ? `${uniqueId.prefix}-` : ""}${uniqueId.number}` : "";
     }
     case "formula": {
-      const formula = property.formula as RawProp;
+      const formula = property.formula as RawProperty;
       const value = formula?.type ? formula[formula.type] : undefined;
       return value == null ? "" : typeof value === "boolean" ? (value ? "☑" : "☐") : String(value);
     }
@@ -90,7 +90,7 @@ export function flattenValue(property: RawProp | undefined): string {
       return relations.length ? `${relations.length} linked` : "";
     }
     case "rollup": {
-      const rollup = property.rollup as RawProp;
+      const rollup = property.rollup as RawProperty;
       const value = rollup?.type ? rollup[rollup.type] : undefined;
       return value == null ? "" : Array.isArray(value) ? `${value.length} item(s)` : String(value);
     }
