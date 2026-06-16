@@ -17,6 +17,9 @@ import { err, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
 
+/** Rows sampled for a mockup preview — one past this is fetched to flag "there are more". */
+const SAMPLE_CAP = 24;
+
 interface DataSourceSchema {
   properties?: PropertiesMap;
 }
@@ -75,7 +78,6 @@ async function renderDatabaseMockup(
   // Sample the rows the SELECTED view actually shows — apply its filter + sorts + quick_filters so the
   // mockup matches the live view (a board's filtered-out rows must NOT appear). Compact preview, so we
   // cap; fetch one past the cap to flag "there are more". A filter Notion rejects → unfiltered fallback.
-  const SAMPLE_CAP = 24;
   const selected = ordered[selectedIndex];
   const filter = selected ? viewQueryFilter(selected) : undefined;
   const sorts = selected?.sorts ?? undefined;
