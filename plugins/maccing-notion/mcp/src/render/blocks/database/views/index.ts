@@ -8,3 +8,4 @@ import "./chart";
 import "./form";
 import "./map";
 import "./dashboard";
+import "./feed";

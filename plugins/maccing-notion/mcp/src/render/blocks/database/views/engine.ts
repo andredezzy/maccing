@@ -3,6 +3,7 @@ import type { BoardBlock } from "./board";
 import type { CalendarBlock } from "./calendar";
 import type { ChartBlock } from "./chart";
 import type { DashboardBlock } from "./dashboard";
+import type { FeedBlock } from "./feed";
 import type { FormBlock } from "./form";
 import type { GalleryBlock } from "./gallery";
 import type { ListBlock } from "./list";
@@ -20,7 +21,8 @@ export type DatabaseView =
   | ChartBlock
   | FormBlock
   | MapBlock
-  | DashboardBlock;
+  | DashboardBlock
+  | FeedBlock;
 
 const views = createRegistry<DatabaseView>();
 export const registerView = views.register;

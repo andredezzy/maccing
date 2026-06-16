@@ -110,6 +110,30 @@ test("a table view falls back to the default width (70) when rendered at width 7
   expect(displayWidth(topRule ?? "")).toBe(70);
 });
 
+test("feed view renders a single-column stack of post cards with the database header", () => {
+  const out = renderView(
+    {
+      type: "feed",
+      name: "Announcements",
+      views: ["Feed"],
+      posts: [
+        { icon: "📣", title: "Launch", preview: "We shipped it", meta: "2d ago" },
+        { title: "Hiring", preview: "Two roles open" },
+      ],
+    },
+    70,
+    0,
+    0,
+  ).join("\n");
+  expect(out).toContain("◷ Announcements"); // view tab-bar header
+  expect(out).toContain("📣 Launch");
+  expect(out).toContain("We shipped it");
+  expect(out).toContain("2d ago");
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+});
+
 test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
   const views = [
     renderView(

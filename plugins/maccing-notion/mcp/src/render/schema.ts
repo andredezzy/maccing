@@ -76,6 +76,19 @@ const formBlock = z.object({
   fields: z.array(z.object({ label: z.string(), fieldType: z.string().optional() })),
 });
 const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pins: z.number().optional() });
+const feedBlock = z.object({
+  type: z.literal("feed"),
+  name: z.string(),
+  views,
+  posts: z.array(
+    z.object({
+      icon: z.string().optional(),
+      title: z.string(),
+      preview: z.string().optional(),
+      meta: z.string().optional(),
+    }),
+  ),
+});
 
 // The view union is recursive because DashboardBlock.widgets[].view is a DatabaseView.
 // z.lazy with an explicit ZodType<DatabaseView> annotation breaks the circularity for the type checker.
@@ -90,6 +103,7 @@ export const viewSchema: z.ZodType<DatabaseView> = z.lazy(() =>
     chartBlock,
     formBlock,
     mapBlock,
+    feedBlock,
     z.object({
       type: z.literal("dashboard"),
       name: z.string(),
