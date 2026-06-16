@@ -1,7 +1,8 @@
 // Zod schemas for render_mockup — split into three layers:
 //   blockSchema: z.ZodType<Block>   — all content/media/structural blocks + `database`; recursive
 //   pageSchema:  z.ZodType<Page>    — the page root (cover · icon · title · body of blocks)
-//   viewSchema:  z.ZodType<DatabaseView> — the 10 database-view objects (table, gallery, …)
+//   viewSchema:  z.ZodType<DatabaseView> — the 11 database-view objects (table, board, gallery, list,
+//                calendar, timeline, chart, form, map, dashboard, feed)
 //
 // mockupSchema = z.union([pageSchema, blockSchema, z.array(blockSchema)]) — the tool's whole input.
 // A bare view at the top level is intentionally NOT accepted (must be wrapped in a `database` block).
