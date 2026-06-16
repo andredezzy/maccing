@@ -238,7 +238,7 @@ export const readPage: ToolModule = {
       include_properties: z
         .boolean()
         .optional()
-        .describe("markdown only: prepend YAML frontmatter of properties (default true)."),
+        .describe("markdown + text: prepend YAML frontmatter of properties (default true)."),
       depth: z
         .number()
         .optional()
