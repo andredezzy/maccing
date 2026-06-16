@@ -121,7 +121,7 @@ test("buildIconOperations emits a schema op per icon + one commit per data sourc
   expect((removeOperation?.args.primitiveOp as { args: unknown }).args).toBeNull();
 });
 
-test("parseCollectionIcons maps each collection's schema to {propId: icon}", () => {
+test("parseCollectionIcons maps each collection's schema to {propertyId: icon}", () => {
   const body = {
     results: [
       { value: { schema: { abc: { icon: "/icons/cash_gray.svg" }, def: { name: "X" } } } },

@@ -241,7 +241,7 @@ test("viewQueryFilter returns the saved filter VERBATIM (no re-wrapping) or fall
     property: "S",
     status: { equals: "Done" },
   });
-  // a single quick_filter { propId: condition } becomes { property: propId, ...condition }
+  // a single quick_filter { propertyId: condition } becomes { property: propertyId, ...condition }
   expect(viewQueryFilter({ id: "v", quick_filters: { tjUk: { checkbox: { equals: false } } } })).toEqual({
     property: "tjUk",
     checkbox: { equals: false },
