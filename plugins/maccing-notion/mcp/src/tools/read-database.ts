@@ -55,7 +55,20 @@ async function renderDatabaseMockup(
   schema: PropertiesMap,
   viewSelector: string | number | undefined,
 ): Promise<string> {
-  const dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
+  // Title + icon live on the DATABASE WRAPPER. `databaseId` is the caller's input id, which may be a
+  // data_source_id (the public /databases endpoint only accepts a database id, so that GET 404s) — when it
+  // does, resolve the wrapper via the data source's parent so the header still shows the real title/icon
+  // (not the "(database)" fallback) regardless of whether a database id or a data_source id was passed.
+  let dbResponse = await publicRequest("GET", `/v1/databases/${databaseId}`);
+  if (!dbResponse.ok) {
+    const dsResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+    const parentDatabaseId = dsResponse.ok
+      ? (dsResponse.body as { parent?: { database_id?: string } }).parent?.database_id
+      : undefined;
+    if (parentDatabaseId) {
+      dbResponse = await publicRequest("GET", `/v1/databases/${parentDatabaseId}`);
+    }
+  }
   const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
   const title = richTextToPlain(database.title) || "(database)";
   const idToName = buildIdToName(schema);
