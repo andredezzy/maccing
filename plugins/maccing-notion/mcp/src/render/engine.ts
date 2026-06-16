@@ -5,27 +5,13 @@
 // one new shape + one register() call in its own file, never a switch edit. EVERYTHING is a block: content,
 // a standalone `database`, a whole `page`, and every db view all flow through here keyed by `type`.
 
-import type { BoardBlock, GalleryBlock } from "./blocks/cards";
-import type { ChartBlock, DashboardBlock, FormBlock, MapBlock, TableBlock } from "./blocks/data";
-import type { DatabaseBlock } from "./blocks/database";
+import type { DatabaseBlock } from "./blocks/database/database";
+import type { DatabaseView } from "./blocks/database/views/engine";
 import type { ColumnDef } from "./blocks/layout";
-import type { ListBlock } from "./blocks/list";
 import type { PageBlock } from "./blocks/page";
-import type { CalendarBlock, TimelineBlock } from "./blocks/time";
 import { createRegistry, type Renderer } from "./registry";
 
-/** The ten database-view block types — rendered as full data views, not as content blocks. */
-export type DatabaseView =
-  | TableBlock
-  | GalleryBlock
-  | BoardBlock
-  | ListBlock
-  | CalendarBlock
-  | TimelineBlock
-  | ChartBlock
-  | FormBlock
-  | MapBlock
-  | DashboardBlock;
+export type { DatabaseView };
 
 /** All content, media, and structural blocks (including DatabaseBlock and PageBlock). Children are always Blocks, never views. */
 export type Block =

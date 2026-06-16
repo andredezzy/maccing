@@ -1,8 +1,8 @@
 // List view renderer — one line per row: `• [icon] Title   meta`.
 
-import { register } from "../engine";
-import { clip } from "../text";
-import { databaseHeader } from "./database-header";
+import { clip } from "../../../text";
+import { databaseHeader } from "../header";
+import { registerView } from "./engine";
 
 interface ListItem {
   icon?: string;
@@ -28,4 +28,4 @@ function renderList(block: ListBlock, total: number): string[] {
   return lines;
 }
 
-register("list", renderList);
+registerView("list", renderList);

@@ -7,8 +7,9 @@ import { decodePropertyId } from "../notion/ids";
 import { type NotionDateRange, richTextToPlain } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
-import type { GalleryCard } from "./blocks/cards";
-import type { DatabaseModel, ViewBlock } from "./blocks/database";
+import type { DatabaseModel } from "./blocks/database/database";
+import type { DatabaseView } from "./blocks/database/views/engine";
+import type { GalleryCard } from "./blocks/database/views/gallery";
 
 /** A raw Notion property value (one entry of a page's `properties`). */
 interface RawProperty {
@@ -136,7 +137,7 @@ function viewToBlock(
   titleColumn: string,
   dbTitle: string,
   tabs: string[],
-): ViewBlock {
+): DatabaseView {
   const columns = view.columns.length ? view.columns : [titleColumn];
   const otherColumns = columns.filter((column) => column !== titleColumn);
 
@@ -239,7 +240,7 @@ function viewToBlock(
 /** Map a database's resolved views + sample rows to a renderable DatabaseModel. Pure. */
 export function databaseToModel(input: DatabaseModelInput): DatabaseModel {
   const tabs = input.views.map((view) => view.name); // every view's tab bar lists all sibling names
-  const views: ViewBlock[] = input.views.length
+  const views: DatabaseView[] = input.views.length
     ? input.views.map((view) => viewToBlock(view, input.rows, input.titleColumn, input.title, tabs))
     : [
         {

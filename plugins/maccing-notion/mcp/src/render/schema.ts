@@ -3,7 +3,7 @@
 // blocks. `mockupSchema` (a block, or an array of blocks) is the tool's whole input.
 
 import { z } from "zod";
-import type { MockupBlock } from "./engine";
+import type { DatabaseView, MockupBlock } from "./engine";
 
 const card = z.object({
   icon: z.string().optional().describe("emoji or gray named-icon name before the card name"),
@@ -69,11 +69,34 @@ const formBlock = z.object({
   fields: z.array(z.object({ label: z.string(), fieldType: z.string().optional() })),
 });
 const mapBlock = z.object({ type: z.literal("map"), name: z.string(), views, pins: z.number().optional() });
+
+// The view union is recursive because DashboardBlock.widgets[].view is a DatabaseView.
+// z.lazy with an explicit ZodType<DatabaseView> annotation breaks the circularity for the type checker.
+const viewBlock: z.ZodType<DatabaseView> = z.lazy(() =>
+  z.union([
+    tableBlock,
+    galleryBlock,
+    boardBlock,
+    listBlock,
+    calendarBlock,
+    timelineBlock,
+    chartBlock,
+    formBlock,
+    mapBlock,
+    z.object({
+      type: z.literal("dashboard"),
+      name: z.string(),
+      views,
+      widgets: z.array(z.object({ title: z.string(), view: viewBlock })),
+    }),
+  ]),
+);
+
 const dashboardBlock = z.object({
   type: z.literal("dashboard"),
   name: z.string(),
   views,
-  widgets: z.array(z.object({ title: z.string(), view: z.lazy(() => blockSchema) })),
+  widgets: z.array(z.object({ title: z.string(), view: viewBlock })),
 });
 
 // The recursive block union. The z.ZodType<MockupBlock> annotation is required for z.lazy self-reference
@@ -165,19 +188,6 @@ const blockSchema: z.ZodType<MockupBlock> = z.lazy(() =>
     z.object({ type: z.literal("unsupported"), label: z.string().optional() }),
   ]),
 );
-
-const viewBlock = z.union([
-  tableBlock,
-  galleryBlock,
-  boardBlock,
-  listBlock,
-  calendarBlock,
-  timelineBlock,
-  chartBlock,
-  formBlock,
-  mapBlock,
-  dashboardBlock,
-]);
 
 // The standalone-database wire shape, referenced (above) by the inline `database` block via z.lazy.
 const databaseModelSchema = z.object({

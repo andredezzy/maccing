@@ -1,7 +1,7 @@
 // The database tab-bar header — `◷ Title  ‹ View › ‹ View › +N more   + New`, shared by every view
 // renderer. Mirrors Notion: the active (first) tab shows, then as many as fit, then a "+N more" count.
 
-import { clip, displayWidth, spread } from "../text";
+import { clip, displayWidth, spread } from "../../text";
 
 export function databaseHeader(name: string, views: string[] | undefined, total: number): string {
   const right = "+ New";

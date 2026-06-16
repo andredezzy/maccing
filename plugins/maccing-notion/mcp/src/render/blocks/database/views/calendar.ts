@@ -1,9 +1,9 @@
-// Time-based view renderers — calendar (month grid with event dots) and timeline (proportional bars).
+// Calendar view renderer — month grid with event dots.
 
-import { renderTableGrid } from "../box";
-import { register } from "../engine";
-import { clip, padRight } from "../text";
-import { databaseHeader } from "./database-header";
+import { renderTableGrid } from "../../../box";
+import { clip } from "../../../text";
+import { databaseHeader } from "../header";
+import { registerView } from "./engine";
 
 interface CalendarEvent {
   day: number;
@@ -16,18 +16,6 @@ export interface CalendarBlock {
   year: number;
   month: number; // 1-12
   events?: CalendarEvent[];
-}
-interface TimelineRow {
-  label: string;
-  start: number; // fraction 0-1 of the axis
-  end: number; // fraction 0-1
-}
-export interface TimelineBlock {
-  type: "timeline";
-  name: string;
-  views?: string[];
-  axis?: string;
-  rows: TimelineRow[];
 }
 
 const MONTHS = [
@@ -44,6 +32,7 @@ const MONTHS = [
   "November",
   "December",
 ];
+
 /** Day of week (0=Sun) via Sakamoto — pure, no ambient Date. */
 function dayOfWeek(year: number, month: number, day: number): number {
   const monthOffsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
@@ -60,10 +49,12 @@ function dayOfWeek(year: number, month: number, day: number): number {
     7
   );
 }
+
 function daysInMonth(year: number, month: number): number {
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
+
 function renderCalendar(block: CalendarBlock, total: number): string[] {
   const month = ((block.month - 1 + 12) % 12) + 1;
   const lines = [databaseHeader(block.name, block.views, total), `${MONTHS[month - 1]} ${block.year}`];
@@ -90,23 +81,5 @@ function renderCalendar(block: CalendarBlock, total: number): string[] {
   }
   return lines;
 }
-function renderTimeline(block: TimelineBlock, total: number): string[] {
-  const lines = [databaseHeader(block.name, block.views, total)];
-  const nameWidth = Math.max(8, Math.floor(total * 0.3));
-  const barWidth = Math.max(1, total - nameWidth - 1);
-  if (block.axis) {
-    lines.push(`${padRight("", nameWidth)}│${padRight(block.axis, barWidth)}`);
-  }
-  for (const row of block.rows) {
-    const startColumn = Math.max(0, Math.min(barWidth, Math.round((row.start || 0) * barWidth)));
-    const endColumn = Math.max(startColumn, Math.min(barWidth, Math.round((row.end || 0) * barWidth)));
-    const bar = Array.from({ length: barWidth }, (_, column) =>
-      column >= startColumn && column < endColumn ? "█" : "·",
-    ).join("");
-    lines.push(`${padRight(row.label, nameWidth)}│${bar}`);
-  }
-  return lines;
-}
 
-register("calendar", renderCalendar);
-register("timeline", renderTimeline);
+registerView("calendar", renderCalendar);
