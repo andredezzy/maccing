@@ -16,7 +16,7 @@ POST /v1/data_sources/{id}/query
 }
 ```
 
-**Inspect the schema** — `describe(data_source_id)` renders every column as `name · type · detail` (formula bodies elided) plus each column's icon; far cleaner than the raw GET, whose compiled-formula blobs bloat the response. Drop to the raw GET below only when you need the raw property-**id** map for WRITE payloads / formula authoring (you rarely need raw ids for reads: `read_database` resolves names, and its `# Views` section even surfaces id↔name in view configs):
+**Inspect the schema** — `describe(data_source_id)` renders every column as `name · type · detail` (formula bodies elided) plus each column's icon; far cleaner than the raw GET, whose compiled-formula blobs bloat the response. Drop to the raw GET below only when you need the raw property-**id** map for WRITE payloads / formula authoring (you rarely need raw ids for reads: `read_database` resolves names, and its row-format output's `# Views` section even surfaces id↔name in view configs):
 ```python
 schema = GET /v1/data_sources/{id}
 prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
