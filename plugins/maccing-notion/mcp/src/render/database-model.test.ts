@@ -47,11 +47,14 @@ test("flattenValue: date ranges, formula booleans, and null/unknown edge cases",
   expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: true } })).toBe("☑");
   expect(flattenValue({ type: "formula", formula: { type: "boolean", boolean: false } })).toBe("☐");
   expect(flattenValue({ type: "formula", formula: { type: "string", string: "hello" } })).toBe("hello");
-  // KNOWN LIMITATION: a formula returning a DATE renders "[object Object]" — v is the date-range object,
-  // String()'d (flattenValue has no date sub-case in the formula branch). Pinned; fix is behavior-changing.
+  // A formula returning a DATE formats the date range (not "[object Object]") — the formula branch
+  // routes its `date` sub-type through the shared formatDateRange, same as a plain date property.
   expect(flattenValue({ type: "formula", formula: { type: "date", date: { start: "2025-06-09" } } })).toBe(
-    "[object Object]",
+    "2025-06-09",
   );
+  expect(
+    flattenValue({ type: "formula", formula: { type: "date", date: { start: "2025-06-09", end: "2025-06-11" } } }),
+  ).toBe("2025-06-09 → 2025-06-11");
   expect(flattenValue({ type: "some_future_type" })).toBe(""); // unknown type → empty default
 });
 

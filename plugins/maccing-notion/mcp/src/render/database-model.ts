@@ -41,6 +41,11 @@ interface DatabaseModelInput {
   rows: RawRow[];
 }
 
+/** A Notion date range → "start" or "start → end" (empty when undated). */
+function formatDateRange(date: NotionDateRange | null | undefined): string {
+  return date?.start ? date.start + (date.end ? ` → ${date.end}` : "") : "";
+}
+
 /** Flatten a Notion property value to a compact display string. */
 export function flattenValue(property: RawProperty | undefined): string {
   if (!property) {
@@ -58,10 +63,8 @@ export function flattenValue(property: RawProperty | undefined): string {
       return (property.status as { name?: string })?.name ?? "";
     case "multi_select":
       return ((property.multi_select as { name?: string }[]) ?? []).map((option) => option.name).join(", ");
-    case "date": {
-      const date = property.date as NotionDateRange | null;
-      return date?.start ? date.start + (date.end ? ` → ${date.end}` : "") : "";
-    }
+    case "date":
+      return formatDateRange(property.date as NotionDateRange | null);
     case "checkbox":
       return property.checkbox ? "☑" : "☐";
     case "people":
@@ -83,7 +86,13 @@ export function flattenValue(property: RawProperty | undefined): string {
     case "formula": {
       const formula = property.formula as RawProperty;
       const value = formula?.type ? formula[formula.type] : undefined;
-      return value == null ? "" : typeof value === "boolean" ? (value ? "☑" : "☐") : String(value);
+      if (value == null) {
+        return "";
+      }
+      if (typeof value === "boolean") {
+        return value ? "☑" : "☐";
+      }
+      return formula.type === "date" ? formatDateRange(value as NotionDateRange) : String(value);
     }
     case "relation": {
       const relations = (property.relation as { id?: string }[]) ?? [];
