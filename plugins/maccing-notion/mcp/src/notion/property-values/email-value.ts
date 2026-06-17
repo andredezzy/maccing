@@ -6,5 +6,3 @@ export const emailValue = z.object({
   type: z.literal("email"),
   email: z.string().nullable(),
 });
-
-export type EmailValue = z.infer<typeof emailValue>;

@@ -87,5 +87,3 @@ export const propertySchema = z.discriminatedUnion("type", [
   // place — documented on the live reference page (API support limited); empty config
   z.object({ ...base, type: z.literal("place"), place: emptyConfig }),
 ]);
-
-export type PropertySchema = z.infer<typeof propertySchema>;

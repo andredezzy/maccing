@@ -9,7 +9,7 @@ import { renderTableGrid } from "../box";
 import { displayWidth, padRight } from "../text";
 import { type Block, registerBlock, renderBlocks } from "./engine";
 
-export interface ColumnDef {
+interface ColumnDef {
   ratio?: number;
   children: Block[];
 }

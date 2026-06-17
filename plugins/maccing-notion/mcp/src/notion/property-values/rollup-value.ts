@@ -19,5 +19,3 @@ export const rollupValue = z.object({
   type: z.literal("rollup"),
   rollup: rollupPayload,
 });
-
-export type RollupValue = z.infer<typeof rollupValue>;

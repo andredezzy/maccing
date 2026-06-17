@@ -20,7 +20,7 @@ import { codeFence } from "./text";
 
 export { mockupSchema } from "./mockup-schema";
 export { displayWidth } from "./text";
-export type { Block, DatabaseRender, PageRender };
+export type { Block };
 
 export type Mockup = PageRender | Block | Block[] | DatabaseRender;
 

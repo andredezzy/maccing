@@ -11,5 +11,3 @@ export const queryResult = z.object({
   has_more: z.boolean().optional(),
   next_cursor: z.string().nullable().optional(),
 });
-
-export type QueryResult = z.infer<typeof queryResult>;

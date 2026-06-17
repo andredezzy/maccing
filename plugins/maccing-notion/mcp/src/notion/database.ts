@@ -38,5 +38,3 @@ export const database = z.object({
   url: z.string().optional(),
   public_url: z.string().nullable().optional(),
 });
-
-export type DatabaseObject = z.infer<typeof database>;

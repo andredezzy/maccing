@@ -6,5 +6,3 @@ export const phoneNumberValue = z.object({
   type: z.literal("phone_number"),
   phone_number: z.string().nullable(),
 });
-
-export type PhoneNumberValue = z.infer<typeof phoneNumberValue>;

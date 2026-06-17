@@ -12,5 +12,3 @@ export const uniqueIdValue = z.object({
   type: z.literal("unique_id"),
   unique_id: uniqueIdPayload,
 });
-
-export type UniqueIdValue = z.infer<typeof uniqueIdValue>;

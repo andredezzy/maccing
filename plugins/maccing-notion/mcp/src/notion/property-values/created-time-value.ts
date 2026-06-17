@@ -6,5 +6,3 @@ export const createdTimeValue = z.object({
   type: z.literal("created_time"),
   created_time: z.string(),
 });
-
-export type CreatedTimeValue = z.infer<typeof createdTimeValue>;

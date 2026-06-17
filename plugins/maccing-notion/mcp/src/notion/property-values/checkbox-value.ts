@@ -6,5 +6,3 @@ export const checkboxValue = z.object({
   type: z.literal("checkbox"),
   checkbox: z.boolean(),
 });
-
-export type CheckboxValue = z.infer<typeof checkboxValue>;

@@ -6,9 +6,6 @@
 
 import type { BlockObject } from "../../notion/blocks/block";
 import { createRegistry, type Renderer } from "../registry";
-import type { ColumnDef } from "./layout";
-
-export type { ColumnDef };
 
 /** All content, media, and structural blocks. */
 export type Block = BlockObject;

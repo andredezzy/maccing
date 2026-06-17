@@ -7,5 +7,3 @@ export const richTextValue = z.object({
   type: z.literal("rich_text"),
   rich_text: z.array(richText),
 });
-
-export type RichTextValue = z.infer<typeof richTextValue>;

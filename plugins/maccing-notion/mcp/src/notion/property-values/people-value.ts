@@ -7,5 +7,3 @@ export const peopleValue = z.object({
   type: z.literal("people"),
   people: z.array(user),
 });
-
-export type PeopleValue = z.infer<typeof peopleValue>;

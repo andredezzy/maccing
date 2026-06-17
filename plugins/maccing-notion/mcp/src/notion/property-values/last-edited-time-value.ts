@@ -6,5 +6,3 @@ export const lastEditedTimeValue = z.object({
   type: z.literal("last_edited_time"),
   last_edited_time: z.string(),
 });
-
-export type LastEditedTimeValue = z.infer<typeof lastEditedTimeValue>;

@@ -8,5 +8,3 @@ export const statusValue = z.object({
   type: z.literal("status"),
   status: selectOption.nullable(),
 });
-
-export type StatusValue = z.infer<typeof statusValue>;

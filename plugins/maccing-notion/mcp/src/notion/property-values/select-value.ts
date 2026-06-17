@@ -13,6 +13,3 @@ export const selectValue = z.object({
   type: z.literal("select"),
   select: selectOption.nullable(),
 });
-
-export type SelectOption = z.infer<typeof selectOption>;
-export type SelectValue = z.infer<typeof selectValue>;

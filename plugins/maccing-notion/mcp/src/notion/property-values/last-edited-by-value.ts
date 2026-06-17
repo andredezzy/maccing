@@ -7,5 +7,3 @@ export const lastEditedByValue = z.object({
   type: z.literal("last_edited_by"),
   last_edited_by: user,
 });
-
-export type LastEditedByValue = z.infer<typeof lastEditedByValue>;

@@ -15,5 +15,3 @@ export const verificationValue = z.object({
   type: z.literal("verification"),
   verification: verificationPayload.nullable(),
 });
-
-export type VerificationValue = z.infer<typeof verificationValue>;

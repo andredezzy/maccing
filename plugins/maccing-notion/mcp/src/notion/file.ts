@@ -31,8 +31,6 @@ const fileUpload = z.object({
 
 export const fileObject = z.discriminatedUnion("type", [externalFile, notionFile, fileUpload]);
 
-export type FileObject = z.infer<typeof fileObject>;
-
 // Icon: emoji | custom_emoji | any file object type
 const emojiIcon = z.object({
   type: z.literal("emoji"),
@@ -67,5 +65,3 @@ export type Icon = z.infer<typeof icon>;
 
 // Cover: only external or notion-hosted files (not file_upload, not emoji)
 export const cover = z.discriminatedUnion("type", [externalFile, notionFile]);
-
-export type Cover = z.infer<typeof cover>;

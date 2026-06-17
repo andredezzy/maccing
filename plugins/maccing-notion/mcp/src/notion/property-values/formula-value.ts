@@ -26,5 +26,3 @@ export const formulaValue = z.object({
   type: z.literal("formula"),
   formula: formulaPayload,
 });
-
-export type FormulaValue = z.infer<typeof formulaValue>;

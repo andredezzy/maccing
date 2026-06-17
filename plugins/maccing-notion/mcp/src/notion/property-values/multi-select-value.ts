@@ -7,5 +7,3 @@ export const multiSelectValue = z.object({
   type: z.literal("multi_select"),
   multi_select: z.array(selectOption),
 });
-
-export type MultiSelectValue = z.infer<typeof multiSelectValue>;

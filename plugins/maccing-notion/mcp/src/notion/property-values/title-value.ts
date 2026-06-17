@@ -7,5 +7,3 @@ export const titleValue = z.object({
   type: z.literal("title"),
   title: z.array(richText),
 });
-
-export type TitleValue = z.infer<typeof titleValue>;

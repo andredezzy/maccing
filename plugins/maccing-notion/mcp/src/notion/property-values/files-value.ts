@@ -7,5 +7,3 @@ export const filesValue = z.object({
   type: z.literal("files"),
   files: z.array(fileObject),
 });
-
-export type FilesValue = z.infer<typeof filesValue>;

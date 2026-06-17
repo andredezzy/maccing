@@ -13,6 +13,3 @@ export const dateValue = z.object({
   type: z.literal("date"),
   date: datePayload.nullable(),
 });
-
-export type DatePayload = z.infer<typeof datePayload>;
-export type DateValue = z.infer<typeof dateValue>;

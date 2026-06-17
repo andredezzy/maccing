@@ -6,5 +6,3 @@ export const urlValue = z.object({
   type: z.literal("url"),
   url: z.string().nullable(),
 });
-
-export type UrlValue = z.infer<typeof urlValue>;

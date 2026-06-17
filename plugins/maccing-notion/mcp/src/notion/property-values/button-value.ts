@@ -7,5 +7,3 @@ export const buttonValue = z.object({
   type: z.literal("button"),
   button: z.record(z.string(), z.unknown()),
 });
-
-export type ButtonValue = z.infer<typeof buttonValue>;

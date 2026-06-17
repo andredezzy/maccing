@@ -7,5 +7,3 @@ export const createdByValue = z.object({
   type: z.literal("created_by"),
   created_by: user,
 });
-
-export type CreatedByValue = z.infer<typeof createdByValue>;
