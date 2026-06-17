@@ -23,7 +23,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 # IDs may be URL-encoded — urllib.parse.unquote(id) to normalize
 ```
 
-**Read view config:** every row-format `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) appends every view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, `filter`, `quick_filters`) with property ids resolved to names — no flag (`format:"mockup"` returns the ASCII mockup alone — no `# Views` section). Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views.
+**Read view config:** every row-format `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) appends every view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, `filter`, `quick_filters`) with property ids resolved to names — no flag, on every format. Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views.
 
 **Extract data_source_id from a database URL:**
 ```python
