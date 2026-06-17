@@ -156,43 +156,15 @@ EVERY MOCKUP YOU PRODUCE IS PASTED VERBATIM INTO YOUR VISIBLE REPLY — A MOCKUP
 
 Produce a mockup (`render_mockup({ page_id | database_id })` for a live object, or build an official shape → `render_mockup({ mockup })`) → **paste its output verbatim into your visible reply.** The tool result is invisible to the user; an unpasted mockup was never shown. Proposals show how it will become; verifications (post-write OR fix) show the live result. Never hand-draw, never edit the output, never swap it for a summary. Non-negotiable.
 
-## MANDATORY — propose and get approval before any write
+## Operate directly — act and report (no per-write approval gate)
 
-Every Notion write (create, update, move, rename, trash, icon/cover change, property change) requires a concise proposal and explicit user approval before execution — because structural changes to a workspace are irreversible and the user must retain full agency over their data.
-**Violating the letter of this rule is violating the spirit of this rule.**
+Writes do **not** require a propose-then-wait-for-approval cycle. When the user has asked for a change, or it clearly serves the task in progress, **make the change and report it**, then verify with a live `render_mockup` / read so the user sees the actual result. This MCP exists to DO the work — not to narrate intentions and wait.
 
-### The Iron Law
-```
-NO WRITE TOUCHES NOTION UNTIL THE USER TYPES AN EXPLICIT APPROVAL — NO EXCEPTIONS
-```
+- **Default — act and report:** create / update / rename / icon / cover / property / formula / view / move operations proceed directly; show the verified result (a `render_mockup` after structural changes) afterward.
+- **One carve-out — irreversible data loss:** before a **permanent delete, or a trash/archive that removes data and can't be cleanly undone**, give a one-line heads-up so the user can stop you. This is basic prudence before destruction, not an approval gate — it never applies to routine creates/edits.
+- **Reads** (`GET`, `/query`, `/search`, `AGENTS.md`) are always free.
 
-### The Gate
-
-Present ONE proposal per logical batch of related writes. Never split a related batch to reduce friction. Structure:
-
-- **(a) Intent** — one sentence: what and why
-- **(b) Exact operations** — terse bullet per API call: method, target block/page/db ID (or title), fields changing
-- **(c) Preview mockup** — the RESULTING object built as an official shape (a `PageRender` / `BlockObject[]` / `DatabaseRender`) and passed to **`render_mockup`** ("how it will become"; see the render-mockup rule above), pasted verbatim — mark each change in the node's own text (`← NEW` / `← moved` / `← trashed`)
-
-Then **stop and wait**. Silence, a question, or a clarifying reply is **not** approval — hold.
-
-After all writes complete, emit the **verified mockup** — `render_mockup({ page_id })` on the live page(s) (it re-fetches) — confirming the result matches the preview.
-
-Read-only operations — `GET`, `/query`, `/search`, reading `AGENTS.md` — proceed freely, no gate.
-
-### Red Flags — STOP, you're rationalizing
-
-| Thought | Reality |
-|---|---|
-| "It's just a rename, I'll do it and mention it" | Any write, however minor, requires a proposal first |
-| "The user clearly wants this, the approval is a formality" | Implicit intent is not approval — present the gate every time |
-| "These are two quick writes, I'll propose them one at a time" | Related writes batch into ONE proposal — never split to reduce friction |
-| "I'll do the writes now and show the mockup after" | Preview mockup comes BEFORE execution, verified mockup comes AFTER |
-| "The user said 'create X' mid-conversation, that's approval enough" | A task description is not an approval — proposal-then-explicit-confirm is the cycle |
-
-### The Bottom Line
-
-Every write is gated: propose (intent + operations + preview mockup), wait for explicit approval, execute, verify with a live rendered mockup. Reads are always free, writes never are. Non-negotiable.
+The verified mockup after a structural change is how the user reviews — replacing the old up-front proposal.
 
 ## MANDATORY — match the workspace's conventions
 
@@ -381,6 +353,30 @@ Present it, **stop and wait**. After approval, execution goes straight to the wr
 ### The Bottom Line
 
 Any build with more than one dimension to decide gets one pre-build design document — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design — approved as a whole before the first write. Approval of that document IS the per-object design approval; execution then runs the write cycle per object. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
+
+## MANDATORY — every operation runs through the agent; NEVER hand a step to the user's UI
+
+The user installed this MCP so the AGENT performs the change. Telling them "open Notion and edit this yourself" is a failure, not a fallback — it defeats the automation's entire purpose.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+```
+NOTHING IS "UI-ONLY" UNTIL THE PRIVATE api/v3 PATH HAS BEEN TRIED — NEVER PUNT A WRITE BACK TO THE USER
+```
+
+Public REST first; when it 400s or silently folds — parse/list/**relation-read** formulas, column/property icons, block reorder, relative-date filters, default visibility — the private `api/v3` path does it via `private_request` (`saveTransactions`: `formula2` AST planting, `listAfter`/`listBefore`, schema/icon ops). **A relation-read formula with no copyable example is STILL agent-authorable** — crack the `formula2` AST by isolated probing (private-api.md → "Relation-read encoding"). Live-proof: Muscle Groups `To beat` (a `filter → map → sum` over a relation) was planted entirely via the agent, zero UI.
+
+### Red Flags — STOP, you're rationalizing
+| Thought | Reality |
+|---|---|
+| "This is UI-only — the user has to do it" | Almost nothing is. Try the private api/v3 path first. |
+| "I'll just give them the formula to paste in the UI" | That IS the forbidden punt. Plant the `formula2` AST yourself. |
+| "Hand-crafting the AST is error-prone, so ask the user" | A wrong relation-read AST computes empty/0 (not an error) — probe in isolation for signal, then assemble. Don't punt. |
+| "It's faster if they just click it" | Speed for you ≠ the point. They installed this so they DON'T touch the UI. |
+
+### The Bottom Line
+Exhaust public → private `api/v3` before ever suggesting a manual UI action. If something is truly impossible via every API path, state exactly why — never default to "you do it." Non-negotiable.
 
 ## MCP tools — pick by job
 

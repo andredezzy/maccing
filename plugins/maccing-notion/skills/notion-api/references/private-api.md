@@ -113,6 +113,17 @@ The public API stores `formula.expression` as a **string** and compiles it serve
 
 **Bonus:** an AST formula with the right `result_type` is type-correct → it composes and is view-filterable (unlike public-string formulas, typed `unknown`). And at **runtime** even existing public-string formulas that reference your new AST formula still evaluate — the `unknown`-type block is author-time only.
 
+### Relation-read encoding (`current.prop` / `.last().prop`) — hand-craftable, no UI seed needed (live-verified 2026-06-17)
+
+The recipe above says "copy a working one," but a relation-read example may not exist anywhere in the workspace (rollups, not formulas, do relation aggregation — so even mature trackers like Net worth have none to copy). You can still hand-craft it directly, because the encoding is now known. **A related-page property read is literal `current.` (inside a `.map`/`.filter`/`.sort` lambda) or `.last().` glued to a typed `‣`/`fpp` mention whose `collection` is the RELATED data source.** Two collections are in play: the relation mention's `collection` = the formula's OWN ds; every `current.`/`.last().`-bound mention's `collection` = the RELATED ds.
+
+- ✅ **Works:** `prop("Rel").sort(current.‣Date).last().‣Weight` → fragments: `["‣",[["fpp",{relation, collection:OWN ds}]]]`, `[".sort(current."]`, `["‣",[["fpp",{name:"Date", property:"<related raw id>", collection:RELATED ds}]]]`, `[").last()."]`, `["‣",[["fpp",{name:"Weight", property:"<related raw id>", collection:RELATED ds}]]]`. Chains like `.last().‣Reps.split(";").first()` glue literal text after the related mention (same as the same-collection split). `result_type` `{type:"text"}` or `{type:"number"}`.
+- ❌ **Literal `current.prop("Date")`** (plain text, no mention) → computes **empty** — the related prop never resolves (same wall as the public string compiler).
+- ❌ **Bare `‣Weight` mention WITHOUT the `current.` literal** → binds to the OUTER row (reads the formula's-own-collection `Weight`, which is absent) → computes **0 / empty**. The `current.` literal is what binds the typed mention to the lambda item.
+- **Diagnostic discipline:** a wrong relation-read AST computes **empty/0, never an error** — so probe in isolation with a signal-producing op (`.map(current.‣X).sum()` → a non-zero number means the bind works) before assembling the full chain. Blind full-formula guesses give no signal.
+- **Live example** — Muscle Groups `To beat` = latest log's weight × top-set reps:
+  `format(‣Training Log.sort(current.‣Date).last().‣Weight) + " × " + ‣Training Log.sort(current.‣Date).last().‣Reps.split(";").first()`
+
 ## ⭐ Verified recipe: reorder / MOVE any block in place (`listAfter` / `listBefore`)
 
 The public API **cannot move an existing block** within its parent (`blocks.md`: child_database/page need a re-parent-out-and-back dance that appends at the end; loose blocks — paragraph, callout, embed — have **no** public move at all and must be recreated). The private app API moves **any** block — loose blocks included — in **one** transaction, via a list op on the parent block's `content`:
