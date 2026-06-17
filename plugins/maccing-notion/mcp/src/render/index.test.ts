@@ -142,10 +142,10 @@ test("DatabaseRender header is PROSE (bold title + bold selected view); the grid
   // Title is markdown-bold PROSE (rendered OUTSIDE the fence → real bold in chat), not box-art.
   const titleLine = lines.find((line) => line.startsWith("◷ "));
   expect(titleLine).toBe("◷ **Sessions**");
-  // The Views line is prose too; the selected view is wrapped in ** ** (real bold), + New trails inline.
+  // The Views line is prose too; the selected view is wrapped in ** ** (real bold).
   const viewsLine = lines.find((line) => line.startsWith("Views: ")) ?? "";
   expect(viewsLine).toContain("**Sessions**"); // the only/selected view, in REAL markdown bold
-  expect(viewsLine.endsWith("+ New")).toBe(true);
+  expect(viewsLine).not.toContain("+ New"); // no + New affordance — dropped
   // The box-art grid is fenced so it renders monospace (bold is impossible inside a fence).
   expect(lines).toContain("```");
 });
@@ -605,5 +605,5 @@ test("the Views line bolds the selected view and collapses overflowing tabs to '
   const viewsLine = out.split("\n").find((line) => line.startsWith("Views: ")) ?? "";
   expect(viewsLine).toContain("**Board**"); // the selected/default (first) view in REAL bold, always shown
   expect(viewsLine).toMatch(/\+\d+ more/); // the rest collapse into a count
-  expect(viewsLine.endsWith("+ New")).toBe(true); // + New trails the Views line inline
+  expect(viewsLine).not.toContain("+ New"); // no + New affordance — dropped
 });
