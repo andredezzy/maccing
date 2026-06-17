@@ -21,8 +21,6 @@ import type { GalleryCard } from "./blocks/database/views/gallery";
 import { type Block, renderBlock, renderBlocks } from "./blocks/engine";
 import { renderPage } from "./page";
 
-// Re-export RawBlock for read-page.ts
-export type { RawBlock } from "./raw-block";
 export { mockupSchema } from "./schema";
 export { displayWidth } from "./text";
 export type { Block, DatabaseRender, DatabaseView, PageRender };
