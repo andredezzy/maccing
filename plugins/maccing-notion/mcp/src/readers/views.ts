@@ -64,7 +64,7 @@ export function groupOptionsFor(groupBy: string | undefined, schema: PropertiesM
     return undefined;
   }
   const property = schema[groupBy];
-  const options = property?.status?.options ?? property?.select?.options;
+  const options = property?.status?.options ?? property?.select?.options ?? property?.multi_select?.options;
   const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
   return names.length ? names : undefined;
 }

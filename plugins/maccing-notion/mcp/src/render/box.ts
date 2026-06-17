@@ -39,10 +39,29 @@ export function cardsPerRow(inner: number, total: number): number {
   return count;
 }
 function fitColumns(natural: number[], total: number): number[] {
-  const widths = [...natural];
-  let extra = total - (3 * widths.length + 1) - widths.reduce((acc, width) => acc + width, 0);
-  for (let index = 0; extra > 0; index = (index + 1) % widths.length, extra--) {
-    widths[index]++;
+  // Each column gets ` content ` (2 padding) and the grid has n+1 vertical borders, so the content widths
+  // share this budget. budget = total - (3·columns + 1).
+  const budget = total - (3 * natural.length + 1);
+  const sum = natural.reduce((acc, width) => acc + width, 0);
+
+  if (sum <= budget) {
+    // Slack: widen columns round-robin (from index 0) so the grid fills the canvas.
+    const widths = [...natural];
+    for (let index = 0, extra = budget - sum; extra > 0; index = (index + 1) % widths.length, extra--) {
+      widths[index]++;
+    }
+    return widths;
+  }
+
+  // Natural widths overflow the canvas — shrink proportionally (min 1/column), then trim rounding drift so
+  // the row never exceeds `total`. renderTableGrid's padRight clips each cell to its width, so boxes stay closed.
+  const widths = natural.map((width) => Math.max(1, Math.round((width / sum) * budget)));
+  for (let over = widths.reduce((acc, width) => acc + width, 0) - budget; over > 0; over--) {
+    const widest = widths.indexOf(Math.max(...widths));
+    if (widths[widest] <= 1) {
+      break; // degenerate: more columns than the canvas can hold even at 1 col each
+    }
+    widths[widest]--;
   }
   return widths;
 }

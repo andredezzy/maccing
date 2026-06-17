@@ -5,6 +5,8 @@ import type { PropertyValue } from "../notion/property-values/property-value";
 
 export interface RichText {
   plain_text?: string;
+  text?: { content?: string };
+  equation?: { expression?: string };
 }
 
 // The loose hand-rolled property value is now an ALIAS of the official canon `PropertyValue` — the canon is
@@ -16,8 +18,14 @@ export interface NotionPageBase {
   properties?: Record<string, NotionPropertyValue>;
 }
 
+// Prefer `plain_text` (always present on live API responses); fall back to the text/equation payload so a
+// hand-authored proposal run (e.g. {type:"text", text:{content:"Hi"}} with no plain_text) still renders.
 export const richTextToPlain = (richText: unknown): string =>
-  Array.isArray(richText) ? (richText as RichText[]).map((part) => part.plain_text ?? "").join("") : "";
+  Array.isArray(richText)
+    ? (richText as RichText[])
+        .map((part) => part.plain_text ?? part.text?.content ?? part.equation?.expression ?? "")
+        .join("")
+    : "";
 
 /** The page's title from whichever property is the `title` type ("Name", "Month", "title", …). */
 export function titleOf(page: NotionPageBase): string {

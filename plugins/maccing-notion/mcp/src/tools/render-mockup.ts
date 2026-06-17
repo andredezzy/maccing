@@ -25,7 +25,9 @@ export const renderMockup: ToolModule = {
       "synced_block, child_page, child_database, link_to_page, template, tab, unsupported).\n" +
       "• Array of BlockObjects.\n" +
       "• Official DatabaseRender: { database: DatabaseObject, dataSource: DataSourceObject, views: ViewObject[], rows: PageObject[] } — " +
-      "the full database bundle as returned by read_database (mockup format). Views are official ViewObjects with type and configuration.\n" +
+      "the full database bundle, assembled from the raw API objects (Retrieve a database + its data source, GET views, query rows). " +
+      "Views are official ViewObjects with type and configuration. (read_database with format=mockup already returns the rendered " +
+      "ASCII string directly — assemble this bundle only to render a hand-authored or programmatically-built database.)\n" +
       "Optional top-level `width` (default 70) sets the canvas for bare blocks.",
     annotations: { title: "Render a Notion mockup", readOnlyHint: true },
     inputSchema: {

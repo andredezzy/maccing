@@ -5,7 +5,7 @@ import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
-export interface GalleryCard {
+interface GalleryCard {
   icon?: string;
   name: string;
   lines?: string[];
