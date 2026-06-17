@@ -1,5 +1,10 @@
 .worktrees/
 
+# Claude Code local artifacts — worktree storage (.claude/settings.json stays tracked) and the
+# plugin-in-use marker the dev symlink writes into the repo when a plugin is installed from this path
+.claude/worktrees/
+**/.in_use/
+
 # macOS
 .DS_Store
 
