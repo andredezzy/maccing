@@ -111,3 +111,20 @@ test("renderPropertyValue: relation — count or empty string", () => {
   expect(renderPropertyValue({ type: "relation", relation: [{ id: "p1" }] })).toBe("1 linked");
   expect(renderPropertyValue({ type: "relation", relation: [] })).toBe("");
 });
+
+test("renderPropertyValue: verification, button, and unknown types all return empty string", () => {
+  // verification, button — future/newer Notion property types not handled in propertyToString's switch;
+  // they fall to the default branch which returns "". Cast to exercise the runtime default branch.
+  expect(
+    renderPropertyValue({ type: "verification", verification: { state: "verified" } } as unknown as Parameters<
+      typeof renderPropertyValue
+    >[0]),
+  ).toBe("");
+  expect(
+    renderPropertyValue({ type: "button", button: {} } as unknown as Parameters<typeof renderPropertyValue>[0]),
+  ).toBe("");
+  // An unknown future type also falls to default
+  expect(
+    renderPropertyValue({ type: "some_future_type" } as unknown as Parameters<typeof renderPropertyValue>[0]),
+  ).toBe("");
+});

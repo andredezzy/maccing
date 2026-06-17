@@ -17,6 +17,20 @@ test("richTextToPlain joins runs and tolerates non-arrays", () => {
   expect(richTextToPlain("nope")).toBe("");
 });
 
+test("richTextToPlain fallback: uses text.content when plain_text is absent", () => {
+  // A hand-authored proposal block has {type:"text", text:{content:"Hi"}} with no plain_text
+  expect(richTextToPlain([{ type: "text", text: { content: "Hi" } }])).toBe("Hi");
+});
+
+test("richTextToPlain fallback: uses equation.expression when plain_text is absent", () => {
+  expect(richTextToPlain([{ type: "equation", equation: { expression: "x^2" } }])).toBe("x^2");
+});
+
+test("richTextToPlain: plain_text wins over text.content when both are present", () => {
+  // plain_text is the first-priority field; text.content is only a fallback
+  expect(richTextToPlain([{ plain_text: "P", text: { content: "ignored" } }])).toBe("P");
+});
+
 test("titleOf reads the title-type property, else (untitled)", () => {
   expect(titleOf({ properties: { Name: { type: "title", title: [rt("Push day")] } } })).toBe("Push day");
   expect(titleOf({ properties: { Status: { type: "status", status: { name: "Done" } } } })).toBe("(untitled)");
