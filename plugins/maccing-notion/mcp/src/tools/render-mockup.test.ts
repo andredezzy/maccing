@@ -91,3 +91,19 @@ test("render_mockup rejects old compact {type:'table', columns, rows} shape", as
   });
   expect(isError).toBe(true); // old compact simplified shape is not a valid block or DatabaseRender
 });
+
+test("render_mockup errors when no input shape/id is provided", async () => {
+  const result = await renderMockup.handler({});
+  expect(result.isError ?? false).toBe(true);
+  expect((result.content[0] as { text: string }).text).toContain("Provide exactly one");
+});
+
+test("render_mockup rejects a non-UUID page_id / database_id (live paths)", async () => {
+  const page = await renderMockup.handler({ page_id: "not-a-uuid" });
+  expect(page.isError ?? false).toBe(true);
+  expect((page.content[0] as { text: string }).text).toMatch(/NOTION_TOKEN is not set|must be a UUID/);
+
+  const db = await renderMockup.handler({ database_id: "also-not-a-uuid" });
+  expect(db.isError ?? false).toBe(true);
+  expect((db.content[0] as { text: string }).text).toMatch(/NOTION_TOKEN is not set|must be a UUID/);
+});
