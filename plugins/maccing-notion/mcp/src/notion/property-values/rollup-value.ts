@@ -3,6 +3,9 @@
 import { z } from "zod";
 import { datePayload } from "./date-value";
 
+// Flat object by design (not a discriminatedUnion on `type`): a rollup VALUE is a read-only computed result
+// the API returns well-formed and proposals never author, and readers/page.ts reads it via dynamic
+// `rollup[rollup.type]` access — the flat optional shape supports that directly. (Same rationale as formula.)
 const rollupPayload = z.object({
   type: z.string(),
   number: z.number().nullable().optional(),

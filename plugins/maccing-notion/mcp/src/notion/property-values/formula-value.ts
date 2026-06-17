@@ -9,6 +9,10 @@ const formulaDateResult = z.object({
   end: z.string().nullable().optional(),
 });
 
+// Deliberately a flat object (not a z.discriminatedUnion on `type`, the canon convention elsewhere): a
+// formula VALUE is a read-only computed result the API always returns well-formed and that proposals never
+// author, and readers/page.ts consumes it via dynamic `formula[formula.type]` access — which the flat
+// optional shape supports directly, whereas a discriminated union would force per-branch narrowing here.
 const formulaPayload = z.object({
   type: z.string(),
   string: z.string().nullable().optional(),
