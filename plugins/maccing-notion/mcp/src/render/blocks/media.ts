@@ -71,7 +71,7 @@ registerBlock("code", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "code" }>).code;
   const text = richTextToPlain(data.rich_text);
   const caption = richTextToPlain(data.caption) || undefined;
-  return [...box([`‹${data.language ?? "code"}›`, ...text.split("\n")], width - 2), ...(caption ? [caption] : [])];
+  return [...box([`› ${data.language ?? "code"}`, ...text.split("\n")], width - 2), ...(caption ? [caption] : [])];
 });
 
 registerBlock("equation", (block) => {

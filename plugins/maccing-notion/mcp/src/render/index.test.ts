@@ -466,6 +466,12 @@ test("an empty render stays empty — nothing to fence", () => {
   expect(render([{ type: "column_list", column_list: { children: [] } }] as Block[])).toBe("");
 });
 
+test("a code block labels its language with a '› ' prefix (no wrapping angle brackets)", () => {
+  const out = render([{ type: "code", code: { language: "bash", rich_text: rt("echo hi") } }] as Block[]);
+  expect(out).toContain("› bash"); // leading chevron + language
+  expect(out).not.toContain("‹"); // the old wrapping ‹…› form is gone
+});
+
 test("render falls back to the default width (70) on a non-positive width", () => {
   const bundle = mkTableDb("T", ["Name", "Status"], [["X", "Y"]]);
   const out = render(bundle, 0);
