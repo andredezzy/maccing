@@ -33,7 +33,7 @@ export const request: ToolModule = {
 
   handler: async (args) => {
     if (!hasPublicToken()) {
-      return err("NOTION_TOKEN is not set");
+      return err("NOTION_TOKEN is not set.");
     }
 
     const path = args.path;

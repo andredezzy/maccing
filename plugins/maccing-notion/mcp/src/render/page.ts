@@ -15,10 +15,8 @@ export interface Page {
   children: Block[];
 }
 
-const DEFAULT_WIDTH = 70;
-
-export function renderPage(page: Page, width?: number): string[] {
-  const total = page.width ?? width ?? DEFAULT_WIDTH;
+export function renderPage(page: Page, width: number): string[] {
+  const total = page.width ?? width;
   return [
     ...header(page.icon, page.title, page.cover, page.description, total),
     ...renderBlocks(page.children, total, 0),

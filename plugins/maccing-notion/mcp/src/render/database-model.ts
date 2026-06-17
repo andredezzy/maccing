@@ -207,7 +207,14 @@ interface ViewConfig {
   date_property_name?: string;
 }
 
-/** Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes. */
+/**
+ * Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes.
+ *
+ * NOTE — two-step contract for board views: `groupOptions` is always `undefined` on return.
+ * After calling this, assign `resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema)`
+ * to seed the board's option columns. Schema is not taken here to keep the function pure and
+ * independently testable — see the `groupOptionsFor` export.
+ */
 export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
   const config = (view.configuration ?? {}) as ViewConfig;
   const resolve = (id: string | undefined): string | undefined =>
