@@ -151,8 +151,9 @@ export async function fetchViews(dataSourceId: string): Promise<RawView[]> {
  * containers sharing this data source (a different `parent.database_id`). `viewIds` is the container
  * block's `view_ids` (private api/v3) — its order IS the tab order and `viewIds[0]` is the default view;
  * it also defines membership, so foreign views fall away. When `viewIds` is null (token_v2 absent / private
- * read failed), fall back to filtering by `parent.database_id`, preserving the public list order; if that
- * filter would empty the set, keep the unfiltered views rather than render nothing.
+ * read failed), fall back to filtering by `parent.database_id`, then sort by a STABLE key (name, then id)
+ * so the order is DETERMINISTIC across runs — the public `/v1/views` list order is not the tab order and is
+ * not guaranteed stable. If the parent filter would empty the set, keep the unfiltered views.
  */
 export function orderViews(views: RawView[], viewIds: string[] | null, databaseId: string): RawView[] {
   if (viewIds) {
@@ -163,7 +164,17 @@ export function orderViews(views: RawView[], viewIds: string[] | null, databaseI
     }
   }
   const own = views.filter((view) => view.parent?.database_id === databaseId);
-  return own.length ? own : views;
+  const fallback = own.length ? own : views;
+  return [...fallback].sort((a, b) => {
+    const aName = a.name ?? "";
+    const bName = b.name ?? "";
+    if (aName !== bName) {
+      return aName < bName ? -1 : 1; // code-point order — deterministic regardless of locale
+    }
+    const aId = a.id ?? "";
+    const bId = b.id ?? "";
+    return aId < bId ? -1 : aId > bId ? 1 : 0; // tiebreak by id (e.g. duplicate view names)
+  });
 }
 
 /**
