@@ -64,6 +64,28 @@ export function displayWidth(text: string): number {
   }
   return total;
 }
+/**
+ * Render text as REAL bold by mapping ASCII letters/digits to their Mathematical Sans-Serif Bold glyphs
+ * (𝗖𝗮𝗹𝗲𝗻𝗱𝗮𝗿). Markdown `*…*` / `**…**` are literal inside a monospace code block — these glyphs render
+ * bold there anyway, and each is one display column (clusterWidth counts them as 1), so alignment holds.
+ * Non-alphanumeric characters pass through unchanged.
+ */
+export function bold(text: string): string {
+  let out = "";
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code >= 0x41 && code <= 0x5a) {
+      out += String.fromCodePoint(0x1d5d4 + code - 0x41); // A–Z → 𝗔–𝗭
+    } else if (code >= 0x61 && code <= 0x7a) {
+      out += String.fromCodePoint(0x1d5ee + code - 0x61); // a–z → 𝗮–𝘇
+    } else if (code >= 0x30 && code <= 0x39) {
+      out += String.fromCodePoint(0x1d7ec + code - 0x30); // 0–9 → 𝟬–𝟵
+    } else {
+      out += character;
+    }
+  }
+  return out;
+}
 /** Truncate `text` to at most `width` display columns, appending `…` when it overflows. */
 export function clip(text: string, width: number): string {
   if (displayWidth(text) <= width) {

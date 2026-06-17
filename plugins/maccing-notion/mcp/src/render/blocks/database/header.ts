@@ -4,7 +4,7 @@
 // The title is on its own line; the views line lists the tabs comma-separated (the SELECTED view in
 // *bold*), as many as fit, then a "+N more" count, with "+ New" right-aligned. Mirrors Notion's header.
 
-import { clip, displayWidth, spread } from "../../text";
+import { bold, clip, displayWidth, spread } from "../../text";
 
 export function databaseHeader(
   name: string,
@@ -21,8 +21,9 @@ export function databaseHeader(
 
   const right = "+ New";
   const prefix = "Views: ";
-  // Bold the selected view with *…*; the asterisks count toward width, so build tokens first.
-  const tokens = list.map((view) => (view === selected ? `*${view}*` : view));
+  // The selected view renders in REAL bold (Mathematical Sans-Serif Bold glyphs) — each is one display
+  // column, so the fit math below is unchanged.
+  const tokens = list.map((view) => (view === selected ? bold(view) : view));
 
   // The list must fit between the "Views: " prefix and "+ New" (≥1 space before it); reserve room for a
   // ", +N more" suffix whenever tabs remain unshown so the count never itself overflows.

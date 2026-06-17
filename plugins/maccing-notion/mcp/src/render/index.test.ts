@@ -9,6 +9,7 @@ import type { PageObject } from "../notion/page";
 import type { DatabaseRender, PageRender } from "../notion/render-bundles";
 import type { ViewObject } from "../notion/view";
 import { type Block, displayWidth, render } from "./index";
+import { bold } from "./text";
 
 // Helper: create a minimal rich-text array from a plain string.
 function rt(text: string) {
@@ -486,7 +487,7 @@ test("DatabaseRender renders selected view (default view 0)", () => {
   const out = render(bundle);
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("◷ Exercises"); // title line
-  expect(out).toContain("Views: *All*"); // the selected (default view 0) is bold on the Views line
+  expect(out).toContain(`Views: ${bold("All")}`); // the selected (default view 0) renders bold on the Views line
 });
 
 test("DatabaseRender renders all views stacked when selectedView='all'", () => {
@@ -515,9 +516,9 @@ test("DatabaseRender renders all views stacked when selectedView='all'", () => {
   const titleLines = out.split("\n").filter((line) => line.startsWith("◷ Exercises"));
   expect(titleLines.length).toBeGreaterThanOrEqual(2);
   const viewsLines = out.split("\n").filter((line) => line.startsWith("Views: "));
-  expect(viewsLines[0]).toContain("*All*"); // first stacked view: All selected → bold
-  expect(viewsLines[0]).toContain("Gallery"); // sibling tab listed
-  expect(viewsLines[1]).toContain("*Gallery*"); // second stacked view: Gallery selected → bold
+  expect(viewsLines[0]).toContain(bold("All")); // first stacked view: All selected → bold
+  expect(viewsLines[0]).toContain("Gallery"); // sibling tab listed (regular)
+  expect(viewsLines[1]).toContain(bold("Gallery")); // second stacked view: Gallery selected → bold
 });
 
 test("Phase-2 DatabaseRender views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
@@ -593,7 +594,7 @@ test("databaseHeader fits the width and collapses overflowing view tabs to '+N m
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
   const viewsLine = out.split("\n").find((line) => line.startsWith("Views: ")) ?? "";
-  expect(viewsLine).toContain("*Board*"); // the selected/default (first) view is bold and always shown
+  expect(viewsLine).toContain(bold("Board")); // the selected/default (first) view is bold and always shown
   expect(viewsLine).toMatch(/\+\d+ more/); // the rest collapse into a count
   expect(viewsLine.endsWith("+ New")).toBe(true); // + New right-aligned on the Views line
 });
