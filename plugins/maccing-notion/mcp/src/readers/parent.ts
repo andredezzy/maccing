@@ -2,15 +2,12 @@
 // for it — shared by `describe`, `search`, and the AGENTS.md parent-chain climb so the cases stay in one place.
 
 import { abbreviateId } from "../notion/ids";
+import type { ParentRef } from "../notion/parent";
 
-export interface NotionParentRef {
-  type?: string;
-  page_id?: string;
-  block_id?: string;
-  database_id?: string;
-  data_source_id?: string;
-  workspace?: boolean;
-}
+// The loose hand-rolled parent ref is now an ALIAS of the official canon `ParentRef` (src/notion/parent.ts) —
+// the canon is the single source of truth. ParentRef is intentionally all-optional, which is exactly what this
+// defensive label helper needs (it must render partial refs without throwing).
+export type NotionParentRef = ParentRef;
 
 /** "page abcd…1234" | "data_source …" | "database …" | "block …" | the raw type | "—" when absent. */
 export function parentLabel(parent: NotionParentRef | undefined): string {

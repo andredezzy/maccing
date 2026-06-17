@@ -7,6 +7,9 @@ import { flattenProperty, type NotionPropertyValue, propertyToString, richTextTo
 
 const flat = (property: NotionPropertyValue) => flattenProperty(property).value;
 
+// A minimal valid canon rich-text run carrying just the text the readers extract via `plain_text`.
+const rt = (content: string) => ({ type: "text" as const, text: { content }, plain_text: content });
+
 test("richTextToPlain joins runs and tolerates non-arrays", () => {
   expect(richTextToPlain([{ plain_text: "Hello " }, { plain_text: "world" }])).toBe("Hello world");
   expect(richTextToPlain([])).toBe("");
@@ -15,18 +18,18 @@ test("richTextToPlain joins runs and tolerates non-arrays", () => {
 });
 
 test("titleOf reads the title-type property, else (untitled)", () => {
-  expect(titleOf({ properties: { Name: { type: "title", title: [{ plain_text: "Push day" }] } } })).toBe("Push day");
+  expect(titleOf({ properties: { Name: { type: "title", title: [rt("Push day")] } } })).toBe("Push day");
   expect(titleOf({ properties: { Status: { type: "status", status: { name: "Done" } } } })).toBe("(untitled)");
   expect(titleOf({})).toBe("(untitled)");
 });
 
 test("flattenProperty: text-like, number, boolean", () => {
-  expect(flat({ type: "title", title: [{ plain_text: "Hi" }] })).toBe("Hi");
-  expect(flat({ type: "rich_text", rich_text: [{ plain_text: "hi" }] })).toBe("hi");
+  expect(flat({ type: "title", title: [rt("Hi")] })).toBe("Hi");
+  expect(flat({ type: "rich_text", rich_text: [rt("hi")] })).toBe("hi");
   expect(flat({ type: "number", number: 42 })).toBe(42);
-  expect(flat({ type: "number" })).toBeNull();
+  expect(flat({ type: "number", number: null })).toBeNull();
   expect(flat({ type: "checkbox", checkbox: true })).toBe(true);
-  expect(flat({ type: "checkbox" })).toBe(false);
+  expect(flat({ type: "checkbox", checkbox: false })).toBe(false);
 });
 
 test("flattenProperty: select / status / multi_select", () => {
@@ -49,7 +52,9 @@ test("flattenProperty: people (name, id fallback, empty) + contact fields", () =
   expect(flat({ type: "email", email: "a@b.com" })).toBe("a@b.com");
   expect(flat({ type: "phone_number", phone_number: "555" })).toBe("555");
   expect(flat({ type: "url", url: "https://x" })).toBe("https://x");
-  expect(flat({ type: "files", files: [{ name: "doc.pdf" }] })).toBe("doc.pdf");
+  expect(
+    flat({ type: "files", files: [{ type: "external", name: "doc.pdf", external: { url: "https://x/doc.pdf" } }] }),
+  ).toBe("doc.pdf");
   expect(flat({ type: "files", files: [] })).toBeNull();
   expect(flat({ type: "created_time", created_time: "2025-01-01T00:00:00Z" })).toBe("2025-01-01T00:00:00Z");
   expect(flat({ type: "last_edited_time", last_edited_time: "2025-02-02T00:00:00Z" })).toBe("2025-02-02T00:00:00Z");
@@ -69,11 +74,13 @@ test("flattenProperty: rollup (number/date/array) and formula (number/date/strin
   expect(flat({ type: "formula", formula: { type: "number", number: 190 } })).toBe(190);
   expect(flat({ type: "formula", formula: { type: "date", date: { start: "2025-03-03" } } })).toBe("2025-03-03");
   expect(flat({ type: "formula", formula: { type: "string", string: "x" } })).toBe("x");
-  expect(flat({ type: "formula", formula: {} })).toBeNull();
+  expect(flat({ type: "formula", formula: { type: "string" } })).toBeNull(); // a string formula with no value → null
 });
 
 test("flattenProperty: unknown type → null", () => {
-  expect(flat({ type: "some_future_type" })).toBeNull();
+  // A property type outside the canon union (e.g. a future Notion type) — cast to exercise the runtime
+  // default branch, which the strict PropertyValue type otherwise makes unrepresentable.
+  expect(flat({ type: "some_future_type" } as unknown as NotionPropertyValue)).toBeNull();
 });
 
 test("flattenProperty: unique_id with and without prefix", () => {

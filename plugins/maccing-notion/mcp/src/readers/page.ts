@@ -1,14 +1,16 @@
 // Notion page/property-value readers: plain-text extraction, the page title, and flattening a property
 // value to an agent-friendly scalar (relations surfaced as ids for the caller to resolve to titles).
 
+import type { PropertyValue } from "../notion/property-values/property-value";
+
 export interface RichText {
   plain_text?: string;
 }
 
-export interface NotionPropertyValue {
-  type: string;
-  [key: string]: unknown;
-}
+// The loose hand-rolled property value is now an ALIAS of the official canon `PropertyValue` — the canon is
+// the single source of truth. The readers below narrow on `property.type`, so the discriminated union flows
+// through unchanged (the local FormulaValue/RollupValue casts below stay loose for the dynamic value access).
+export type NotionPropertyValue = PropertyValue;
 
 export interface NotionPageBase {
   properties?: Record<string, NotionPropertyValue>;
