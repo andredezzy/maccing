@@ -1,10 +1,9 @@
 // render_mockup — the one renderer tool. Turn structure into the canonical fixed-width ASCII "mockup":
 // a faithful COMPOUNDING (recursive, width-flowing) visual of how a Notion item looks / WILL look. The
-// input is a page render bundle ({ page, blocks[] } using official API shapes), a single block (official
-// Notion API block JSON), or an array of blocks. A `database` block holds its pre-built views[] — views
-// are NOT top-level, they only live inside a database's views[]. The node's own `type` decides what it
-// is; the renderer OWNS all alignment (pads/truncates by display width, word-wraps, emoji-safe), so the
-// caller supplies only STRUCTURE and never counts a character.
+// input is an official Notion API shape: a page render bundle ({ page, blocks[] }), a single BlockObject,
+// an array of BlockObjects, or a DatabaseRender ({ database, dataSource, views, rows }). The node's own
+// `type` decides what it is; the renderer OWNS all alignment (pads/truncates by display width,
+// word-wraps, emoji-safe), so the caller supplies only STRUCTURE and never counts a character.
 
 import { z } from "zod";
 import type { Mockup } from "../render";
@@ -20,13 +19,13 @@ export const renderMockup: ToolModule = {
       "(pads/truncates by display width, word-wraps, emoji-safe), so you supply only structure and never " +
       "count characters. Accepts:\n" +
       "• Official PageRender: { page: PageObject, blocks: BlockObject[] } — a full page with cover/icon/title.\n" +
-      "• Official block: any Notion BlockObject (paragraph, heading_1|2|3|4, bulleted_list_item, " +
+      "• Official BlockObject: any Notion block (paragraph, heading_1|2|3|4, bulleted_list_item, " +
       "numbered_list_item, to_do, toggle, quote, callout, divider, code, equation, image, video, audio, " +
       "file, pdf, bookmark, link_preview, embed, column_list, table, breadcrumb, table_of_contents, " +
       "synced_block, child_page, child_database, link_to_page, template, tab, unsupported).\n" +
-      "• Array of blocks.\n" +
-      "• Inline database block: { type: 'database', database: { title, icon?, views[], view? } } — " +
-      "wraps pre-built view objects (table/gallery/board/list/calendar/timeline/chart/form/map/dashboard/feed).\n" +
+      "• Array of BlockObjects.\n" +
+      "• Official DatabaseRender: { database: DatabaseObject, dataSource: DataSourceObject, views: ViewObject[], rows: PageObject[] } — " +
+      "the full database bundle as returned by read_database (mockup format). Views are official ViewObjects with type and configuration.\n" +
       "Optional top-level `width` (default 70) sets the canvas for bare blocks.",
     annotations: { title: "Render a Notion mockup", readOnlyHint: true },
     inputSchema: {

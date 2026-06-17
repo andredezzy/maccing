@@ -1,32 +1,62 @@
-// The "database" container block — renders a DatabaseModel's header + its selected view (or all views
-// stacked). Registered like any block, so a database composes anywhere (inline in a page, or as the
-// top-level database block render() dispatches); each view recurses through the view engine.
+// Database renderer — consumes the official DatabaseRender bundle directly.
+// Builds the ViewRenderNode for each view and dispatches through the view engine.
 
+import type { DatabaseRender } from "../../../notion/render-bundles";
+import { iconGlyph } from "../../../readers/object";
+import { richTextToPlain } from "../../../readers/page";
 import { header } from "../../box";
-import { registerBlock } from "../engine";
-import { type DatabaseView, renderViews } from "./views/engine";
+import { renderView, renderViews, type ViewRenderNode } from "./views/engine";
 
-export interface DatabaseModel {
-  title: string;
-  icon?: string;
-  description?: string;
-  width?: number;
-  views: DatabaseView[];
-  /** which view to render: an index, or "all" for every view stacked. Default 0. */
-  view?: number | "all";
-}
-/** The standalone-database block — wraps a DatabaseModel. A database IS a block too. */
-export interface DatabaseBlock {
-  type: "database";
-  database: DatabaseModel;
+/** Derive the title-typed column name from the data source schema. */
+function titleColumnOf(schema: Record<string, { type?: string }>): string {
+  return (
+    Object.entries(schema).find(([, property]) => property.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name"
+  );
 }
 
-/** Render a database body (header + the selected view, or all views stacked). */
-function renderDatabaseLines(database: DatabaseModel, total: number): string[] {
-  const out = header(database.icon, database.title, undefined, database.description, total);
-  const which = database.view ?? 0;
-  const selected = which === "all" ? database.views : [database.views[which]].filter(Boolean);
-  return [...out, ...renderViews(selected, total)];
-}
+/** Render a DatabaseRender bundle into lines. selectedView: index, "all", or undefined (default: 0). */
+export function renderDatabase(bundle: DatabaseRender, width: number, selectedView?: number | "all"): string[] {
+  const { database, dataSource, views: viewObjects, rows } = bundle;
+  // viewIndex may be injected at runtime by read_database.
+  const injectedIndex = (bundle as DatabaseRender & { viewIndex?: number }).viewIndex;
 
-registerBlock("database", (block, width) => renderDatabaseLines(block.database, width));
+  const dbTitle = richTextToPlain(database.title) || "(database)";
+  const icon = iconGlyph(database.icon);
+  const schema = dataSource.properties ?? {};
+  const titleColumn = titleColumnOf(schema);
+  const tabs = viewObjects.map((view) => view.name ?? "");
+
+  const headerLines = header(icon, dbTitle, undefined, undefined, width);
+
+  const which = selectedView ?? injectedIndex ?? 0;
+
+  if (viewObjects.length === 0) {
+    return headerLines;
+  }
+
+  if (which === "all") {
+    const nodes: ViewRenderNode[] = viewObjects.map((view) => ({
+      type: view.type,
+      view,
+      rows,
+      dataSource,
+      dbTitle,
+      tabs,
+      titleColumn,
+    }));
+    return [...headerLines, ...renderViews(nodes, width)];
+  }
+
+  const resolvedIndex = typeof which === "number" && which >= 0 && which < viewObjects.length ? which : 0;
+  const selectedViewObj = viewObjects[resolvedIndex];
+  const node: ViewRenderNode = {
+    type: selectedViewObj.type,
+    view: selectedViewObj,
+    rows,
+    dataSource,
+    dbTitle,
+    tabs,
+    titleColumn,
+  };
+  return [...headerLines, ...renderView(node, width, 0, 0)];
+}

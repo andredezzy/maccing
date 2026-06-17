@@ -1,19 +1,14 @@
-// Table view renderer — a full grid of rows and columns.
+// Table view renderer — a full grid of visible columns × rows.
 
 import { renderTableGrid } from "../../../box";
 import { databaseHeader } from "../header";
-import { registerView } from "./engine";
+import { registerView, type ViewRenderNode } from "./engine";
+import { cellValue, visibleColumns } from "./helpers";
 
-export interface TableBlock {
-  type: "table";
-  name: string;
-  views?: string[];
-  columns: string[];
-  rows: string[][];
-}
-
-function renderTable(block: TableBlock, width: number): string[] {
-  return [databaseHeader(block.name, block.views, width), ...renderTableGrid(block.columns, block.rows, width, "─")];
+function renderTable(node: ViewRenderNode, width: number): string[] {
+  const columns = visibleColumns(node.view, node.dataSource, node.titleColumn);
+  const rows = node.rows.map((row) => columns.map((column) => cellValue(row, column)));
+  return [databaseHeader(node.dbTitle, node.tabs, width), ...renderTableGrid(columns, rows, width, "─")];
 }
 
 registerView("table", renderTable);

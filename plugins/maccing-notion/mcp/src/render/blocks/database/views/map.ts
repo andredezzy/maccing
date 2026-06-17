@@ -2,19 +2,12 @@
 
 import { box } from "../../../box";
 import { databaseHeader } from "../header";
-import { registerView } from "./engine";
+import { registerView, type ViewRenderNode } from "./engine";
 
-export interface MapBlock {
-  type: "map";
-  name: string;
-  views?: string[];
-  pins?: number;
-}
-
-function renderMap(block: MapBlock, total: number): string[] {
+function renderMap(node: ViewRenderNode, total: number): string[] {
   return [
-    databaseHeader(block.name, block.views, total),
-    ...box(["[ map view ]", `  ${block.pins ?? 0} pin(s)`], total - 2),
+    databaseHeader(node.dbTitle, node.tabs, total),
+    ...box(["[ map view ]", `  ${node.rows.length} pin(s)`], total - 2),
   ];
 }
 

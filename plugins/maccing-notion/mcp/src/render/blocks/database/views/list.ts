@@ -1,29 +1,25 @@
-// List view renderer — one line per row: `• [icon] Title   meta`.
+// List view renderer — one line per row: `• Title   meta`.
 
 import { clip } from "../../../text";
 import { databaseHeader } from "../header";
-import { registerView } from "./engine";
+import { registerView, type ViewRenderNode } from "./engine";
+import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
-interface ListItem {
-  icon?: string;
-  title: string;
-  meta?: string;
-}
-export interface ListBlock {
-  type: "list";
-  name: string;
-  views?: string[];
-  items: ListItem[];
-}
-
-function renderList(block: ListBlock, total: number): string[] {
-  const lines = [databaseHeader(block.name, block.views, total)];
-  if (block.items.length === 0) {
+function renderList(node: ViewRenderNode, total: number): string[] {
+  const lines = [databaseHeader(node.dbTitle, node.tabs, total)];
+  if (node.rows.length === 0) {
     return [...lines, "(empty)"];
   }
-  for (const item of block.items) {
-    const head = `• ${item.icon ? `${item.icon} ` : ""}${item.title}`;
-    lines.push(item.meta ? clip(`${head}   ${item.meta}`, total) : clip(head, total));
+  const columns = visibleColumns(node.view, node.dataSource, node.titleColumn);
+  const otherColumns = columns.filter((column) => column !== node.titleColumn);
+  for (const row of node.rows) {
+    const title = rowTitle(row, node.titleColumn);
+    const meta = otherColumns
+      .map((column) => cellValue(row, column))
+      .filter(Boolean)
+      .join(" · ");
+    const head = `• ${title}`;
+    lines.push(meta ? clip(`${head}   ${meta}`, total) : clip(head, total));
   }
   return lines;
 }

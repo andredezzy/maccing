@@ -1,4 +1,4 @@
-// The render dispatch engine — it owns the block CONTRACT (the recursive `Block` union = BlockObject | DatabaseBlock)
+// The render dispatch engine — it owns the block CONTRACT (the recursive `Block` union = BlockObject)
 // plus a type→renderer registry and the recursive walker. Each block's SHAPE lives with its renderer (in ./*.ts)
 // and is imported here type-only to assemble the union; each renderer registers itself via registerBlock().
 // So the RUNTIME graph stays a clean DAG (renderers → engine; the type imports erase), and adding a block
@@ -6,14 +6,12 @@
 
 import type { BlockObject } from "../../notion/blocks/block";
 import { createRegistry, type Renderer } from "../registry";
-import type { DatabaseBlock } from "./database/database";
-import type { DatabaseView } from "./database/views/engine";
 import type { ColumnDef } from "./layout";
 
-export type { ColumnDef, DatabaseView };
+export type { ColumnDef };
 
-/** All content, media, and structural blocks (including DatabaseBlock for internal rendering). */
-export type Block = BlockObject | DatabaseBlock;
+/** All content, media, and structural blocks. */
+export type Block = BlockObject;
 
 /** A renderer for one block type. `T` narrows the block to that type at the registration site. */
 export type BlockRenderer<T extends Block = Block> = Renderer<T>;

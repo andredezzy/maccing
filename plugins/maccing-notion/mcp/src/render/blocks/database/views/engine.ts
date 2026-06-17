@@ -1,35 +1,30 @@
+// View render engine — dispatches on ViewRenderNode.type (= view.type, the official ViewObject's discriminant).
+// Each renderer reads from the official ViewObject + PageObject rows + DataSourceObject schema directly;
+// no intermediate simplified model.
+
+import type { DataSourceObject } from "../../../../notion/data-source";
+import type { PageObject } from "../../../../notion/page";
+import type { ViewObject } from "../../../../notion/view";
 import { createRegistry } from "../../../registry";
-import type { BoardBlock } from "./board";
-import type { CalendarBlock } from "./calendar";
-import type { ChartBlock } from "./chart";
-import type { DashboardBlock } from "./dashboard";
-import type { FeedBlock } from "./feed";
-import type { FormBlock } from "./form";
-import type { GalleryBlock } from "./gallery";
-import type { ListBlock } from "./list";
-import type { MapBlock } from "./map";
-import type { TableBlock } from "./table";
-import type { TimelineBlock } from "./timeline";
 
-export type DatabaseView =
-  | TableBlock
-  | BoardBlock
-  | GalleryBlock
-  | ListBlock
-  | CalendarBlock
-  | TimelineBlock
-  | ChartBlock
-  | FormBlock
-  | MapBlock
-  | DashboardBlock
-  | FeedBlock;
+/** All the official data a view renderer needs. The `type` field mirrors `view.type` so createRegistry dispatches. */
+export interface ViewRenderNode {
+  type: string;
+  view: ViewObject;
+  rows: PageObject[];
+  dataSource: DataSourceObject;
+  /** Database display title (rich-text resolved to plain string) shown in the header. */
+  dbTitle: string;
+  tabs: string[];
+  titleColumn: string;
+}
 
-const views = createRegistry<DatabaseView>();
+const views = createRegistry<ViewRenderNode>();
 export const registerView = views.register;
 export const renderView = views.render;
 
 /** Stack views with a blank line between (database view:"all", dashboard widgets). */
-export function renderViews(list: DatabaseView[], width: number): string[] {
+export function renderViews(list: ViewRenderNode[], width: number): string[] {
   const out: string[] = [];
   for (let index = 0; index < list.length; index++) {
     if (index > 0) {

@@ -1,11 +1,13 @@
-// View-engine tests — standalone rendering of every DatabaseView type. These were skipped in
-// index.test.ts while views still dispatched through the block registry; now they are tested
-// directly via renderView (and asserting displayWidth from the text module).
+// View-engine tests — standalone rendering of every ViewRenderNode type with official API shapes.
+// Exercises renderView with real ViewObject + PageObject[] rows + DataSourceObject inputs.
 
 import "../../.."; // registers all block renderers (and transitively the view renderers)
 import { expect, test } from "bun:test";
+import type { DataSourceObject } from "../../../../notion/data-source";
+import type { PageObject } from "../../../../notion/page";
+import type { ViewObject } from "../../../../notion/view";
 import { displayWidth } from "../../../text";
-import { renderView } from "./engine";
+import { renderView, type ViewRenderNode } from "./engine";
 
 /** Every box (┌…┐ / │…│ / └…┘) must have equal DISPLAY width on every one of its lines. */
 function assertSingleBoxesClose(out: string, width: number): void {
@@ -21,29 +23,97 @@ function assertSingleBoxesClose(out: string, width: number): void {
   }
 }
 
-test("a gallery view with no cards renders an (empty) box", () => {
-  const out = renderView({ type: "gallery", name: "G", views: ["V"], cardSize: "small", cards: [] }, 70, 0, 0).join(
-    "\n",
-  );
+// ── Fixtures ────────────────────────────────────────────────────────────────────────────────────────
+
+/** Build a minimal PageObject with a title property. */
+function mkTitleRow(titleColumn: string, title: string, extra?: Record<string, string>): PageObject {
+  const props: Record<string, unknown> = {
+    [titleColumn]: { type: "title", title: [{ plain_text: title }] },
+  };
+  for (const [name, value] of Object.entries(extra ?? {})) {
+    props[name] = { type: "rich_text", rich_text: [{ plain_text: value }] };
+  }
+  return { properties: props as PageObject["properties"] };
+}
+
+/** Build a minimal DataSourceObject with named columns. */
+function mkSchema(columns: Array<{ name: string; type?: string; id?: string }>): DataSourceObject {
+  const properties: Record<string, unknown> = {};
+  for (const column of columns) {
+    const type = column.type ?? "rich_text";
+    properties[column.name] = { id: column.id ?? column.name, type, [type]: {} };
+  }
+  return { properties: properties as DataSourceObject["properties"] };
+}
+
+/** Build a minimal ViewObject. */
+function mkView(type: ViewObject["type"], columnIds?: string[], options?: Partial<ViewObject>): ViewObject {
+  const props = columnIds?.map((id) => ({ property_id: id }));
+  return {
+    name: type.charAt(0).toUpperCase() + type.slice(1),
+    type,
+    configuration: props ? { properties: props } : undefined,
+    ...options,
+  };
+}
+
+/** Wrap data into a ViewRenderNode. */
+function mkNode(
+  view: ViewObject,
+  rows: PageObject[],
+  dataSource: DataSourceObject,
+  tabs?: string[],
+  titleColumn?: string,
+): ViewRenderNode {
+  const schemaEntries = Object.entries(dataSource.properties ?? {});
+  const derivedTitle =
+    schemaEntries.find(([, property]) => property.type === "title")?.[0] ?? schemaEntries[0]?.[0] ?? "Name";
+  return {
+    type: view.type,
+    view,
+    rows,
+    dataSource,
+    dbTitle: "Test DB",
+    tabs: tabs ?? [view.name],
+    titleColumn: titleColumn ?? derivedTitle,
+  };
+}
+
+// Simple test fixtures
+const schema = mkSchema([
+  { name: "Name", type: "title", id: "name" },
+  { name: "Status", type: "status", id: "status" },
+  { name: "Date", type: "date", id: "date" },
+]);
+
+const rows: PageObject[] = [
+  mkTitleRow("Name", "Push day", { Status: "Done", Date: "2025-06-09" }),
+  mkTitleRow("Name", "Pull day", { Status: "To do", Date: "2025-06-11" }),
+];
+
+// ── Tests ────────────────────────────────────────────────────────────────────────────────────────────
+
+test("a gallery view with no rows renders an (empty) box", () => {
+  const view = mkView("gallery", ["name"]);
+  const node = mkNode(view, [], schema);
+  const out = renderView(node, 70, 0, 0).join("\n");
   expect(out).toContain("(empty)");
   assertSingleBoxesClose(out, 70);
 });
 
 test("over-long gallery content is truncated with … so the box still closes", () => {
-  const out = renderView(
-    {
-      type: "gallery",
-      name: "Areas",
-      cardSize: "small",
-      cards: [{ name: "Mindset and lifestyle", lines: ["Document your professional projects"] }],
-    },
-    70,
-    0,
-    0,
-  ).join("\n");
+  const longSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "Description", type: "rich_text", id: "desc" },
+  ]);
+  const longRows: PageObject[] = [
+    mkTitleRow("Name", "Mindset and lifestyle", { Description: "Document your professional projects" }),
+  ];
+  const view = mkView("gallery", ["name", "desc"]);
+  const node = mkNode(view, longRows, longSchema);
+  const out = renderView(node, 70, 0, 0).join("\n");
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("…"); // the long name/description got clipped
-  // no content line is wider than its box
   const topLine = out.split("\n").find((line) => line.startsWith("┌"));
   for (const line of out.split("\n").filter((line) => line.startsWith("│"))) {
     expect(displayWidth(line)).toBeLessThanOrEqual(displayWidth(topLine ?? ""));
@@ -51,12 +121,26 @@ test("over-long gallery content is truncated with … so the box still closes", 
 });
 
 test("a calendar view honors leap-year February (29 days in Feb 2024)", () => {
-  const out = renderView(
-    { type: "calendar", name: "C", views: ["V"], year: 2024, month: 2, events: [{ day: 29, title: "Leap day" }] },
-    70,
-    0,
-    0,
-  ).join("\n");
+  const calSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "When", type: "date", id: "when" },
+  ]);
+  const calRows: PageObject[] = [
+    {
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Leap day" }] },
+        When: { type: "date", date: { start: "2024-02-29" } },
+      } as unknown as PageObject["properties"],
+    },
+  ];
+  // View with date_property_id pointing to "when"
+  const view: ViewObject = {
+    name: "Calendar",
+    type: "calendar",
+    configuration: { date_property_id: "when" },
+  };
+  const node = mkNode(view, calRows, calSchema);
+  const out = renderView(node, 70, 0, 0).join("\n");
   expect(out).toContain("February 2024");
   expect(out).toContain("29"); // the leap day is a real cell — not clamped to 28
   for (const line of out.split("\n")) {
@@ -65,69 +149,68 @@ test("a calendar view honors leap-year February (29 days in Feb 2024)", () => {
 });
 
 test("render edge branches: group-less board, data-less chart, every form widget", () => {
-  const board = renderView({ type: "board", name: "B", views: ["V"], groups: [] }, 70, 0, 0).join("\n");
+  // Board with no rows and no group-by → no groups
+  const boardView = mkView("board");
+  const boardNode = mkNode(boardView, [], schema);
+  const board = renderView(boardNode, 70, 0, 0).join("\n");
   expect(board).toContain("(no groups)");
 
-  const chart = renderView({ type: "chart", name: "C", views: ["V"], chartType: "bar", data: [] }, 70, 0, 0).join("\n");
-  expect(chart).toContain("(no data)");
+  // Chart with no group-by → shows row count
+  const chartView = mkView("chart");
+  const chartNode = mkNode(chartView, [], schema);
+  const chart = renderView(chartNode, 70, 0, 0).join("\n");
+  expect(chart).toContain("rows"); // count placeholder
 
-  const form = renderView(
-    {
-      type: "form",
-      name: "F",
-      views: ["V"],
-      fields: [
-        { label: "When", fieldType: "date" },
-        { label: "Who", fieldType: "person" },
-        { label: "Free", fieldType: "text" },
-      ],
-    },
-    70,
-    0,
-    0,
-  ).join("\n");
+  // Form view — columns become labeled fields; widget type derived from schema type
+  const formSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "When", type: "date", id: "when" },
+    { name: "Who", type: "people", id: "who" },
+    { name: "Note", type: "rich_text", id: "note" },
+  ]);
+  const formView = mkView("form", ["name", "when", "who", "note"]);
+  const formNode = mkNode(formView, [], formSchema);
+  const form = renderView(formNode, 70, 0, 0).join("\n");
   expect(form).toContain("[ 📅 ]"); // date widget
-  expect(form).toContain("[ @ ]"); // person widget
+  expect(form).toContain("[ @ ]"); // people widget
   expect(form).toContain("[ _____ ]"); // text/default widget
 });
 
 test("render fallback branch: empty list view", () => {
-  const out = renderView({ type: "list", name: "L", views: ["V"], items: [] }, 70, 0, 0).join("\n");
+  const view = mkView("list");
+  const node = mkNode(view, [], schema);
+  const out = renderView(node, 70, 0, 0).join("\n");
   expect(out).toContain("(empty)");
 });
 
-test("a table view falls back to the default width (70) when rendered at width 70", () => {
-  // Verifies the table spans the full width (the previous test used render(…, 0) to exercise the
-  // default-width fallback in render(); here we pass width=70 directly to renderView).
-  const out = renderView(
-    { type: "table", name: "T", views: ["All"], columns: ["Name", "Status"], rows: [["X", "Y"]] },
-    70,
-    0,
-    0,
-  ).join("\n");
+test("a table view spans the full width (70) when rendered at width 70", () => {
+  const view = mkView("table", ["name", "status"]);
+  const node = mkNode(view, rows, schema);
+  const out = renderView(node, 70, 0, 0).join("\n");
   const topRule = out.split("\n").find((line) => line.startsWith("┌─") && line.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
 });
 
 test("feed view renders a single-column stack of post cards with the database header", () => {
-  const out = renderView(
-    {
-      type: "feed",
-      name: "Announcements",
-      views: ["Feed"],
-      posts: [
-        { icon: "📣", title: "Launch", preview: "We shipped it", meta: "2d ago" },
-        { title: "Hiring", preview: "Two roles open" },
-      ],
-    },
-    70,
-    0,
-    0,
-  ).join("\n");
+  const feedSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "Meta", type: "rich_text", id: "meta" },
+  ]);
+  const feedRows: PageObject[] = [mkTitleRow("Name", "Launch", { Meta: "2d ago" }), mkTitleRow("Name", "Hiring")];
+  const view = mkView("feed", ["name", "meta"]);
+  const node: ViewRenderNode = {
+    type: "feed",
+    view,
+    rows: feedRows,
+    dataSource: feedSchema,
+    dbTitle: "Announcements",
+    tabs: ["Feed"],
+    titleColumn: "Name",
+  };
+  const out = renderView(node, 70, 0, 0).join("\n");
   expect(out).toContain("◷ Announcements"); // view tab-bar header
-  expect(out).toContain("📣 Launch");
-  expect(out).toContain("We shipped it");
+  expect(out).toContain("Launch");
   expect(out).toContain("2d ago");
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
@@ -135,93 +218,49 @@ test("feed view renders a single-column stack of post cards with the database he
 });
 
 test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
-  const views = [
-    renderView(
-      {
-        type: "calendar",
-        name: "Sessions",
-        views: ["Calendar"],
-        year: 2025,
-        month: 6,
-        events: [
-          { day: 9, title: "Push" },
-          { day: 14, title: "Legs" },
-        ],
-      },
-      70,
-      0,
-      0,
-    ),
-    renderView(
-      {
-        type: "timeline",
-        name: "Roadmap",
-        views: ["Timeline"],
-        axis: "Jun — Aug",
-        rows: [
-          { label: "Cut", start: 0, end: 0.4 },
-          { label: "Bulk", start: 0.6, end: 1 },
-        ],
-      },
-      70,
-      0,
-      0,
-    ),
-    renderView(
-      {
-        type: "chart",
-        name: "Volume",
-        views: ["Chart"],
-        chartType: "bar",
-        data: [
-          { label: "Legs", value: 14 },
-          { label: "Chest", value: 6 },
-        ],
-      },
-      70,
-      0,
-      0,
-    ),
-    renderView(
-      { type: "chart", name: "Total", views: ["Number"], chartType: "number", value: "1,302", unit: "sets" },
-      70,
-      0,
-      0,
-    ),
-    renderView(
-      {
-        type: "form",
-        name: "New log",
-        views: ["Form"],
-        fields: [
-          { label: "Exercise", fieldType: "select" },
-          { label: "Done", fieldType: "checkbox" },
-        ],
-      },
-      70,
-      0,
-      0,
-    ),
-    renderView({ type: "map", name: "Gyms", views: ["Map"], pins: 3 }, 70, 0, 0),
-    renderView(
-      {
-        type: "dashboard",
-        name: "Overview",
-        views: ["Dashboard"],
-        widgets: [
-          {
-            title: "Volume",
-            view: { type: "chart", name: "V", chartType: "bar", data: [{ label: "Legs", value: 14 }] },
-          },
-        ],
-      },
-      70,
-      0,
-      0,
-    ),
+  const sessionSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "Date", type: "date", id: "date" },
+    { name: "Status", type: "status", id: "status" },
+  ]);
+  const sessionRows: PageObject[] = [
+    {
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Push" }] },
+        Date: { type: "date", date: { start: "2025-06-09" } },
+        Status: { type: "status", status: { name: "Done" } },
+      } as unknown as PageObject["properties"],
+    },
+    {
+      properties: {
+        Name: { type: "title", title: [{ plain_text: "Legs" }] },
+        Date: { type: "date", date: { start: "2025-06-14" } },
+        Status: { type: "status", status: { name: "To do" } },
+      } as unknown as PageObject["properties"],
+    },
   ];
 
-  const out = views.map((lines) => lines.join("\n")).join("\n\n");
+  const calendarView: ViewObject = { name: "Calendar", type: "calendar", configuration: { date_property_id: "date" } };
+  const timelineView: ViewObject = { name: "Timeline", type: "timeline", configuration: { date_property_id: "date" } };
+  const chartView: ViewObject = {
+    name: "Chart",
+    type: "chart",
+    configuration: { group_by: { property_id: "status" } },
+  };
+  const formView = mkView("form", ["name", "date", "status"]);
+  const mapView = mkView("map");
+  const dashboardView = mkView("dashboard");
+
+  const viewOutputs = [
+    renderView(mkNode(calendarView, sessionRows, sessionSchema, ["Calendar"], "Name"), 70, 0, 0),
+    renderView(mkNode(timelineView, sessionRows, sessionSchema, ["Timeline"], "Name"), 70, 0, 0),
+    renderView(mkNode(chartView, sessionRows, sessionSchema, ["Chart"], "Name"), 70, 0, 0),
+    renderView(mkNode(formView, sessionRows, sessionSchema, ["Form"], "Name"), 70, 0, 0),
+    renderView(mkNode(mapView, sessionRows, sessionSchema, ["Map"], "Name"), 70, 0, 0),
+    renderView(mkNode(dashboardView, sessionRows, sessionSchema, ["Dashboard"], "Name"), 70, 0, 0),
+  ];
+
+  const out = viewOutputs.map((lines) => lines.join("\n")).join("\n\n");
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
@@ -229,4 +268,75 @@ test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned,
   expect(out).toContain("█"); // timeline/chart bars drawn
   expect(out).toContain("[ Submit ]"); // form
   expect(out).toContain("Su"); // calendar weekday header
+});
+
+test("board seeds every group-by option as a column (even empty), in order, and caps a dominant column", () => {
+  const boardSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "Status", type: "status", id: "status_id" },
+  ]);
+  // Add status options to the schema
+  (boardSchema.properties.Status as Record<string, unknown>).status = {
+    options: [{ name: "Not started" }, { name: "Next to-do" }, { name: "In progress" }, { name: "Done" }],
+  };
+
+  const manyDone: PageObject[] = Array.from({ length: 9 }, (_, index) => ({
+    properties: {
+      Name: { type: "title", title: [{ plain_text: `Task ${index}` }] },
+      Status: { type: "status", status: { name: "Done" } },
+    } as unknown as PageObject["properties"],
+  }));
+
+  const boardView: ViewObject = {
+    name: "Board",
+    type: "board",
+    configuration: { group_by: { property_id: "status_id" } },
+  };
+  const node = mkNode(boardView, manyDone, boardSchema, ["Board"], "Name");
+  const out = renderView(node, 70, 0, 0).join("\n");
+
+  // Every status column appears including empty ones
+  expect(out).toContain("Not started");
+  expect(out).toContain("Next to-do");
+  expect(out).toContain("In progress");
+  expect(out).toContain("Done  (9)"); // true count
+
+  // Capped: a "+N more" tail card for the overflowing Done column
+  expect(out).toContain("more");
+  for (const line of out.split("\n")) {
+    expect(displayWidth(line)).toBeLessThanOrEqual(70);
+  }
+});
+
+test("every view's tab bar lists all sibling view names, not just its own", () => {
+  const tabs = ["All logs", "By status", "Timeline"];
+  const tableView = mkView("table", ["name", "status"]);
+  for (const _tab of tabs) {
+    const node: ViewRenderNode = {
+      type: "table",
+      view: tableView,
+      rows,
+      dataSource: schema,
+      dbTitle: "Sessions",
+      tabs,
+      titleColumn: "Name",
+    };
+    const header = renderView(node, 70, 0, 0)[0];
+    for (const tab of tabs) {
+      expect(header).toContain(tab);
+    }
+  }
+});
+
+test("calendar falls through to table when no date column is found", () => {
+  const noDateSchema = mkSchema([
+    { name: "Name", type: "title", id: "name" },
+    { name: "Tag", type: "select", id: "tag" },
+  ]);
+  const calView = mkView("calendar", ["name", "tag"]);
+  const node = mkNode(calView, [mkTitleRow("Name", "X", { Tag: "TBD" })], noDateSchema);
+  const out = renderView(node, 70, 0, 0).join("\n");
+  // Falls back to table — shows the grid lines
+  const topRule = out.split("\n").find((line) => line.startsWith("┌─") && line.includes("┬"));
+  expect(topRule).toBeTruthy();
 });

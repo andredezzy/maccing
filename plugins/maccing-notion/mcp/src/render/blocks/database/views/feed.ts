@@ -3,36 +3,25 @@
 import { box } from "../../../box";
 import { clip } from "../../../text";
 import { databaseHeader } from "../header";
-import { registerView } from "./engine";
+import { registerView, type ViewRenderNode } from "./engine";
+import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
-interface FeedPost {
-  icon?: string;
-  title: string;
-  preview?: string;
-  meta?: string;
-}
-
-export interface FeedBlock {
-  type: "feed";
-  name: string;
-  views?: string[];
-  posts: FeedPost[];
-}
-
-registerView("feed", (block: FeedBlock, width: number) => {
-  const lines = [databaseHeader(block.name, block.views, width)];
-
-  if (block.posts.length === 0) {
+registerView("feed", (node: ViewRenderNode, width: number) => {
+  const lines = [databaseHeader(node.dbTitle, node.tabs, width)];
+  if (node.rows.length === 0) {
     return [...lines, ...box(["(empty)"], width - 2)];
   }
 
-  for (const post of block.posts) {
-    const head = clip(`${post.icon ? `${post.icon} ` : ""}${post.title}`, width - 4);
-    const body = [
-      head,
-      ...(post.preview ? [clip(post.preview, width - 4)] : []),
-      ...(post.meta ? [clip(post.meta, width - 4)] : []),
-    ];
+  const columns = visibleColumns(node.view, node.dataSource, node.titleColumn);
+  const otherColumns = columns.filter((column) => column !== node.titleColumn);
+
+  for (const row of node.rows) {
+    const title = rowTitle(row, node.titleColumn);
+    const meta = otherColumns
+      .map((column) => cellValue(row, column))
+      .filter(Boolean)
+      .join(" · ");
+    const body = [clip(title, width - 4), ...(meta ? [clip(meta, width - 4)] : [])];
     lines.push(...box(body, width - 2));
   }
 
