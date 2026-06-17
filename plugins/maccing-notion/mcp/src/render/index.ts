@@ -16,6 +16,7 @@ import type { DatabaseRender, PageRender } from "../notion/render-bundles";
 import { renderDatabase } from "./blocks/database/database";
 import { type Block, renderBlock, renderBlocks } from "./blocks/engine";
 import { renderPage } from "./page";
+import { codeFence } from "./text";
 
 export { mockupSchema } from "./mockup-schema";
 export { displayWidth } from "./text";
@@ -34,27 +35,31 @@ function finish(lines: string[]): string {
 }
 
 /**
- * Render a mockup — a PageRender, a single Block, a Block[], or a DatabaseRender — to the finished string.
+ * Render a mockup — a PageRender, a single Block, a Block[], or a DatabaseRender — to a paste-ready string.
  * Resolves the canvas width (default DEFAULT_WIDTH) and dispatches through the appropriate renderer.
  * `viewSelection` chooses which database view to render (index, "all", or default 0); it is ignored for
  * non-database mockups.
+ *
+ * Every result is SELF-FENCING markdown — paste it verbatim, never wrap it again. Page/block/bare-block
+ * box-art is wrapped whole in a code fence here; a DATABASE wraps only its grid (the bold prose header must
+ * stay OUTSIDE the fence to render bold), so its renderer fences internally and is returned as-is.
  */
 export function render(mockup: Mockup, width?: number, viewSelection?: number | "all"): string {
   const total = width && width > 0 ? width : DEFAULT_WIDTH;
 
   if (Array.isArray(mockup)) {
-    return finish(renderBlocks(mockup as Block[], total, 0));
+    return codeFence(finish(renderBlocks(mockup as Block[], total, 0)));
   }
 
   if ("page" in mockup && "blocks" in mockup) {
     const bundle = mockup as PageRender;
-    return finish(renderPage(bundle.page, bundle.blocks as BlockObject[], total));
+    return codeFence(finish(renderPage(bundle.page, bundle.blocks as BlockObject[], total)));
   }
 
   if ("database" in mockup && "dataSource" in mockup) {
-    return finish(renderDatabase(mockup as DatabaseRender, total, viewSelection));
+    return finish(renderDatabase(mockup as DatabaseRender, total, viewSelection)); // self-fences its grid internally
   }
 
   // Single Block (BlockObject)
-  return finish(renderBlock(mockup as Block, total, 0, 0));
+  return codeFence(finish(renderBlock(mockup as Block, total, 0, 0)));
 }

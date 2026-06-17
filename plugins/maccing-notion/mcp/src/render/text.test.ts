@@ -4,7 +4,7 @@
 
 import { expect, test } from "bun:test";
 
-import { clip, displayWidth, padRight, spread, wordWrap } from "./text";
+import { clip, codeFence, displayWidth, padRight, spread, wordWrap } from "./text";
 
 test("wordWrap: an empty string yields a single empty line (the sentinel)", () => {
   expect(wordWrap("", 10)).toEqual([""]);
@@ -38,4 +38,20 @@ test("padRight fits to exactly the width — pad when short, clip when long", ()
 
 test("spread right-aligns the right side within the width", () => {
   expect(spread("L", "R", 5)).toBe("L   R");
+});
+
+test("codeFence wraps a body in a triple-backtick fence", () => {
+  expect(codeFence("hello")).toBe("```\nhello\n```");
+});
+
+test("codeFence returns empty for an empty body — nothing to fence", () => {
+  expect(codeFence("")).toBe("");
+});
+
+test("codeFence lengthens the fence past any embedded backtick run so it can't break out early", () => {
+  const body = "```js\ncode\n```"; // an embedded code block — a run of 3 backticks
+  const fenced = codeFence(body);
+  expect(fenced.startsWith("````\n")).toBe(true); // 4 backticks — one longer than the embedded run
+  expect(fenced.endsWith("\n````")).toBe(true);
+  expect(fenced).toContain(body); // body preserved verbatim inside
 });

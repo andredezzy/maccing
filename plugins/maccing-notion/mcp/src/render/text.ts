@@ -91,6 +91,20 @@ export function spread(left: string, right: string, width: number): string {
   const room = width - displayWidth(left) - displayWidth(right);
   return left + " ".repeat(Math.max(1, room)) + right;
 }
+/** Wrap `body` in a fenced code block so the mockup is paste-ready as-is (monospace in chat). The fence is
+ * one backtick longer than the longest backtick run inside `body`, so an embedded code block (or any literal
+ * ``` in the content) can't terminate it early. An empty body fences to nothing — there's no box to show. */
+export function codeFence(body: string): string {
+  if (body === "") {
+    return "";
+  }
+  let longestRun = 0;
+  for (const match of body.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
+  }
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}\n${body}\n${fence}`;
+}
 /** Word-wrap `text` to lines of at most `width` display columns (hard-breaks over-long words). */
 export function wordWrap(text: string, width: number): string[] {
   const wrapWidth = Math.max(1, width);

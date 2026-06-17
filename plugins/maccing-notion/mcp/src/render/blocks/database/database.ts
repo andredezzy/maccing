@@ -4,11 +4,9 @@
 import type { DatabaseRender } from "../../../notion/render-bundles";
 import type { ViewObject } from "../../../notion/view";
 import { richTextToPlain } from "../../../readers/page";
+import { codeFence } from "../../text";
 import { databaseHeader } from "./header";
 import { renderView, type ViewRenderNode } from "./views/engine";
-
-/** Fence that wraps the box-art grid so it renders monospace; the prose header sits OUTSIDE it (bold). */
-const FENCE = "```";
 
 /** Derive the title-typed column name from the data source schema. */
 function titleColumnOf(schema: Record<string, { type?: string }>): string {
@@ -62,13 +60,12 @@ export function renderDatabase(bundle: DatabaseRender, width: number, selectedVi
   return viewMockup(nodeFor(viewObjects[resolvedIndex]), width);
 }
 
-/** One view's mockup: the prose header, then the grid in a code fence. */
+/** One view's mockup: the prose header (kept OUTSIDE the fence so the selected view renders bold), then the
+ * box-art grid in a code fence — backtick-safe so a cell value containing ``` can't terminate it early. */
 function viewMockup(node: ViewRenderNode, width: number): string[] {
   return [
     ...databaseHeader(node.dbTitle, node.tabs, node.view.name, width),
     "",
-    FENCE,
-    ...renderView(node, width, 0, 0),
-    FENCE,
+    codeFence(renderView(node, width, 0, 0).join("\n")),
   ];
 }

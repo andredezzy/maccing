@@ -443,6 +443,29 @@ test("render renders a bare block subtree (no page chrome) and honors the given 
   }
 });
 
+test("a page mockup is self-fencing — the box-art is wrapped in a code fence, paste-ready as-is", () => {
+  const out = render(mkPage("Demo", [{ type: "paragraph", paragraph: { rich_text: rt("hi") } }], "📄"));
+  expect(out.startsWith("```\n")).toBe(true); // opens with a fence
+  expect(out.endsWith("\n```")).toBe(true); // closes with a fence
+  expect(out).toContain("📄 Demo"); // the box-art lives inside the fence
+});
+
+test("a bare block subtree is self-fencing too", () => {
+  const out = render([{ type: "paragraph", paragraph: { rich_text: rt("alpha") } }] as Block[]);
+  expect(out.startsWith("```")).toBe(true);
+  expect(out.trimEnd().endsWith("```")).toBe(true);
+  expect(out).toContain("alpha");
+});
+
+test("a code block whose content contains ``` gets a longer outer fence so it can't break out", () => {
+  const out = render([{ type: "code", code: { language: "markdown", rich_text: rt("```js\nx\n```") } }] as Block[]);
+  expect(out.startsWith("````")).toBe(true); // 4+ backticks — longer than the embedded run of 3
+});
+
+test("an empty render stays empty — nothing to fence", () => {
+  expect(render([{ type: "column_list", column_list: { children: [] } }] as Block[])).toBe("");
+});
+
 test("render falls back to the default width (70) on a non-positive width", () => {
   const bundle = mkTableDb("T", ["Name", "Status"], [["X", "Y"]]);
   const out = render(bundle, 0);
