@@ -6,7 +6,7 @@ import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
 function renderList(node: ViewRenderNode, total: number): string[] {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, total)];
+  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   if (node.rows.length === 0) {
     return [...lines, "(empty)"];
   }

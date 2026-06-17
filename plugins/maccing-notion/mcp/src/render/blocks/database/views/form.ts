@@ -34,7 +34,10 @@ function renderForm(node: ViewRenderNode, total: number): string[] {
     return clip(`${column}:  ${widget(fieldType)}`, total - 2);
   });
 
-  return [databaseHeader(node.dbTitle, node.tabs, total), ...box([...fields, "", "[ Submit ]"], total - 2)];
+  return [
+    databaseHeader(node.dbTitle, node.tabs, node.view.name, total),
+    ...box([...fields, "", "[ Submit ]"], total - 2),
+  ];
 }
 
 registerView("form", renderForm);

@@ -7,7 +7,7 @@ import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
 registerView("feed", (node: ViewRenderNode, width: number) => {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, width)];
+  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, width)];
   if (node.rows.length === 0) {
     return [...lines, ...box(["(empty)"], width - 2)];
   }

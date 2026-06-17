@@ -29,7 +29,7 @@ function renderGallery(node: ViewRenderNode, total: number): string[] {
     );
   });
 
-  const lines = [databaseHeader(node.dbTitle, node.tabs, total)];
+  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   if (cardBoxes.length === 0) {
     return [...lines, ...box(["(empty)"], total - 2)];
   }

@@ -73,7 +73,10 @@ function renderCalendar(node: ViewRenderNode, total: number): string[] {
   if (!resolvedDateCol) {
     // No date column found — fall back to table.
     const rows = node.rows.map((row) => allColumns.map((column) => cellValue(row, column)));
-    return [databaseHeader(node.dbTitle, node.tabs, total), ...renderTableGrid(allColumns, rows, total, "─")];
+    return [
+      databaseHeader(node.dbTitle, node.tabs, node.view.name, total),
+      ...renderTableGrid(allColumns, rows, total, "─"),
+    ];
   }
 
   const dated = node.rows
@@ -86,11 +89,14 @@ function renderCalendar(node: ViewRenderNode, total: number): string[] {
   if (dated.length === 0) {
     // No parseable dates → table fallback.
     const rows = node.rows.map((row) => allColumns.map((column) => cellValue(row, column)));
-    return [databaseHeader(node.dbTitle, node.tabs, total), ...renderTableGrid(allColumns, rows, total, "─")];
+    return [
+      databaseHeader(node.dbTitle, node.tabs, node.view.name, total),
+      ...renderTableGrid(allColumns, rows, total, "─"),
+    ];
   }
 
   const { year, month } = dated[0].date;
-  const lines = [databaseHeader(node.dbTitle, node.tabs, total), `${MONTHS[month - 1]} ${year}`];
+  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total), `${MONTHS[month - 1]} ${year}`];
   const first = dayOfWeek(year, month, 1);
   const days = daysInMonth(year, month);
 

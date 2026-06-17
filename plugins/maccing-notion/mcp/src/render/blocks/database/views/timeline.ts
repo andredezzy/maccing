@@ -7,7 +7,7 @@ import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
 function renderTimeline(node: ViewRenderNode, total: number): string[] {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, total)];
+  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   const schema = node.dataSource.properties ?? {};
   const config = node.view.configuration ?? {};
   const idToName = buildIdToName(schema);

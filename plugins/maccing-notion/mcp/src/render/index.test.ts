@@ -135,12 +135,16 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
   expect(displayWidth(bottom ?? "")).toBe(displayWidth(top ?? ""));
 });
 
-test("DatabaseRender table header carries a right-aligned + New", () => {
+test("DatabaseRender header is two lines: ◷ title, then a Views line with a right-aligned + New", () => {
   const bundle = mkTableDb("Sessions", ["Name", "Volume"], [["Push", "4 210"]]);
   const out = render(bundle);
-  const headerLine = out.split("\n").find((line) => line.includes("◷ Sessions"));
-  expect(headerLine).toBeTruthy();
-  expect(headerLine?.endsWith("+ New")).toBe(true);
+  const lines = out.split("\n");
+  const titleLine = lines.find((line) => line.startsWith("◷ Sessions"));
+  expect(titleLine).toBeTruthy();
+  expect(titleLine?.includes("+ New")).toBe(false); // title line stands alone — no tabs, no + New
+  const viewsLine = lines.find((line) => line.startsWith("Views: "));
+  expect(viewsLine).toBeTruthy();
+  expect(viewsLine?.endsWith("+ New")).toBe(true);
 });
 
 test("over-long content is truncated with … so the box still closes", () => {
@@ -481,8 +485,8 @@ test("DatabaseRender renders selected view (default view 0)", () => {
   };
   const out = render(bundle);
   assertSingleBoxesClose(out, 70);
-  expect(out).toContain("Exercises");
-  expect(out).toContain("◷ Exercises   ‹ All ›"); // tab bar shows first view active
+  expect(out).toContain("◷ Exercises"); // title line
+  expect(out).toContain("Views: *All*"); // the selected (default view 0) is bold on the Views line
 });
 
 test("DatabaseRender renders all views stacked when selectedView='all'", () => {
@@ -507,11 +511,13 @@ test("DatabaseRender renders all views stacked when selectedView='all'", () => {
   const { renderDatabase } = require("./blocks/database/database");
   const out = (renderDatabase as (b: DatabaseRender, w: number, s: "all") => string[])(bundle, 70, "all").join("\n");
   assertSingleBoxesClose(out, 70);
-  // Both views stacked — header appears twice (once per view); each shows all sibling tabs.
-  const headerLines = out.split("\n").filter((line) => line.includes("◷ Exercises"));
-  expect(headerLines.length).toBeGreaterThanOrEqual(2);
-  expect(headerLines[0]).toContain("‹ All ›");
-  expect(headerLines[0]).toContain("‹ Gallery ›");
+  // Both views stacked — the ◷ title + a Views line appear once per view; each view bolds itself.
+  const titleLines = out.split("\n").filter((line) => line.startsWith("◷ Exercises"));
+  expect(titleLines.length).toBeGreaterThanOrEqual(2);
+  const viewsLines = out.split("\n").filter((line) => line.startsWith("Views: "));
+  expect(viewsLines[0]).toContain("*All*"); // first stacked view: All selected → bold
+  expect(viewsLines[0]).toContain("Gallery"); // sibling tab listed
+  expect(viewsLines[1]).toContain("*Gallery*"); // second stacked view: Gallery selected → bold
 });
 
 test("Phase-2 DatabaseRender views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
@@ -586,8 +592,8 @@ test("databaseHeader fits the width and collapses overflowing view tabs to '+N m
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
-  const header = out.split("\n").find((line) => line.includes("+ New")) ?? "";
-  expect(header).toContain("‹ Board ›"); // the active/default (first) view is always shown
-  expect(header).toMatch(/\+\d+ more/); // the rest collapse into a count
-  expect(header).toContain("+ New");
+  const viewsLine = out.split("\n").find((line) => line.startsWith("Views: ")) ?? "";
+  expect(viewsLine).toContain("*Board*"); // the selected/default (first) view is bold and always shown
+  expect(viewsLine).toMatch(/\+\d+ more/); // the rest collapse into a count
+  expect(viewsLine.endsWith("+ New")).toBe(true); // + New right-aligned on the Views line
 });
