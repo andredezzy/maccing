@@ -15,15 +15,7 @@
         "name": "André \"Dezzy\" Victor",
         "url": "https://github.com/andredezzy"
       },
-      "keywords": [
-        "growth",
-        "ads",
-        "meta",
-        "whatsapp",
-        "ycloud",
-        "bsp",
-        "marketing"
-      ],
+      "keywords": ["growth", "ads", "meta", "whatsapp", "ycloud", "bsp", "marketing"],
       "license": "MIT",
       "skills": [
         "./skills/meta/meta",
