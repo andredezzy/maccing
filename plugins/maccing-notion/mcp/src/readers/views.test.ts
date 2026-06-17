@@ -47,9 +47,9 @@ test("listViewIds paginates to the end, threading next_cursor", async () => {
   expect(await listViewIds("ds")).toEqual(["v1", "v2", "v3"]);
 });
 
-test("listViewIds stops and returns the partial list on a non-2xx response", async () => {
+test("listViewIds throws on a non-2xx response (no silent partial list)", async () => {
   globalThis.fetch = (async () => jsonResponse(500, {})) as unknown as typeof fetch;
-  expect(await listViewIds("ds")).toEqual([]); // first page failed → nothing collected
+  await expect(listViewIds("ds")).rejects.toThrow("Failed to list views for data source ds");
 });
 
 test("fetchViews lists the view ids, then batch-fetches each view's full config", async () => {

@@ -39,3 +39,8 @@ test("text without callouts passes through unchanged", () => {
   const text = "# Heading\n\nA paragraph with no callouts.";
   expect(normalizeCallouts(text)).toBe(text);
 });
+
+test("empty-body callout becomes a blockquote, not raw HTML", () => {
+  // The trailing newline is optional: <callout …>\n</callout> has no body line, only one \n total.
+  expect(normalizeCallouts('<callout icon="💡">\n</callout>')).toBe("> 💡 ");
+});

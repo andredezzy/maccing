@@ -2,7 +2,7 @@
 
 // Match the whole open tag's attributes (any order: icon/color, either first, plus any others), then
 // pull `icon` out of them — Notion emits icon-first, but a color-first tag must normalize identically.
-const CALLOUT = /<callout([^>]*)>\n([\s\S]*?)\n<\/callout>/g;
+const CALLOUT = /<callout([^>]*)>\n?([\s\S]*?)\n?<\/callout>/g;
 
 /** Convert Notion callout blocks (`<callout icon="X" …>…</callout>`) to `> X …` blockquotes. */
 export function normalizeCallouts(markdown: string): string {

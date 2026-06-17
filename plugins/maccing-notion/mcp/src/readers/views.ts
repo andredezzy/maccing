@@ -32,7 +32,8 @@ interface ViewIdListResponse {
   next_cursor?: string | null;
 }
 
-/** List a data source's view ids, paginated to the end (the public API caps each page at 100). */
+/** List a data source's view ids, paginated to the end (the public API caps each page at 100).
+ * Throws on a non-ok response mid-pagination (consistent with resolveRelations throwing on 429). */
 export async function listViewIds(dataSourceId: string): Promise<string[]> {
   const ids: string[] = [];
   let cursor: string | undefined;
@@ -43,7 +44,9 @@ export async function listViewIds(dataSourceId: string): Promise<string[]> {
     }
     const response = await publicRequest("GET", "/v1/views", undefined, query);
     if (!response.ok) {
-      break;
+      throw new Error(
+        `Failed to list views for data source ${dataSourceId} (status ${response.status ?? "unknown"}): ${JSON.stringify(response.body).slice(0, 200)}`,
+      );
     }
     const body = response.body as ViewIdListResponse;
     ids.push(...(body.results ?? []).map((view) => view.id));
