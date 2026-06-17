@@ -1,54 +1,51 @@
-// The database header — two lines, shared by every view renderer:
-//   ◷ Title
-//   Views: *Selected*, Other, Other, +N more                              + New
-// The title is on its own line; the views line lists the tabs comma-separated (the SELECTED view in
-// *bold*), as many as fit, then a "+N more" count, with "+ New" right-aligned. Mirrors Notion's header.
+// The database header, emitted as PROSE markdown (NOT box-art) so the SELECTED view renders in REAL bold
+// in chat — markdown bold is literal inside a code fence, model-emitted ANSI is stripped, and Unicode bold
+// glyphs fall back to a different font, so the only reliable bold is `**…**` in prose OUTSIDE the fence.
+// Two lines:
+//   ◷ **Title**
+//   Views: **Selected**, Other, Other, +N more · + New
+// The title and the selected view are wrapped in ** ** (real bold). Tabs collapse to "+N more" once they'd
+// exceed `width` (the budget counts the ** markers, so when the collapse succeeds even the RAW string fits
+// the canvas — on screen the markers render to nothing, leaving it narrower still). A single tab too long to
+// fit on its own is shown in FULL anyway (never clipped) and the prose simply wraps in chat — being prose is
+// the whole point, since that is the only place bold renders. `+ New` trails INLINE: prose can't right-align
+// (markdown eats runs of spaces), and ` · ` keeps it from reading as just another tab.
 
-import { bold, clip, displayWidth, spread } from "../../text";
+import { displayWidth } from "../../text";
+
+const PREFIX = "Views: ";
+const SEPARATOR = " · ";
+const NEW = "+ New";
 
 export function databaseHeader(
   name: string,
   views: string[] | undefined,
   selected: string | undefined,
-  total: number,
-): string {
-  const titleLine = clip(`◷ ${name}`, total);
+  width: number,
+): string[] {
+  const titleLine = `◷ **${name}**`;
 
   const list = views ?? [];
   if (list.length === 0) {
-    return titleLine;
+    return [titleLine];
   }
 
-  const right = "+ New";
-  const prefix = "Views: ";
-  // The selected view renders in REAL bold (Mathematical Sans-Serif Bold glyphs) — each is one display
-  // column, so the fit math below is unchanged.
-  const tokens = list.map((view) => (view === selected ? bold(view) : view));
+  const tokens = list.map((view) => (view === selected ? `**${view}**` : view));
 
-  // The list must fit between the "Views: " prefix and "+ New" (≥1 space before it); reserve room for a
-  // ", +N more" suffix whenever tabs remain unshown so the count never itself overflows.
-  const budget = total - displayWidth(right) - 1 - displayWidth(prefix);
-  let shown = 0;
-  for (let count = 1; count <= tokens.length; count++) {
+  // Reserve room for the "Views: " prefix and the trailing " · + New", plus a ", +N more" count whenever
+  // tabs remain unshown — so the line never overflows even after the count is appended.
+  const budget = width - displayWidth(PREFIX) - displayWidth(SEPARATOR) - displayWidth(NEW);
+  let shown = tokens.length;
+  for (let count = tokens.length; count >= 1; count--) {
     const hidden = tokens.length - count;
     const candidate = tokens.slice(0, count).join(", ") + (hidden > 0 ? `, +${hidden} more` : "");
-    if (displayWidth(candidate) <= budget) {
+    if (displayWidth(candidate) <= budget || count === 1) {
       shown = count;
-    } else {
       break;
     }
   }
 
-  let strip: string;
-  if (shown === 0) {
-    // Even the first view + count won't fit — show it clipped so the selected/default view is never hidden.
-    const moreSuffix = tokens.length > 1 ? `, +${tokens.length - 1} more` : "";
-    strip = clip(tokens[0], Math.max(1, budget - displayWidth(moreSuffix))) + moreSuffix;
-  } else {
-    const hidden = tokens.length - shown;
-    strip = tokens.slice(0, shown).join(", ") + (hidden > 0 ? `, +${hidden} more` : "");
-  }
-
-  const left = clip(`${prefix}${strip}`, total - displayWidth(right) - 1);
-  return `${titleLine}\n${spread(left, right, total)}`;
+  const hidden = tokens.length - shown;
+  const tabs = tokens.slice(0, shown).join(", ") + (hidden > 0 ? `, +${hidden} more` : "");
+  return [titleLine, `${PREFIX}${tabs}${SEPARATOR}${NEW}`];
 }

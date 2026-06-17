@@ -2,7 +2,6 @@
 
 import { box } from "../../../box";
 import { clip } from "../../../text";
-import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { visibleColumns } from "./helpers";
 
@@ -34,10 +33,7 @@ function renderForm(node: ViewRenderNode, total: number): string[] {
     return clip(`${column}:  ${widget(fieldType)}`, total - 2);
   });
 
-  return [
-    databaseHeader(node.dbTitle, node.tabs, node.view.name, total),
-    ...box([...fields, "", "[ Submit ]"], total - 2),
-  ];
+  return box([...fields, "", "[ Submit ]"], total - 2);
 }
 
 registerView("form", renderForm);

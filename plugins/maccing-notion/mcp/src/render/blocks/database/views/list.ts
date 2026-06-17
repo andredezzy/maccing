@@ -1,15 +1,14 @@
 // List view renderer — one line per row: `• Title   meta`.
 
 import { clip } from "../../../text";
-import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
 function renderList(node: ViewRenderNode, total: number): string[] {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   if (node.rows.length === 0) {
-    return [...lines, "(empty)"];
+    return ["(empty)"];
   }
+  const lines: string[] = [];
   const columns = visibleColumns(node.view, node.dataSource, node.titleColumn);
   const otherColumns = columns.filter((column) => column !== node.titleColumn);
   for (const row of node.rows) {

@@ -7,6 +7,7 @@ import type { DataSourceObject } from "../../../../notion/data-source";
 import type { PageObject } from "../../../../notion/page";
 import type { ViewObject } from "../../../../notion/view";
 import { displayWidth } from "../../../text";
+import { databaseHeader } from "../header";
 import { renderView, type ViewRenderNode } from "./engine";
 
 /** Every box (┌…┐ / │…│ / └…┘) must have equal DISPLAY width on every one of its lines. */
@@ -192,7 +193,7 @@ test("a table view spans the full width (70) when rendered at width 70", () => {
   expect(displayWidth(topRule ?? "")).toBe(70);
 });
 
-test("feed view renders a single-column stack of post cards with the database header", () => {
+test("feed view renders a single-column stack of post cards (grid only — header is added by the database renderer)", () => {
   const feedSchema = mkSchema([
     { name: "Name", type: "title", id: "name" },
     { name: "Meta", type: "rich_text", id: "meta" },
@@ -209,7 +210,8 @@ test("feed view renders a single-column stack of post cards with the database he
     titleColumn: "Name",
   };
   const out = renderView(node, 70, 0, 0).join("\n");
-  expect(out).toContain("◷ Announcements"); // view tab-bar header
+  // renderView emits only the box-art grid now; the ◷ title / Views header is prose owned by renderDatabase.
+  expect(out).not.toContain("◷"); // no header woven into the grid
   expect(out).toContain("Launch");
   expect(out).toContain("2d ago");
   for (const line of out.split("\n")) {
@@ -308,23 +310,15 @@ test("board seeds every group-by option as a column (even empty), in order, and 
   }
 });
 
-test("every view's tab bar lists all sibling view names, not just its own", () => {
+test("the Views line lists every sibling view name and bolds the selected one", () => {
   const tabs = ["All logs", "By status", "Timeline"];
-  const tableView = mkView("table", ["name", "status"]);
-  for (const _tab of tabs) {
-    const node: ViewRenderNode = {
-      type: "table",
-      view: tableView,
-      rows,
-      dataSource: schema,
-      dbTitle: "Sessions",
-      tabs,
-      titleColumn: "Name",
-    };
-    const header = renderView(node, 70, 0, 0)[0];
+  for (const selected of tabs) {
+    const [titleLine, viewsLine] = databaseHeader("Sessions", tabs, selected, 70);
+    expect(titleLine).toBe("◷ **Sessions**");
     for (const tab of tabs) {
-      expect(header).toContain(tab);
+      expect(viewsLine).toContain(tab); // every sibling tab is listed, not just the selected one
     }
+    expect(viewsLine).toContain(`**${selected}**`); // the selected view is in real markdown bold
   }
 });
 

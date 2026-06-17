@@ -3,12 +3,11 @@
 import { buildIdToName } from "../../../../readers/views";
 import { box } from "../../../box";
 import { displayWidth, padRight } from "../../../text";
-import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue } from "./helpers";
 
 function renderChart(node: ViewRenderNode, total: number): string[] {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
+  const lines: string[] = [];
   const schema = node.dataSource.properties ?? {};
   const config = node.view.configuration ?? {};
   const idToName = buildIdToName(schema);
@@ -19,7 +18,7 @@ function renderChart(node: ViewRenderNode, total: number): string[] {
 
   if (!groupByName || node.rows.length === 0) {
     // No group-by or no data — show total count.
-    return [...lines, ...box([`  ${node.rows.length} rows`], total - 2)];
+    return box([`  ${node.rows.length} rows`], total - 2);
   }
 
   // Count rows per group value.
@@ -31,7 +30,7 @@ function renderChart(node: ViewRenderNode, total: number): string[] {
 
   const data = [...counts].map(([label, value]) => ({ label, value }));
   if (data.length === 0) {
-    return [...lines, ...box(["(no data)"], total - 2)];
+    return box(["(no data)"], total - 2);
   }
 
   const labelWidth = Math.min(20, Math.max(...data.map((point) => displayWidth(point.label))));

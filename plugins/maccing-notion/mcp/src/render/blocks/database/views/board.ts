@@ -2,7 +2,6 @@
 
 import { groupOptionsFor } from "../../../../readers/views";
 import { box, GAP, hcat, SMALL_CARD } from "../../../box";
-import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle } from "./helpers";
 
@@ -15,7 +14,6 @@ interface BoardGroup {
 const BOARD_CARD_CAP = 6;
 
 function renderBoard(node: ViewRenderNode, total: number): string[] {
-  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   const schema = node.dataSource.properties ?? {};
   const config = node.view.configuration ?? {};
 
@@ -52,7 +50,7 @@ function renderBoard(node: ViewRenderNode, total: number): string[] {
   });
 
   if (boardGroups.length === 0) {
-    return [...lines, ...box(["(no groups)"], total - 2)];
+    return box(["(no groups)"], total - 2);
   }
   const columnInner = Math.max(
     SMALL_CARD,
@@ -63,7 +61,7 @@ function renderBoard(node: ViewRenderNode, total: number): string[] {
     const cards = group.cards.flatMap((card) => box([card.name], columnInner));
     return [...head, ...cards];
   });
-  return [...lines, ...hcat(columns, GAP)];
+  return hcat(columns, GAP);
 }
 
 registerView("board", renderBoard);

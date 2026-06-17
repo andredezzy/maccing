@@ -1,7 +1,6 @@
 // Gallery view renderer — cover cards in a row-flow.
 
 import { box, COVER, cardsPerRow, GAP, hcat, MEDIUM_CARD } from "../../../box";
-import { databaseHeader } from "../header";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
@@ -29,10 +28,10 @@ function renderGallery(node: ViewRenderNode, total: number): string[] {
     );
   });
 
-  const lines = [databaseHeader(node.dbTitle, node.tabs, node.view.name, total)];
   if (cardBoxes.length === 0) {
-    return [...lines, ...box(["(empty)"], total - 2)];
+    return box(["(empty)"], total - 2);
   }
+  const lines: string[] = [];
   for (let index = 0; index < cardBoxes.length; index += perRow) {
     lines.push(...hcat(cardBoxes.slice(index, index + perRow), GAP));
   }

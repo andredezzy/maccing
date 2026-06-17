@@ -9,7 +9,6 @@ import type { PageObject } from "../notion/page";
 import type { DatabaseRender, PageRender } from "../notion/render-bundles";
 import type { ViewObject } from "../notion/view";
 import { type Block, displayWidth, render } from "./index";
-import { bold } from "./text";
 
 // Helper: create a minimal rich-text array from a plain string.
 function rt(text: string) {
@@ -136,16 +135,19 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
   expect(displayWidth(bottom ?? "")).toBe(displayWidth(top ?? ""));
 });
 
-test("DatabaseRender header is two lines: ◷ title, then a Views line with a right-aligned + New", () => {
+test("DatabaseRender header is PROSE (bold title + bold selected view); the grid sits in a code fence", () => {
   const bundle = mkTableDb("Sessions", ["Name", "Volume"], [["Push", "4 210"]]);
   const out = render(bundle);
   const lines = out.split("\n");
-  const titleLine = lines.find((line) => line.startsWith("◷ Sessions"));
-  expect(titleLine).toBeTruthy();
-  expect(titleLine?.includes("+ New")).toBe(false); // title line stands alone — no tabs, no + New
-  const viewsLine = lines.find((line) => line.startsWith("Views: "));
-  expect(viewsLine).toBeTruthy();
-  expect(viewsLine?.endsWith("+ New")).toBe(true);
+  // Title is markdown-bold PROSE (rendered OUTSIDE the fence → real bold in chat), not box-art.
+  const titleLine = lines.find((line) => line.startsWith("◷ "));
+  expect(titleLine).toBe("◷ **Sessions**");
+  // The Views line is prose too; the selected view is wrapped in ** ** (real bold), + New trails inline.
+  const viewsLine = lines.find((line) => line.startsWith("Views: ")) ?? "";
+  expect(viewsLine).toContain("**Sessions**"); // the only/selected view, in REAL markdown bold
+  expect(viewsLine.endsWith("+ New")).toBe(true);
+  // The box-art grid is fenced so it renders monospace (bold is impossible inside a fence).
+  expect(lines).toContain("```");
 });
 
 test("over-long content is truncated with … so the box still closes", () => {
@@ -398,9 +400,9 @@ test("render fallback branches: bare breadcrumb / toc / synced_block", () => {
   );
 });
 
-test("DatabaseRender table — the tab-bar header clips the active tab when even it alone won't fit", () => {
+test("a tab too long to fit on its own is shown in FULL (prose wraps); only the fenced grid stays within width", () => {
   const schema = mkSchema([{ name: "Name", type: "title", id: "name" }]);
-  const longTabName = "A view name so long that not even the active tab fits the budget, which forces a hard clip";
+  const longTabName = "A view name so long that not even the active tab fits the budget, which forces a wrap";
   const view: ViewObject = {
     name: longTabName,
     type: "table",
@@ -413,11 +415,16 @@ test("DatabaseRender table — the tab-bar header clips the active tab when even
     rows: [mkRow("Name", "x")],
   };
   const out = render(bundle);
-  for (const line of out.split("\n")) {
+  // The prose header is NOT clipped — the over-long active tab appears in full, bold, and wraps in chat.
+  expect(out).toContain(`**${longTabName}**`);
+  expect(out).toContain("+2 more"); // the other two tabs still collapse into a count
+  // The width invariant applies to the FENCED box-art grid, not the free-flowing prose header.
+  const lines = out.split("\n");
+  const open = lines.indexOf("```");
+  const close = lines.lastIndexOf("```");
+  for (const line of lines.slice(open + 1, close)) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
-  expect(out).toContain("…"); // the active tab itself is clipped
-  expect(out).toContain("+2 more"); // the other two tabs collapse into a count
 });
 
 test("render renders a bare block subtree (no page chrome) and honors the given width", () => {
@@ -486,8 +493,8 @@ test("DatabaseRender renders selected view (default view 0)", () => {
   };
   const out = render(bundle);
   assertSingleBoxesClose(out, 70);
-  expect(out).toContain("◷ Exercises"); // title line
-  expect(out).toContain(`Views: ${bold("All")}`); // the selected (default view 0) renders bold on the Views line
+  expect(out).toContain("◷ **Exercises**"); // title line, bold prose
+  expect(out).toContain("Views: **All**"); // the selected (default view 0) is bold on the Views line
 });
 
 test("DatabaseRender renders all views stacked when selectedView='all'", () => {
@@ -513,12 +520,12 @@ test("DatabaseRender renders all views stacked when selectedView='all'", () => {
   const out = (renderDatabase as (b: DatabaseRender, w: number, s: "all") => string[])(bundle, 70, "all").join("\n");
   assertSingleBoxesClose(out, 70);
   // Both views stacked — the ◷ title + a Views line appear once per view; each view bolds itself.
-  const titleLines = out.split("\n").filter((line) => line.startsWith("◷ Exercises"));
+  const titleLines = out.split("\n").filter((line) => line.startsWith("◷ "));
   expect(titleLines.length).toBeGreaterThanOrEqual(2);
   const viewsLines = out.split("\n").filter((line) => line.startsWith("Views: "));
-  expect(viewsLines[0]).toContain(bold("All")); // first stacked view: All selected → bold
-  expect(viewsLines[0]).toContain("Gallery"); // sibling tab listed (regular)
-  expect(viewsLines[1]).toContain(bold("Gallery")); // second stacked view: Gallery selected → bold
+  expect(viewsLines[0]).toContain("**All**"); // first stacked view: All selected → real bold
+  expect(viewsLines[0]).toContain("Gallery"); // sibling tab listed (plain)
+  expect(viewsLines[1]).toContain("**Gallery**"); // second stacked view: Gallery selected → real bold
 });
 
 test("Phase-2 DatabaseRender views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
@@ -580,7 +587,7 @@ test("Phase-2 DatabaseRender views (calendar/timeline/chart/form/map/dashboard) 
   expect(results[0]).toContain("Su"); // calendar weekday header
 });
 
-test("databaseHeader fits the width and collapses overflowing view tabs to '+N more'", () => {
+test("the Views line bolds the selected view and collapses overflowing tabs to '+N more'", () => {
   const schema = mkSchema([{ name: "Name", type: "title", id: "name" }]);
   const tabNames = ["Board", "Backlog", "Calendar", "Timeline", "Table", "Open tasks (Status ≠ Done)"];
   const bundle: DatabaseRender = {
@@ -590,11 +597,13 @@ test("databaseHeader fits the width and collapses overflowing view tabs to '+N m
     rows: [mkRow("Name", "Ship it")],
   };
   const out = render(bundle);
+  // The raw header includes the ** markers; the collapse budget reserves room for them so even the raw
+  // string stays within the canvas width (the markers render to nothing, so on screen it's narrower still).
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
   const viewsLine = out.split("\n").find((line) => line.startsWith("Views: ")) ?? "";
-  expect(viewsLine).toContain(bold("Board")); // the selected/default (first) view is bold and always shown
+  expect(viewsLine).toContain("**Board**"); // the selected/default (first) view in REAL bold, always shown
   expect(viewsLine).toMatch(/\+\d+ more/); // the rest collapse into a count
-  expect(viewsLine.endsWith("+ New")).toBe(true); // + New right-aligned on the Views line
+  expect(viewsLine.endsWith("+ New")).toBe(true); // + New trails the Views line inline
 });

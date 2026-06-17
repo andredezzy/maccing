@@ -22,15 +22,3 @@ export interface ViewRenderNode {
 const views = createRegistry<ViewRenderNode>();
 export const registerView = views.register;
 export const renderView = views.render;
-
-/** Stack views with a blank line between (database view:"all", dashboard widgets). */
-export function renderViews(list: ViewRenderNode[], width: number): string[] {
-  const out: string[] = [];
-  for (let index = 0; index < list.length; index++) {
-    if (index > 0) {
-      out.push("");
-    }
-    out.push(...renderView(list[index], width, 0, 0));
-  }
-  return out;
-}
