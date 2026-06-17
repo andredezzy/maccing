@@ -80,6 +80,11 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 ```
 (`configuration` excerpt — a full create POST also needs `database_id` + `data_source_id` + `name` + `type`, as in the chart example above.)
 
+**Group ANY view (table / list / …) by a property — and the DATE rule.** Same `group_by` config; it's a oneOf with two shapes:
+- **Simple types** (`select` · `multi_select` · `status` · `relation` · `person` · `created_by` · `last_edited_by` · `text` · `title` · `number` · `checkbox` · `url` · `email` · `phone_number`): `group_by: { "type": <that type>, "property_id": "<id>", "sort": {...} }`.
+- **Date/time types** (`date` · `created_time` · `last_edited_time`): MUST add a nested `group_by` **granularity** — `{ "type": "date", "property_id": "<id>", "group_by": "day", "sort": { "type": "descending" } }` (granularity ∈ `day` / `week` / `month` / `year` / `relative`). ⚠️ Missing the granularity → `400 "group_by.group_by should be defined"`; missing `type` → `400 "type should be defined"` — you need BOTH. `formula` is NOT a valid `group_by.type` (group by a real property, not a formula).
+- **`PATCH /v1/views/{id}` MERGES `configuration`** — sending only `group_by` preserves the column `properties` (no need to resend the whole list). Live-verified 2026-06-17 (Training Log "All logs" grouped by session Date, day granularity, descending).
+
 **Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard`, `map`, `form`
 
 **"Open pages in" (peek mode) — a PRIVATE-only view setting.** How a row opens — **Side peek** / **Center peek** / **Full page** — is NOT in the public view `configuration` (which carries only type/properties/cover/sorts/filter). It lives in the collection_view's `format.collection_peek_mode`. Set it via the private app API (DevTools-captured from the UI's `saveTransactionsFanout`; live-verified 2026-06-14):
