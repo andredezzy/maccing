@@ -103,7 +103,7 @@ test("502 no-retry check is case-insensitive for 'post'", () => {
   expect(shouldRetryPublic(502, "post")).toBe(false);
 });
 
-// ── backoffMs (pure) ──────────────────────────────────────────────────────────────────────────
+// backoffMs (pure)
 test("backoffMs is EXPONENTIAL: 700 · 2^attempt = 700, 1400, 2800", () => {
   expect(backoffMs(0)).toBe(700);
   expect(backoffMs(1)).toBe(1400);
@@ -121,7 +121,7 @@ test("backoffMs ignores NaN / zero / negative Retry-After, falling back to expon
   expect(backoffMs(1, -5)).toBe(1400);
 });
 
-// ── publicRequest retry LOOP (mocked fetch + setTimeout) ──────────────────────────────────────
+// publicRequest retry LOOP (mocked fetch + setTimeout)
 const realFetch = globalThis.fetch;
 const realSetTimeout = globalThis.setTimeout;
 let delays: number[] = [];

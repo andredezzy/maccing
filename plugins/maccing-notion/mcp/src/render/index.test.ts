@@ -181,7 +181,7 @@ test("a table spans the full page width", () => {
   expect(displayWidth(topRule ?? "")).toBe(70);
 });
 
-// ── 360 coverage: every block type + every Phase-1 view (via database blocks), recursion, columns ──
+// 360 coverage: every block type + every Phase-1 view (via database blocks), recursion, columns
 // Inline views are now `database` blocks wrapping the view object.
 const SINK: Block[] = [
   { type: "heading", text: "H0" },

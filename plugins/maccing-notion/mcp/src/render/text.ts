@@ -1,7 +1,7 @@
 // Display-width-aware text primitives — the renderer pads/truncates/wraps by GRAPHEME width
 // (emoji = 2 cells, ZWJ/skin/VS clusters = one glyph), so callers never count characters. Pure leaf.
 
-// ── display width (grapheme-cluster aware) ────────────────────────────────────
+// display width (grapheme-cluster aware)
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 
 function isZeroWidth(codePoint: number): boolean {
