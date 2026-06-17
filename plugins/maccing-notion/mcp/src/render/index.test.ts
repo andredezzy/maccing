@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import type { BlockObject } from "../notion/blocks/block";
 import type { DataSourceObject } from "../notion/data-source";
 import type { PageObject } from "../notion/page";
-import type { DatabaseRender, PageRender } from "../notion/render-bundles";
+import type { DatabaseRender, InlineDatabaseRender, PageRender } from "../notion/render-bundles";
 import type { ViewObject } from "../notion/view";
 import { type Block, displayWidth, render } from "./index";
 
@@ -133,6 +133,87 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
   expect(top && emojiLine && bottom).toBeTruthy();
   expect(displayWidth(emojiLine ?? "")).toBe(displayWidth(top ?? ""));
   expect(displayWidth(bottom ?? "")).toBe(displayWidth(top ?? ""));
+});
+
+test("a callout with hard newlines borders EVERY line — the box stays closed (no spill)", () => {
+  const out = render([
+    {
+      type: "callout",
+      callout: {
+        rich_text: rt("@andre.dezzy\n\nHeight: 1,65m\nAge: 22"),
+        icon: { type: "emoji", emoji: "👦" },
+      },
+    },
+  ] as Block[]);
+  const lines = out.split("\n");
+  const top = lines.find((line) => line.startsWith("┌")) ?? "";
+  // Every interior content line must be bordered (│ … │) at the box width — including the ones after a \n.
+  for (const needle of ["@andre.dezzy", "Height: 1,65m", "Age: 22"]) {
+    const line = lines.find((l) => l.includes(needle)) ?? "";
+    expect(line.startsWith("│")).toBe(true);
+    expect(line.endsWith("│")).toBe(true);
+    expect(displayWidth(line)).toBe(displayWidth(top));
+  }
+});
+
+test("a child_database with an attached live bundle expands INLINE into its default-view grid (not a ▦ reference)", () => {
+  const inline: InlineDatabaseRender = {
+    bundle: mkTableDb("Training Log", ["Name", "Volume"], [["Push day", "4 210"]]),
+    selectedView: 0,
+    truncated: false,
+  };
+  const block = {
+    type: "child_database",
+    child_database: { title: "Training Log", render: inline },
+  } as unknown as Block;
+  const out = render([block]);
+  expect(out).toContain("▦ Training Log"); // plain heading (no bold — the page is one fenced block)
+  expect(out).toContain("Volume"); // a column header from the expanded grid
+  expect(out).toContain("Push day"); // a row cell — proves the grid expanded, not just the ▦ reference
+  expect(out).toContain("┌"); // an actual box was drawn
+});
+
+test("an inline child_database flags truncation when the view has more rows than were sampled", () => {
+  const inline: InlineDatabaseRender = {
+    bundle: mkTableDb("Exercises", ["Name"], [["Squat"]]),
+    selectedView: 0,
+    truncated: true,
+  };
+  const block = { type: "child_database", child_database: { title: "Exercises", render: inline } } as unknown as Block;
+  expect(render([block])).toContain("more rows");
+});
+
+test("a child_database with NO attached bundle stays a ▦ reference (hand-authored mockups, unreadable DBs)", () => {
+  const out = render([{ type: "child_database", child_database: { title: "Linked DB" } }] as Block[]);
+  expect(out).toContain("▦ Linked DB");
+  expect(out).not.toContain("┌"); // no grid box — just the reference line
+});
+
+// Count a grid's columns from its top rule (┌──┬──┬──┐ → ┬ count + 1).
+function gridColumnCount(out: string): number {
+  const top = out.split("\n").find((line) => line.startsWith("┌")) ?? "";
+  return top ? [...top].filter((char) => char === "┬").length + 1 : 0;
+}
+
+test("an inline table caps wide column sets to what stays readable (+N marker); the standalone view keeps ALL", () => {
+  const columns = Array.from({ length: 14 }, (_, index) => `C${String(index + 1).padStart(2, "0")}`); // C01..C14
+  const bundle = mkTableDb("Wide", columns, [columns.map((_, index) => `v${index + 1}`)]);
+
+  // Standalone database mockup: faithful — every one of the 14 columns, no cap marker.
+  const standalone = render(bundle);
+  expect(gridColumnCount(standalone)).toBe(14);
+  expect(standalone).not.toContain("more columns");
+
+  // Inline expansion: capped to the readable few, with a marker for the rest.
+  const inlineBlock = {
+    type: "child_database",
+    child_database: { title: "Wide", render: { bundle, selectedView: 0, truncated: false } },
+  } as unknown as Block;
+  const inline = render([inlineBlock]);
+  const shown = gridColumnCount(inline);
+  expect(shown).toBeGreaterThanOrEqual(1);
+  expect(shown).toBeLessThan(14);
+  expect(inline).toContain("more columns");
 });
 
 test("DatabaseRender header is PROSE (bold title + bold selected view); the grid sits in a code fence", () => {

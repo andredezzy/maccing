@@ -88,6 +88,76 @@ test("fetchPageRender returns null when the page can't be read", async () => {
   expect(await fetchPageRender("MISSING", 1)).toBeNull();
 });
 
+test("fetchPageRender EXPANDS an inline child_database into its default-view grid (always, by default)", async () => {
+  route = (method, path) => {
+    if (path === "/v1/pages/PAGE") {
+      return okBody({ object: "page", properties: { Name: { type: "title", title: [rt("Gym")] } } });
+    }
+    if (path === "/v1/blocks/PAGE/children") {
+      return okBody({
+        results: [
+          { type: "child_database", id: "INLINE_DS", has_children: false, child_database: { title: "Training Log" } },
+        ],
+        has_more: false,
+      });
+    }
+    // fetchDatabaseRender("INLINE_DS"): /databases/INLINE_DS 404s → id treated as a data source; wrapper resolved via parent.
+    if (method === "GET" && path === "/v1/data_sources/INLINE_DS") {
+      return okBody({
+        object: "data_source",
+        parent: { type: "database_id", database_id: "INLINE_DB" },
+        properties: {
+          Name: { id: "nm", name: "Name", type: "title", title: {} },
+          Volume: { id: "vol", name: "Volume", type: "rich_text", rich_text: {} },
+        },
+      });
+    }
+    if (method === "GET" && path === "/v1/databases/INLINE_DB") {
+      return okBody({ object: "database", title: [rt("Training Log")], icon: { type: "emoji", emoji: "🏋" } });
+    }
+    if (method === "GET" && path === "/v1/views") {
+      return okBody({ results: [{ id: "vw1" }], has_more: false });
+    }
+    if (method === "GET" && path === "/v1/views/vw1") {
+      return okBody({
+        id: "vw1",
+        name: "Sessions",
+        type: "table",
+        parent: { database_id: "INLINE_DB" },
+        configuration: { properties: [{ property_id: "nm" }, { property_id: "vol" }] },
+      });
+    }
+    if (method === "POST" && path === "/v1/data_sources/INLINE_DS/query") {
+      return okBody({
+        results: [
+          {
+            object: "page",
+            properties: {
+              Name: { type: "title", title: [rt("Push day")] },
+              Volume: { type: "rich_text", rich_text: [rt("4 210")] },
+            },
+          },
+        ],
+        has_more: false,
+      });
+    }
+    return { ok: false, status: 404, body: {} }; // /databases/INLINE_DS 404s → resolver treats the id as a data source
+  };
+
+  const bundle = await fetchPageRender("PAGE", 3);
+  expect(bundle).not.toBeNull();
+  const dbBlock = bundle?.blocks.find((block) => block.type === "child_database") as {
+    child_database?: { render?: { bundle?: { rows?: unknown[] } } };
+  };
+  expect(dbBlock?.child_database?.render?.bundle?.rows).toHaveLength(1); // the inline DB was fetched + attached
+
+  const out = render(bundle as Parameters<typeof render>[0]);
+  expect(out).toContain("▦ Training Log"); // inline heading
+  expect(out).toContain("Volume"); // a column from the expanded grid
+  expect(out).toContain("Push day"); // a row cell — grid expanded inline, not a bare ▦ reference
+  expect(out).toContain("┌"); // an actual box
+});
+
 test("fetchDatabaseRender assembles a live database (schema + views + rows) and it renders", async () => {
   route = (method, path) => {
     if (method === "GET" && path === "/v1/databases/DB") {

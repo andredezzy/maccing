@@ -33,7 +33,7 @@ interface FetchedBody {
 }
 
 /** Page body as markdown, recovering unknown_block_ids until no round makes progress. */
-async function fetchBody(pageId: string): Promise<FetchedBody> {
+async function assembleBody(pageId: string): Promise<FetchedBody> {
   const first = await publicRequest("GET", `/v1/pages/${pageId}/markdown`);
   if (!first.ok) {
     return { markdown: "(could not read this page as markdown)", rounds: 1, unfetchable: [] };
@@ -233,7 +233,7 @@ export const readPage: ToolModule = {
       const includeProperties = args.include_properties !== false;
       const [pageResponse, body] = await Promise.all([
         includeProperties ? publicRequest("GET", `/v1/pages/${pageId}`) : Promise.resolve(null),
-        fetchBody(pageId),
+        assembleBody(pageId),
       ]);
 
       const normalizedMarkdown = normalizeCallouts(body.markdown);

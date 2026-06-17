@@ -53,7 +53,40 @@ async function fetchBlockTree(id: string, depth: number): Promise<BlockObject[]>
   return out;
 }
 
-/** Fetch a live page object + its block tree as a PageRender, or null if the page can't be read. */
+/**
+ * Expand every child_database in a page's block tree IN PLACE: fetch each one's DatabaseRender bundle and attach
+ * it to the block payload (the page → inline-DB bridge) so the renderer draws the grid instead of a ▦ reference.
+ * A child_database block's id IS its database id. Fetches run in parallel; a DB that can't be read is left
+ * unenriched, so it falls back to the ▦ reference line — one bad embed never fails the whole page.
+ */
+async function expandInlineDatabases(blocks: BlockObject[]): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  const walk = (nodes: BlockObject[]) => {
+    for (const block of nodes) {
+      if (block.type === "child_database" && block.id) {
+        tasks.push(
+          fetchDatabaseRender(block.id, undefined).then((live) => {
+            if (!live) {
+              return;
+            }
+            const payload = (block as unknown as Record<string, unknown>).child_database as Record<string, unknown>;
+            payload.render = { bundle: live.bundle, selectedView: live.selectedIndex, truncated: live.truncated };
+          }),
+        );
+      }
+      const payload = (block as Record<string, unknown>)[block.type] as Record<string, unknown> | undefined;
+      const children = payload?.children as BlockObject[] | undefined;
+      if (children?.length) {
+        walk(children);
+      }
+    }
+  };
+  walk(blocks);
+  await Promise.all(tasks);
+}
+
+/** Fetch a live page object + its block tree as a PageRender, or null if the page can't be read. Inline
+ * databases are always expanded into their default-view grids. */
 export async function fetchPageRender(pageId: string, depth: number): Promise<PageRender | null> {
   const [pageResponse, blocks] = await Promise.all([
     publicRequest("GET", `/v1/pages/${pageId}`),
@@ -62,6 +95,7 @@ export async function fetchPageRender(pageId: string, depth: number): Promise<Pa
   if (!pageResponse.ok) {
     return null;
   }
+  await expandInlineDatabases(blocks);
   return { page: pageResponse.body as PageObject, blocks };
 }
 

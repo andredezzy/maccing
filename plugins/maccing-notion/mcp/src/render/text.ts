@@ -82,7 +82,7 @@ export function clip(text: string, width: number): string {
   return `${out}…`;
 }
 /** Fit to exactly `width`: pad if short, truncate with `…` if long. Keeps every box closed. */
-export function padRight(text: string, width: number): string {
+export function fitWidth(text: string, width: number): string {
   const clipped = clip(text, width);
   return clipped + " ".repeat(Math.max(0, width - displayWidth(clipped)));
 }
@@ -105,8 +105,9 @@ export function codeFence(body: string): string {
   const fence = "`".repeat(Math.max(3, longestRun + 1));
   return `${fence}\n${body}\n${fence}`;
 }
-/** Word-wrap `text` to lines of at most `width` display columns (hard-breaks over-long words). */
-export function wordWrap(text: string, width: number): string[] {
+/** Re-flow `text` to lines of at most `width` display columns: splits on existing newlines, wraps on word
+ * boundaries, and hard-breaks any word too long to fit. ("Reflow" — re-lay-out to a width, whatever it takes.) */
+export function reflow(text: string, width: number): string[] {
   const wrapWidth = Math.max(1, width);
   const out: string[] = [];
   for (const para of text.split("\n")) {

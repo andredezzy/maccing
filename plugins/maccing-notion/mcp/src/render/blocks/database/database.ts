@@ -1,7 +1,7 @@
 // Database renderer — consumes the official DatabaseRender bundle directly.
 // Builds the ViewRenderNode for each view and dispatches through the view engine.
 
-import type { DatabaseRender } from "../../../notion/render-bundles";
+import type { DatabaseRender, InlineDatabaseRender } from "../../../notion/render-bundles";
 import type { ViewObject } from "../../../notion/view";
 import { richTextToPlain } from "../../../readers/page";
 import { codeFence } from "../../text";
@@ -68,4 +68,37 @@ function viewMockup(node: ViewRenderNode, width: number): string[] {
     "",
     codeFence(renderView(node, width, 0, 0).join("\n")),
   ];
+}
+
+/**
+ * Inline (within a page) rendering of a child_database: a plain `▦ Title` heading + the default view's box-art
+ * grid. NO code fence and NO bold prose header — the surrounding page is already wrapped in ONE fence, inside
+ * which bold can't render; the standalone `renderDatabase` keeps the fenced, bold-header treatment for
+ * `database_id`. This is the page → view-engine bridge, in one direction. Appends a note when rows were sampled.
+ */
+export function renderInlineDatabase(inline: InlineDatabaseRender, width: number): string[] {
+  const { bundle, selectedView, truncated } = inline;
+  const { database, dataSource, views: viewObjects, rows } = bundle;
+
+  const dbTitle = richTextToPlain(database.title) || "(database)";
+  const heading = `▦ ${dbTitle}`;
+  if (viewObjects.length === 0) {
+    return [heading];
+  }
+
+  const index = selectedView >= 0 && selectedView < viewObjects.length ? selectedView : 0;
+  const view = viewObjects[index];
+  const node: ViewRenderNode = {
+    type: view.type,
+    view,
+    rows,
+    dataSource,
+    dbTitle,
+    tabs: viewObjects.map((tab) => tab.name ?? ""),
+    titleColumn: titleColumnOf(dataSource.properties ?? {}),
+    capColumns: true, // inline within a page: cap wide tables to the readable few (standalone shows all)
+  };
+
+  const grid = renderView(node, width, 0, 0);
+  return truncated ? [heading, ...grid, "(+ more rows — open the database to see all)"] : [heading, ...grid];
 }

@@ -135,7 +135,7 @@ async function findAgentsMdPageId(pageId: string): Promise<string | null> {
   return null;
 }
 
-async function fetchPageMarkdown(pageId: string): Promise<string> {
+async function readPageMarkdown(pageId: string): Promise<string> {
   const response = await publicRequest("GET", `/v1/pages/${pageId}/markdown`);
   if (!response.ok) {
     return "(could not read this AGENTS.md as markdown)";
@@ -178,7 +178,7 @@ export const readAgentsMd: ToolModule = {
       for (const ancestor of ancestors) {
         const agentsId = await findAgentsMdPageId(ancestor.pageId);
         if (agentsId) {
-          found.push({ title: ancestor.title, agentsId, markdown: await fetchPageMarkdown(agentsId) });
+          found.push({ title: ancestor.title, agentsId, markdown: await readPageMarkdown(agentsId) });
         }
       }
 

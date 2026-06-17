@@ -2,7 +2,7 @@
 
 import { buildIdToName } from "../../../../readers/views";
 import { box } from "../../../box";
-import { displayWidth, padRight } from "../../../text";
+import { displayWidth, fitWidth } from "../../../text";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue } from "./helpers";
 
@@ -42,7 +42,7 @@ function renderChart(node: ViewRenderNode, total: number): string[] {
   for (let index = 0; index < data.length; index++) {
     const filled = Math.round((data[index].value / max) * barWidth);
     const bar = "█".repeat(filled) + "·".repeat(Math.max(0, barWidth - filled));
-    lines.push(`${padRight(data[index].label, labelWidth)} ${bar} ${padRight(valueStrings[index], valueWidth)}`);
+    lines.push(`${fitWidth(data[index].label, labelWidth)} ${bar} ${fitWidth(valueStrings[index], valueWidth)}`);
   }
   return lines;
 }

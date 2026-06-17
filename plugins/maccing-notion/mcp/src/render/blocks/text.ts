@@ -5,7 +5,7 @@ import type { BlockObject } from "../../notion/blocks/block";
 import { iconGlyph } from "../../readers/object";
 import { richTextToPlain } from "../../readers/page";
 import { box } from "../box";
-import { displayWidth, wordWrap } from "../text";
+import { displayWidth, reflow } from "../text";
 import { type Block, type BlockRenderer, registerBlock, renderBlocks } from "./engine";
 
 const BULLETS = ["•", "◦", "▪"];
@@ -24,7 +24,7 @@ function childLines(children: Block[] | undefined, width: number, by: number, de
 }
 
 /** A marker + word-wrapped text, with continuation lines aligned under the text; then children. */
-function flow(
+function flowItem(
   marker: string,
   text: string,
   width: number,
@@ -33,7 +33,7 @@ function flow(
   childDepth: number,
 ): string[] {
   const markerWidth = displayWidth(marker);
-  const wrapped = wordWrap(text ?? "", Math.max(1, width - markerWidth));
+  const wrapped = reflow(text ?? "", Math.max(1, width - markerWidth));
   const lines = wrapped.map((line, index) => (index === 0 ? marker : " ".repeat(markerWidth)) + line);
   return [...lines, ...childLines(children, width, childIndent, childDepth)];
 }
@@ -42,7 +42,7 @@ registerBlock("paragraph", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "paragraph" }>).paragraph;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  return [...(text ? wordWrap(text, width) : [""]), ...childLines(children, width, 2, 0)];
+  return [...(text ? reflow(text, width) : [""]), ...childLines(children, width, 2, 0)];
 });
 
 const heading: BlockRenderer<Extract<BlockObject, { type: "heading_1" | "heading_2" | "heading_3" | "heading_4" }>> = (
@@ -59,7 +59,7 @@ const heading: BlockRenderer<Extract<BlockObject, { type: "heading_1" | "heading
   const toggle = data.is_toggleable ?? false;
   const children = data.children as Block[] | undefined;
   const marker = `${"#".repeat(level)} ${toggle ? "▸ " : ""}`;
-  return ["", ...flow(marker, text, width, toggle ? children : undefined, 2, 0)];
+  return ["", ...flowItem(marker, text, width, toggle ? children : undefined, 2, 0)];
 };
 
 registerBlock("heading_1", heading as BlockRenderer<Extract<Block, { type: "heading_1" }>>);
@@ -71,35 +71,35 @@ registerBlock("bulleted_list_item", (block, width, depth) => {
   const data = (block as Extract<BlockObject, { type: "bulleted_list_item" }>).bulleted_list_item;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  return flow(`${BULLETS[Math.min(depth, 2)]} `, text, width, children, 2, depth + 1);
+  return flowItem(`${BULLETS[Math.min(depth, 2)]} `, text, width, children, 2, depth + 1);
 });
 
 registerBlock("numbered_list_item", (block, width, _depth, ordinal) => {
   const data = (block as Extract<BlockObject, { type: "numbered_list_item" }>).numbered_list_item;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  return flow(`${ordinal || 1}. `, text, width, children, 3, 0);
+  return flowItem(`${ordinal || 1}. `, text, width, children, 3, 0);
 });
 
 registerBlock("to_do", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "to_do" }>).to_do;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  return flow(`[${data.checked ? "x" : " "}] `, text, width, children, 4, 0);
+  return flowItem(`[${data.checked ? "x" : " "}] `, text, width, children, 4, 0);
 });
 
 registerBlock("toggle", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "toggle" }>).toggle;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  return flow("▸ ", text, width, children, 2, 0);
+  return flowItem("▸ ", text, width, children, 2, 0);
 });
 
 registerBlock("quote", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "quote" }>).quote;
   const text = richTextToPlain(data.rich_text);
   const children = data.children as Block[] | undefined;
-  const wrapped = wordWrap(text, Math.max(1, width - 2)).map((line) => `│ ${line}`);
+  const wrapped = reflow(text, Math.max(1, width - 2)).map((line) => `│ ${line}`);
   const kids = childLines(children, width - 2, 0, 0).map((line) => `│ ${line}`);
   return [...wrapped, ...kids];
 });
@@ -109,6 +109,9 @@ registerBlock("callout", (block, width) => {
   const text = richTextToPlain(data.rich_text);
   const glyph = iconGlyph(data.icon);
   const head = glyph ? `${glyph} ${text}` : text;
+  // reflow before boxing: box() borders each array element, so any hard newline in `head` must become its
+  // own element or it spills outside the border. width-3 = box inner (width-2) minus its 1-col leading pad.
+  const lines = reflow(head, Math.max(1, width - 3));
   const kids = data.children ? renderBlocks(data.children as Block[], width - 4, 0) : [];
-  return box([head, ...kids], width - 2);
+  return box([...lines, ...kids], width - 2);
 });

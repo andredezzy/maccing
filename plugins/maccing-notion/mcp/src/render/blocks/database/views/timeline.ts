@@ -1,7 +1,7 @@
 // Timeline view renderer — proportional bars across a horizontal axis.
 
 import { buildIdToName } from "../../../../readers/views";
-import { padRight } from "../../../text";
+import { fitWidth } from "../../../text";
 import { registerView, type ViewRenderNode } from "./engine";
 import { cellValue, rowTitle, visibleColumns } from "./helpers";
 
@@ -45,7 +45,7 @@ function renderTimeline(node: ViewRenderNode, total: number): string[] {
     const columns = visibleColumns(node.view, node.dataSource, node.titleColumn);
     for (const row of node.rows) {
       lines.push(
-        `${padRight(rowTitle(row, node.titleColumn), nameWidth)}│${padRight(cellValue(row, columns[1] ?? node.titleColumn), barWidth)}`,
+        `${fitWidth(rowTitle(row, node.titleColumn), nameWidth)}│${fitWidth(cellValue(row, columns[1] ?? node.titleColumn), barWidth)}`,
       );
     }
     return lines;
@@ -63,7 +63,7 @@ function renderTimeline(node: ViewRenderNode, total: number): string[] {
     const bar = Array.from({ length: barWidth }, (_, column) =>
       column >= startColumn && column < endColumn ? "█" : "·",
     ).join("");
-    lines.push(`${padRight(entry.label, nameWidth)}│${bar}`);
+    lines.push(`${fitWidth(entry.label, nameWidth)}│${bar}`);
   }
   return lines;
 }

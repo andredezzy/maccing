@@ -40,8 +40,9 @@ export function iconLabel(icon: NotionIcon | null | undefined): string {
   }
 }
 
-/** Map a Notion icon to a compact string for the render model: emoji, named-icon name, or 🖼 for any
- * image (external/file/custom). Distinct from `iconLabel`, which returns 'none'/urls for the `describe` tool. */
+/** Map a Notion icon to a compact string for the render model: the emoji, a named icon as `name:color`
+ * (color dropped when default/absent), or 🖼 for any image (external/file/custom). Distinct from `iconLabel`,
+ * which returns 'none'/urls (and a `·` separator) for the `describe` tool. */
 export function iconGlyph(icon: NotionIcon | null | undefined): string | undefined {
   if (!icon) {
     return undefined;
@@ -50,7 +51,12 @@ export function iconGlyph(icon: NotionIcon | null | undefined): string | undefin
     return icon.emoji;
   }
   if (icon.type === "icon") {
-    return icon.icon?.name;
+    const name = icon.icon?.name;
+    if (!name) {
+      return undefined;
+    }
+    const color = icon.icon?.color;
+    return color && color !== "default" ? `${name}:${color}` : name;
   }
   return icon.type ? "🖼" : undefined; // external/file/custom image icon
 }

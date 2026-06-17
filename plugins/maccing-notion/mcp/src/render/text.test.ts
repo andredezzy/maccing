@@ -1,29 +1,30 @@
 // Pure unit tests for the display-width text primitives — the seam every renderer leans on for wrapping
-// and padding. displayWidth's grapheme handling is covered in index.test; here we pin wordWrap's branches
-// (the off-by-one-prone hard-break path) plus clip/padRight/spread. Run with `bun test`.
+// and padding. displayWidth's grapheme handling is covered in index.test; here we pin reflow's branches
+// (the off-by-one-prone hard-break path) plus clip/fitWidth/spread. Run with `bun test`.
 
 import { expect, test } from "bun:test";
 
-import { clip, codeFence, displayWidth, padRight, spread, wordWrap } from "./text";
+import { clip, codeFence, displayWidth, fitWidth, reflow, spread } from "./text";
 
-test("wordWrap: an empty string yields a single empty line (the sentinel)", () => {
-  expect(wordWrap("", 10)).toEqual([""]);
+test("reflow: an empty string yields a single empty line (the sentinel)", () => {
+  expect(reflow("", 10)).toEqual([""]);
 });
 
-test("wordWrap: wraps on word boundaries within the width", () => {
-  expect(wordWrap("hello world", 7)).toEqual(["hello", "world"]);
+test("reflow: wraps on word boundaries within the width", () => {
+  expect(reflow("hello world", 7)).toEqual(["hello", "world"]);
 });
 
-test("wordWrap: preserves blank lines between paragraphs", () => {
-  expect(wordWrap("hi\n\nbye", 20)).toEqual(["hi", "", "bye"]);
+test("reflow: splits on existing newlines into one line each (preserving blanks)", () => {
+  expect(reflow("hi\n\nbye", 20)).toEqual(["hi", "", "bye"]);
+  expect(reflow("Height: 1,65m\nAge: 22", 40)).toEqual(["Height: 1,65m", "Age: 22"]);
 });
 
-test("wordWrap: hard-breaks a single word longer than the width", () => {
-  expect(wordWrap("abcdefghij", 4)).toEqual(["abcd", "efgh", "ij"]);
+test("reflow: hard-breaks a single word longer than the width", () => {
+  expect(reflow("abcdefghij", 4)).toEqual(["abcd", "efgh", "ij"]);
 });
 
-test("wordWrap: a non-positive width clamps to 1 (never zero/negative)", () => {
-  expect(wordWrap("x", 0)).toEqual(["x"]);
+test("reflow: a non-positive width clamps to 1 (never zero/negative)", () => {
+  expect(reflow("x", 0)).toEqual(["x"]);
 });
 
 test("clip truncates with an ellipsis only when over the width", () => {
@@ -31,9 +32,9 @@ test("clip truncates with an ellipsis only when over the width", () => {
   expect(clip("hello", 4)).toBe("hel…");
 });
 
-test("padRight fits to exactly the width — pad when short, clip when long", () => {
-  expect(padRight("hi", 5)).toBe("hi   ");
-  expect(displayWidth(padRight("hello world", 6))).toBe(6);
+test("fitWidth fits to exactly the width — pad when short, clip when long", () => {
+  expect(fitWidth("hi", 5)).toBe("hi   ");
+  expect(displayWidth(fitWidth("hello world", 6))).toBe(6);
 });
 
 test("spread right-aligns the right side within the width", () => {

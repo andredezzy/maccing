@@ -1,7 +1,7 @@
 // Box-drawing layout primitives — bordered boxes, horizontal concat, fixed-width grids, and the
 // page/database chrome (cover band · title · divider). All width math is display-aware via ./text.
 
-import { displayWidth, padRight } from "./text";
+import { displayWidth, fitWidth } from "./text";
 
 export const GAP = 2;
 export const SMALL_CARD = 14;
@@ -11,7 +11,7 @@ export const COVER = " COVER";
 export function box(lines: string[], inner: number): string[] {
   const out = [`┌${"─".repeat(inner)}┐`];
   for (const line of lines) {
-    out.push(line === COVER ? `│${"▒".repeat(inner)}│` : `│${padRight(` ${line}`, inner)}│`);
+    out.push(line === COVER ? `│${"▒".repeat(inner)}│` : `│${fitWidth(` ${line}`, inner)}│`);
   }
   out.push(`└${"─".repeat(inner)}┘`);
   return out;
@@ -54,7 +54,7 @@ function fitColumns(natural: number[], total: number): number[] {
   }
 
   // Natural widths overflow the canvas — shrink proportionally (min 1/column), then trim rounding drift so
-  // the row never exceeds `total`. renderTableGrid's padRight clips each cell to its width, so boxes stay closed.
+  // the row never exceeds `total`. renderTableGrid's fitWidth clips each cell to its width, so boxes stay closed.
   const widths = natural.map((width) => Math.max(1, Math.round((width / sum) * budget)));
   for (let over = widths.reduce((acc, width) => acc + width, 0) - budget; over > 0; over--) {
     const widest = widths.indexOf(Math.max(...widths));
@@ -73,7 +73,7 @@ export function renderTableGrid(columns: string[], rows: string[][], total: numb
   const rule = (left: string, junction: string, right: string, fillChar: string): string =>
     left + widths.map((width) => fillChar.repeat(width + 2)).join(junction) + right;
   const line = (cells: string[]): string =>
-    `│${widths.map((width, index) => ` ${padRight(cells[index] ?? "", width)} `).join("│")}│`;
+    `│${widths.map((width, index) => ` ${fitWidth(cells[index] ?? "", width)} `).join("│")}│`;
   return [
     rule("┌", "┬", "┐", "─"),
     line(columns),

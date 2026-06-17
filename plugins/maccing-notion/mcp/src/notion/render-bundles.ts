@@ -17,3 +17,12 @@ export const databaseRender = z.object({
   rows: z.array(page),
 });
 export type DatabaseRender = z.infer<typeof databaseRender>;
+
+// A child_database block on a page expands INLINE into its default view's grid. The live-bundle reader fetches
+// each inline database and attaches this enrichment to the block's payload (the page → inline-DB bridge). It is
+// an in-memory shape, never parsed from the wire — so it lives as a plain interface, not a zod schema.
+export interface InlineDatabaseRender {
+  bundle: DatabaseRender;
+  selectedView: number;
+  truncated: boolean;
+}

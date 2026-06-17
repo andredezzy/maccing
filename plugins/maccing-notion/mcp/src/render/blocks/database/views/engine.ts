@@ -17,6 +17,9 @@ export interface ViewRenderNode {
   dbTitle: string;
   tabs: string[];
   titleColumn: string;
+  /** Inline (within-a-page) rendering caps wide tables to the columns that stay readable at the canvas width,
+   *  with a "+N more columns" marker; the standalone database mockup leaves this unset to show every column. */
+  capColumns?: boolean;
 }
 
 const views = createRegistry<ViewRenderNode>();

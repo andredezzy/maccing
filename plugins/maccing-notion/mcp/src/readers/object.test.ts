@@ -1,8 +1,9 @@
-// Pure unit tests for the page/database icon-label formatter. Run with `bun test`.
+// Pure unit tests for the page/database icon formatters — iconLabel (the `describe` tool) and iconGlyph
+// (the render model). Run with `bun test`.
 
 import { expect, test } from "bun:test";
 
-import { iconLabel } from "./object";
+import { iconGlyph, iconLabel } from "./object";
 
 test("emoji icon → the emoji glyph", () => {
   expect(iconLabel({ type: "emoji", emoji: "💰" })).toBe("💰");
@@ -29,4 +30,16 @@ test("a named icon with no name → 'none' (degenerate shape guard)", () => {
 
 test("an unrecognized icon type → 'none' (forward-compat default)", () => {
   expect(iconLabel({ type: "custom_upload" })).toBe("none");
+});
+
+test("iconGlyph: emoji → the emoji; image icons → 🖼; nothing → undefined", () => {
+  expect(iconGlyph({ type: "emoji", emoji: "🏋" })).toBe("🏋");
+  expect(iconGlyph({ type: "external", external: { url: "https://x/i.png" } })).toBe("🖼");
+  expect(iconGlyph(null)).toBeUndefined();
+});
+
+test("iconGlyph: a named icon renders as name:color (color dropped when default or absent)", () => {
+  expect(iconGlyph({ type: "icon", icon: { name: "gym", color: "gray" } })).toBe("gym:gray");
+  expect(iconGlyph({ type: "icon", icon: { name: "cash", color: "default" } })).toBe("cash");
+  expect(iconGlyph({ type: "icon", icon: { name: "cash" } })).toBe("cash");
 });

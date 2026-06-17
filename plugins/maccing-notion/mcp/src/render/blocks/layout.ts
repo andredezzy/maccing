@@ -3,10 +3,12 @@
 // Reads from the official BlockObject payload shapes.
 
 import type { BlockObject } from "../../notion/blocks/block";
+import type { InlineDatabaseRender } from "../../notion/render-bundles";
 import type { RichTextObject } from "../../notion/rich-text";
 import { richTextToPlain } from "../../readers/page";
 import { renderTableGrid } from "../box";
-import { displayWidth, padRight } from "../text";
+import { displayWidth, fitWidth } from "../text";
+import { renderInlineDatabase } from "./database/database";
 import { type Block, registerBlock, renderBlocks } from "./engine";
 
 interface ColumnDef {
@@ -25,7 +27,7 @@ function renderColumns(columns: ColumnDef[], total: number): string[] {
   const totalRatio = columns.reduce((acc, column) => acc + (column.ratio ?? 1), 0);
   const widths = columns.map((column) => Math.max(3, Math.floor((content * (column.ratio ?? 1)) / totalRatio)));
   const rendered = columns.map((column, index) =>
-    renderBlocks(column.children, widths[index], 0).map((line) => padRight(line, widths[index])),
+    renderBlocks(column.children, widths[index], 0).map((line) => fitWidth(line, widths[index])),
   );
   const height = Math.max(0, ...rendered.map((columnLines) => columnLines.length));
   const out: string[] = [];
@@ -97,9 +99,12 @@ registerBlock("child_page", (block) => {
   return [`▤ ${data.title || "(page)"}`];
 });
 
-registerBlock("child_database", (block) => {
+registerBlock("child_database", (block, width) => {
   const data = (block as Extract<BlockObject, { type: "child_database" }>).child_database;
-  return [`▦ ${data.title || "(database)"}`];
+  // The live-page reader attaches a fetched bundle so an inline DB expands into its grid; without one
+  // (hand-authored mockups, or a DB that couldn't be read) we fall back to the ▦ reference line.
+  const inline = (data as { render?: InlineDatabaseRender }).render;
+  return inline ? renderInlineDatabase(inline, width) : [`▦ ${data.title || "(database)"}`];
 });
 
 registerBlock("link_to_page", (_block) => ["▤ (linked page)"]);
