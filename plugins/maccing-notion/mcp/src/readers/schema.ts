@@ -3,7 +3,8 @@
 // relations/rollups summarized. Optional per-column icons are INJECTED, not fetched here, so this
 // stays pure and unit-testable with zero network calls.
 
-import { idVariants } from "../notion/ids";
+import { decodePropertyId, idVariants } from "../notion/ids";
+import { publicRequest } from "../notion/public-client";
 
 interface SchemaRollupConfig {
   function?: string;
@@ -40,6 +41,40 @@ export interface SchemaBody {
 /** The GET /v1/databases/{id} response envelope — links a database to its canonical data source(s). */
 export interface DataSourceBody {
   data_sources?: { id: string }[];
+}
+
+/**
+ * Scan a schema for a property matching by name, raw id, or decoded id.
+ * Returns the DECODED internal id, or null if no match.
+ *
+ * Note on diverging fallbacks:
+ *   - `namesToDecodedIds` (order-properties) falls back to `decodePropertyId(name)` when unmatched
+ *     (treats the input as an already-id-like string).
+ *   - `resolvePropertyId` (upsert-property) returns null when unmatched (strict: no fallback).
+ *   Each caller preserves its own fallback logic; only the scan kernel is shared.
+ */
+export function findSchemaPropertyId(schema: Record<string, SchemaPropertyRef>, nameOrId: string): string | null {
+  for (const propertyRef of Object.values(schema)) {
+    const decoded = decodePropertyId(propertyRef.id);
+    if (propertyRef.name === nameOrId || propertyRef.id === nameOrId || decoded === nameOrId) {
+      return decoded;
+    }
+  }
+  return null;
+}
+
+/** Extract the first data_source id from a GET /v1/databases/{id} response body (pure, no I/O). */
+export function extractDataSourceId(body: unknown): string | undefined {
+  return (body as DataSourceBody).data_sources?.[0]?.id;
+}
+
+/** GET /v1/databases/{id} → first data_source id, or undefined when absent / request failed. */
+export async function databaseToDataSourceId(databaseId: string): Promise<string | undefined> {
+  const response = await publicRequest("GET", `/v1/databases/${databaseId}`);
+  if (!response.ok) {
+    return undefined;
+  }
+  return extractDataSourceId(response.body as DataSourceBody);
 }
 
 /** property id (any variant — raw, url-decoded, or url-encoded) → "/icons/<file>_<color>.svg". */

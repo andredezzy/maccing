@@ -14,7 +14,7 @@ import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { pageFromNotion, type RawBlock, type RawPage, render } from "../render";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
 
@@ -257,10 +257,7 @@ export const readPage: ToolModule = {
     if (!UUID_PATTERN.test(pageId)) {
       return err("page_id must be a UUID.");
     }
-    const format = String(args.format);
-    if (!FORMATS.includes(format as (typeof FORMATS)[number])) {
-      return err(`Invalid format "${String(args.format)}". One of: ${FORMATS.join(", ")}`);
-    }
+    const format = args.format as (typeof FORMATS)[number];
 
     try {
       if (format === "outline") {
@@ -300,7 +297,7 @@ export const readPage: ToolModule = {
 
       return ok(`${yamlFrontmatter}${content}${completionNote}`);
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

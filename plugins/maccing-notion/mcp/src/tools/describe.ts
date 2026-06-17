@@ -11,7 +11,7 @@ import { iconLabel, type NotionIcon } from "../readers/object";
 import { type RichText, richTextToPlain } from "../readers/page";
 import { type NotionParentRef, parentLabel } from "../readers/parent";
 import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 interface DataSourceObject {
   title?: RichText[];
@@ -131,7 +131,7 @@ export const describe: ToolModule = {
         `Could not describe ${id} — not a readable page, database, or data source (check the id and that NOTION_TOKEN has access).`,
       );
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

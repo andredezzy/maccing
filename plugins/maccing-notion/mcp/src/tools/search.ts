@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { formatSearch, type RawSearchResult } from "../readers/search";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const OBJECT_TYPES = ["page", "data_source"] as const;
 
@@ -71,7 +71,7 @@ export const search: ToolModule = {
 
       return ok(formatSearch(results));
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { mockupSchema, render } from "../render";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 export const renderMockup: ToolModule = {
   name: "render_mockup",
@@ -47,7 +47,7 @@ export const renderMockup: ToolModule = {
       const width = typeof args.width === "number" && args.width > 0 ? args.width : undefined;
       return ok(render(parsed, width));
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

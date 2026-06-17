@@ -3,7 +3,7 @@
 
 import { z } from "zod";
 import { privateCall, privateConfig, saveTransactions } from "../notion/private-client";
-import { err, type ToolModule } from "../tool";
+import { err, errorMessage, type ToolModule } from "../tool";
 
 // api/v3 endpoints are camelCase identifiers (getSpaces, saveTransactions, …). The allowlist
 // pattern blocks path traversal / arbitrary-endpoint injection (e.g. from prompt-injected content).
@@ -77,7 +77,7 @@ export const privateRequest: ToolModule = {
       const response = await privateCall(endpoint, args.body ?? {});
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }], isError: !response.ok };
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

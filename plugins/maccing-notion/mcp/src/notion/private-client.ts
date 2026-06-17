@@ -10,6 +10,8 @@
 //  - x-notion-active-user-header must be the account (a session can hold several) that has edit
 //    access to NOTION_SPACE_ID — resolved from getSpaces by matching the space, then cached.
 
+import { errorMessage } from "../tool";
+
 const TOKEN_V2 = process.env.NOTION_TOKEN_V2;
 const SPACE_ID = process.env.NOTION_SPACE_ID;
 const BASE = "https://www.notion.so/api/v3";
@@ -83,7 +85,7 @@ async function postOnce(endpoint: string, body: unknown, activeUser?: string): P
     return {
       status: 0,
       ok: false,
-      body: `Private API unreachable (likely throttled / bot-protection reset): ${error instanceof Error ? error.message : String(error)}`,
+      body: `Private API unreachable (likely throttled / bot-protection reset): ${errorMessage(error)}`,
     };
   }
 

@@ -10,10 +10,10 @@ import { iconGlyph, type NotionIcon } from "../readers/object";
 import { type FlattenedProperty, flattenProperty, type NotionPropertyValue, richTextToPlain } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
-import { type DataSourceBody, formatSchema, type PropertiesMap } from "../readers/schema";
+import { databaseToDataSourceId, formatSchema, type PropertiesMap } from "../readers/schema";
 import { buildIdToName, fetchViews, formatViews, orderViews, selectViewIndex, viewQueryFilter } from "../readers/views";
 import { databaseToModel, groupOptionsFor, render, resolveView } from "../render";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
 
@@ -35,12 +35,7 @@ interface QueryResponse {
 // /data_sources first, returns null on failure — because a WRITE must validate the target before mutating.)
 /** Resolve a database id to its data source id (falls back to treating the id as a data source). */
 async function resolveDataSourceId(databaseId: string): Promise<string> {
-  const response = await publicRequest("GET", `/v1/databases/${databaseId}`);
-  if (response.ok) {
-    const database = response.body as DataSourceBody;
-    return database.data_sources?.[0]?.id ?? databaseId;
-  }
-  return databaseId; // the caller may have passed a data_source_id directly
+  return (await databaseToDataSourceId(databaseId)) ?? databaseId;
 }
 
 interface DatabaseTitleBody {
@@ -178,10 +173,7 @@ export const readDatabase: ToolModule = {
     if (!UUID_PATTERN.test(databaseId)) {
       return err("database_id must be a UUID.");
     }
-    const format = String(args.format);
-    if (!FORMATS.includes(format as (typeof FORMATS)[number])) {
-      return err(`Invalid format "${String(args.format)}". One of: ${FORMATS.join(", ")}`);
-    }
+    const format = args.format as (typeof FORMATS)[number];
 
     try {
       const dataSourceId = await resolveDataSourceId(databaseId);
@@ -279,7 +271,7 @@ export const readDatabase: ToolModule = {
 
       return ok(rendered + rowsSummary + schemaSection + viewsSection);
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

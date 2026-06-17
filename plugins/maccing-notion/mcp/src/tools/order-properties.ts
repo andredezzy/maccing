@@ -16,9 +16,9 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import type { DataSourceBody, SchemaBody, SchemaPropertyRef } from "../readers/schema";
+import { extractDataSourceId, findSchemaPropertyId, type SchemaBody, type SchemaPropertyRef } from "../readers/schema";
 import { listViewIds } from "../readers/views";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 import {
   reorderPageProperties,
   reorderViewProperties,
@@ -46,17 +46,14 @@ async function resolveDataSourceId(id: string): Promise<string | null> {
   }
   const database = await publicRequest("GET", `/v1/databases/${id}`);
   if (database.ok) {
-    return (database.body as DataSourceBody).data_sources?.[0]?.id ?? null;
+    return extractDataSourceId(database.body) ?? null;
   }
   return null;
 }
 
 function namesToDecodedIds(names: string[], schema: Record<string, SchemaPropertyRef>): string[] {
-  const byName = new Map<string, string>();
-  for (const propertyRef of Object.values(schema)) {
-    byName.set(propertyRef.name, decodePropertyId(propertyRef.id));
-  }
-  return names.map((name) => byName.get(name) ?? decodePropertyId(name));
+  // findSchemaPropertyId returns null for unmatched inputs; fallback treats the input as an id and decodes it.
+  return names.map((name) => findSchemaPropertyId(schema, name) ?? decodePropertyId(name));
 }
 
 /** Reorder one view's columns (public). */
@@ -99,7 +96,7 @@ async function reorderPage(
     const setResponse = await writeCollectionFormat(dataSourceId, { collection_page_properties: reordered });
     return setResponse.ok ? "page order set ✓ (verify in Notion)" : describePrivateFailure(setResponse.body);
   } catch (error) {
-    return describePrivateFailure(error instanceof Error ? error.message : String(error));
+    return describePrivateFailure(errorMessage(error));
   }
 }
 
@@ -175,7 +172,7 @@ export const orderProperties: ToolModule = {
         page,
       });
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

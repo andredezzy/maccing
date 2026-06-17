@@ -19,8 +19,14 @@ import {
   writeCollectionFormat,
 } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { type DataSourceBody, formatIconAssetPath, type SchemaBody, type SchemaPropertyRef } from "../readers/schema";
-import { err, ok, type ToolModule } from "../tool";
+import {
+  extractDataSourceId,
+  findSchemaPropertyId,
+  formatIconAssetPath,
+  type SchemaBody,
+  type SchemaPropertyRef,
+} from "../readers/schema";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 import { seedPageOrderFromSchema } from "../writers/reorder-properties";
 import {
   buildIconOperations,
@@ -51,13 +57,8 @@ interface ResolvedTarget {
 
 /** Resolve a property NAME (or id) to its RAW internal id (url-decoded), or null. */
 function resolvePropertyId(schema: Record<string, SchemaPropertyRef>, property: string): string | null {
-  for (const propertyRef of Object.values(schema)) {
-    const decoded = decodePropertyId(propertyRef.id);
-    if (propertyRef.name === property || propertyRef.id === property || decoded === property) {
-      return decoded;
-    }
-  }
-  return null;
+  // findSchemaPropertyId returns null when unmatched — no fallback here (strict: an unrecognized input is an error).
+  return findSchemaPropertyId(schema, property);
 }
 
 interface VisibilityResult {
@@ -132,7 +133,7 @@ async function resolveTarget(id: string): Promise<ResolvedTarget | null> {
   }
   const database = await publicRequest("GET", `/v1/databases/${id}`);
   if (database.ok) {
-    const dataSourceId = (database.body as DataSourceBody).data_sources?.[0]?.id;
+    const dataSourceId = extractDataSourceId(database.body);
     if (dataSourceId) {
       return { type: TargetType.DATA_SOURCE, dataSourceId };
     }
@@ -341,7 +342,7 @@ export const upsertProperty: ToolModule = {
               }
             }
           } catch (iconError) {
-            icons = describePrivateFailure(iconError instanceof Error ? iconError.message : String(iconError));
+            icons = describePrivateFailure(errorMessage(iconError));
             errors.push(`Column icons not applied — ${icons}`);
           }
         }
@@ -376,7 +377,7 @@ export const upsertProperty: ToolModule = {
         errors: errors.length > 0 ? errors : undefined,
       });
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };

@@ -10,7 +10,7 @@ import type { NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
 import { type NotionPageBase, titleOf } from "../readers/page";
 import type { NotionParentRef } from "../readers/parent";
-import { err, ok, type ToolModule } from "../tool";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains
 
@@ -224,7 +224,7 @@ export const readAgentsMd: ToolModule = {
 
       return ok(`${preamble}\n\n${sections}`);
     } catch (error) {
-      return err(error instanceof Error ? error.message : String(error));
+      return err(errorMessage(error));
     }
   },
 };
