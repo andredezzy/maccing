@@ -6,14 +6,16 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
+import type { BlockObject } from "../notion/blocks/block";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import type { PageObject as NotionPageObject } from "../notion/page";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildBlock, NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
 import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
-import { pageFromNotion, type RawBlock, type RawPage, render } from "../render";
+import { type RawBlock, render } from "../render";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
@@ -53,7 +55,7 @@ interface SubPageMarkdown {
   unknownBlockIds: string[];
 }
 
-interface PageObject extends NotionPageBase {
+interface PageProperties extends NotionPageBase {
   icon?: NotionIcon | null;
 }
 
@@ -108,7 +110,7 @@ async function fetchBody(pageId: string): Promise<FetchedBody> {
  * suppresses external/file URL icons (a frontmatter URL is noise) and drops the color, keeping the
  * header terse. `describe` uses the verbose `iconLabel` instead.
  */
-function pageIconLabel(page: PageObject): string | null {
+function pageIconLabel(page: PageProperties): string | null {
   const icon = page.icon;
   if (!icon) {
     return null;
@@ -123,7 +125,7 @@ function pageIconLabel(page: PageObject): string | null {
 }
 
 /** YAML frontmatter from page properties; relations rendered as titles. */
-async function frontmatter(page: PageObject): Promise<string> {
+async function frontmatter(page: PageProperties): Promise<string> {
   const properties = page.properties ?? {};
   const flattenedProperties = Object.entries(properties)
     .filter(([, property]) => property.type !== "title")
@@ -274,7 +276,7 @@ export const readPage: ToolModule = {
         if (!pageResponse.ok) {
           return err("Could not read the page — check the id and that NOTION_TOKEN has access.");
         }
-        return ok(render(pageFromNotion(pageResponse.body as RawPage, tree)));
+        return ok(render({ page: pageResponse.body as NotionPageObject, blocks: tree as BlockObject[] }));
       }
 
       const includeProperties = args.include_properties !== false;
@@ -287,7 +289,7 @@ export const readPage: ToolModule = {
       const content = format === "text" ? toText(normalizedMarkdown) : normalizedMarkdown;
 
       const yamlFrontmatter =
-        includeProperties && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageObject)}\n\n` : "";
+        includeProperties && pageResponse?.ok ? `${await frontmatter(pageResponse.body as PageProperties)}\n\n` : "";
 
       const completionNote =
         body.unfetchable.length > 0

@@ -1,7 +1,18 @@
 // Media + embed block renderers — image/video/audio/file/pdf, bookmarks, embeds, code, equations.
+// Reads from the official BlockObject payload shapes.
 
+import type { BlockObject } from "../../notion/blocks/block";
+import { richTextToPlain } from "../../readers/page";
 import { box } from "../box";
-import { type Block, type BlockRenderer, registerBlock } from "./engine";
+import { registerBlock } from "./engine";
+
+interface MediaPayload {
+  type?: string;
+  external?: { url?: string };
+  file?: { url?: string };
+  name?: string;
+  caption?: unknown;
+}
 
 /** A captioned media/bookmark box: a label + name/url line, then an optional caption, inside the box. */
 function mediaBox(
@@ -18,22 +29,52 @@ function mediaBox(
   return box(body, total - 2);
 }
 
-const media: BlockRenderer<Extract<Block, { type: "image" | "video" | "audio" | "file" | "pdf" }>> = (block, width) =>
-  mediaBox(`[${block.type.toUpperCase()}]`, block.url, block.name, block.caption, width);
-registerBlock("image", media);
-registerBlock("video", media);
-registerBlock("audio", media);
-registerBlock("file", media);
-registerBlock("pdf", media);
+function mediaUrl(payload: MediaPayload): string | undefined {
+  return payload.external?.url ?? payload.file?.url ?? (payload.type === "file_upload" ? "(uploaded)" : undefined);
+}
 
-const bookmark: BlockRenderer<Extract<Block, { type: "bookmark" | "link_preview" }>> = (block, width) =>
-  mediaBox("🔖", block.url, undefined, block.caption, width);
-registerBlock("bookmark", bookmark);
-registerBlock("link_preview", bookmark);
+function mediaCaptionString(payload: MediaPayload): string | undefined {
+  const cap = richTextToPlain(payload.caption);
+  return cap || undefined;
+}
 
-registerBlock("embed", (block, width) => box([`▶ ${block.label}`], width - 2));
-registerBlock("code", (block, width) => [
-  ...box([`‹${block.language ?? "code"}›`, ...block.text.split("\n")], width - 2),
-  ...(block.caption ? [block.caption] : []),
-]);
-registerBlock("equation", (block) => ["$$", block.expression, "$$"]);
+for (const mediaType of ["image", "video", "audio", "file", "pdf"] as const) {
+  registerBlock(mediaType, (block, width) => {
+    const payload = ((block as Record<string, unknown>)[block.type] ?? {}) as MediaPayload;
+    return mediaBox(
+      `[${block.type.toUpperCase()}]`,
+      mediaUrl(payload),
+      payload.name,
+      mediaCaptionString(payload),
+      width,
+    );
+  });
+}
+
+registerBlock("bookmark", (block, width) => {
+  const data = (block as Extract<BlockObject, { type: "bookmark" }>).bookmark;
+  const caption = richTextToPlain(data.caption) || undefined;
+  return mediaBox("🔖", data.url, undefined, caption, width);
+});
+
+registerBlock("link_preview", (block, width) => {
+  const data = (block as Extract<BlockObject, { type: "link_preview" }>).link_preview;
+  return mediaBox("🔖", data.url, undefined, undefined, width);
+});
+
+registerBlock("embed", (block, width) => {
+  const data = (block as Extract<BlockObject, { type: "embed" }>).embed;
+  return box([`▶ ${data.url}`], width - 2);
+});
+
+registerBlock("code", (block, width) => {
+  const data = (block as Extract<BlockObject, { type: "code" }>).code;
+  const text = richTextToPlain(data.rich_text);
+  const caption = richTextToPlain(data.caption) || undefined;
+  return [...box([`‹${data.language ?? "code"}›`, ...text.split("\n")], width - 2), ...(caption ? [caption] : [])];
+});
+
+registerBlock("equation", (block) => {
+  const data = (block as Extract<BlockObject, { type: "equation" }>).equation;
+  return ["$$", data.expression, "$$"];
+});

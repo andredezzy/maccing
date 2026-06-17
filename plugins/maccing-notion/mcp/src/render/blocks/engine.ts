@@ -1,41 +1,19 @@
-// The render dispatch engine — it owns the block CONTRACT (the recursive `Block` union) plus a
-// type→renderer registry and the recursive walker. Each block's SHAPE lives with its renderer (in ./*.ts)
+// The render dispatch engine — it owns the block CONTRACT (the recursive `Block` union = BlockObject | DatabaseBlock)
+// plus a type→renderer registry and the recursive walker. Each block's SHAPE lives with its renderer (in ./*.ts)
 // and is imported here type-only to assemble the union; each renderer registers itself via registerBlock().
 // So the RUNTIME graph stays a clean DAG (renderers → engine; the type imports erase), and adding a block
 // type = one new shape + one registerBlock() call in its own file, never a switch edit.
 
+import type { BlockObject } from "../../notion/blocks/block";
 import { createRegistry, type Renderer } from "../registry";
 import type { DatabaseBlock } from "./database/database";
 import type { DatabaseView } from "./database/views/engine";
 import type { ColumnDef } from "./layout";
 
-export type { DatabaseView };
+export type { ColumnDef, DatabaseView };
 
-/** All content, media, and structural blocks (including DatabaseBlock). Children are always Blocks, never views. */
-export type Block =
-  | { type: "paragraph"; text?: string; children?: Block[] }
-  | { type: "heading"; text: string } // legacy: bare heading
-  | { type: "heading_1" | "heading_2" | "heading_3"; text: string; toggle?: boolean; children?: Block[] }
-  | { type: "bulleted_list_item"; text: string; children?: Block[] }
-  | { type: "numbered_list_item"; text: string; children?: Block[] }
-  | { type: "to_do"; text: string; checked?: boolean; children?: Block[] }
-  | { type: "toggle"; text: string; children?: Block[] }
-  | { type: "quote"; text: string; children?: Block[] }
-  | { type: "callout"; icon?: string; lines: string[]; children?: Block[] }
-  | { type: "divider" }
-  | { type: "code"; language?: string; text: string; caption?: string }
-  | { type: "equation"; expression: string }
-  | { type: "image" | "video" | "audio" | "file" | "pdf"; url?: string; name?: string; caption?: string }
-  | { type: "bookmark" | "link_preview"; url: string; caption?: string }
-  | { type: "embed"; label: string }
-  | { type: "column_list"; columns: ColumnDef[] }
-  | { type: "simple_table"; rows: string[][]; hasColumnHeader?: boolean }
-  | { type: "breadcrumb"; path?: string[] }
-  | { type: "table_of_contents"; headings?: string[] }
-  | { type: "synced_block"; from?: string; children?: Block[] }
-  | { type: "page_link"; icon?: string; title: string; note?: string }
-  | DatabaseBlock
-  | { type: "unsupported"; label?: string };
+/** All content, media, and structural blocks (including DatabaseBlock for internal rendering). */
+export type Block = BlockObject | DatabaseBlock;
 
 /** A renderer for one block type. `T` narrows the block to that type at the registration site. */
 export type BlockRenderer<T extends Block = Block> = Renderer<T>;

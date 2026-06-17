@@ -15,14 +15,27 @@ async function run(mockup: unknown): Promise<RunResult> {
 }
 
 test("render_mockup renders a page block (chrome + body)", async () => {
-  const { text, isError } = await run({ type: "page", title: "P", children: [{ type: "paragraph", text: "hi" }] });
+  const { text, isError } = await run({
+    page: {
+      properties: { Name: { type: "title", title: [{ plain_text: "P", text: { content: "P" } }] } },
+    },
+    blocks: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "hi", text: { content: "hi" } }] } }],
+  });
   expect(isError).toBe(false);
   expect(text).toContain("P");
   expect(text).toContain("hi");
 });
 
 test("render_mockup renders a bare array of blocks", async () => {
-  const { text } = await run([{ type: "callout", icon: "💡", lines: ["x"] }]);
+  const { text } = await run([
+    {
+      type: "callout",
+      callout: {
+        rich_text: [{ plain_text: "x", text: { content: "x" } }],
+        icon: { type: "emoji", emoji: "💡" },
+      },
+    },
+  ]);
   expect(text).toContain("💡");
 });
 

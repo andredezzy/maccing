@@ -3,7 +3,25 @@
 // including emoji lines (the case that broke every hand attempt). Run with `bun test`.
 
 import { expect, test } from "bun:test";
+import type { BlockObject } from "../notion/blocks/block";
+import type { PageObject } from "../notion/page";
+import type { PageRender } from "../notion/render-bundles";
 import { type Block, displayWidth, render } from "./index";
+
+// Helper: create a minimal rich-text array from a plain string.
+function rt(text: string) {
+  return [{ type: "text" as const, plain_text: text, text: { content: text } }];
+}
+
+// Helper: create a minimal PageRender from title, blocks, and optional chrome.
+function mkPage(title: string, blocks: Block[], icon?: string, cover?: boolean): PageRender {
+  const page: PageObject = {
+    properties: { Name: { type: "title", title: rt(title) } },
+    ...(icon ? { icon: { type: "emoji", emoji: icon } } : {}),
+    ...(cover ? { cover: { type: "external", external: { url: "https://example.com" } } } : {}),
+  };
+  return { page, blocks: blocks as BlockObject[] };
+}
 
 test("displayWidth counts emoji as 2 cells and ZWJ/skin clusters as one glyph", () => {
   expect(displayWidth("abc")).toBe(3);
@@ -39,7 +57,13 @@ function assertBoxesClose(rendered: string): void {
 // The page fixture uses `database` blocks for inline views (gallery/table) — views compose via the
 // `database` block, not as bare top-level view objects in the block union.
 const model: Block[] = [
-  { type: "callout", icon: "👦", lines: ["@andre.dezzy", "", "Height: 1,65m", "Age: 22"] },
+  {
+    type: "callout",
+    callout: {
+      rich_text: rt("@andre.dezzy"),
+      icon: { type: "emoji", emoji: "👦" },
+    },
+  },
   {
     type: "database",
     database: {
@@ -91,28 +115,25 @@ const model: Block[] = [
       ],
     },
   },
-  { type: "page_link", icon: "📓", title: "Training Log", note: "full-page database" },
+  {
+    type: "child_page",
+    child_page: { title: "Training Log" },
+  },
 ];
 
 test("renders a full page with every box closing on display width (incl. emoji lines)", () => {
-  assertBoxesClose(
-    render({
-      type: "page",
-      title: "Gym",
-      icon: "🏋",
-      cover: "B&W dumbbell-rack cover",
-      description: "Document your gym life",
-      children: model,
-    }),
-  );
+  assertBoxesClose(render(mkPage("Gym", model, "🏋", true)));
 });
 
 test("the callout's emoji line has the SAME display width as its borders", () => {
-  const lines = render({
-    type: "page",
-    title: "X",
-    children: [{ type: "callout", icon: "👦", lines: ["@andre.dezzy", "Age: 22"] }],
-  }).split("\n");
+  const lines = render(
+    mkPage("X", [
+      {
+        type: "callout",
+        callout: { rich_text: rt("@andre.dezzy"), icon: { type: "emoji", emoji: "👦" } },
+      },
+    ]),
+  ).split("\n");
   const top = lines.find((line) => line.startsWith("┌"));
   const emojiLine = lines.find((line) => line.includes("@andre.dezzy"));
   const bottom = lines.find((line) => line.startsWith("└"));
@@ -122,14 +143,7 @@ test("the callout's emoji line has the SAME display width as its borders", () =>
 });
 
 test("every database header carries a right-aligned + New", () => {
-  const out = render({
-    type: "page",
-    title: "Gym",
-    icon: "🏋",
-    cover: "B&W dumbbell-rack cover",
-    description: "Document your gym life",
-    children: model,
-  });
+  const out = render(mkPage("Gym", model, "🏋", true));
   for (const dbName of ["Gym Navigation", "Muscle Groups", "Weeks"]) {
     const headerLine = out.split("\n").find((line) => line.includes(`◷ ${dbName}`));
     expect(headerLine).toBeTruthy();
@@ -138,10 +152,8 @@ test("every database header carries a right-aligned + New", () => {
 });
 
 test("over-long content is truncated with … so the box still closes", () => {
-  const out = render({
-    type: "page",
-    title: "X",
-    children: [
+  const out = render(
+    mkPage("X", [
       {
         type: "database",
         database: {
@@ -156,8 +168,8 @@ test("over-long content is truncated with … so the box still closes", () => {
           ],
         },
       },
-    ],
-  });
+    ] as Block[]),
+  );
   assertBoxesClose(out);
   expect(out).toContain("…"); // the long name/description got clipped
   // no content line is wider than its box
@@ -168,14 +180,7 @@ test("over-long content is truncated with … so the box still closes", () => {
 });
 
 test("a table spans the full page width", () => {
-  const out = render({
-    type: "page",
-    title: "Gym",
-    icon: "🏋",
-    cover: "B&W dumbbell-rack cover",
-    description: "Document your gym life",
-    children: model,
-  }).split("\n");
+  const out = render(mkPage("Gym", model, "🏋", true)).split("\n");
   const topRule = out.find((line) => line.startsWith("┌─") && line.includes("┬"));
   expect(topRule).toBeTruthy();
   expect(displayWidth(topRule ?? "")).toBe(70);
@@ -184,63 +189,119 @@ test("a table spans the full page width", () => {
 // 360 coverage: every block type + every Phase-1 view (via database blocks), recursion, columns
 // Inline views are now `database` blocks wrapping the view object.
 const SINK: Block[] = [
-  { type: "heading", text: "H0" },
-  { type: "heading_1", text: "H1 toggle", toggle: true, children: [{ type: "paragraph", text: "inside" }] },
-  { type: "heading_2", text: "H2" },
-  { type: "heading_3", text: "H3" },
+  {
+    type: "heading_1",
+    heading_1: {
+      rich_text: rt("H1 toggle"),
+      is_toggleable: true,
+      children: [{ type: "paragraph", paragraph: { rich_text: rt("inside") } }],
+    },
+  },
+  { type: "heading_2", heading_2: { rich_text: rt("H2") } },
+  { type: "heading_3", heading_3: { rich_text: rt("H3") } },
   {
     type: "paragraph",
-    text: "A long paragraph that should word-wrap across multiple lines because it exceeds seventy display columns comfortably.",
-    children: [{ type: "paragraph", text: "nested child" }],
+    paragraph: {
+      rich_text: rt(
+        "A long paragraph that should word-wrap across multiple lines because it exceeds seventy display columns comfortably.",
+      ),
+      children: [{ type: "paragraph", paragraph: { rich_text: rt("nested child") } }],
+    },
   },
   {
     type: "bulleted_list_item",
-    text: "bullet",
-    children: [
-      { type: "bulleted_list_item", text: "nested", children: [{ type: "bulleted_list_item", text: "deep" }] },
-    ],
+    bulleted_list_item: {
+      rich_text: rt("bullet"),
+      children: [
+        {
+          type: "bulleted_list_item",
+          bulleted_list_item: {
+            rich_text: rt("nested"),
+            children: [{ type: "bulleted_list_item", bulleted_list_item: { rich_text: rt("deep") } }],
+          },
+        },
+      ],
+    },
   },
-  { type: "numbered_list_item", text: "first" },
-  { type: "numbered_list_item", text: "second" },
-  { type: "to_do", text: "done", checked: true },
-  { type: "to_do", text: "todo" },
-  { type: "toggle", text: "toggle", children: [{ type: "paragraph", text: "body" }] },
+  { type: "numbered_list_item", numbered_list_item: { rich_text: rt("first") } },
+  { type: "numbered_list_item", numbered_list_item: { rich_text: rt("second") } },
+  { type: "to_do", to_do: { rich_text: rt("done"), checked: true } },
+  { type: "to_do", to_do: { rich_text: rt("todo"), checked: false } },
+  {
+    type: "toggle",
+    toggle: {
+      rich_text: rt("toggle"),
+      children: [{ type: "paragraph", paragraph: { rich_text: rt("body") } }],
+    },
+  },
   {
     type: "quote",
-    text: "a quote that wraps onto a second line yes indeed it really does for sure",
-    children: [{ type: "paragraph", text: "qc" }],
+    quote: {
+      rich_text: rt("a quote that wraps onto a second line yes indeed it really does for sure"),
+      children: [{ type: "paragraph", paragraph: { rich_text: rt("qc") } }],
+    },
   },
-  { type: "callout", icon: "💡", lines: ["c1", "c2"], children: [{ type: "bulleted_list_item", text: "cc" }] },
-  { type: "code", language: "ts", text: "const x = 1;\nconsole.log(x);", caption: "snippet" },
-  { type: "equation", expression: "E = mc^2" },
-  { type: "image", url: "https://x/y.png", caption: "pic" },
-  { type: "bookmark", url: "https://example.com", caption: "bm" },
-  { type: "embed", label: "widget" },
-  { type: "divider" },
+  {
+    type: "callout",
+    callout: {
+      rich_text: rt("c1"),
+      icon: { type: "emoji", emoji: "💡" },
+      children: [{ type: "bulleted_list_item", bulleted_list_item: { rich_text: rt("cc") } }],
+    },
+  },
+  { type: "code", code: { rich_text: rt("const x = 1;\nconsole.log(x);"), caption: rt("snippet"), language: "ts" } },
+  { type: "equation", equation: { expression: "E = mc^2" } },
+  { type: "image", image: { type: "external", external: { url: "https://x/y.png" }, caption: rt("pic") } } as {
+    type: "image";
+    [k: string]: unknown;
+  },
+  { type: "bookmark", bookmark: { url: "https://example.com", caption: rt("bm") } },
+  { type: "embed", embed: { url: "widget" } },
+  { type: "divider", divider: {} },
   {
     type: "column_list",
-    columns: [
-      {
-        ratio: 2,
-        children: [
-          { type: "paragraph", text: "left wider" },
-          { type: "bulleted_list_item", text: "l1" },
-        ],
-      },
-      { ratio: 1, children: [{ type: "paragraph", text: "right" }] },
-    ],
+    column_list: {
+      children: [
+        {
+          type: "column",
+          column: {
+            width_ratio: 2,
+            children: [
+              { type: "paragraph", paragraph: { rich_text: rt("left wider") } },
+              { type: "bulleted_list_item", bulleted_list_item: { rich_text: rt("l1") } },
+            ],
+          },
+        },
+        {
+          type: "column",
+          column: {
+            width_ratio: 1,
+            children: [{ type: "paragraph", paragraph: { rich_text: rt("right") } }],
+          },
+        },
+      ],
+    },
   },
   {
-    type: "simple_table",
-    rows: [
-      ["A", "B", "C"],
-      ["1", "2", "3"],
-    ],
-    hasColumnHeader: true,
+    type: "table",
+    table: {
+      table_width: 3,
+      has_column_header: true,
+      children: [
+        { type: "table_row", table_row: { cells: [rt("A"), rt("B"), rt("C")] } },
+        { type: "table_row", table_row: { cells: [rt("1"), rt("2"), rt("3")] } },
+      ],
+    },
   },
-  { type: "breadcrumb", path: ["LifeOS", "Gym"] },
-  { type: "table_of_contents", headings: ["Intro", "End"] },
-  { type: "synced_block", from: "src", children: [{ type: "paragraph", text: "synced" }] },
+  { type: "breadcrumb", breadcrumb: {} },
+  { type: "table_of_contents", table_of_contents: {} },
+  {
+    type: "synced_block",
+    synced_block: {
+      synced_from: { type: "block_id", block_id: "src" },
+      children: [{ type: "paragraph", paragraph: { rich_text: rt("synced") } }],
+    },
+  },
   {
     type: "database",
     database: {
@@ -295,8 +356,8 @@ const SINK: Block[] = [
       ],
     },
   },
-  { type: "page_link", icon: "📦", title: "Backups", note: "page" },
-  { type: "unsupported", label: "new block" },
+  { type: "child_page", child_page: { title: "Backups" } },
+  { type: "unsupported" },
 ];
 
 /** Single-box lines (│…│ with no column/hcat gap) must match their box's top border width. */
@@ -314,9 +375,8 @@ function assertSingleBoxesClose(out: string, width: number): void {
 }
 
 test("renders EVERY block type + all Phase-1 views with no overflow and every single box closed", () => {
-  const out = render({ type: "page", title: "Kitchen Sink", icon: "🧪", cover: "cover", children: SINK });
+  const out = render(mkPage("Kitchen Sink", SINK, "🧪", true));
   assertSingleBoxesClose(out, 70);
-  expect(out).toContain("H0"); // the legacy bare "heading" block type
   // recursion: a nested bullet uses the depth-1 marker, indented
   expect(out).toContain("  ◦ nested");
   expect(out).toContain("    ▪ deep");
@@ -340,7 +400,7 @@ test("a gallery with no cards renders an (empty) box", () => {
         views: [{ type: "gallery", name: "G", views: ["V"], cardSize: "small", cards: [] }],
       },
     },
-  ]);
+  ] as Block[]);
   expect(out).toContain("(empty)");
   assertSingleBoxesClose(out, 70);
 });
@@ -356,7 +416,7 @@ test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
         ],
       },
     },
-  ]);
+  ] as Block[]);
   expect(out).toContain("February 2024");
   expect(out).toContain("29"); // the leap day is a real cell — not clamped to 28
   for (const line of out.split("\n")) {
@@ -365,14 +425,14 @@ test("a calendar honors leap-year February (29 days in Feb 2024)", () => {
 });
 
 test("render edge branches: empty column_list, group-less board, data-less chart, every form widget", () => {
-  expect(render([{ type: "column_list", columns: [] }])).toBe(""); // no columns → nothing
+  expect(render([{ type: "column_list", column_list: { children: [] } }] as Block[])).toBe(""); // no columns → nothing
   expect(
     render([
       {
         type: "database",
         database: { title: "B", views: [{ type: "board", name: "B", views: ["V"], groups: [] }] },
       },
-    ]),
+    ] as Block[]),
   ).toContain("(no groups)");
   expect(
     render([
@@ -380,7 +440,7 @@ test("render edge branches: empty column_list, group-less board, data-less chart
         type: "database",
         database: { title: "C", views: [{ type: "chart", name: "C", views: ["V"], chartType: "bar", data: [] }] },
       },
-    ]),
+    ] as Block[]),
   ).toContain("(no data)");
   const form = render([
     {
@@ -401,7 +461,7 @@ test("render edge branches: empty column_list, group-less board, data-less chart
         ],
       },
     },
-  ]);
+  ] as Block[]);
   expect(form).toContain("[ 📅 ]"); // date widget
   expect(form).toContain("[ @ ]"); // person widget
   expect(form).toContain("[ _____ ]"); // text/default widget
@@ -414,11 +474,13 @@ test("render fallback branches: empty list, and bare breadcrumb / toc / synced_b
         type: "database",
         database: { title: "L", views: [{ type: "list", name: "L", views: ["V"], items: [] }] },
       },
-    ]),
+    ] as Block[]),
   ).toContain("(empty)");
-  expect(render([{ type: "breadcrumb" }])).toContain("…"); // no path → the … placeholder
-  expect(render([{ type: "table_of_contents" }])).toContain("[ Table of contents ]"); // no headings
-  expect(render([{ type: "synced_block" }])).toContain("[ synced block ]"); // no children
+  expect(render([{ type: "breadcrumb", breadcrumb: {} }] as Block[])).toContain("…"); // no path → the … placeholder
+  expect(render([{ type: "table_of_contents", table_of_contents: {} }] as Block[])).toContain("[ Table of contents ]"); // no headings
+  expect(render([{ type: "synced_block", synced_block: { synced_from: null } }] as Block[])).toContain(
+    "[ synced block ]",
+  ); // no children
 });
 
 test("the database tab-bar header clips the active tab when even it alone won't fit", () => {
@@ -440,7 +502,7 @@ test("the database tab-bar header clips the active tab when even it alone won't 
         },
       ],
     },
-  });
+  } as Block);
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
@@ -450,11 +512,11 @@ test("the database tab-bar header clips the active tab when even it alone won't 
 
 test("render renders a bare block subtree (no page chrome) and honors the given width", () => {
   const blocks: Block[] = [
-    { type: "heading_2", text: "Section" },
-    { type: "bulleted_list_item", text: "alpha" },
+    { type: "heading_2", heading_2: { rich_text: rt("Section") } },
+    { type: "bulleted_list_item", bulleted_list_item: { rich_text: rt("alpha") } },
   ];
   const bare = render(blocks, 50);
-  const page = render({ type: "page", title: "My Page", children: blocks });
+  const page = render(mkPage("My Page", blocks));
 
   expect(page).toContain("My Page"); // the page has its title header…
   expect(bare).not.toContain("My Page"); // …the bare subtree has no page chrome
@@ -475,48 +537,41 @@ test("render falls back to the default width (70) on a non-positive width", () =
           views: [{ type: "table", name: "T", columns: ["Name", "Status"], rows: [["X", "Y"]] }],
         },
       },
-    ],
+    ] as Block[],
     0,
   );
   const top = out.split("\n").find((line) => line.startsWith("┌"));
   expect(displayWidth(top ?? "")).toBe(70);
 });
 
-test("a `page` renders full page chrome (cover · icon · title · description) — Page is a root concept", () => {
-  const out = render({
-    type: "page",
-    title: "Demo",
-    icon: "📄",
-    cover: "Sunrise cover",
-    description: "the desc",
-    children: [{ type: "paragraph", text: "hi" }],
-  });
+test("a `page` renders full page chrome (cover · icon · title) — Page is a root concept", () => {
+  const out = render(mkPage("Demo", [{ type: "paragraph", paragraph: { rich_text: rt("hi") } }], "📄", true));
   expect(out).toContain("▒"); // cover band
   expect(out).toContain("📄 Demo"); // icon + title
-  expect(out).toContain("the desc"); // description
   expect(out).toContain("hi"); // recursive body
 });
 
 test("blocks compose to any depth — a page nesting an inline database block", () => {
-  const out = render({
-    type: "page",
-    title: "Workspace",
-    icon: "🗂",
-    children: [
-      { type: "heading_2", text: "Tasks" },
-      {
-        type: "database",
-        database: {
-          title: "Tasks",
-          icon: "✅",
-          views: [{ type: "table", name: "All", columns: ["Name", "Status"], rows: [["Ship", "Done"]] }],
+  const out = render(
+    mkPage(
+      "Workspace",
+      [
+        { type: "heading_2", heading_2: { rich_text: rt("Tasks") } },
+        {
+          type: "database",
+          database: {
+            title: "Tasks",
+            icon: "✅",
+            views: [{ type: "table", name: "All", columns: ["Name", "Status"], rows: [["Ship", "Done"]] }],
+          },
         },
-      },
-    ],
-  });
+      ] as Block[],
+      "🗂",
+    ),
+  );
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("🗂 Workspace"); // page chrome
-  expect(out).toContain("# Tasks"); // heading in the page body
+  expect(out).toContain("## Tasks"); // heading in the page body
   expect(out).toContain("✅ Tasks"); // the nested database's own chrome
 });
 
@@ -532,7 +587,7 @@ test("standalone database renders its views (view:'all')", () => {
         { type: "gallery", name: "Exercises", views: ["Gallery"], cardSize: "small", cards: [{ name: "A" }] },
       ],
     },
-  });
+  } as Block);
   assertSingleBoxesClose(out, 70);
   expect(out).toContain("🏋 Exercises");
   expect(out).toContain("◷ Exercises   ‹ All ›");
@@ -541,10 +596,8 @@ test("standalone database renders its views (view:'all')", () => {
 
 test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned, no overflow", () => {
   // Each view is wrapped in a `database` block — inline views compose as blocks in the page body.
-  const out = render({
-    type: "page",
-    title: "P2",
-    children: [
+  const out = render(
+    mkPage("P2", [
       {
         type: "database",
         database: {
@@ -652,8 +705,8 @@ test("Phase-2 views (calendar/timeline/chart/form/map/dashboard) render aligned,
           ],
         },
       },
-    ],
-  });
+    ] as Block[]),
+  );
   assertSingleBoxesClose(out, 70);
   // every line fits within the page width
   for (const line of out.split("\n")) {
@@ -682,7 +735,7 @@ test("databaseHeader fits the width and collapses overflowing view tabs to '+N m
         },
       ],
     },
-  });
+  } as Block);
   for (const line of out.split("\n")) {
     expect(displayWidth(line)).toBeLessThanOrEqual(70);
   }
