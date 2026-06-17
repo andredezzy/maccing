@@ -1,6 +1,5 @@
-// Tests for renderPropertyValue — must match flattenValue output byte-for-byte per type.
-// Fixtures use canonical PropertyValue shapes (official zod schemas); see database-model.test.ts
-// for the original flattenValue assertions that this matrix mirrors.
+// Tests for renderPropertyValue — the database-cell display formatter. Fixtures use canonical official
+// PropertyValue shapes; this matrix pins one assertion per value type (including the relation count case).
 
 import { expect, test } from "bun:test";
 import { renderPropertyValue } from "./property-value";

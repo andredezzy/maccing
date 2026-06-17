@@ -8,7 +8,7 @@ import { abbreviateId, decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
 import type { PropertiesMap } from "./schema";
 
-// ── View resolution (pure) ────────────────────────────────────────────────────────────────────────
+// View resolution (pure)
 
 /** A view with its property IDs already resolved to names by the caller. */
 export interface ResolvedView {

@@ -94,8 +94,9 @@ function flattenRollup(rollup: unknown): Scalar {
 
 /**
  * Convert any non-relation Notion property value to a compact display string.
- * Shared between flattenProperty (scalar reader) and flattenValue (database-model display renderer)
- * so the two callers stay in sync when new property types are added. Returns "" (never null).
+ * Shared between flattenProperty (the scalar reader for YAML frontmatter) and renderPropertyValue
+ * (the database-cell display formatter in render/property-value.ts), so the two stay in sync as new
+ * property types are added. Returns "" (never null).
  *
  * Note: checkbox renders as ☑/☐ (display use); flattenProperty returns a boolean for typed reads.
  * Note: rollup arrays render as "N item(s)" here; flattenProperty uses flattenRollup for Scalar output.
@@ -174,32 +175,6 @@ export function propertyToString(property: NotionPropertyValue): string {
     default:
       return "";
   }
-}
-
-/** A property with an optional `type` field (accepts both the full API shape and partial inputs). */
-export interface RawProperty {
-  type?: string;
-  [key: string]: unknown;
-}
-
-/** A row that carries page properties — the minimal shape used by the database display renderer. */
-export interface RawRow {
-  properties?: Record<string, RawProperty>;
-}
-
-/**
- * Flatten a Notion property value to a compact display string for database cell rendering.
- * Handles the `relation` type specially (count of linked items). Returns "" for undefined.
- */
-export function flattenValue(property: RawProperty | undefined): string {
-  if (!property) {
-    return "";
-  }
-  if (property.type === "relation") {
-    const relations = (property.relation as { id?: string }[]) ?? [];
-    return relations.length ? `${relations.length} linked` : "";
-  }
-  return propertyToString(property as NotionPropertyValue);
 }
 
 /** Flatten one Notion property value to a scalar (relations return their ids for later title resolution). */

@@ -23,7 +23,7 @@ function assertSingleBoxesClose(out: string, width: number): void {
   }
 }
 
-// ── Fixtures ────────────────────────────────────────────────────────────────────────────────────────
+// Fixtures
 
 /** Build a minimal PageObject with a title property. */
 function mkTitleRow(titleColumn: string, title: string, extra?: Record<string, string>): PageObject {
@@ -91,7 +91,7 @@ const rows: PageObject[] = [
   mkTitleRow("Name", "Pull day", { Status: "To do", Date: "2025-06-11" }),
 ];
 
-// ── Tests ────────────────────────────────────────────────────────────────────────────────────────────
+// Tests
 
 test("a gallery view with no rows renders an (empty) box", () => {
   const view = mkView("gallery", ["name"]);
