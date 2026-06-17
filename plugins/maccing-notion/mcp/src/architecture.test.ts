@@ -1,8 +1,8 @@
 // Architecture invariant: the RUNTIME module import graph must stay ACYCLIC (CLAUDE.md: no circular imports —
 // extract a shared dep into a third module instead). `import type` / `export type` statements are EXCLUDED:
 // they erase at compile time, form no runtime edge, and so cannot cause the init-order / shared-instance
-// cycles this rule targets — which lets a recursive type union (Block / DatabaseView) legitimately reference its
-// members across the renderer files that own them. This builds the graph from the actual runtime `from "./…"`
+// cycles this rule targets — which lets a recursive type union (the official BlockObject) legitimately reference
+// its members across the files that own them. This builds the graph from the actual runtime `from "./…"`
 // imports across src/ and fails with the offending chain if any cycle appears. Run with `bun test`.
 
 import { expect, test } from "bun:test";
