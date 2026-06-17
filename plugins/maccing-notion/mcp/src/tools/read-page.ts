@@ -6,56 +6,16 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-import type { BlockObject } from "../notion/blocks/block";
 import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
-import type { PageObject as NotionPageObject } from "../notion/page";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildBlock, NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
 import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
-import { render } from "../render";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
-const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
-
-interface RawChildrenResponse {
-  results?: BlockObject[];
-  has_more?: boolean;
-  next_cursor?: string | null;
-}
-
-/** Fetch a page's block tree (recursing into has_children blocks up to `depth`), for the mockup renderer. */
-async function fetchBlockTree(id: string, depth: number): Promise<BlockObject[]> {
-  const out: BlockObject[] = [];
-  let cursor: string | undefined;
-  do {
-    const query: Record<string, unknown> = { page_size: 100 };
-    if (cursor) {
-      query.start_cursor = cursor;
-    }
-    const response = await publicRequest("GET", `/v1/blocks/${id}/children`, undefined, query);
-    if (!response.ok) {
-      break;
-    }
-    const body = response.body as RawChildrenResponse;
-    for (const block of body.results ?? []) {
-      if (block.has_children && depth > 0 && block.id) {
-        const children = await fetchBlockTree(block.id, depth - 1);
-        if (children.length > 0) {
-          const payload = (block as Record<string, unknown>)[block.type] as Record<string, unknown>;
-          if (payload && typeof payload === "object") {
-            payload.children = children;
-          }
-        }
-      }
-      out.push(block);
-    }
-    cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
-  } while (cursor);
-  return out;
-}
+const FORMATS = ["markdown", "outline", "text"] as const;
 
 interface SubPageMarkdown {
   markdown: string;
@@ -241,20 +201,16 @@ export const readPage: ToolModule = {
       "followed by the Notion-flavored Markdown body — ~22x smaller than raw block JSON, fully recovered. " +
       "format=outline: a compact block tree WITH block ids (use this when you need a block id to edit). " +
       "format=text: the body with Markdown markup stripped. " +
-      "format=mockup: render the LIVE page as the canonical fixed-width ASCII page mockup (the deterministic " +
-      "render_mockup renderer applied to the live block tree) — the one-call way to SHOW how a page looks.",
+      "To SHOW how a page looks as an ASCII mockup, use the dedicated render_mockup tool (pass a PageRender).",
     annotations: { title: "Read a Notion page/row", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       page_id: z.string().describe("The page or database-row id to read."),
-      format: z.enum(FORMATS).describe("markdown | outline | text | mockup — required."),
+      format: z.enum(FORMATS).describe("markdown | outline | text — required."),
       include_properties: z
         .boolean()
         .optional()
         .describe("markdown + text: prepend YAML frontmatter of properties (default true)."),
-      depth: z
-        .number()
-        .optional()
-        .describe("outline + mockup: block-nesting levels to include (default 2 for outline, 3 for mockup)."),
+      depth: z.number().optional().describe("outline: block-nesting levels to include (default 2)."),
     },
   },
 
@@ -272,18 +228,6 @@ export const readPage: ToolModule = {
       if (format === "outline") {
         const depth = typeof args.depth === "number" && args.depth > 0 ? Math.min(args.depth, 5) : 2;
         return ok(await buildOutline(pageId, depth));
-      }
-
-      if (format === "mockup") {
-        const depth = typeof args.depth === "number" && args.depth > 0 ? Math.min(args.depth, 5) : 3;
-        const [pageResponse, tree] = await Promise.all([
-          publicRequest("GET", `/v1/pages/${pageId}`),
-          fetchBlockTree(pageId, depth),
-        ]);
-        if (!pageResponse.ok) {
-          return err("Could not read the page — check the id and that NOTION_TOKEN has access.");
-        }
-        return ok(render({ page: pageResponse.body as NotionPageObject, blocks: tree }));
       }
 
       const includeProperties = args.include_properties !== false;
