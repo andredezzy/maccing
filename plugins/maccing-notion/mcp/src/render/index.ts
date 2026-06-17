@@ -36,8 +36,10 @@ function finish(lines: string[]): string {
 /**
  * Render a mockup — a PageRender, a single Block, a Block[], or a DatabaseRender — to the finished string.
  * Resolves the canvas width (default DEFAULT_WIDTH) and dispatches through the appropriate renderer.
+ * `viewSelection` chooses which database view to render (index, "all", or default 0); it is ignored for
+ * non-database mockups.
  */
-export function render(mockup: Mockup, width?: number): string {
+export function render(mockup: Mockup, width?: number, viewSelection?: number | "all"): string {
   const total = width && width > 0 ? width : DEFAULT_WIDTH;
 
   if (Array.isArray(mockup)) {
@@ -50,7 +52,7 @@ export function render(mockup: Mockup, width?: number): string {
   }
 
   if ("database" in mockup && "dataSource" in mockup) {
-    return finish(renderDatabase(mockup as DatabaseRender, total));
+    return finish(renderDatabase(mockup as DatabaseRender, total, viewSelection));
   }
 
   // Single Block (BlockObject)

@@ -185,6 +185,9 @@ const SINK: Block[] = [
   },
   { type: "heading_2", heading_2: { rich_text: rt("H2") } },
   { type: "heading_3", heading_3: { rich_text: rt("H3") } },
+  { type: "heading_4", heading_4: { rich_text: rt("H4") } },
+  { type: "child_database", child_database: { title: "Linked DB" } },
+  { type: "link_to_page", link_to_page: { type: "page_id", page_id: "abc" } },
   {
     type: "paragraph",
     paragraph: {

@@ -17,8 +17,6 @@ function titleColumnOf(schema: Record<string, { type?: string }>): string {
 /** Render a DatabaseRender bundle into lines. selectedView: index, "all", or undefined (default: 0). */
 export function renderDatabase(bundle: DatabaseRender, width: number, selectedView?: number | "all"): string[] {
   const { database, dataSource, views: viewObjects, rows } = bundle;
-  // viewIndex may be injected at runtime by read_database.
-  const injectedIndex = (bundle as DatabaseRender & { viewIndex?: number }).viewIndex;
 
   const dbTitle = richTextToPlain(database.title) || "(database)";
   const icon = iconGlyph(database.icon);
@@ -28,7 +26,7 @@ export function renderDatabase(bundle: DatabaseRender, width: number, selectedVi
 
   const headerLines = header(icon, dbTitle, undefined, undefined, width);
 
-  const which = selectedView ?? injectedIndex ?? 0;
+  const which = selectedView ?? 0;
 
   if (viewObjects.length === 0) {
     return headerLines;

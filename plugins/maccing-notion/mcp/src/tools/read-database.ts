@@ -96,14 +96,10 @@ async function renderDatabaseMockup(
   const rows = truncated ? fetched.slice(0, SAMPLE_CAP) : fetched;
 
   const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
-  const bundle = {
-    database,
-    dataSource: { properties: schema },
-    views: ordered,
-    rows,
-    viewIndex: selectedIndex,
-  } as unknown as DatabaseRender;
-  const body = render(bundle);
+  // read_database still uses loose API-response types (canon alignment of the reader layer is out of
+  // scope here); the bundle is the exact DatabaseRender shape and the renderer reads it defensively.
+  const bundle = { database, dataSource: { properties: schema }, views: ordered, rows } as unknown as DatabaseRender;
+  const body = render(bundle, undefined, selectedIndex);
 
   return truncated ? `${body}\n\n(mockup preview — showing the first ${SAMPLE_CAP} rows; the database has more)` : body;
 }
