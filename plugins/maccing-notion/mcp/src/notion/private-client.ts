@@ -136,12 +136,17 @@ async function resolveActiveUser(): Promise<string> {
 
   const usersById = response.body as Record<string, GetSpacesUserRecord>;
   const owningUserId = Object.entries(usersById).find(([, record]) => record.space && SPACE_ID in record.space)?.[0];
-  const userId = owningUserId ?? Object.keys(usersById)[0];
 
-  if (!userId) {
-    throw new Error("Could not resolve an active user from getSpaces.");
+  if (!owningUserId) {
+    const availableSpaces = Object.values(usersById)
+      .flatMap((record) => Object.keys(record.space ?? {}))
+      .join(", ");
+    throw new Error(
+      `No user in this session owns NOTION_SPACE_ID ${SPACE_ID}. Available spaces: ${availableSpaces || "(none)"}.`,
+    );
   }
-  return userId;
+
+  return owningUserId;
 }
 
 // Cached as a PROMISE singleton: getSpaces is a network call, the input is unavailable at

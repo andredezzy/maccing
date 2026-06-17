@@ -4,7 +4,7 @@
 // Unknown view types fall back to a table.
 
 import { decodePropertyId } from "../notion/ids";
-import { type NotionDateRange, richTextToPlain } from "../readers/page";
+import { type NotionPropertyValue, propertyToString } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
 import type { IdToName, RawView } from "../readers/views";
 import type { DatabaseModel } from "./blocks/database/database";
@@ -19,10 +19,7 @@ interface RawProperty {
 export interface RawRow {
   properties?: Record<string, RawProperty>;
 }
-interface NotionUniqueId {
-  prefix?: string;
-  number?: number;
-}
+
 /** A view with its property IDs already resolved to names by the caller. */
 interface ResolvedView {
   name: string;
@@ -43,71 +40,16 @@ interface DatabaseModelInput {
   rows: RawRow[];
 }
 
-/** A Notion date range → "start" or "start → end" (empty when undated). */
-function formatDateRange(date: NotionDateRange | null | undefined): string {
-  return date?.start ? date.start + (date.end ? ` → ${date.end}` : "") : "";
-}
-
 /** Flatten a Notion property value to a compact display string. */
 export function flattenValue(property: RawProperty | undefined): string {
   if (!property) {
     return "";
   }
-  switch (property.type) {
-    case "title":
-    case "rich_text":
-      return richTextToPlain(property[property.type]);
-    case "number":
-      return property.number == null ? "" : String(property.number);
-    case "select":
-      return (property.select as { name?: string })?.name ?? "";
-    case "status":
-      return (property.status as { name?: string })?.name ?? "";
-    case "multi_select":
-      return ((property.multi_select as { name?: string }[]) ?? []).map((option) => option.name).join(", ");
-    case "date":
-      return formatDateRange(property.date as NotionDateRange | null);
-    case "checkbox":
-      return property.checkbox ? "☑" : "☐";
-    case "people":
-      return ((property.people as { name?: string }[]) ?? []).map((person) => person.name ?? "user").join(", ");
-    case "url":
-      return (property.url as string) ?? "";
-    case "email":
-      return (property.email as string) ?? "";
-    case "phone_number":
-      return (property.phone_number as string) ?? "";
-    case "created_time":
-      return (property.created_time as string) ?? "";
-    case "last_edited_time":
-      return (property.last_edited_time as string) ?? "";
-    case "unique_id": {
-      const uniqueId = property.unique_id as NotionUniqueId | null;
-      return uniqueId?.number != null ? `${uniqueId.prefix ? `${uniqueId.prefix}-` : ""}${uniqueId.number}` : "";
-    }
-    case "formula": {
-      const formula = property.formula as RawProperty;
-      const value = formula?.type ? formula[formula.type] : undefined;
-      if (value == null) {
-        return "";
-      }
-      if (typeof value === "boolean") {
-        return value ? "☑" : "☐";
-      }
-      return formula.type === "date" ? formatDateRange(value as NotionDateRange) : String(value);
-    }
-    case "relation": {
-      const relations = (property.relation as { id?: string }[]) ?? [];
-      return relations.length ? `${relations.length} linked` : "";
-    }
-    case "rollup": {
-      const rollup = property.rollup as RawProperty;
-      const value = rollup?.type ? rollup[rollup.type] : undefined;
-      return value == null ? "" : Array.isArray(value) ? `${value.length} item(s)` : String(value);
-    }
-    default:
-      return "";
+  if (property.type === "relation") {
+    const relations = (property.relation as { id?: string }[]) ?? [];
+    return relations.length ? `${relations.length} linked` : "";
   }
+  return propertyToString(property as NotionPropertyValue);
 }
 
 function rowTitle(row: RawRow, titleColumn: string): string {

@@ -31,6 +31,17 @@ test("render_mockup returns an error on input that matches no block shape", asyn
   expect(isError).toBe(true); // zod parse throws → err()
 });
 
+test("render_mockup rejects a calendar view with month out of range (1-12 enforced by schema)", async () => {
+  const { isError } = await run({
+    type: "database",
+    database: {
+      title: "Events",
+      views: [{ type: "calendar", name: "Cal", year: 2025, month: 13 }],
+    },
+  });
+  expect(isError).toBe(true); // month: 13 fails z.number().min(1).max(12)
+});
+
 test("render_mockup accepts a database whose views include a dashboard (wire schema mirrors the ViewBlock type)", async () => {
   const { isError } = await run({
     type: "database",

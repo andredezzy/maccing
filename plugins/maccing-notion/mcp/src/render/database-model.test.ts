@@ -268,3 +268,10 @@ test("board seeds every group-by option as a column (even empty), in order, and 
   expect(out).toContain("Not started"); // empty columns still drawn
   expect(out).toContain("Done  (9)"); // true count in the header
 });
+
+test("flattenValue: created_by and last_edited_by return the user name", () => {
+  expect(flattenValue({ type: "created_by", created_by: { name: "Alice" } })).toBe("Alice");
+  expect(flattenValue({ type: "created_by", created_by: {} })).toBe("");
+  expect(flattenValue({ type: "last_edited_by", last_edited_by: { name: "Bob" } })).toBe("Bob");
+  expect(flattenValue({ type: "last_edited_by", last_edited_by: {} })).toBe("");
+});

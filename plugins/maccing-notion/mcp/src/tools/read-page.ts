@@ -141,6 +141,9 @@ async function frontmatter(page: PageObject): Promise<string> {
     let rendered: string;
     if (flattenedProperty.relationIds) {
       rendered = flattenedProperty.relationIds.map((id) => titles.get(id) ?? abbreviateId(id)).join(", ");
+      if (flattenedProperty.truncated) {
+        rendered += " (+ more)";
+      }
     } else {
       rendered = flattenedProperty.value === null ? "" : String(flattenedProperty.value);
     }

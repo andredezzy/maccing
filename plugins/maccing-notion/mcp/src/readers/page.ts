@@ -33,6 +33,8 @@ export interface FlattenedProperty {
   value: Scalar;
   /** Present for relation properties — the target page ids to resolve to titles. */
   relationIds?: string[];
+  /** True when the relation list is truncated (Notion's has_more flag) — caller should indicate partial data. */
+  truncated?: boolean;
 }
 
 interface FormulaValue {
@@ -58,6 +60,11 @@ interface NotionPersonRef {
   id?: string;
 }
 
+interface NotionUniqueId {
+  prefix?: string;
+  number?: number;
+}
+
 function flattenFormula(formula: unknown): Scalar {
   const formulaValue = formula as FormulaValue;
   if (!formulaValue?.type) {
@@ -81,6 +88,90 @@ function flattenRollup(rollup: unknown): Scalar {
     return `[${(rollupValue.array ?? []).length} items]`;
   }
   return null;
+}
+
+/**
+ * Convert any non-relation Notion property value to a compact display string.
+ * Shared between flattenProperty (scalar reader) and flattenValue (database-model display renderer)
+ * so the two callers stay in sync when new property types are added. Returns "" (never null).
+ *
+ * Note: checkbox renders as ☑/☐ (display use); flattenProperty returns a boolean for typed reads.
+ * Note: rollup arrays render as "N item(s)" here; flattenProperty uses flattenRollup for Scalar output.
+ */
+export function propertyToString(property: NotionPropertyValue): string {
+  switch (property.type) {
+    case "title":
+      return richTextToPlain(property.title);
+    case "rich_text":
+      return richTextToPlain(property.rich_text);
+    case "number":
+      return property.number == null ? "" : String(property.number);
+    case "checkbox":
+      return property.checkbox ? "☑" : "☐";
+    case "select":
+      return (property.select as { name?: string })?.name ?? "";
+    case "status":
+      return (property.status as { name?: string })?.name ?? "";
+    case "multi_select":
+      return ((property.multi_select as { name?: string }[]) ?? []).map((option) => option.name).join(", ");
+    case "date": {
+      const dateRange = property.date as NotionDateRange | null;
+      return dateRange?.start ? (dateRange.end ? `${dateRange.start} → ${dateRange.end}` : dateRange.start) : "";
+    }
+    case "people":
+      return ((property.people as NotionPersonRef[]) ?? []).map((person) => person.name ?? person.id ?? "").join(", ");
+    case "email":
+      return (property.email as string) ?? "";
+    case "phone_number":
+      return (property.phone_number as string) ?? "";
+    case "url":
+      return (property.url as string) ?? "";
+    case "files":
+      return ((property.files as { name?: string }[]) ?? []).map((file) => file.name ?? "").join(", ");
+    case "created_time":
+      return (property.created_time as string) ?? "";
+    case "last_edited_time":
+      return (property.last_edited_time as string) ?? "";
+    case "unique_id": {
+      const uniqueId = property.unique_id as NotionUniqueId | null;
+      return uniqueId?.number != null ? `${uniqueId.prefix ? `${uniqueId.prefix}-` : ""}${uniqueId.number}` : "";
+    }
+    case "created_by":
+      return (property.created_by as { name?: string })?.name ?? "";
+    case "last_edited_by":
+      return (property.last_edited_by as { name?: string })?.name ?? "";
+    case "rollup": {
+      const rollup = property.rollup as { type?: string; [key: string]: unknown };
+      if (!rollup?.type) {
+        return "";
+      }
+      const value = rollup[rollup.type];
+      if (value == null) {
+        return "";
+      }
+      return Array.isArray(value) ? `${value.length} item(s)` : String(value);
+    }
+    case "formula": {
+      const formulaValue = property.formula as FormulaValue | null;
+      if (!formulaValue?.type) {
+        return "";
+      }
+      if (formulaValue.type === "date") {
+        const dateRange = formulaValue.date as NotionDateRange | null;
+        return dateRange?.start ? (dateRange.end ? `${dateRange.start} → ${dateRange.end}` : dateRange.start) : "";
+      }
+      const formulaScalar = formulaValue[formulaValue.type] as Scalar | undefined;
+      if (formulaScalar == null) {
+        return "";
+      }
+      if (typeof formulaScalar === "boolean") {
+        return formulaScalar ? "☑" : "☐";
+      }
+      return String(formulaScalar);
+    }
+    default:
+      return "";
+  }
 }
 
 /** Flatten one Notion property value to a scalar (relations return their ids for later title resolution). */
@@ -127,13 +218,26 @@ export function flattenProperty(property: NotionPropertyValue): FlattenedPropert
       return { value: (property.created_time as string) ?? null };
     case "last_edited_time":
       return { value: (property.last_edited_time as string) ?? null };
-    case "relation":
+    case "unique_id": {
+      const uniqueId = property.unique_id as NotionUniqueId | null;
+      return {
+        value: uniqueId?.number != null ? `${uniqueId.prefix ? `${uniqueId.prefix}-` : ""}${uniqueId.number}` : null,
+      };
+    }
+    case "created_by":
+      return { value: (property.created_by as { name?: string })?.name ?? null };
+    case "last_edited_by":
+      return { value: (property.last_edited_by as { name?: string })?.name ?? null };
+    case "relation": {
+      const hasMore = (property as { has_more?: boolean }).has_more;
       return {
         value: null,
         relationIds: ((property.relation as { id?: string }[]) ?? [])
           .map((relation) => relation.id)
           .filter((id): id is string => Boolean(id)),
+        ...(hasMore ? { truncated: true } : {}),
       };
+    }
     case "rollup":
       return { value: flattenRollup(property.rollup) };
     case "formula":

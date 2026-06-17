@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { Block, DatabaseView } from "./blocks/engine";
 import type { Page } from "./page";
 
-// View object schemas (used by viewSchema AND by databaseModelSchema.views)
+// ── View object schemas (used by viewSchema AND by databaseModelSchema.views) ──────────────────────
 
 const card = z.object({
   icon: z.string().optional().describe("emoji or gray named-icon name before the card name"),
@@ -51,7 +51,7 @@ const calendarBlock = z.object({
   name: z.string(),
   views,
   year: z.number(),
-  month: z.number().describe("1-12"),
+  month: z.number().min(1).max(12).describe("1-12"),
   events: z.array(z.object({ day: z.number(), title: z.string() })).optional(),
 });
 const timelineBlock = z.object({
@@ -114,7 +114,7 @@ export const viewSchema: z.ZodType<DatabaseView> = z.lazy(() =>
   ]),
 );
 
-// Block schema (recursive; no views, no page)
+// ── Block schema (recursive; no views, no page) ──────────────────────────────────────────────────
 
 // The standalone-database wire shape, referenced by the inline `database` block via z.lazy.
 const databaseModelSchema = z.object({
@@ -200,7 +200,7 @@ export const blockSchema: z.ZodType<Block> = z.lazy(() =>
   ]),
 );
 
-// Page schema
+// ── Page schema ───────────────────────────────────────────────────────────────────────────────────
 
 export const pageSchema: z.ZodType<Page> = z.object({
   type: z.literal("page"),
@@ -212,7 +212,7 @@ export const pageSchema: z.ZodType<Page> = z.object({
   children: z.array(blockSchema),
 });
 
-// Mockup schema (the render_mockup tool's full input)
+// ── Mockup schema (the render_mockup tool's full input) ───────────────────────────────────────────
 
 // A Page, a single Block, or an array of Blocks. Bare views are intentionally excluded — wrap them
 // in a { type: "database", database: { ... } } block to use them in a mockup.

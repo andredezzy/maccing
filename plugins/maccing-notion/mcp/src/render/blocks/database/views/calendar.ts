@@ -56,7 +56,7 @@ function daysInMonth(year: number, month: number): number {
 }
 
 function renderCalendar(block: CalendarBlock, total: number): string[] {
-  const month = ((block.month - 1 + 12) % 12) + 1;
+  const month = block.month; // guaranteed 1-12 by the schema validator
   const lines = [databaseHeader(block.name, block.views, total), `${MONTHS[month - 1]} ${block.year}`];
   const first = dayOfWeek(block.year, month, 1);
   const days = daysInMonth(block.year, month);
