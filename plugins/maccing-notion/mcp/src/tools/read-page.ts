@@ -201,7 +201,7 @@ export const readPage: ToolModule = {
       "followed by the Notion-flavored Markdown body — ~22x smaller than raw block JSON, fully recovered. " +
       "format=outline: a compact block tree WITH block ids (use this when you need a block id to edit). " +
       "format=text: the body with Markdown markup stripped. " +
-      "To SHOW how a page looks as an ASCII mockup, use the dedicated render_mockup tool (pass a PageRender).",
+      "To SHOW how a page looks as an ASCII mockup, use the dedicated render_mockup tool (pass this page_id).",
     annotations: { title: "Read a Notion page/row", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       page_id: z.string().describe("The page or database-row id to read."),

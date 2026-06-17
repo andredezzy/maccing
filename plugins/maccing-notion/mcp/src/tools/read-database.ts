@@ -59,7 +59,7 @@ export const readDatabase: ToolModule = {
       "sorts, filter, quick_filters, and all visual props (covers/preview, card size, aspect, layout, group_by, " +
       "chart axes, visible/hidden columns) — with property ids resolved to names. Schema + views always included. " +
       "For column ICONS, or to describe a page/data source on its own, use the `describe` tool. To SHOW the database " +
-      "as an ASCII mockup, use the dedicated render_mockup tool (pass a DatabaseRender).",
+      "as an ASCII mockup, use the dedicated render_mockup tool (pass this database_id, optionally a `view`).",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
