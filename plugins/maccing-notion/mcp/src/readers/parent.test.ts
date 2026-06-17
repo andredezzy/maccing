@@ -5,13 +5,13 @@ import { expect, test } from "bun:test";
 
 import { parentLabel } from "./parent";
 
-const ID = "abcdef0123456789"; // 16 chars → abbreviated to abcdef01…6789
+const ID = "abcdef0123456789"; // ids are surfaced in FULL — never abbreviated
 
-test("parentLabel renders each parent type with an abbreviated id", () => {
-  expect(parentLabel({ type: "page_id", page_id: ID })).toBe("page abcdef01…6789");
-  expect(parentLabel({ type: "data_source_id", data_source_id: ID })).toBe("data_source abcdef01…6789");
-  expect(parentLabel({ type: "database_id", database_id: ID })).toBe("database abcdef01…6789");
-  expect(parentLabel({ type: "block_id", block_id: ID })).toBe("block abcdef01…6789");
+test("parentLabel renders each parent type with its full id", () => {
+  expect(parentLabel({ type: "page_id", page_id: ID })).toBe(`page ${ID}`);
+  expect(parentLabel({ type: "data_source_id", data_source_id: ID })).toBe(`data_source ${ID}`);
+  expect(parentLabel({ type: "database_id", database_id: ID })).toBe(`database ${ID}`);
+  expect(parentLabel({ type: "block_id", block_id: ID })).toBe(`block ${ID}`);
 });
 
 test("parentLabel handles a missing id, workspace, an unknown type, and an absent parent", () => {

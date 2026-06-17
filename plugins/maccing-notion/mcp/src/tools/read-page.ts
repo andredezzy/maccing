@@ -6,7 +6,7 @@
 // unknown_block_ids to completion (no round cap; stops only when a round makes no further progress).
 
 import { z } from "zod";
-import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildBlock, NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
@@ -109,7 +109,7 @@ async function frontmatter(page: PageProperties): Promise<string> {
   for (const [name, flattenedProperty] of flattenedProperties) {
     let rendered: string;
     if (flattenedProperty.relationIds) {
-      rendered = flattenedProperty.relationIds.map((id) => titles.get(id) ?? abbreviateId(id)).join(", ");
+      rendered = flattenedProperty.relationIds.map((id) => titles.get(id) ?? id).join(", ");
       if (flattenedProperty.truncated) {
         rendered += " (+ more)";
       }
@@ -173,7 +173,7 @@ async function buildOutline(pageId: string, depth: number): Promise<string> {
       const body = response.body as NotionChildrenResponse;
       for (const block of body.results ?? []) {
         const indent = "  ".repeat(level - 1);
-        lines.push(`${indent}${block.type.padEnd(20)} [${abbreviateId(block.id)}]  "${blockPreview(block)}"`);
+        lines.push(`${indent}${block.type.padEnd(20)} [${block.id}]  "${blockPreview(block)}"`);
         if (block.has_children) {
           if (level < depth) {
             await walk(block.id, level + 1);
@@ -245,7 +245,7 @@ export const readPage: ToolModule = {
       const completionNote =
         body.unfetchable.length > 0
           ? `\n\n[INCOMPLETE — ${body.unfetchable.length} block(s) unfetchable (permission/deleted); recovery made no further progress. ` +
-            `Ids: ${body.unfetchable.map(abbreviateId).join(", ")} | rounds_used: ${body.rounds}]`
+            `Ids: ${body.unfetchable.join(", ")} | rounds_used: ${body.rounds}]`
           : `\n\n[TRUNCATED: false | rounds_used: ${body.rounds}]`;
 
       return ok(`${yamlFrontmatter}${content}${completionNote}`);

@@ -4,7 +4,7 @@
 // (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
 // opaque property ids resolved to names (formatViews).
 
-import { abbreviateId, decodePropertyId, idVariants } from "../notion/ids";
+import { decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
 import type { PropertiesMap } from "./schema";
 
@@ -277,7 +277,7 @@ export function formatViews(views: RawView[], idToName: IdToName): string {
 
   const blocks = views.map((view) => {
     const lines = [
-      `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? abbreviateId(view.id) : "?"})`,
+      `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? view.id : "?"})`,
       view.url ? `url: ${view.url}` : null,
       `sorts: ${renderSorts(view.sorts, idToName)}`,
       `filter: ${view.filter ? JSON.stringify(resolveDeep(view.filter, idToName)) : "—"}`,

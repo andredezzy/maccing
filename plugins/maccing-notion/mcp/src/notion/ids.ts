@@ -1,5 +1,6 @@
-// Notion id helpers — normalizing UUIDs for the REST API, abbreviating ids for display, and expanding
-// the raw/decoded/encoded forms a property id can take across endpoints.
+// Notion id helpers — normalizing UUIDs for the REST API, and expanding the raw/decoded/encoded forms a
+// property id can take across endpoints. (Ids are never abbreviated for display — every surfaced id must
+// be usable as-is.)
 
 /** Trim whitespace and lowercase a UUID so it is accepted by the Notion REST API (it rejects uppercase). */
 export function normalizeUuid(id: string): string {
@@ -8,11 +9,6 @@ export function normalizeUuid(id: string): string {
 
 /** Matches a normalized Notion UUID — 32–36 hex chars with optional hyphens. */
 export const UUID_PATTERN = /^[0-9a-f-]{32,36}$/i;
-
-/** Abbreviate a Notion id for display: first 8 + last 4 chars via an ellipsis (id ≤ 12 chars: as-is). */
-export function abbreviateId(id: string): string {
-  return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
-}
 
 /**
  * Try to url-decode a value; return undefined if the value is malformed percent-encoding.

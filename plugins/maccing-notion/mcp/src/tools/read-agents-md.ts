@@ -4,7 +4,7 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
-import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildrenResponse } from "../readers/blocks";
 import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markdown";
@@ -187,7 +187,7 @@ export const readAgentsMd: ToolModule = {
 
       if (found.length === 0) {
         return ok(
-          `read_agents_md · target: ${target.title} (${abbreviateId(targetId)})\n` +
+          `read_agents_md · target: ${target.title} (${targetId})\n` +
             `No AGENTS.md found on the ancestry (${ancestryBreadcrumb}). Proceed under the workspace's general conventions.`,
         );
       }
@@ -199,7 +199,7 @@ export const readAgentsMd: ToolModule = {
           const role = rank === 1 ? "root" : rank === playbookCount ? "closest" : "intermediate";
           const weight =
             rank === playbookCount ? "STRONGEST — wins on conflict" : rank === 1 ? "weakest" : "overrides lower ranks";
-          return `  rank ${rank}/${playbookCount} · ${entry.title} (${role}) · ${weight} · ${abbreviateId(entry.agentsId)}`;
+          return `  rank ${rank}/${playbookCount} · ${entry.title} (${role}) · ${weight} · ${entry.agentsId}`;
         })
         .join("\n");
 
@@ -218,7 +218,7 @@ export const readAgentsMd: ToolModule = {
         .join("\n\n");
 
       const preamble =
-        `read_agents_md · target: ${target.title} (${abbreviateId(targetId)})\n` +
+        `read_agents_md · target: ${target.title} (${targetId})\n` +
         `${playbookCount} playbook${playbookCount > 1 ? "s" : ""} govern this target, ordered root→closest. OBEY ALL; on any conflict the CLOSEST (higher rank) wins.\n` +
         `ancestry: ${ancestryBreadcrumb}\n${indexLines}`;
 

@@ -1,8 +1,8 @@
 // Pure renderer for /v1/search hits — turns Notion's verbose page/data_source objects into one
-// compact line each (object · "title" · short id · parent), so name→id lookups cost a few lines
-// instead of tens of KB. No API calls.
+// compact line each (object · "title" · full id · parent), so name→id lookups cost a few lines
+// instead of tens of KB. Ids are FULL (not abbreviated) — the whole point is to hand a usable id to
+// read_page / read_database / describe / read_agents_md. No API calls.
 
-import { abbreviateId } from "../notion/ids";
 import { type RichText, richTextToPlain } from "./page";
 import { type NotionParentRef, parentLabel } from "./parent";
 
@@ -42,7 +42,7 @@ export function formatSearch(results: RawSearchResult[]): string {
 
   const lines = results.map((result) => {
     const object = (result.object ?? "?").padEnd(pad);
-    const id = result.id ? abbreviateId(result.id) : "?";
+    const id = result.id ?? "?";
     return `${object} · "${searchResultTitle(result)}" · id ${id} · parent ${parentLabel(result.parent)}`;
   });
 

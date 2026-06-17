@@ -6,7 +6,7 @@
 // A "column" is a property rendered in a view — the property is the entity, hence order_properties.
 
 import { z } from "zod";
-import { abbreviateId, decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import {
   describePrivateFailure,
   type PageOrderEntry,
@@ -60,7 +60,7 @@ function namesToDecodedIds(names: string[], schema: Record<string, SchemaPropert
 async function reorderView(viewId: string, orderIds: string[]): Promise<string> {
   const viewResponse = await publicRequest("GET", `/v1/views/${viewId}`);
   if (!viewResponse.ok) {
-    return `${abbreviateId(viewId)}: read failed`;
+    return `${viewId}: read failed`;
   }
   const view = viewResponse.body as ViewBody;
   const configuration = view.configuration ?? {};
@@ -70,8 +70,8 @@ async function reorderView(viewId: string, orderIds: string[]): Promise<string> 
     configuration: { ...configuration, properties: newProperties },
   });
   return patch.ok
-    ? `${view.name ?? "(view)"} ${abbreviateId(viewId)}: reordered ✓`
-    : `${view.name ?? "(view)"} ${abbreviateId(viewId)}: PATCH failed — ${JSON.stringify(patch.body).slice(0, 120)}`;
+    ? `${view.name ?? "(view)"} ${viewId}: reordered ✓`
+    : `${view.name ?? "(view)"} ${viewId}: PATCH failed — ${JSON.stringify(patch.body).slice(0, 120)}`;
 }
 
 /** Reorder the canonical page-property order (private), preserving each property's default visibility. */

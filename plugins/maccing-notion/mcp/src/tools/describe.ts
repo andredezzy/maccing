@@ -4,7 +4,7 @@
 // properties as name · type. Complements read_page (content+values) and read_database (rows+views).
 
 import { z } from "zod";
-import { abbreviateId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { ReadStatus, readCollectionIcons } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { iconLabel, type NotionIcon } from "../readers/object";
@@ -58,7 +58,7 @@ function describePage(page: PageObject): string {
   const title = titleName ? richTextToPlain(properties[titleName].title) : "";
 
   const header = [
-    `# Page: ${title || (page.id ? abbreviateId(page.id) : "?")}`,
+    `# Page: ${title || (page.id ? page.id : "?")}`,
     `icon: ${iconLabel(page.icon)}`,
     `cover: ${iconLabel(page.cover)}`,
     `parent: ${parentLabel(page.parent)}`,
@@ -115,7 +115,7 @@ export const describe: ToolModule = {
               await describeDataSource(
                 dataSourceId,
                 resolvedDataSourceResponse.body as DataSourceObject,
-                `(via database ${abbreviateId(id)})`,
+                `(via database ${id})`,
               ),
             );
           }

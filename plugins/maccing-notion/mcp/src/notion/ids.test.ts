@@ -1,9 +1,9 @@
-// Pure unit tests for the Notion id helpers (normalizeUuid + abbreviateId + decodePropertyId +
-// idVariants). Run with `bun test`.
+// Pure unit tests for the Notion id helpers (normalizeUuid + decodePropertyId + idVariants).
+// Run with `bun test`.
 
 import { expect, test } from "bun:test";
 
-import { abbreviateId, decodePropertyId, idVariants, normalizeUuid } from "./ids";
+import { decodePropertyId, idVariants, normalizeUuid } from "./ids";
 
 test("lowercase input passes through unchanged", () => {
   expect(normalizeUuid("a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
@@ -27,18 +27,6 @@ test("trim AND lowercase are applied together", () => {
 
 test("UUID without dashes (32-char form) is also lowercased", () => {
   expect(normalizeUuid("A1B2C3D4E5F67890ABCDEF1234567890")).toBe("a1b2c3d4e5f67890abcdef1234567890");
-});
-
-test("abbreviateId: a long id is first-8 + ellipsis + last-4", () => {
-  expect(abbreviateId("a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBe("a1b2c3d4…7890");
-});
-
-test("abbreviateId: an id of exactly 12 chars is returned as-is (boundary)", () => {
-  expect(abbreviateId("abcdef123456")).toBe("abcdef123456");
-});
-
-test("abbreviateId: an id longer than 12 chars is abbreviated (boundary)", () => {
-  expect(abbreviateId("abcdef1234567")).toBe("abcdef12…4567");
 });
 
 test("decodePropertyId: an url-encoded id is decoded", () => {

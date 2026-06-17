@@ -19,12 +19,12 @@ const results: RawSearchResult[] = [
   },
 ];
 
-test("renders one compact line per hit: object · title · short id · parent", () => {
+test("renders one compact line per hit: object · title · full id · parent", () => {
   const output = formatSearch(results);
   expect(output).toContain("data_source");
   expect(output).toContain('"Months"');
-  expect(output).toContain("b2479c20…caf9"); // short id
-  expect(output).toContain("parent page 3cf65cfc…bdb4");
+  expect(output).toContain("b2479c20-380d-41f1-89f3-4449fb31caf9"); // FULL id — usable as-is, never abbreviated
+  expect(output).toContain("parent page 3cf65cfc-3cda-4338-8c29-10e08ec0bdb4");
   expect(output).toContain("# 2 hits");
 });
 

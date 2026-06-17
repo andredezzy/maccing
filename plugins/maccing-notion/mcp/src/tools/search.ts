@@ -20,7 +20,7 @@ export const search: ToolModule = {
     title: "Search Notion (name → id)",
     description:
       "Find a page or data source by name and get its id — the compact reader over POST /v1/search. Returns " +
-      'ranked hits, one line each (object · "title" · short id · parent), instead of the raw endpoint\'s ' +
+      'ranked hits, one line each (object · "title" · full id · parent), instead of the raw endpoint\'s ' +
       "tens-of-KB page objects. Pass object_type to filter (page | data_source — NOT 'database'). Ranked by " +
       "relevance/last-edited and NOT exhaustive — set exhaust_all=true to page to the end. Use this to resolve " +
       "a name into an id for read_page / read_database / describe / read_agents_md.",
