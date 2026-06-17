@@ -48,7 +48,20 @@ const customEmojiIcon = z.object({
   }),
 });
 
-export const icon = z.discriminatedUnion("type", [emojiIcon, customEmojiIcon, externalFile, notionFile, fileUpload]);
+// A native Notion icon from the built-in icon set (e.g. "chart-mixed", optionally with a color).
+const nativeIcon = z.object({
+  type: z.literal("icon"),
+  icon: z.object({ name: z.string(), color: z.string().optional() }),
+});
+
+export const icon = z.discriminatedUnion("type", [
+  emojiIcon,
+  customEmojiIcon,
+  nativeIcon,
+  externalFile,
+  notionFile,
+  fileUpload,
+]);
 
 export type Icon = z.infer<typeof icon>;
 

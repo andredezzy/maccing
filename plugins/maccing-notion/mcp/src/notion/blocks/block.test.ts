@@ -261,3 +261,36 @@ test("recursive toggle: parsed children contain paragraph", () => {
     expect(child?.type).toBe("paragraph");
   }
 });
+
+test("paragraph accepts the tab-child icon (emoji or native icon)", () => {
+  const emojiIcon = block.safeParse({
+    type: "paragraph",
+    paragraph: { rich_text: [{ type: "text", text: { content: "Tab one" } }], icon: { type: "emoji", emoji: "📁" } },
+  });
+  expect(emojiIcon.success).toBe(true);
+
+  const native = block.safeParse({
+    type: "paragraph",
+    paragraph: {
+      rich_text: [{ type: "text", text: { content: "Tab two" } }],
+      icon: { type: "icon", icon: { name: "chart-mixed" } },
+    },
+  });
+  expect(native.success).toBe(true);
+});
+
+test("numbered_list_item carries list_start_index and list_format on the first item", () => {
+  const result = block.safeParse({
+    type: "numbered_list_item",
+    numbered_list_item: {
+      rich_text: [{ type: "text", text: { content: "First" } }],
+      list_start_index: 5,
+      list_format: "roman",
+    },
+  });
+  expect(result.success).toBe(true);
+  if (result.success && result.data.type === "numbered_list_item") {
+    expect(result.data.numbered_list_item.list_start_index).toBe(5);
+    expect(result.data.numbered_list_item.list_format).toBe("roman");
+  }
+});

@@ -21,7 +21,9 @@ export const numberedListItem = (blockChild: z.ZodType<BlockObject>) =>
     numbered_list_item: z.object({
       rich_text: z.array(richText),
       color: z.string().optional(),
-      // list_start_index and list_format are undocumented extras; passthrough captures them
+      // Present only on the first item of a list: a custom start index, and the numbering format.
+      list_start_index: z.number().optional(),
+      list_format: z.enum(["numbers", "letters", "roman"]).optional(),
       children: z.array(blockChild).optional(),
     }),
   });

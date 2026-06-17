@@ -154,6 +154,13 @@ test("icon parses an emoji icon", () => {
   expect(parsed.type === "emoji" && parsed.emoji).toBe("💡");
 });
 
+// icon — native Notion icon (built-in icon set)
+
+test("icon parses a native Notion icon", () => {
+  const parsed = icon.parse({ type: "icon", icon: { name: "chart-mixed", color: "gray" } });
+  expect(parsed.type === "icon" && parsed.icon.name).toBe("chart-mixed");
+});
+
 // icon — external file
 
 test("icon parses an external file icon", () => {

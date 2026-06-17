@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { icon } from "../file";
 import { richText } from "../rich-text";
 import { blockMeta } from "./_envelope";
 import type { BlockObject } from "./block";
@@ -12,6 +13,8 @@ export const paragraph = (blockChild: z.ZodType<BlockObject>) =>
     paragraph: z.object({
       rich_text: z.array(richText),
       color: z.string().optional(),
+      // Optional icon — only set when this paragraph is a direct child of a tab block.
+      icon: icon.nullable().optional(),
       children: z.array(blockChild).optional(),
     }),
   });

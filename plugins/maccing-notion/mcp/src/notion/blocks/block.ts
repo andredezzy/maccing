@@ -48,7 +48,7 @@ export type BlockObject = BlockBase &
   (
     | {
         type: "paragraph";
-        paragraph: { rich_text: RichTextObject[]; color?: string; children?: BlockObject[] };
+        paragraph: { rich_text: RichTextObject[]; color?: string; icon?: Icon | null; children?: BlockObject[] };
       }
     | {
         type: "heading_1";
@@ -92,7 +92,13 @@ export type BlockObject = BlockBase &
       }
     | {
         type: "numbered_list_item";
-        numbered_list_item: { rich_text: RichTextObject[]; color?: string; children?: BlockObject[] };
+        numbered_list_item: {
+          rich_text: RichTextObject[];
+          color?: string;
+          list_start_index?: number;
+          list_format?: "numbers" | "letters" | "roman";
+          children?: BlockObject[];
+        };
       }
     | {
         type: "to_do";
