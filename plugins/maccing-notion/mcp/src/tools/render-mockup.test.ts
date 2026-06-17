@@ -55,6 +55,15 @@ test("render_mockup rejects a calendar view with month out of range (1-12 enforc
   expect(isError).toBe(true); // month: 13 fails z.number().min(1).max(12)
 });
 
+test("render_mockup rejects a DatabaseRender-style bundle (database + dataSource) — not a valid mockup input", async () => {
+  const { isError } = await run({
+    type: "table",
+    columns: ["Name"],
+    rows: [["Alice"]],
+  });
+  expect(isError).toBe(true); // old compact {type:"table",...} shape is not a valid block schema
+});
+
 test("render_mockup accepts a database whose views include a dashboard (wire schema mirrors the ViewBlock type)", async () => {
   const { isError } = await run({
     type: "database",

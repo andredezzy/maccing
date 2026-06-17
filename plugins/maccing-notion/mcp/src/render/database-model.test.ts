@@ -2,10 +2,10 @@
 // the produced model is renderable and aligned. Run with `bun test`.
 
 import { expect, test } from "bun:test";
+import { flattenValue, type RawRow } from "../readers/page";
 import type { PropertiesMap } from "../readers/schema";
-import type { IdToName, RawView } from "../readers/views";
-import { databaseToModel, flattenValue, groupOptionsFor, type RawRow, resolveView } from "./database-model";
-import { displayWidth, render } from "./index";
+import { groupOptionsFor, type IdToName, type RawView, resolveView } from "../readers/views";
+import { databaseToModel, displayWidth, render } from "./index";
 
 test("flattenValue handles the common property types", () => {
   expect(flattenValue({ type: "title", title: [{ plain_text: "Hi" }] })).toBe("Hi");

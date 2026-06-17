@@ -176,6 +176,32 @@ export function propertyToString(property: NotionPropertyValue): string {
   }
 }
 
+/** A property with an optional `type` field (accepts both the full API shape and partial inputs). */
+export interface RawProperty {
+  type?: string;
+  [key: string]: unknown;
+}
+
+/** A row that carries page properties — the minimal shape used by the database display renderer. */
+export interface RawRow {
+  properties?: Record<string, RawProperty>;
+}
+
+/**
+ * Flatten a Notion property value to a compact display string for database cell rendering.
+ * Handles the `relation` type specially (count of linked items). Returns "" for undefined.
+ */
+export function flattenValue(property: RawProperty | undefined): string {
+  if (!property) {
+    return "";
+  }
+  if (property.type === "relation") {
+    const relations = (property.relation as { id?: string }[]) ?? [];
+    return relations.length ? `${relations.length} linked` : "";
+  }
+  return propertyToString(property as NotionPropertyValue);
+}
+
 /** Flatten one Notion property value to a scalar (relations return their ids for later title resolution). */
 export function flattenProperty(property: NotionPropertyValue): FlattenedProperty {
   switch (property.type) {

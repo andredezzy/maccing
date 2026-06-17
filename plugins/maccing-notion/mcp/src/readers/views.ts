@@ -8,6 +8,67 @@ import { abbreviateId, decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
 import type { PropertiesMap } from "./schema";
 
+// ── View resolution (pure) ────────────────────────────────────────────────────────────────────────
+
+/** A view with its property IDs already resolved to names by the caller. */
+export interface ResolvedView {
+  name: string;
+  type: string;
+  columns: string[]; // visible column NAMES (title first)
+  groupBy?: string; // board group-by column name
+  groupOptions?: string[]; // board: every group-by option name, in order (seeds empty columns too)
+  dateProperty?: string; // calendar/timeline date column name
+}
+
+interface ViewConfigProperty {
+  property_id?: string;
+  property_name?: string;
+  visible?: boolean;
+}
+interface ViewConfig {
+  properties?: ViewConfigProperty[];
+  group_by?: { property_id?: string };
+  date_property_id?: string;
+  date_property_name?: string;
+}
+
+/**
+ * Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes.
+ *
+ * NOTE — two-step contract for board views: `groupOptions` is always `undefined` on return.
+ * After calling this, assign `resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema)`
+ * to seed the board's option columns. Schema is not taken here to keep the function pure and
+ * independently testable — see the `groupOptionsFor` export.
+ */
+export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
+  const config = (view.configuration ?? {}) as ViewConfig;
+  const resolve = (id: string | undefined): string | undefined =>
+    id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
+  const columns = (config.properties ?? [])
+    .filter((viewProperty) => viewProperty.visible !== false)
+    .map((viewProperty) => resolve(viewProperty.property_id) ?? viewProperty.property_name)
+    .filter((name): name is string => Boolean(name));
+  return {
+    name: view.name ?? "View",
+    type: view.type ?? "table",
+    columns,
+    groupBy: resolve(config.group_by?.property_id),
+    dateProperty: resolve(config.date_property_id) ?? config.date_property_name,
+  };
+}
+
+/** A board's columns are its group-by property's options — return them in schema order so the mockup
+ * draws every status/select column (even empty ones), matching how Notion lays out the board. */
+export function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): string[] | undefined {
+  if (!groupBy) {
+    return undefined;
+  }
+  const property = schema[groupBy];
+  const options = property?.status?.options ?? property?.select?.options;
+  const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
+  return names.length ? names : undefined;
+}
+
 /** Concurrent GET /v1/views/{id} per batch — conservative vs the general rate limit (cf. PAGE_FETCH_BATCH_SIZE). */
 const VIEW_FETCH_BATCH_SIZE = 10;
 

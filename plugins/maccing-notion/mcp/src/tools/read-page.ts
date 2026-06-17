@@ -15,19 +15,20 @@ import { type NotionMarkdownResponse, normalizeCallouts } from "../readers/markd
 import type { NotionIcon } from "../readers/object";
 import { flattenProperty, type NotionPageBase, titleOf } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
-import { type RawBlock, render } from "../render";
+import { render } from "../render";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["markdown", "outline", "text", "mockup"] as const;
 
 interface RawChildrenResponse {
-  results?: RawBlock[];
+  results?: BlockObject[];
   has_more?: boolean;
   next_cursor?: string | null;
 }
+
 /** Fetch a page's block tree (recursing into has_children blocks up to `depth`), for the mockup renderer. */
-async function fetchBlockTree(id: string, depth: number): Promise<RawBlock[]> {
-  const out: RawBlock[] = [];
+async function fetchBlockTree(id: string, depth: number): Promise<BlockObject[]> {
+  const out: BlockObject[] = [];
   let cursor: string | undefined;
   do {
     const query: Record<string, unknown> = { page_size: 100 };
@@ -41,7 +42,13 @@ async function fetchBlockTree(id: string, depth: number): Promise<RawBlock[]> {
     const body = response.body as RawChildrenResponse;
     for (const block of body.results ?? []) {
       if (block.has_children && depth > 0 && block.id) {
-        block.children = await fetchBlockTree(block.id, depth - 1);
+        const children = await fetchBlockTree(block.id, depth - 1);
+        if (children.length > 0) {
+          const payload = (block as Record<string, unknown>)[block.type] as Record<string, unknown>;
+          if (payload && typeof payload === "object") {
+            payload.children = children;
+          }
+        }
       }
       out.push(block);
     }
@@ -276,7 +283,7 @@ export const readPage: ToolModule = {
         if (!pageResponse.ok) {
           return err("Could not read the page — check the id and that NOTION_TOKEN has access.");
         }
-        return ok(render({ page: pageResponse.body as NotionPageObject, blocks: tree as BlockObject[] }));
+        return ok(render({ page: pageResponse.body as NotionPageObject, blocks: tree }));
       }
 
       const includeProperties = args.include_properties !== false;

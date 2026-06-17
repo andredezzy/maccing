@@ -6,13 +6,14 @@ import { z } from "zod";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { readViewOrder } from "../notion/private-client";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
-import { iconGlyph, type NotionIcon } from "../readers/object";
-import { type FlattenedProperty, flattenProperty, type NotionPropertyValue, richTextToPlain } from "../readers/page";
+import type { DatabaseRender } from "../notion/render-bundles";
+import type { NotionIcon } from "../readers/object";
+import { type FlattenedProperty, flattenProperty, type NotionPropertyValue } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { databaseToDataSourceId, formatSchema, type PropertiesMap } from "../readers/schema";
 import { buildIdToName, fetchViews, formatViews, orderViews, selectViewIndex, viewQueryFilter } from "../readers/views";
-import { databaseToModel, groupOptionsFor, render, resolveView } from "../render";
+import { render } from "../render";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary", "mockup"] as const;
@@ -64,11 +65,6 @@ async function renderDatabaseMockup(
       dbResponse = await publicRequest("GET", `/v1/databases/${parentDatabaseId}`);
     }
   }
-  const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
-  const title = richTextToPlain(database.title) || "(database)";
-  const idToName = buildIdToName(schema);
-  const titleColumn =
-    Object.entries(schema).find(([, property]) => property.type === "title")?.[0] ?? Object.keys(schema)[0] ?? "Name";
 
   // Order views the way Notion shows them. The public API exposes no tab order or default-view signal, so
   // we read the container block's `view_ids` via private api/v3 (databaseId IS the collection_view block
@@ -76,14 +72,6 @@ async function renderDatabaseMockup(
   // Falls back to public order if token_v2 is absent. `viewSelector` picks which view to render.
   const rawViews = await fetchViews(dataSourceId);
   const ordered = orderViews(rawViews, await readViewOrder(databaseId), databaseId);
-  const views = ordered.map((view) => {
-    const resolved = resolveView(view, idToName);
-    resolved.columns = [titleColumn, ...resolved.columns.filter((column) => column !== titleColumn)];
-    if (resolved.type === "board") {
-      resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema);
-    }
-    return resolved;
-  });
   const selectedIndex = selectViewIndex(ordered, viewSelector);
 
   // Sample the rows the SELECTED view actually shows — apply its filter + sorts + quick_filters so the
@@ -107,15 +95,15 @@ async function renderDatabaseMockup(
   const truncated = fetched.length > SAMPLE_CAP;
   const rows = truncated ? fetched.slice(0, SAMPLE_CAP) : fetched;
 
-  const model = databaseToModel({
-    title,
-    icon: iconGlyph(database.icon),
-    titleColumn,
-    views: views.length ? views : [{ name: "Table", type: "table", columns: [titleColumn] }],
+  const database = dbResponse.ok ? (dbResponse.body as DatabaseTitleBody) : {};
+  const bundle = {
+    database,
+    dataSource: { properties: schema },
+    views: ordered,
     rows,
-  });
-  model.view = views.length ? selectedIndex : 0;
-  const body = render({ type: "database", database: model });
+    viewIndex: selectedIndex,
+  } as unknown as DatabaseRender;
+  const body = render(bundle);
 
   return truncated ? `${body}\n\n(mockup preview — showing the first ${SAMPLE_CAP} rows; the database has more)` : body;
 }

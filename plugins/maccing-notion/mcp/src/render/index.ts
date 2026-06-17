@@ -13,16 +13,14 @@ import "./blocks"; // side-effect: registers every block renderer (content · da
 import type { BlockObject } from "../notion/blocks/block";
 import type { DatabaseRender, PageRender } from "../notion/render-bundles";
 import { iconGlyph } from "../readers/object";
-import { propertyToString, richTextToPlain } from "../readers/page";
-import { buildIdToName } from "../readers/views";
+import { flattenValue, propertyToString, type RawRow, richTextToPlain } from "../readers/page";
+import { buildIdToName, type ResolvedView } from "../readers/views";
 import type { DatabaseBlock, DatabaseModel } from "./blocks/database/database";
 import type { DatabaseView } from "./blocks/database/views/engine";
 import type { GalleryCard } from "./blocks/database/views/gallery";
 import { type Block, renderBlock, renderBlocks } from "./blocks/engine";
 import { renderPage } from "./page";
 
-// Keep backward compat exports for database-model (used by read-database.ts)
-export { databaseToModel, groupOptionsFor, resolveView } from "./database-model";
 // Re-export RawBlock for read-page.ts
 export type { RawBlock } from "./raw-block";
 export { mockupSchema } from "./schema";
@@ -30,6 +28,156 @@ export { displayWidth } from "./text";
 export type { Block, DatabaseRender, DatabaseView, PageRender };
 
 export type Mockup = PageRender | Block | Block[] | DatabaseRender;
+
+// ── databaseToModel — pure mapper (pre-resolved views + rows → DatabaseModel) ────────────────────
+
+interface DatabaseModelInput {
+  title: string;
+  icon?: string;
+  titleColumn: string;
+  views: ResolvedView[];
+  rows: RawRow[];
+}
+
+const BOARD_CARD_CAP_MODEL = 6;
+
+interface DayComponentsModel {
+  year: number;
+  month: number;
+  day: number;
+}
+
+interface DatedRowModel {
+  date: DayComponentsModel;
+  title: string;
+}
+
+function dayOfModel(dateString: string): DayComponentsModel | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
+  return match ? { year: +match[1], month: +match[2], day: +match[3] } : null;
+}
+
+function rowTitleModel(row: RawRow, titleColumn: string): string {
+  return flattenValue(row.properties?.[titleColumn]) || "(untitled)";
+}
+
+function viewToBlock(
+  view: ResolvedView,
+  rows: RawRow[],
+  titleColumn: string,
+  dbTitle: string,
+  tabs: string[],
+): DatabaseView {
+  const columns = view.columns.length ? view.columns : [titleColumn];
+  const otherColumns = columns.filter((column) => column !== titleColumn);
+
+  switch (view.type) {
+    case "gallery":
+      return {
+        type: "gallery",
+        name: dbTitle,
+        views: tabs,
+        cardSize: "medium",
+        cards: rows.map((row) => ({
+          name: rowTitleModel(row, titleColumn),
+          lines: otherColumns.map((column) => flattenValue(row.properties?.[column])).filter(Boolean),
+        })),
+      };
+    case "board": {
+      const groupBy = view.groupBy ?? otherColumns[0] ?? titleColumn;
+      const groups = new Map<string, GalleryCard[]>();
+
+      for (const option of view.groupOptions ?? []) {
+        groups.set(option, []);
+      }
+      for (const row of rows) {
+        const key = flattenValue(row.properties?.[groupBy]) || "(empty)";
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key)?.push({ name: rowTitleModel(row, titleColumn) });
+      }
+      return {
+        type: "board",
+        name: dbTitle,
+        views: tabs,
+        groups: [...groups].map(([name, cards]) => {
+          if (cards.length <= BOARD_CARD_CAP_MODEL) {
+            return { name, cards };
+          }
+          return {
+            name,
+            total: cards.length,
+            cards: [...cards.slice(0, BOARD_CARD_CAP_MODEL), { name: `+${cards.length - BOARD_CARD_CAP_MODEL} more` }],
+          };
+        }),
+      };
+    }
+    case "list":
+      return {
+        type: "list",
+        name: dbTitle,
+        views: tabs,
+        items: rows.map((row) => ({
+          title: rowTitleModel(row, titleColumn),
+          meta: otherColumns
+            .map((column) => flattenValue(row.properties?.[column]))
+            .filter(Boolean)
+            .join(" · "),
+        })),
+      };
+    case "calendar": {
+      const dateColumn =
+        view.dateProperty ??
+        columns.find((column) => flattenValue(rows[0]?.properties?.[column]).match(/^\d{4}-\d{2}/));
+      const dated = rows
+        .map((row) => ({
+          date: dayOfModel(flattenValue(row.properties?.[dateColumn ?? ""])),
+          title: rowTitleModel(row, titleColumn),
+        }))
+        .filter((datedRow): datedRow is DatedRowModel => datedRow.date !== null);
+      if (dated.length === 0) {
+        break; // no usable dates → fall through to table
+      }
+      const { year, month } = dated[0].date;
+      return {
+        type: "calendar",
+        name: dbTitle,
+        views: tabs,
+        year,
+        month,
+        events: dated
+          .filter((datedRow) => datedRow.date.year === year && datedRow.date.month === month)
+          .map((datedRow) => ({ day: datedRow.date.day, title: datedRow.title })),
+      };
+    }
+    default:
+      break;
+  }
+  return {
+    type: "table",
+    name: dbTitle,
+    views: tabs,
+    columns,
+    rows: rows.map((row) => columns.map((column) => flattenValue(row.properties?.[column]))),
+  };
+}
+
+/** Map a database's resolved views + sample rows to a renderable DatabaseModel. Pure. */
+export function databaseToModel(input: DatabaseModelInput): DatabaseModel {
+  const tabs = input.views.map((view) => view.name);
+  const views: DatabaseView[] = input.views.length
+    ? input.views.map((view) => viewToBlock(view, input.rows, input.titleColumn, input.title, tabs))
+    : [
+        {
+          type: "table",
+          name: input.title,
+          columns: [input.titleColumn],
+          rows: input.rows.map((row) => [rowTitleModel(row, input.titleColumn)]),
+        },
+      ];
+  return { title: input.title, icon: input.icon, view: 0, views };
+}
 
 const DEFAULT_WIDTH = 70;
 
@@ -44,6 +192,8 @@ function finish(lines: string[]): string {
 /** Convert a DatabaseRender (official API shapes) into a DatabaseModel for the internal renderer. */
 function renderDatabaseBundle(bundle: DatabaseRender, width: number): string[] {
   const { database, dataSource, views: viewObjects, rows } = bundle;
+  // viewIndex may be injected at runtime by read_database (not part of the official DatabaseRender type)
+  const viewIndex = (bundle as DatabaseRender & { viewIndex?: number }).viewIndex;
 
   const title = richTextToPlain(database.title) || "(database)";
   const icon = iconGlyph(database.icon);
@@ -219,7 +369,9 @@ function renderDatabaseBundle(bundle: DatabaseRender, width: number): string[] {
         } satisfies DatabaseView,
       ];
 
-  const model: DatabaseModel = { title, icon, view: 0, views: databaseViews };
+  const resolvedViewIndex =
+    viewIndex !== undefined && viewIndex >= 0 && viewIndex < databaseViews.length ? viewIndex : 0;
+  const model: DatabaseModel = { title, icon, view: resolvedViewIndex, views: databaseViews };
   const databaseBlock: DatabaseBlock = { type: "database", database: model };
   return renderBlock(databaseBlock, width, 0, 0);
 }
