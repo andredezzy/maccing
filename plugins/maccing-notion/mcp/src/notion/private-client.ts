@@ -22,6 +22,14 @@ const BASE = "https://www.notion.so/api/v3";
 const MIN_PRIVATE_INTERVAL_MS = 280;
 const BASE_PRIVATE_BACKOFF_MS = 700;
 
+// The FIRST api/v3 call after process start can be met with cold-start bot-protection (a bot-page or a
+// connection reset) that lingers for several seconds before the session warms. The session warm-up
+// (getSpaces, behind the single-flight activeUserId) gets a bigger, backed-off retry budget than a normal
+// call so it OUTLASTS that window instead of giving up — every inline DB's view-order read awaits that one
+// call, so if it fails the whole page loses its Notion view order at once (the Muscle Groups gallery → table
+// flake). Backing off (not bursting) is also the correct anti-bot behavior. 5 attempts ≈ up to 7s of patience.
+export const WARMUP_RETRIES = 5;
+
 let lastPrivateStart = 0;
 let privateGate: Promise<void> = Promise.resolve();
 
@@ -103,6 +111,21 @@ async function postOnce(endpoint: string, body: unknown, activeUser?: string): P
   return { status: response.status, ok: response.ok, body: responseBody };
 }
 
+/** Retry a private call until it succeeds or the budget runs out, backing off (linearly, never bursting)
+ * between attempts so a transient throttle — bot-page or connection reset — can self-heal. Pure: the caller
+ * supplies the attempt thunk, so the cold-start window is testable without a live socket. */
+export async function retryPrivate(
+  attempt: () => Promise<PrivateResponse>,
+  maxRetries: number,
+): Promise<PrivateResponse> {
+  let response = await attempt();
+  for (let retries = 1; retries < maxRetries && !response.ok; retries++) {
+    await new Promise((resolve) => setTimeout(resolve, BASE_PRIVATE_BACKOFF_MS * retries));
+    response = await attempt();
+  }
+  return response;
+}
+
 /** api/v3 POST with bounded paced backoff. The private API throttles via BOTH bot-pages and
  * connection resets; retrying lets a transient throttle self-heal — for reads AND writes. Our
  * private writes are idempotent (icon schema sets), so a retry after an inconclusive reset is safe. */
@@ -112,12 +135,7 @@ async function postWithRetry(
   activeUser?: string,
   maxRetries = 3,
 ): Promise<PrivateResponse> {
-  let response = await postOnce(endpoint, body, activeUser);
-  for (let attempt = 1; attempt < maxRetries && !response.ok; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, BASE_PRIVATE_BACKOFF_MS * attempt));
-    response = await postOnce(endpoint, body, activeUser);
-  }
-  return response;
+  return retryPrivate(() => postOnce(endpoint, body, activeUser), maxRetries);
 }
 
 interface GetSpacesUserRecord {
@@ -129,7 +147,9 @@ async function resolveActiveUser(): Promise<string> {
     throw new Error("NOTION_SPACE_ID is not set.");
   }
 
-  const response = await postWithRetry("getSpaces", {});
+  // getSpaces is the session warm-up — the universal first private call. Give it the patient cold-start
+  // budget so a transient bot window can't cascade into every awaiting view-order read returning null.
+  const response = await postWithRetry("getSpaces", {}, undefined, WARMUP_RETRIES);
   if (!response.ok || typeof response.body !== "object" || response.body === null) {
     throw new Error(
       `getSpaces failed (status ${response.status}). Is NOTION_TOKEN_V2 the .app.notion.com (broad-domain) cookie?`,
