@@ -16,6 +16,8 @@ The private API is reached exclusively via two tools on the self-hosted `notion`
 
 Extending it (a new UI-only capability) is a server change — add a file under `mcp/tools/` and one line to the registry — not a new script. Auth/envelope details below are for understanding and for DevTools capture; you drive it through the tools.
 
+**Throttle handling is built in — do NOT hand-roll backoff.** Both tools auto-pace private calls (a minimum interval) and **adaptively back off** on bot-protection: every throttle (a dropped socket, a 429/503, or an HTML bot-page) pushes a GLOBAL cooldown forward — exponential per consecutive throttle, capped at 30s, cleared on the first success — and the shared promise-chained gate makes EVERY private call wait it out (a retry, a read-back, a concurrent OR a separate later tool call alike). So never `sleep` between MCP calls to space them yourself: on a throttled result just **retry the tool in a moment** — the server self-throttles across calls — and only wait longer if it persists across a few retries. A genuine API error (a JSON validation body) is NOT treated as a throttle, so it won't trigger the cooldown.
+
 ## When the public API is enough (don't use this file)
 Pages/database icons & covers, properties, rows, views (table/board/gallery/chart), sorts, filters (except UI relative dates), **most** formulas, rollups, relations, blocks — all public. Reach for the private API **only** for the UI-only gaps below. ⚠️ **Exception — parse/list/relation formulas:** a formula that splits a text property (`split().map(toNumber(current))`) or reads a related page's property (`current.prop("X")`, `.last().prop("X")`) is **NOT authorable via the public API** (it returns `400 "Type error"` or silently folds `prop().split()` to `[]`) — author it here as a `formula2` AST (see "Author a Formula 2.0 formula" below). Full diagnosis in `formulas.md`.
 
@@ -156,9 +158,9 @@ This is how the property-icon and "This month" formats were found. To learn the 
 | `401 "Could not validate token"` | Wrong cookie — use the **`.app.notion.com`** (broad-domain) `token_v2`, not the exact-host one. |
 | `400 "User does not have edit access"` | `x-notion-active-user-header` is the wrong account — pick the one whose `getSpaces.space` contains the target space. |
 | `200 {}` but change didn't persist | Missing the trailing `update` commit op, OR an invalid `/icons/<file>` name (silent no-op). |
-| `getRecordValues` returns HTML / reads flaky | Missing `x-notion-active-user-header`, or **rate-limited**. Space calls out (seconds apart), add retries; don't loop hard. |
+| `getRecordValues` returns HTML / reads flaky | Missing `x-notion-active-user-header`, or **rate-limited** — the client auto-paces + adaptively backs off (see Access), so just retry the tool; don't add your own sleeps. |
 | Public API doesn't reflect it | Expected — these features are invisible to `api.notion.com/v1`. |
-| Batched `upsert_property` (many icons/visibility) → **502 HTML bot page** (`"Non-JSON response"`) | Bot-protection throttle from bursting `saveTransactions` + read-backs. Split into smaller batches, space calls ~2s+, back off ~10s on 502, retry. For **default column visibility**, prefer the public **view config** (a view's visible-property list — `views.md`) over the private `visible` flag: reliable, not rate-limited. |
+| Batched `upsert_property` (many icons/visibility) → **502 HTML bot page** (`"Non-JSON response"`) | Bot-protection throttle from bursting `saveTransactions` + read-backs. The client now auto-paces + adaptively backs off (see Access), so just **retry the tool in a moment** — it self-throttles; no manual spacing/backoff math. Still **batch, don't loop** (one call for all columns, not N) to cut total calls. For **default column visibility**, prefer the public **view config** (a view's visible-property list — `views.md`) over the private `visible` flag: reliable, not rate-limited. |
 
 ---
 

@@ -16,26 +16,77 @@ const TOKEN_V2 = process.env.NOTION_TOKEN_V2;
 const SPACE_ID = process.env.NOTION_SPACE_ID;
 const BASE = "https://www.notion.so/api/v3";
 
-// Serialize private POSTs with a minimum interval — Notion's api/v3 bot-protection trips on bursts
-// (rapid calls return an HTML page). A shared promise chain spaces every call ≥ MIN apart, so no
-// code path (a batch readback, describe, an upsert) can burst-trip it. Transparent to callers.
+// Pacing + ADAPTIVE backoff for Notion's api/v3 bot-protection. The private API trips on bursts (an HTML
+// bot-page or a dropped socket) AND the trip is STATEFUL — once hot it stays hot for tens of seconds, so
+// retrying or firing another private call too soon just re-trips and ESCALATES it (the failure that needed
+// a ~60s manual wait to clear). Two transparent layers defend against it:
+//   1. MIN_PRIVATE_INTERVAL_MS — a floor between calls so nothing bursts; and
+//   2. an ADAPTIVE COOLDOWN — each throttle pushes a GLOBAL "don't call until" forward, growing
+//      exponentially per consecutive throttle (capped) and clearing on the first success. The gate is a
+//      module-level promise chain, so EVERY path — a retry, a batch readback, a concurrent OR separate tool
+//      call — waits it out; a trip self-heals across calls instead of cascading. Backing off (not bursting)
+//      is also the correct anti-bot behavior.
 const MIN_PRIVATE_INTERVAL_MS = 280;
-const BASE_PRIVATE_BACKOFF_MS = 700;
+const THROTTLE_COOLDOWN_BASE_MS = 1_000;
+const THROTTLE_COOLDOWN_CAP_MS = 30_000;
 
-// The FIRST api/v3 call after process start can be met with cold-start bot-protection (a bot-page or a
-// connection reset) that lingers for several seconds before the session warms. The session warm-up
-// (getSpaces, behind the single-flight activeUserId) gets a bigger, backed-off retry budget than a normal
-// call so it OUTLASTS that window instead of giving up — every inline DB's view-order read awaits that one
-// call, so if it fails the whole page loses its Notion view order at once (the Muscle Groups gallery → table
-// flake). Backing off (not bursting) is also the correct anti-bot behavior. 5 attempts ≈ up to 7s of patience.
+// A failed private response is bot-protection (a throttle), NOT a real error, when it carries a 0/429/503
+// status or one of these body markers. Drives both the cooldown growth and the user-facing message.
+const THROTTLE_SIGNATURE =
+  /throttl|bot.?page|bot-protection|rate.?limit|unreachable|connection|socket|closed unexpectedly|non-json|hang up/i;
+
+// The FIRST api/v3 call after process start can meet cold-start bot-protection (a bot-page or connection
+// reset) that lingers a few seconds. The session warm-up (getSpaces, behind the single-flight
+// activeUserId) gets a bigger retry budget than a normal call so it OUTLASTS that window instead of giving
+// up — every inline DB's view-order read awaits that one call, so if it fails the whole page loses its
+// Notion view order at once (the Muscle Groups gallery → table flake). With the exponential cooldown, 5
+// attempts ride out a multi-second cold start (≈ 1 + 2 + 4 + 8s of patience).
 export const WARMUP_RETRIES = 5;
 
 let lastPrivateStart = 0;
 let privateGate: Promise<void> = Promise.resolve();
+// Adaptive throttle state (see the pacing comment): the gate won't release a call before cooldownUntil,
+// and each consecutive throttle grows that window; the first success clears it.
+let cooldownUntil = 0;
+let consecutiveThrottles = 0;
+
+/** A failed private response is a THROTTLE (vs a genuine API error) when the transport dropped (status 0),
+ * Notion returned 429/503, or the body is a bot-page / rate-limit marker. A JSON validation error (bad
+ * args, no edit access, …) is NOT a throttle, so it never grows the cooldown. Pure → unit-tested. */
+export function isThrottle(response: PrivateResponse): boolean {
+  if (response.ok) {
+    return false;
+  }
+  if (response.status === 0 || response.status === 429 || response.status === 503) {
+    return true;
+  }
+  const text = typeof response.body === "string" ? response.body : JSON.stringify(response.body ?? "");
+  return THROTTLE_SIGNATURE.test(text);
+}
+
+/** The cooldown (ms) imposed after the Nth consecutive throttle (1-based) — exponential, capped. Jitter is
+ * layered on by the caller, so this stays pure/testable. */
+export function throttleCooldownMs(consecutive: number): number {
+  return Math.min(THROTTLE_COOLDOWN_CAP_MS, THROTTLE_COOLDOWN_BASE_MS * 2 ** Math.max(0, consecutive - 1));
+}
+
+/** Fold one private response into the global throttle state: a throttle pushes the cooldown forward
+ * (exponential + jitter); the first OK clears it; a genuine non-throttle error is neutral. */
+function noteOutcome(response: PrivateResponse): void {
+  if (isThrottle(response)) {
+    consecutiveThrottles += 1;
+    const backoff = throttleCooldownMs(consecutiveThrottles);
+    cooldownUntil = Date.now() + backoff + Math.floor(Math.random() * (backoff / 4));
+  } else if (response.ok) {
+    consecutiveThrottles = 0;
+    cooldownUntil = 0;
+  }
+}
 
 async function pacePrivate(): Promise<void> {
   privateGate = privateGate.then(async () => {
-    const delayMs = MIN_PRIVATE_INTERVAL_MS - (Date.now() - lastPrivateStart);
+    const readyAt = Math.max(lastPrivateStart + MIN_PRIVATE_INTERVAL_MS, cooldownUntil);
+    const delayMs = readyAt - Date.now();
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -70,12 +121,10 @@ export function spaceId(): string | undefined {
   return SPACE_ID;
 }
 
-/** A single api/v3 POST — paced, with bot-page detection AND network-error capture. Never throws:
- * a connection reset (Notion drops the socket under hard bot-protection) becomes an ok:false result,
- * so every caller handles throttling uniformly instead of seeing a raw fetch error. */
-async function postOnce(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
-  await pacePrivate();
-
+/** Perform one api/v3 POST — bot-page detection AND network-error capture, never throws: a connection
+ * reset (Notion drops the socket under hard bot-protection) becomes an ok:false result, so every caller
+ * handles throttling uniformly instead of seeing a raw fetch error. Pacing + cooldown live in postOnce. */
+async function performPost(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Cookie: `token_v2=${TOKEN_V2}`,
@@ -111,16 +160,26 @@ async function postOnce(endpoint: string, body: unknown, activeUser?: string): P
   return { status: response.status, ok: response.ok, body: responseBody };
 }
 
-/** Retry a private call until it succeeds or the budget runs out, backing off (linearly, never bursting)
- * between attempts so a transient throttle — bot-page or connection reset — can self-heal. Pure: the caller
- * supplies the attempt thunk, so the cold-start window is testable without a live socket. */
+/** A single api/v3 POST: paced behind the shared gate (min-interval + adaptive cooldown), then the
+ * response folded back into the throttle state (noteOutcome). Transparent to callers; never throws. */
+async function postOnce(endpoint: string, body: unknown, activeUser?: string): Promise<PrivateResponse> {
+  await pacePrivate();
+  const response = await performPost(endpoint, body, activeUser);
+  noteOutcome(response);
+  return response;
+}
+
+/** Retry a private call until it succeeds or the budget runs out. Spacing between attempts is the shared
+ * gate's job, NOT a separate backoff here: each throttled attempt grows the adaptive cooldown (noteOutcome)
+ * that the next attempt's pacePrivate waits out — so backoff has ONE source of truth and a trip self-heals
+ * across attempts AND across separate calls. Pure: the caller supplies the thunk, so the budget is testable
+ * without a live socket. */
 export async function retryPrivate(
   attempt: () => Promise<PrivateResponse>,
   maxRetries: number,
 ): Promise<PrivateResponse> {
   let response = await attempt();
   for (let retries = 1; retries < maxRetries && !response.ok; retries++) {
-    await new Promise((resolve) => setTimeout(resolve, BASE_PRIVATE_BACKOFF_MS * retries));
     response = await attempt();
   }
   return response;
@@ -250,9 +309,6 @@ export enum ReadStatus {
   THROTTLED = "THROTTLED",
 }
 
-const THROTTLE_SIGNATURE =
-  /throttl|bot.?page|bot-protection|rate.?limit|unreachable|connection|socket|closed unexpectedly|non-json|hang up/i;
-
 /**
  * Turn a failed private-API body into a user-facing message. A connection reset / bot page is the
  * session's bot-protection, NOT a real failure — say so and reassure that the public schema/value
@@ -261,7 +317,7 @@ const THROTTLE_SIGNATURE =
 export function describePrivateFailure(body: unknown): string {
   const text = typeof body === "string" ? body : JSON.stringify(body);
   if (THROTTLE_SIGNATURE.test(text)) {
-    return "private app API throttled (bot protection) — column icons not applied (any public schema/value changes in this batch are listed under `applied`); retry the icon entries in a moment.";
+    return "private app API throttled (bot protection) — this UI-only change didn't apply. The client now self-throttles and backs off automatically, so just retry in a moment (any public schema/value changes in the same batch already landed).";
   }
   return `private write failed: ${text.slice(0, 300)}`;
 }

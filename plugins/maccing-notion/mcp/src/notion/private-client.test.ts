@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
-import { retryPrivate, WARMUP_RETRIES } from "./private-client";
+import { isThrottle, retryPrivate, throttleCooldownMs, WARMUP_RETRIES } from "./private-client";
 
 const realSetTimeout = globalThis.setTimeout;
 beforeEach(() => {
@@ -49,4 +49,23 @@ test("a long cold-start transient needs the patient warm-up budget — a normal 
   const transient = 4; // the cold-start bot window clears only on the 5th attempt
   expect((await retryPrivate(flaky(transient).attempt, 3)).ok).toBe(false); // a normal call gives up → the flake
   expect((await retryPrivate(flaky(transient).attempt, WARMUP_RETRIES)).ok).toBe(true); // the warm-up survives it
+});
+
+test("isThrottle: bot-protection (socket drop / 429 / 503 / bot-page body) trips the cooldown; a real error doesn't", () => {
+  // Throttles — these GROW the global cooldown so the next call backs off.
+  expect(isThrottle({ status: 0, ok: false, body: "Private API unreachable (likely throttled / reset)" })).toBe(true);
+  expect(isThrottle({ status: 429, ok: false, body: { message: "rate limited" } })).toBe(true);
+  expect(isThrottle({ status: 503, ok: false, body: "Service Unavailable" })).toBe(true);
+  expect(isThrottle({ status: 200, ok: false, body: "Non-JSON response (likely bot page)" })).toBe(true);
+  // Not throttles — a success, or a genuine JSON validation error (must NOT grow the cooldown).
+  expect(isThrottle({ status: 200, ok: true, body: { ok: true } })).toBe(false);
+  expect(isThrottle({ status: 400, ok: false, body: { message: "body.operations should be an array" } })).toBe(false);
+});
+
+test("throttleCooldownMs grows exponentially per consecutive throttle and caps", () => {
+  expect(throttleCooldownMs(1)).toBe(1_000); // first throttle → 1s
+  expect(throttleCooldownMs(2)).toBe(2_000); // doubles each time
+  expect(throttleCooldownMs(3)).toBe(4_000);
+  expect(throttleCooldownMs(4)).toBe(8_000);
+  expect(throttleCooldownMs(99)).toBe(30_000); // capped — never an unbounded wait
 });
