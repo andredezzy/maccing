@@ -108,6 +108,7 @@ The public API stores `formula.expression` as a **string** and compiles it serve
    ```
    - **`set` replaces the whole schema entry** — include `name`/`type`/`icon`/`version` so you don't drop them. (`update` would *merge*, leaving a stale `number_format` when converting a number→formula.)
    - **Raw prop ids are URL-DECODED** (`Wr%7Bh` → `Wr{h`); `<target_ds_id>` == the collection id == your public `data_source_id`; **`spaceId`** is the 3rd UUID in any public compiled `{{notion:block_property:…}}` token.
+   - **The `code` array is freely EDITABLE — not just pointer-swappable.** You can ADD and NEST list-ops to extend a formula, not only re-point an existing one — splice the extra literal fragments + reused `‣`/`fpp` tokens into the array. Live example (2026-06-18): turned a Muscle-Groups `To beat` from *“sum Volume on the latest session”* into *“sum Volume on the latest session whose volume > 0”* (skips cardio / unparseable-rep days) by nesting a sub-query as the reference date — `<rel>.filter(current.<Volume‣> > 0).map(current.<Date‣>).sort().last()` inside the outer `.filter(dateBetween(current.<Date‣>, <that>, "days") == 0).map(current.<Volume‣>).sum()`. (`.sort().last()` = the MAX/latest of a date list; nested `current` scopes to its own enclosing lambda.)
 
 3. **VERIFY** — `200 {}` does NOT prove persistence. Create a probe row, read it back via the **public** API: the formula cell must show the computed value. Then trash the probe row.
 
