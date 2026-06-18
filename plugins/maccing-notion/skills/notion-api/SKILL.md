@@ -42,7 +42,7 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
-**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. **The sweep is bidirectional — read the closest AGENTS.md before a change, maintain the closest one after** (every change, at the right level — see "Maintain the nearest governing `AGENTS.md`" under the conventions rule).
+**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. **The sweep is bidirectional — read the closest AGENTS.md before a change, maintain the closest one after** — enforced as its own hard gate by the **MANDATORY "update the nearest `AGENTS.md` after every write"** rule immediately below (write at the right level — closest wins).
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -59,6 +59,39 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 ### The Bottom Line
 
 Walk the tree. Read every `AGENTS.md` from root to target. Obey the closest one on conflict. **Only then** act. This is non-negotiable.
+
+## MANDATORY — update the nearest `AGENTS.md` after every write (the sweep's back half)
+
+The ancestral-`AGENTS.md` sweep is **bidirectional**. You read the nearest playbook *before* a change (the read-sweep above); you **MUST update it *after*** any change that alters what it describes. An `AGENTS.md` that still describes a structure you just changed is **actively lying** to the next agent and to the user — a dead database id, a reference to a deleted DB, a renamed thing under its old name, "five databases" when there are three, a hub that moved. Stale architecture notes are *worse* than none, because they are trusted. Maintenance is the back half of the same mandatory sweep, **not** a separate task and **never** something to wait to be asked for.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+```
+NO WRITE-TASK IS COMPLETE UNTIL THE NEAREST GOVERNING AGENTS.md REFLECTS THE NEW REALITY — SAME TASK, UNPROMPTED
+```
+
+### The Gate (run after any write that changes structure / ids / names / layout / conventions)
+1. **Identify** the nearest governing `AGENTS.md` — the closest one on the root→target path that owns the changed subtree. If a higher one (e.g. the root **map**) also describes what you changed, it is in scope too.
+2. **Scan it line-by-line** against what you changed: the architecture/model description and DB count, the **ID table**, property/column lists, view & layout descriptions, hub/section structure, conventions, and "X is hidden / inline / full-page" claims.
+3. **Bring every touched line to the new reality** — DELETE references to deleted objects (the most misleading kind of stale), RENAME renamed ones, ADD new structure, FIX counts and positions. A change that establishes a NEW convention is recorded **as a convention**, at the right level (closest wins — `references/agents-md-authoring.md`).
+4. **Verify** the playbook reads true end-to-end — no surviving mention of anything you removed or renamed, and no "disregard the section above" disclaimers left as a substitute for actually fixing the section.
+
+**Scope:** structural / architectural writes fire this gate — create / delete / rename / move a database, property, or view; restructure blocks; change a hub or layout; establish a convention. **Pure data-row edits** (logging a workout, updating a value) don't change what the playbook describes — skip the gate for those.
+
+### Red Flags — STOP, you're rationalizing
+| Thought | Reality |
+|---|---|
+| "I'll update the `AGENTS.md` at the end / once the user asks" | The update is the back half of THIS write-task. Maintenance is **never** user-triggered — if you wait to be asked, the playbook is already stale. |
+| "It's a small change; the playbook is still basically right" | "Basically right" with a dead id or a deleted-DB reference is **wrong** — and the next agent trusts it. |
+| "I deleted the DB; the `AGENTS.md` mention is harmless" | A reference to a **deleted** object is the most misleading stale of all. Remove it. |
+| "I made 10 changes — too much to reconcile" | Batch the doc update at the end of the batch; **skipping** it is the violation, not batching. |
+| "Only the closest `AGENTS.md` matters" | If a higher file (the root map) also describes what you changed, it is stale too — update both. |
+| "I'll add a 'disregard §X above' note instead of rewriting it" | A disclaimer is not maintenance — fix the section so it reads true. |
+| "Nothing to update here" | A conclusion you reach **after** scanning the governing file against your change — never a step you skip. |
+
+### The Bottom Line
+Read the nearest `AGENTS.md` before; **UPDATE it after** — every structural write-task, the same task, unprompted, at the right level (closest wins; root only for workspace-wide). Leave no playbook describing a workspace that no longer exists. Non-negotiable.
 
 ## MANDATORY — exhaust every paginated list (never act on a partial set)
 
@@ -202,7 +235,7 @@ When the user's instruction deviates from inferred conventions (e.g. user says "
 
 ### Maintain the nearest governing `AGENTS.md` — after every change
 
-The ancestral sweep is **bidirectional**: you read the closest `AGENTS.md` *before* touching a target, and you **maintain the closest one *after***. So **every** create / edit / move / rename / restyle ends with a maintenance check — not only changes that feel like "a new convention." Ask: *does the `AGENTS.md` that governs this subtree still describe reality?* If the change established or altered a convention, fact, ID, or workflow the playbook should carry, update it in the same approval batch; if nothing changed, the check costs one thought and you move on. "Nothing to update" is a conclusion you reach *after* checking — never a step you skip.
+**Enforcement** of after-every-write maintenance is its own MANDATORY hard gate above — **"update the nearest `AGENTS.md` after every write."** What this section adds is *where* that update is written — the LEVEL:
 
 **Write at the right level — closest wins, exactly like reads:**
 - **Subtree-local** convention (e.g. "Category rows use gray icons", "this tracker's Months view sorts descending") → the **nearest** ancestor `AGENTS.md` that owns that subtree (the area/hub playbook), **NOT** root.
