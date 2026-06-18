@@ -87,7 +87,7 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 - **Hide empty groups — undocumented but PUBLIC.** Add `"hide_empty_groups": true` **inside** the `group_by` object (`{ "type":"date", …, "sort":{…}, "hide_empty_groups": true }`). The public API accepts, persists, and echoes it back even though it's absent from the docs. Live-verified 2026-06-18.
 - **Group sort ≠ row sort — two different fields.** `group_by.sort` orders the GROUPS; the view's **top-level `sorts: [{ "property", "direction" }]`** orders the ROWS *within* each group. To sequence rows inside a group (e.g. a numbered plan whose titles are `"1 · …"` … `"7 · …"`), set a top-level `sorts` on that property — the `group_by.sort` won't touch row order. Live-verified 2026-06-18.
 
-**Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard`, `map`, `form`
+**Supported view types:** `table`, `board`, `list`, `calendar`, `timeline`, `gallery`, `chart`, `dashboard` _(Business+ only; required POST fields unverified — see charts.md)_, `map` _(availability/required fields unverified)_, `form`
 
 **"Open pages in" (peek mode) — a PRIVATE-only view setting.** How a row opens — **Side peek** / **Center peek** / **Full page** — is NOT in the public view `configuration` (which carries only type/properties/cover/sorts/filter). It lives in the collection_view's `format.collection_peek_mode`. Set it via the private app API (DevTools-captured from the UI's `saveTransactionsFanout`; live-verified 2026-06-14):
 ```jsonc

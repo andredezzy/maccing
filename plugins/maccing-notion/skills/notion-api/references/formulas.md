@@ -20,7 +20,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 **Mixed-type branches make a formula unfilterable too** (same "unknown type" 400, even UI-created): `if(cond, <date>, "")` mixes date+string → type unresolvable. Every branch must return ONE type — use **`empty()`** (not `""`, not `null`) for the no-value branch. Source: Notion help "Common formula errors".
 
-**After formula/rollup schema update**: Notion needs ~5s to recompute all rows — wait (retry with brief backoff) before querying.
+**After formula/rollup schema update**: Notion needs ~5 s to recompute all rows — re-read a moment later before depending on the values (this is Notion-side propagation delay, NOT a rate limit; the MCP clients handle real throttles themselves).
 
 **15-layer formula reference chain limit** (increased from 7 in Aug 2024) — Notion silently stops computing when exceeded with no error raised. Chains like formula → formula → rollup consume depth.
 

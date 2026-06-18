@@ -4,7 +4,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 **Reads:** every `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) dumps the gallery config (cover/preview, card size, aspect, layout, visible props, sorts, filters) in a trailing `# Views` section — full config with property ids resolved to names, no flag, every format. `read_database` also reads row values; `read_page(page_id, "outline")` reads the block tree. Schema/property-id lookup for PATCH bodies needs `GET /v1/data_sources/{id}`; but the Views section carries both `property_id` and resolved `property_name`, so you can often harvest the ids you need from there first.
 
-> Requires `Notion-Version: 2026-03-11` (gallery config minimum `2025-09-03`).
+> Requires `Notion-Version: 2026-03-11` (gallery configuration support added in the 2025-09-03 API release; `2026-03-11` is the active version to send).
 
 ⚠️ **Maturity:** the Views API is new (early 2026). **Live-verified 2026-03-11** (on a real gallery): the creation location rule, the minimal create, **`cover:{type:"page_cover"}`, `cover_size` (small/medium/large), `cover_aspect` (contain/cover), `properties[]` with `visible`, and top-level `sorts`** (top-level PATCH field, not inside `configuration`; see `views.md`) — all confirmed in one `PATCH`. Still **doc-sourced / not all live-verified**: `card_layout`, `cover` via `property`/`page_content`, and the per-property options (`wrap`, `date_format`, `card_property_width_mode`). For those, confirm with a test `PATCH` and treat `400 validation_error` as "that field/name is wrong." Flag uncertainty rather than asserting.
 

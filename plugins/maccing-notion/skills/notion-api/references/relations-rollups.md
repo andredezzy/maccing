@@ -15,7 +15,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
   PATCH /v1/data_sources/{id}
   { "properties": { "Related to X (DB Name)": { "name": "Related to X" } } }
   ```
-- Rollup recompute lag: querying immediately after a schema change may return `null` — retry with brief backoff (a few seconds) until non-null before depending on the value
+- Rollup recompute lag: querying immediately after a schema change may return `null` — re-read a moment later until non-null before depending on the value (this is Notion-side propagation delay, NOT a rate limit; the MCP clients handle real throttles themselves)
 - `read_page`/`read_database` return rollup values as plain scalars. (If using raw `request` instead: `latest_date` → `rollup.date.start`, numeric → `rollup.number` — the readers flatten these for you.)
 
 ---

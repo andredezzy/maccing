@@ -2,7 +2,7 @@
 
 Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
 
-**Reads:** start with the mandatory `read_agents_md` sweep, then `search` to resolve a name→id, `read_database` for querying rows (or `read_page` for a single row), and `describe` for a data source's column schema (+ column icons) or a page's metadata — see SKILL.md "MCP tools — pick by job". The row readers take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes and what the readers don't cover.
+**Reads:** start with the mandatory `read_agents_md` sweep, then `search` to resolve a name→id, `read_database` for querying rows (or `read_page` for a single row), and `describe` for a data source's metadata header + column schema (+ column icons) or a page's metadata — see SKILL.md "MCP tools — pick by job". The row readers take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes and what the readers don't cover.
 
 ## Useful patterns
 
@@ -16,7 +16,7 @@ POST /v1/data_sources/{id}/query
 }
 ```
 
-**Inspect the schema** — `describe(data_source_id)` renders every column as `name · type · detail` (formula bodies elided) plus each column's icon; far cleaner than the raw GET, whose compiled-formula blobs bloat the response. Drop to the raw GET below only when you need the raw property-**id** map for WRITE payloads / formula authoring (you rarely need raw ids for reads: `read_database` resolves names, and its row-format output's `# Views` section even surfaces id↔name in view configs):
+**Inspect the schema** — `describe(data_source_id)` returns a **metadata header** (title · id · icon · parent) plus every column as `name · type · detail` (formula bodies elided) and each column's icon; far cleaner than the raw GET, whose compiled-formula blobs bloat the response. Drop to the raw GET below only when you need the raw property-**id** map for WRITE payloads / formula authoring (you rarely need raw ids for reads: `read_database` resolves names, and its row-format output's `# Views` section even surfaces id↔name in view configs):
 ```python
 schema = GET /v1/data_sources/{id}
 prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
@@ -36,7 +36,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 
 **Stale `filter_properties` in URL** → 400 `validation_error` "malformed schema ... invalid attribute: <encoded_id>" — remove stale property IDs from query params. (The `request` tool is a pure passthrough — it never appends params on its own; a stale id only appears if you pass it in the `query` arg.)
 
-**Linked database views — creation IS supported** via `POST /v1/views` with a `create_database` block (see `references/views.md` "Create a linked database view embedded in a page"); the integration must have access to the **source** database, not just the page where the linked view is embedded. Wiki-database creation is not exposed by the public API — use the Notion UI.
+**Linked database views — creation IS supported** via `POST /v1/views` with a `create_database` block (see `views.md` "Create a linked database view embedded in a page"); the integration must have access to the **source** database, not just the page where the linked view is embedded. Wiki-database creation is not exposed by the public API — use the Notion UI.
 
 **Move-intact backup / area-refactor** — reorganise an area (rename, restructure, split) without touching or losing any data, relation, or dual-relation. Keep the original in a dated backup, build the new structure in parallel.
 1. **Create** a dated backup page under the area (`POST /v1/pages`, save its id).
