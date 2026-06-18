@@ -82,6 +82,8 @@ if(formatDate(prop("Date"), "GGGGWW") == formatDate(now(), "GGGGWW"), prop("Valu
 if(dateBetween(now(), prop("Date"), "days") >= 0 and dateBetween(now(), prop("Date"), "days") < 7, prop("Value"), 0)
 ```
 
+⚠️ **`now()` is UTC and `dateBetween(…, "days")` counts 24-HOUR periods (not calendar days)** — so the `>= 0` above does NOT exclude a row that is *tomorrow* in the user's timezone but still *today* in UTC. A row dated the user's tomorrow (e.g. a planned future workout) sits <24h ahead of UTC-`now()`, so `dateBetween` rounds it to `0` and it gets **counted**. To make a "recent" window count **only up to the user's today** (exclude future-dated rows): (1) **TZ-adjust** `now()` to the user's local day — `dateSubtract(now(), 3, "hours")` for UTC−3; (2) gate the future with a **DATE comparison**, not `dateBetween` — `prop("Date") <= dateSubtract(now(), 3, "hours")` (a datetime comparison: the row's midnight is only ≤ local-now once that calendar day actually arrives). Live-verified 2026-06-18 (a planned "tomorrow" workout inflated "this week volume" until BOTH were applied; the `dateSubtract` offset alone failed because dateBetween still rounded the sub-day gap to 0).
+
 ### List operations over relations (Formula 2.0)
 
 A relation property is a **list of pages** — Formula 2.0 exposes `.filter()`, `.map()`, `.sort()`, `.first()`, `.last()` over it, with `current` as the per-item page reference inside each callback.
