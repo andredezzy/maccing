@@ -26,6 +26,8 @@ POST /v1/views
 
 `position` (tab-bar): `{ "type": "start" }` | `{ "type": "end" }` | `{ "type": "after_view", "view_id": "<id>" }`.
 
+⚠️ **A freshly-created gallery shows NO card covers by default** — the minimal create above leaves the card-preview source unset, so even rows that HAVE page covers render as coverless tiles. You must explicitly set **`configuration.cover = {type:"page_cover"}`** (+ `cover_size`/`cover_aspect`) — on create or a follow-up `PATCH`. Easy to forget right after creating the view; set it in the same step you give the rows their covers. (Live-verified 2026-06-18.)
+
 > **A view's `type` is immutable via PATCH.** `PATCH /v1/views/{id} {type:"gallery"}` returns `200` but the view stays `table` (silent no-op); sending a gallery `configuration` onto a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To convert a table to a gallery: **create a fresh gallery view (above) then `DELETE /v1/views/{old view id}`** so the new one is the sole/default view. (Live-verified 2026-06-17.)
 
 ## Visual configuration (doc-sourced — verify unusual fields)
