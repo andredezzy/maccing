@@ -1,6 +1,6 @@
 # Gallery view — visual configuration
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — brainstorm the view design** (propose type / filter / sort / grouping / visible-props + cover / size / aspect / layout and get approval) *and* the standard approval gate, before any gallery write.
+Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — brainstorm the view design** (propose type / filter / sort / grouping / visible-props + cover / size / aspect / layout and get approval) *and* the standard approval gate, before any gallery write. **For the design *taste* — which cover/size/icon, when a gallery beats a table, the KPI-tile pattern — see `aesthetics.md`; this file is the API mechanics only.**
 
 **Reads:** every `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) dumps the gallery config (cover/preview, card size, aspect, layout, visible props, sorts, filters) in a trailing `# Views` section — full config with property ids resolved to names, no flag, every format. `read_database` also reads row values; `read_page(page_id, "outline")` reads the block tree. Schema/property-id lookup for PATCH bodies needs `GET /v1/data_sources/{id}`; but the Views section carries both `property_id` and resolved `property_name`, so you can often harvest the ids you need from there first.
 
@@ -25,6 +25,8 @@ POST /v1/views
 ```
 
 `position` (tab-bar): `{ "type": "start" }` | `{ "type": "end" }` | `{ "type": "after_view", "view_id": "<id>" }`.
+
+> **A view's `type` is immutable via PATCH.** `PATCH /v1/views/{id} {type:"gallery"}` returns `200` but the view stays `table` (silent no-op); sending a gallery `configuration` onto a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To convert a table to a gallery: **create a fresh gallery view (above) then `DELETE /v1/views/{old view id}`** so the new one is the sole/default view. (Live-verified 2026-06-17.)
 
 ## Visual configuration (doc-sourced — verify unusual fields)
 
@@ -69,7 +71,7 @@ Set on create or `PATCH /v1/views/{id}` via `configuration`:
 ### Property visibility & order
 - **Array position IS the display order** — there is no separate `position` field on a property.
 - Hide a property on cards: include it with `visible: false`.
-- Hide the title (Name): include the `title` property with `visible: false` — there is no top-level `hide_name`.
+- Hide the title (Name): include the `title` property with `visible: false` — there is no top-level `hide_name`. (Note: the page title still renders as the card's heading; `visible:false` only drops it from the property lines.)
 - `width` is accepted but has no visual effect in gallery (table-only). `status_show_as: "select" | "checkbox"` controls Status rendering.
 
 ### Response-only (never send in a request)
@@ -82,34 +84,6 @@ Any nullable field (`cover`, `cover_size`, `cover_aspect`, `card_layout`, `prope
 ### UI-only (no API equivalent)
 - **Cover image repositioning** (custom focal point on hover) — API controls source + aspect mode only.
 
-## Design language — opinionated defaults (build like the best hand-crafted pages)
+---
 
-These are house-agnostic *defaults* that make a gallery look crafted, not generated. (Always defer to the workspace's own house style — infer it from the root `AGENTS.md` or a bounded sample first; these fill the gaps it doesn't specify.)
-
-**Never ship naked cards.** A `page_cover` card is only as good as the page's **cover + icon** behind it. Before pointing a gallery at `page_cover`, ensure **every row has BOTH a cover and a page icon** — a coverless card is a grey void that breaks the grid. Source covers via the Unsplash loop below; give each row a named icon.
-
-**Nav gallery vs content gallery — they are sized differently** (benchmarked against real hand-built hubs):
-| | **Navigation** hub (rows = sub-pages, a launcher) | **Content** gallery (rows ARE the subject — categories, muscle groups) |
-|---|---|---|
-| `cover_size` | **`small`** (tidy launcher) | **`medium`** (let the subject breathe) |
-| `cover_aspect` | `cover` | `cover` |
-| visible props | **title + a one-line `Description`** only | title + 1–2 key stats (a rollup/number) |
-| schema | **no "Cover" text column** — covers are *page covers*, not a property | same |
-
-- Card **descriptions are short imperatives**, one line, sentence case: "Log and review your training", "Manage your finances" — not paragraphs.
-- The hub itself is an inline DB conventionally titled **"<Area> Navigation"**, its view named **"Navigation"**, placed near the **top** of the area page.
-
-**Beyond the gallery — the surrounding page:** section an area page with **`heading_3` + `divider`** markers; put the nav gallery at the top, tracker DBs below; **space stacked inline DBs** with an empty `paragraph` between them (`blocks.md`). Give **every column a gray named icon**, and use the **same icon for the same concept across sibling DBs** (a date → `calendar-day` everywhere; a Σ-volume metric → `activity`; a count → `hashtag`) — that repetition reads as craft. View names: sentence case, **no emoji**, never leave `Default view`. Keep **computed values LIVE** (rollups/formulas), never a stored static number.
-
-## Sourcing cover images (when `cover:{type:"page_cover"}`)
-
-Cards with `page_cover` are only as good as the page covers behind them. When the rows have no covers, sourcing them is a **visual choice → it belongs in the brainstorm gate** (SKILL.md "brainstorm the view design"): propose the theme, source candidates, **show them to the user**, and let them pick before any write.
-
-**Brainstorm-the-images loop (live-verified, Unsplash):**
-1. **Find real photos.** Unsplash sits behind a bot wall — do **not** scrape its search HTML and do **not** defeat the bot challenge. Instead `WebSearch` (e.g. `allowed_domains:["unsplash.com"]`) for the theme to get photo-**page** URLs, then `WebFetch` each page asking for "the exact `images.unsplash.com/photo-…` URL" — the og:image. Skip any that resolve only to `plus.unsplash.com` (premium → unusable).
-2. **Build the URL** in the workspace's cover style, e.g. `…?ixlib=rb-4.1.0&q=85&fm=jpg&w=1200&crop=entropy&cs=srgb`. For **black-and-white**, append the imgix param **`&sat=-100`** (desaturates any colour photo — no need to find a B&W original).
-3. **Verify before proposing — no broken covers.** `WebFetch` each URL and confirm a `200` with `content-type: image/*`; drop any that 4xx/5xx or redirect to `plus.unsplash.com`.
-4. **Show the user.** Download each image locally (`curl -o`, or any fetch-to-file) and display it via the Read tool so they see the actual B&W result; give the page URL + photographer for attribution. **Flag thematic mismatches** (e.g. a "Bitcoin" chart photo landing on a non-crypto category) — surface it, offer a swap.
-5. **Apply only after approval** — get each row's page id via `POST /v1/data_sources/{id}/query` (`.id` per result; the readers don't expose page ids), then `PATCH /v1/pages/{id}` `{ "cover": { "type":"external", "external": { "url":"<verified url>" } } }` per row, then point the gallery at them with `PATCH /v1/views/{view_id}` `{ "configuration": { "type": "gallery", "cover": { "type": "page_cover" } } }` (the `type: "gallery"` discriminator is required even in PATCH).
-
-> Page covers take **external** URLs; the imgix params (`sat`, `w`, `crop`, …) are honoured by `images.unsplash.com`. Match the workspace's existing cover convention (house style) — colour vs B&W, Unsplash vs gradient — and flag-then-follow if the user asks for something different.
+**Design taste — which cover/size/icon, nav-vs-content sizing, never-ship-naked-cards, the KPI stat-tile pattern, and the Unsplash cover-sourcing loop — moved to `aesthetics.md`.** This file stays the gallery API mechanics.

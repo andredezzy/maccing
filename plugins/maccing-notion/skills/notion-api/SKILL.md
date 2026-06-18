@@ -323,7 +323,7 @@ One section per object. **Reproduce, per object, every applicable line from the 
 - **Default-view rename** — name what each DB's auto `Default view` becomes AND give that renamed view its own full VIEW entry (filter/sort/group/visible) like any other; the rename supplies the name only.
 - **Relation reverse property** — it is a full property: state its name (house casing/language), icon, and default visibility, not just "dual".
 - **Linked views in a page body** — a linked database view embedded in a page is a full VIEW (type/filter/sort/group/visible/name/card-look), not a body-block reference.
-- **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200, `references/gallery-view.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
+- **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200; the sourcing loop + cover taste live in `references/aesthetics.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
 - **A named page's cover** (area / nav / section) is sourced HERE — the "commit at creation" exemption is for not-yet-created DB *rows* only.
 - **Refactor / rebuild → a MIGRATION block** — for each existing DB: row count (`read_database`), every property that must survive (old name → new name/type), every relation to re-wire, every formula referencing an old name. A property you drop is stated `OUT OF SCOPE` with a reason. Approved in this same turn — *enumerating only the headline table and silently ignoring the others is the classic migration miss.*
 
@@ -485,7 +485,8 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
 | Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
-| **Gallery view** visual config (cover, card size, visible props) + **sourcing B&W cover images** | `references/gallery-view.md` |
+| **Design / aesthetics / taste** — the *which / when / why* of covers (B&W Unsplash + sourcing loop), icons, gallery look, **the KPI stat-tile pattern**, layout & spacing, visual hierarchy, colour, hub/dashboard patterns (the mechanics live in the rows below) | `references/aesthetics.md` |
+| **Gallery view** visual config (cover, card size, visible props) — API mechanics | `references/gallery-view.md` |
 | **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |
 | Formulas (gotchas; **`prop().split()` folds to `[]`; parse/list/relation formulas are NOT public-API-writable → use the private `formula2` AST**; pt-BR currency) & number formatting | `references/formulas.md` |
