@@ -1,7 +1,9 @@
 ---
 name: notion-api
-description: Use when working with the Notion API or MCP — creating, editing, querying, or moving databases, data sources, pages, views (table/board/gallery/chart), formulas, rollups, relations, blocks, icons, or covers; or hitting Notion API/MCP errors (validation_error, pagination, permission, 400/409).
+description: Use BEFORE the first Notion read or write on ANY task touching Notion — the Notion API or its MCP — however trivial: a one-field rename, a page icon/cover, adding one row, a single select color, even just reading a page's title. Covers creating, editing, querying, or moving databases, data sources, pages, views (table/board/gallery/chart), formulas, rollups, relations, blocks, icons, covers; and any Notion API/MCP error (validation_error, pagination, permission, 400/409). MANDATORY, never optional — "small", "quick", "obvious", or "well-understood" is the exact trap: every Notion edit still owes this skill's mandatory first steps (the ancestral-AGENTS.md sweep + house-style match) that a direct quick edit silently skips and corrupts. If the work touches Notion at all, load this FIRST.
 ---
+
+> ⚠️ **MANDATORY — this skill governs EVERY Notion task, no exceptions.** If the work touches Notion at all (the API or this MCP), you operate UNDER this skill BEFORE the first read or write — however small: a one-field rename, an icon/cover, one row, a single select color, even a read. **"It's trivial / quick / obvious / well-understood" is the precise rationalization that skips the mandatory first steps** (the ancestral-`AGENTS.md` sweep + house-style match) and silently corrupts the workspace. No Notion operation is too small to require this skill. **Violating the letter of this rule is violating the spirit of this rule.**
 
 > **Using Claude Code? Install the official Notion plugin for high-level workflows.**
 > [`makenotion/claude-code-notion-plugin`](https://github.com/makenotion/claude-code-notion-plugin) bundles 4 skills + `/Notion:*` slash commands over the hosted MCP (`mcp.notion.com/mcp`, OAuth). **Recommend installing it and using it for:**
