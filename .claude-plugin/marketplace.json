@@ -29,7 +29,7 @@
       "name": "maccing-notion",
       "source": "./plugins/maccing-notion",
       "description": "Notion API engineering reference: building/editing databases via the data_sources model, formulas (with empirically-verified gotchas), rollups, relations, views/charts, page blocks & positioning (incl. private-API block reordering), full property-type shapes, pt-BR number formatting, and debugging Notion API errors — with a mandatory ancestral-AGENTS.md sweep. Ships a self-hosted notion MCP server (Bun, official MCP SDK) with high-level reader tools: read_agents_md, search (name→id), read_page (markdown/outline/text), read_database (table/kv/tsv/summary; also dumps each column's schema + every view's full config by default), describe (a data source's column schema + column icons, or any page/object's metadata), upsert_property (batched create/update of any property — a column + its icon, or a page value), order_properties (re-order a database's properties across its views and/or the canonical order), and render_mockup — the one compounding (recursive) ASCII renderer for ALL of Notion: render a LIVE page or database by id (its real view tabs in Notion's order + the rows that view shows, filter+sorts applied), or a hand-authored official shape (PageRender / BlockObject[] / DatabaseRender) to preview how something WILL look — the mandatory default for showing how a page/database looks in chat",
-      "version": "0.37.3",
+      "version": "0.37.4",
       "author": {
         "name": "André \"Dezzy\" Victor",
         "url": "https://github.com/andredezzy"
