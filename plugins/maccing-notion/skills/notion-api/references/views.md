@@ -25,12 +25,19 @@ POST /v1/views
   "type": "table",
   "create_database": {
     "parent": { "type": "page_id", "page_id": "<page_id>" },
-    "position": { "type": "after_block", "after_block": { "id": "<block_id>" } }
+    "position": { "type": "after_block", "block_id": "<block_id>" }
   },
   "filter": { "property": "Active", "checkbox": { "equals": true } }
 }
 ```
-- `create_database` is the location locator here, so no top-level `database_id` is needed; for a view on an **existing** database, `database_id` IS required (see the chart example below). `create_database.position` is optional; controls where the linked-DB block is inserted on the parent page
+- `create_database` is the location locator here, so no top-level `database_id` is needed; for a view on an **existing** database, `database_id` IS required (see the chart example below). `create_database.position` is optional; controls where the linked-DB block is inserted on the parent page.
+- ⚠️ **`create_database.position` uses a FLAT `block_id`** — `{ "type":"after_block", "block_id":"<id>" }` — the **opposite** of `PATCH /v1/blocks/{id}/children`, whose `after_block` is a nested `{ "id":"<id>" }` (blocks.md). The nested form here → `400 create_database.position.block_id should be defined`. Live-verified 2026-06-19.
+
+> ⚠️ **MANDATORY — one inline block with multiple view TABS vs. N separate blocks (the #1 multi-view mistake).** Every `POST /v1/views` carrying a `create_database` object spawns a **brand-new, separate** inline database block. So building a multi-bucket dashboard — **Today / Tomorrow / Next 7 days / Last 7 days** (or Active/Done, by-owner, …) of the **same** database — by calling `create_database` once per bucket yields **N stacked separate databases** (N drag-handles, N gray headings, N "＋ New" rows), **NOT** N tabs. Almost never what's wanted. **Recipe for tabs on ONE block:**
+> 1. **First view** → `create_database` (plants the block). Capture the response's `parent.database_id` — that is the new linked-DB **block id**.
+> 2. **Every other view** → POST with **`database_id` = that block id**, **+ `data_source_id`**, **+ `position: { "type":"after_view", "view_id":"<prev view id>" }`**, and **NO `create_database`**. Each tab keeps its OWN `filter`/`sorts`/visible columns (different tabs can show different columns).
+>
+> **Tab order + default tab = the block's `view_ids` array** (`view_ids[0]` is the leftmost/default tab). `position:after_view` sets order *at creation* but can land off; to fix the order or change which tab is default, **set `view_ids` via the private API** — `saveTransactions` `{command:"set", path:["view_ids"], args:[<ordered view ids>]}` on the `block` (`private-api.md`). Live-verified 2026-06-19 (a Health dashboard mistakenly built as 4 separate blocks per section → rebuilt to 1 block × 4 tabs; `view_ids` set to put **Today** first).
 
 **View tab-bar positioning** (top-level field on `POST /v1/views`):
 ```json
@@ -113,15 +120,32 @@ private_request({ endpoint: "saveTransactions", operations: [
 - **House style:** navigation-hub galleries hide the title — set `hide_linked_collection_name:true` on every nav-hub view (pairs with `collection_peek_mode:"full_page"` above).
 - **`hide_linked_collection_name` hides only the gray *database* name; the *view* name still renders as the block's label** — a "This week" table view shows a "This week" pill even with the collection name hidden. Live-verified 2026-06-17 (Gym daily hub). (Design taste — *let the view name BE the section title; don't stack a redundant `heading_3` above it* — see `aesthetics.md` §5.)
 
+**View icon — the switcher-TAB icon (`collection_view_icon`, PRIVATE-only).** The icon on a view's tab (left of the view name) is **not** in the public API — `PATCH /v1/views/{id}` with an `icon` returns `200` but silently DROPS it (the returned view has no `icon` field). It's a private `format` string on the `collection_view`, set exactly like peek mode / hide-name:
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"collection_view", id:"<view_id>", spaceId:"<space>"},
+    command: "set", path: ["format","collection_view_icon"], args: "/icons/<name>_gray.svg" },
+  { pointer: {table:"collection", id:"<any data source in the space>", spaceId:"<space>"}, path:[], command:"update",
+    args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} } ]})
+```
+- **Value is a STRING:** a Notion named-icon path `"/icons/<name>_<color>.svg"` (same catalog as page/column icons — `icon-names.md`), an emoji char, or an absolute image URL. House style → a **gray named icon** (`/icons/<name>_gray.svg`).
+- **One per VIEW** — each tab carries its own; without it the tab shows the generic view-TYPE glyph (the table/gallery icon). Read back via `getRecordValues` on the `collection_view` → `format.collection_view_icon`; the `200 {}` write doesn't prove it rendered — verify (read-back / UI).
+- **House style — EVERY view gets an icon** (a per-view design dimension, sibling to the column-icon rule): a nav-hub view = the hub's own icon (`navigation`); time-bucket / dashboard tabs get a semantic gray icon (Today `calendar-day`, Tomorrow `arrow-right`, Next 7 days `fast-forward`, Last 7 days `history`). Live-verified 2026-06-19 (field confirmed from yowynn/notion-api types + two captured recordMaps; confirmed rendering in-workspace).
+
 **View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) and rename/keep the old one. Live-verified 2026-06-14.
 
-**Update view column visibility:**
+**Update view column visibility — the `properties` array is REPLACE, not merge.** ⚠️ Whatever array you send becomes the COMPLETE visible set: every property you OMIT auto-reverts to `visible:false`. So a "hide one column" PATCH that lists only that one property **blanks the whole table** (every other column disappears). ALWAYS send the FULL set you want VISIBLE — each `visible:true`, in left-to-right order — and omit the rest (they hide themselves). Only `properties` is replaced; sibling `configuration` keys (`frozen_column_index`, `subtasks`, `group_by`) are preserved. Live-verified 2026-06-19 (a one-property PATCH hid all 14 other columns).
 ```json
 PATCH /v1/views/{id}
-{ "configuration": { "type": "table", "properties": [{ "property_id": "<id>", "visible": false }] } }
+{ "configuration": { "type": "table", "properties": [
+    { "property_id": "<id A>", "visible": true, "width": 220 },
+    { "property_id": "<id B>", "visible": true, "width": 120 }
+] } }   // → A then B visible; EVERY other column auto-hidden
 ```
 
 **Reorder columns** — send the full `configuration.properties` array in the desired left-to-right order (same PATCH; include every property with its `visible`/`width`). **The title column IS reorderable** — placing the `title` entry mid-array renders it there (live-verified 2026-06-14: a Training Log "Note" title column moved to after "Hard sets"); it is NOT pinned first as older Notion behaved. (`order_properties` does this across views — list `title` in `order` to move it.)
+
+**Column width (table views).** `configuration.properties[].width` is an **integer in PIXELS** — table views only (gallery/board accept it but ignore it, `gallery-view.md`). No documented max; **default ≈ 200** when unset. API-set widths render AS-SET — the UI's ~100 px drag-resize minimum does NOT clamp them — so a too-small width truncates the **HEADER** (type-icon + label + sort caret), e.g. `Last weight` at width 110 renders `Last wei…`. Budget by the longer of header-vs-content: a short label + 1–2-digit number ≈ 90–110; a date (`June 19, 2026`) ≈ 140; a title / long relation ≈ 220–320. Set width in the SAME full-`properties` PATCH as visibility + order (one array, one call — see the replace-not-merge rule above). Siblings in `configuration`: **`frozen_column_index`** (int — freeze the first N columns from the left; `-1` = none) and **`wrap_cells`** (bool). Live-verified 2026-06-19.
 ⚠️ **A freshly API-built DB's default view often renders with ALL columns hidden.** After `POST /v1/databases` + PATCH-adding properties (relations/formulas/rollups) + `order_properties`, the default view's `configuration.properties` can come back all `visible:false` — a blank table. **Always explicitly PATCH each view's full visible-column list** (list the ones you want `visible:true` first, then the rest `false`) — don't assume new properties show. Live-verified 2026-06-14.
 Property IDs come from `GET /v1/data_sources/{id}` → `properties.<name>.id`. (For column **names** alone, `read_database` output is enough — drop to the schema GET only when a raw **id** is needed for the PATCH body.) May be URL-encoded → `urllib.parse.unquote()`.
 

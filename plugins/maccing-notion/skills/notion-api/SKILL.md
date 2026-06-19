@@ -310,7 +310,7 @@ Not for "obvious" covers, not for "it's just a table", not when defaults look fi
 
 ### What counts as a design choice
 
-- **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`). Field reference: `references/views.md`.
+- **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`) · the view **icon** (the switcher-tab icon — a gray named icon, like every property/column gets one; private `collection_view_icon`). Field reference: `references/views.md`.
 - **Appearance (visual view types — gallery/board cards):** cover source (`page_cover` / `page_content` / a Files-&-media property / none) · card size (small/medium/large) · fit-image (`contain` vs `cover`/crop) · card layout (`list` vs `compact`) · per-property width. Field reference: `references/gallery-view.md`.
 
 ### The Self-Check
@@ -385,7 +385,7 @@ Not "the user specified most of it", not "some are obvious", not "we'll decide c
 
 ### The Self-Check — a Pre-build Design Document (internal, then act)
 
-One section per object. **Decide, per object, every applicable line from the two rules above** — database: name/casing/inline/description/icon/cover/parent; property: type · format · option names+colours · relation · rollup · formula+guards · column-icon · default-visibility (`upsert_property.visible`) · description; view: type · name · filter · sort · group · visible+order · gallery/board cover-source+size+fit+layout · tab-position (`references/views.md`). Each is **stated, or `none / N/A` with a reason** — a blank line is a silent skip; "default" is spelled out. Whole-build-level additions and the easily-missed:
+One section per object. **Decide, per object, every applicable line from the two rules above** — database: name/casing/inline/description/icon/cover/parent; property: type · format · option names+colours · relation · rollup · formula+guards · column-icon · default-visibility (`upsert_property.visible`) · description; view: type · name · icon (the tab icon — `collection_view_icon`, private) · filter · sort · group · visible+order · gallery/board cover-source+size+fit+layout · tab-position (`references/views.md`). Each is **stated, or `none / N/A` with a reason** — a blank line is a silent skip; "default" is spelled out. Whole-build-level additions and the easily-missed:
 
 - **Default-view rename** — name what each DB's auto `Default view` becomes AND give that renamed view its own full VIEW entry (filter/sort/group/visible) like any other; the rename supplies the name only.
 - **Relation reverse property** — it is a full property: state its name (house casing/language), icon, and default visibility, not just "dual".
@@ -426,6 +426,49 @@ Once every dimension is decided, **build directly** — create each object and v
 ### The Bottom Line
 
 Any build with more than one dimension to decide requires a complete internal self-check before the first write — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design decided as a whole. Once the self-check is complete, build directly and report. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
+
+## MANDATORY — the FINISHING PASS: before "done", verify what `render_mockup` CANNOT show
+
+The pre-build self-check above designs every dimension; this fires at the **other end** — **before you tell the user a page / hub / view is complete.** The recurring failure: the functional build is finished, `render_mockup` is run, the ASCII "looks fine," and it's declared done — but the ASCII **cannot render the very things that are usually wrong**, so "the render looked fine" becomes false confidence and the user is left to catch each gap one by one. Every rule below ALREADY lives in the references; the miss is never *knowing* them — it's never *running the pass*. This is the forcing function.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+### The Iron Law
+```
+"render_mockup LOOKS FINE" IS NOT "DONE" — RUN THE FINISHING PASS AGAINST THE LIVE CONFIG BEFORE REPORTING ANY PAGE / HUB / VIEW COMPLETE
+```
+
+### What `render_mockup` CANNOT show — confirm each against the LIVE config, not the mockup
+| Invisible in the ASCII | Confirm via | Rule |
+|---|---|---|
+| Gallery **card covers** (coverless vs shown) | `read_database` → Views: `configuration.cover == {type:"page_cover"}` (+ `cover_size`/`cover_aspect`) | a gallery is **coverless by default** — rows HAVING covers is not enough (gallery-view.md) |
+| A **leftover default view** / gallery-vs-table tabs | `read_database` → Views list | a nav hub is the **gallery ONLY** — DELETE the auto `Table` / `Default view` (gallery-view.md) |
+| **Multi-bucket = N stacked DBs vs ONE tabbed block** | `read_page` outline → count `child_database` blocks per section | time/status slices of one DB are TABS on ONE linked block (views.md) |
+| Real **block spacing** | `read_page` outline → the block sequence | an empty `paragraph` between EVERY back-to-back section — callout↔first block, a DB↔the next block (heading / page-link / DB), stacked views (aesthetics.md §4) |
+| **Inline vs link** (`↗`) | block `.parent == the page` AND `is_inline` | a moved DB renders as a link unless re-parented (blocks.md) |
+| **Column widths** / truncated headers | `read_database` → Views: each visible column `width` fits its header | (views.md → Column width) |
+| **Hidden collection name** + **peek mode** | `getRecordValues` on the `collection_view` `format` | nav-hub views hide the name + open Full page (views.md) |
+| **View tab icons** | `getRecordValues` → `format.collection_view_icon` | EVERY view tab has a gray named icon — private-only (views.md) |
+
+### The pass — apply, then confirm each row above from the live config
+1. **Spacing** — an empty paragraph between every back-to-back section (no two block-level sections touch).
+2. **Galleries** — covers ON (`page_cover` + size + aspect); the hub is the gallery ONLY (leftover default view deleted); collection name hidden + Full-page peek (nav hubs).
+3. **Multi-bucket views** — ONE tabbed linked block per domain, never N stacked blocks.
+4. **Columns** — table widths fit their headers.
+5. **THEN** `render_mockup` + paste it (the paste gate) — but every item above is confirmed from the live config, because the mockup can't show them.
+
+### Red Flags — STOP, you're rationalizing
+| Thought | Reality |
+|---|---|
+| "`render_mockup` looks fine, so it's done" | The ASCII can't show covers, spacing, tabs, inline-vs-link, or widths — the usual breakages. Confirm them against the live config. |
+| "The cards have covers — the rows have page covers" | The **view** must enable `cover:{type:"page_cover"}`; a default gallery is coverless even when every row has a cover. |
+| "I spaced the main sections" | EVERY boundary gets a spacer — including callout↔first block and last-DB↔page-link, not just the obvious ones. |
+| "The gallery works; the extra Table tab is harmless" | A nav hub is gallery-ONLY — delete the leftover default view. |
+| "It's the same data four ways; four blocks is fine" | Four filters of one DB = four TABS on one block, not four blocks. |
+| "I'll let the user catch what's off" | Each thing the user points out is one this pass would have caught. Run it before reporting, every time. |
+
+### The Bottom Line
+A page/hub/view is "done" only after the finishing pass — spacers at every boundary, galleries covered + gallery-only + name-hidden, multi-bucket as tabs, columns fitting — each confirmed from the LIVE config, because `render_mockup` shows none of it. "The render looked fine" is the exact failure this stops. Non-negotiable.
 
 ## MANDATORY — every operation runs through the agent; NEVER hand a step to the user's UI
 
