@@ -44,7 +44,7 @@ If you have not walked root→target and read every `AGENTS.md` on the path **in
 
 **Fail closed:** if any node's children can't be listed, STOP and say so. Never operate blind.
 
-**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, propose creating one (approval-gated per the approval-gate rule) that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. **The sweep is bidirectional — read the closest AGENTS.md before a change, maintain the closest one after** — enforced as its own hard gate by the **MANDATORY "update the nearest `AGENTS.md` after every write"** rule immediately below (write at the right level — closest wins).
+**Root bootstrap:** at the topmost ancestor (`parent.type == "workspace"`), check for an AGENTS.md. If absent, create one that records inferred workspace conventions and a hub/sub-AGENTS.md map per the conventions rule. **Authoring or editing any AGENTS.md is itself test-driven — see `references/agents-md-authoring.md` (mirrors `superpowers:writing-skills`).** This file is the global source of truth; lower AGENTS.md files override on conflict. **The sweep is bidirectional — read the closest AGENTS.md before a change, maintain the closest one after** — enforced as its own hard gate by the **MANDATORY "update the nearest `AGENTS.md` after every write"** rule immediately below (write at the right level — closest wins).
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -191,15 +191,32 @@ EVERY MOCKUP YOU PRODUCE IS PASTED VERBATIM INTO YOUR VISIBLE REPLY — A MOCKUP
 
 Produce a mockup (`render_mockup({ page_id | database_id })` for a live object, or build an official shape → `render_mockup({ mockup })`) → **paste its output verbatim into your visible reply.** The tool result is invisible to the user; an unpasted mockup was never shown. Proposals show how it will become; verifications (post-write OR fix) show the live result. Never hand-draw, never edit the output, never swap it for a summary. Non-negotiable.
 
-## Operate directly — act and report (no per-write approval gate)
+## Operate directly — act and report (no approval gate), but do ONLY what was asked
 
-Writes do **not** require a propose-then-wait-for-approval cycle. When the user has asked for a change, or it clearly serves the task in progress, **make the change and report it**, then verify with a live `render_mockup` / read so the user sees the actual result. This MCP exists to DO the work — not to narrate intentions and wait.
+Writes do **not** require a propose-then-wait-for-approval cycle. When the user asks for a change, **make exactly that change and report it**, then verify with a live `render_mockup` / read. This MCP exists to DO the work — not to narrate intentions and wait. **No approval gate, ever.** But act-and-report is licence to do the **requested** work directly — it is **NOT** licence to do *more*.
 
-- **Default — act and report:** create / update / rename / icon / cover / property / formula / view / move operations proceed directly; show the verified result (a `render_mockup` after structural changes) afterward.
-- **One carve-out — irreversible data loss:** before a **permanent delete, or a trash/archive that removes data and can't be cleanly undone**, give a one-line heads-up so the user can stop you. This is basic prudence before destruction, not an approval gate — it never applies to routine creates/edits.
+- **Default — act and report:** the create / update / rename / icon / cover / property / formula / view / move operations the request **entails** proceed directly; show the verified result (a `render_mockup` after structural changes) afterward.
 - **Reads** (`GET`, `/query`, `/search`, `AGENTS.md`) are always free.
+- **One carve-out — irreversible data loss:** before a **permanent delete, or a trash/archive that removes data and can't be cleanly undone**, give a one-line heads-up. Basic prudence before destruction, not an approval gate — it never applies to routine creates/edits.
+- **The user's instructions / governing `AGENTS.md` win.** If the user (in chat or a playbook) sets a different write protocol, follow it over this default.
 
-The verified mockup after a structural change is how the user reviews — replacing the old up-front proposal.
+### MANDATORY — the scope boundary (the half that's easy to forget)
+
+**The writes you perform = EXACTLY what the user's request entails. Nothing extra.** Do NOT, on your own judgement, create unrequested objects or take unrequested "prudent" steps — **no backups, no safety/pre-refactor copies, no archive pages, no helper databases, no extra properties/views/rows** the user didn't ask for. If you believe an extra step is genuinely worth doing, **say so in your report as a one-line suggestion** — never perform it. This is the OTHER side of "no approval gate": you don't *wait* for permission, and you don't *take* unrequested scope either.
+
+**Violating the letter of this rule is violating the spirit of this rule.** "Acting directly" never widens the scope.
+
+#### Red flags — STOP, you're about to over-reach
+| Thought | Reality |
+|---|---|
+| "I'll back this up first, just in case" | The user didn't ask for a backup. Don't create one — *suggest* it in your report. |
+| "A safety / pre-refactor copy is prudent before this restructure" | Prudence ≠ permission to add objects. Do the asked change; offer the safeguard as a note. |
+| "While I'm here I'll also add this helper DB / property / view" | Scope = the request. Anything the user didn't ask for is scope creep. |
+| "It clearly serves the task, so I'll just do it" | "Serves the task" is the exact rationalization that adds unrequested work. Didn't ask → don't do → suggest. |
+| "Acting directly means I can do whatever helps" | Acting directly = do the REQUEST directly, no approval gate. It does not enlarge the scope. |
+
+### The bottom line
+Act directly, **no approval gate**, on **exactly what was asked** — no more, no less. Extra ideas are *suggestions in your report*, never silent writes. The verified mockup after a structural change is how the user reviews. Non-negotiable.
 
 ## MANDATORY — match the workspace's conventions
 
@@ -228,11 +245,26 @@ NEVER WRITE A SINGLE GLYPH UNTIL YOU KNOW THE HOUSE STYLE
 1. **Root AGENTS.md first** (cross-ref: "MANDATORY FIRST STEP — read every ancestral AGENTS.md"). If it exists at the topmost workspace ancestor, it is the canonical house-style source of truth.
 2. **Bounded paginated live sample** when no root AGENTS.md exists: fetch the root hub page + 1–2 levels of children, fully paginated (`page_size=100`, exhaust all cursors — cross-ref: "MANDATORY — exhaust every paginated list"). That sample is the evidence base; do not generalize beyond it without reading further.
 
+### MANDATORY — write new content in the workspace's language; never introduce a second one
+
+The inferred **language** is a hard default, not a hint. **All new content you create — area/page/database/property/view names, select-option labels, headings, callouts, descriptions — goes in the language already in use** (e.g. English structure). **NEVER introduce a second language on your own** — not because the user lives in that locale, not because it "feels natural," not because a data SOURCE is in it.
+
+**Foreign-language source data is the trap:** when you seed or import from a source in another language (a Brazilian TACO food table, a Spanish API…), **translate the values into the workspace language as you import** — do not pour the source's language into the workspace. The only things that stay in the source language are genuine proper nouns with no translation, or content the user EXPLICITLY says to keep.
+
+**Violating the letter of this rule is violating the spirit of this rule.**
+
+| Thought | Reality |
+|---|---|
+| "The user is Brazilian, so pt-BR labels feel natural" | Match the workspace's established language, not the user's locale. Here it's English. |
+| "The food data is Portuguese, so its groups/names should be too" | Translate the source into the workspace language on import — never import its language. |
+| "A pt-BR/EN mix is fine here" | Only if the workspace ALREADY does a deliberate, documented mix. Otherwise it's one language — don't invent a mix. |
+| "I'll build it in pt-BR now and translate later if needed" | Building in the wrong language forces a full rework. Default to the workspace language from the first glyph. |
+
 ### Flag-then-follow on explicit user conflict
 
 When the user's instruction deviates from inferred conventions (e.g. user says "Backup" but every existing collection is plural like "Backups", "Months"), **do both**:
 
-1. **FLAG** the deviation in the approval-gate proposal — one sentence: `"Note: existing collections are plural ("Backups", "Months") — using your wording "Backup" instead."`
+1. **FLAG** the deviation in your report — one sentence: `"Note: existing collections are plural ("Backups", "Months") — using your wording "Backup" instead."`
 2. **FOLLOW the user's explicit wording** — the flag is informational only; it must never become a negotiation.
 
 ### Maintain the nearest governing `AGENTS.md` — after every change
@@ -242,7 +274,7 @@ When the user's instruction deviates from inferred conventions (e.g. user says "
 **Write at the right level — closest wins, exactly like reads:**
 - **Subtree-local** convention (e.g. "Category rows use gray icons", "this tracker's Months view sorts descending") → the **nearest** ancestor `AGENTS.md` that owns that subtree (the area/hub playbook), **NOT** root.
 - **Workspace-wide** convention → the **root** `AGENTS.md`.
-- No `AGENTS.md` yet at the level a subtree-local convention belongs → **propose creating one there** (approval-gated; author it test-driven per `references/agents-md-authoring.md`).
+- No `AGENTS.md` yet at the level a subtree-local convention belongs → **create one there** (author it test-driven per `references/agents-md-authoring.md`).
 
 Root is the global source of truth and lower files override on conflict — so an area-scoped rule belongs in that area's file, where the agents working there will find it and where it won't pollute the global playbook. Conventions discovered ad-hoc must be written back, never held only in model context.
 
@@ -262,16 +294,16 @@ Root is the global source of truth and lower files override on conflict — so a
 
 Infer the complete house style from the root AGENTS.md (primary) or a fully-paginated bounded sample (fallback) before any write. Flag user-instruction deviations once, then follow the user. **After every change, maintain the nearest governing AGENTS.md** (the closest one that owns the changed subtree; root only for workspace-wide conventions) — the write-side mirror of the mandatory read-sweep. Non-negotiable.
 
-## MANDATORY — brainstorm the view design before creating or restyling a view
+## MANDATORY — design every dimension of a view before creating it (no silent defaults)
 
-Creating or restyling **any** view is a design decision in two layers: its **data shape** — view type, filter (which rows), sort (order), grouping (`group_by`), which properties are visible and their order, and a self-describing name — **and** its **appearance** — cover source, card size, fit-image, card layout, per-property width. Propose the design and get approval before any API call. The user lives inside a view daily and sees it instantly; an imposed sort, filter, or grouping is as wrong as an imposed cover.
+Creating or restyling **any** view is a design decision in two layers: its **data shape** — view type, filter (which rows), sort (order), grouping (`group_by`), which properties are visible and their order, and a self-describing name — **and** its **appearance** — cover source, card size, fit-image, card layout, per-property width. Decide every dimension deliberately before any API call, then act and report. The user lives inside a view daily and sees it instantly; an imposed sort, filter, or grouping is as wrong as an imposed cover.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO VIEW CREATE OR RESTYLE UNTIL YOU HAVE PROPOSED THE VIEW DESIGN — DATA SHAPE *AND* LOOK — AND THE USER HAS APPROVED IT
+NO VIEW CREATE OR RESTYLE UNTIL EVERY DIMENSION — DATA SHAPE *AND* LOOK — IS DECIDED; THEN ACT DIRECTLY AND REPORT THE RESULT
 ```
 
 Not for "obvious" covers, not for "it's just a table", not when defaults look fine, not when the user said "make it look nice" or merely "add a view".
@@ -281,11 +313,11 @@ Not for "obvious" covers, not for "it's just a table", not when defaults look fi
 - **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`). Field reference: `references/views.md`.
 - **Appearance (visual view types — gallery/board cards):** cover source (`page_cover` / `page_content` / a Files-&-media property / none) · card size (small/medium/large) · fit-image (`contain` vs `cover`/crop) · card layout (`list` vs `compact`) · per-property width. Field reference: `references/gallery-view.md`.
 
-### The Gate
+### The Self-Check
 
-Present a concise design brief — **one line per applicable dimension, each with a recommendation + why**: type · filter · sort · grouping · visible properties · name; plus cover · size + aspect · card layout for visual types. **State EVERY applicable dimension explicitly — especially `sort` and `visible properties`, the two most often silently dropped.** "No sort / Notion default order" and "all properties, default order" are valid recommendations — but they must be *stated*, never omitted: **if your brief has no `sort:` line, you skipped it.** Never bury a sort/filter/group inside the payload. Then **stop and wait** — silence or "looks good" is approval; a new question or a tweak is not.
+Before writing, mentally verify every applicable dimension — **one decision per applicable line**: type · filter · sort · grouping · visible properties · name; plus cover · size + aspect · card layout for visual types. **State EVERY applicable dimension explicitly — especially `sort` and `visible properties`, the two most often silently dropped.** "No sort / Notion default order" and "all properties, default order" are valid decisions — but they must be *decided*, never silently skipped: **if your internal check has no `sort:` decision, you skipped it.** Never bury a sort/filter/group inside the payload without deciding it.
 
-**Collapse the friction:** ONLY when the user has already stated EVERY applicable dimension (verified line-by-line — type, filter, sort, grouping, visible props, name, and cover/size/aspect/layout for visual types), confirm in ONE sentence instead of a full brief; fold the brief and the approval-gate operations into a single turn ("here's the design I propose; if you approve, here are the exact calls"). A single unstated dimension forbids the collapse — present the full brief. "Add a gallery" specifies the type, not the design. In a **multi-object build**, this per-view collapse is unavailable until the pre-build completeness gate's document (the rule below) is approved.
+After writing, report the decisions made and paste the verified `render_mockup`.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -296,23 +328,23 @@ Present a concise design brief — **one line per applicable dimension, each wit
 | "I'll just sort by created date" | A default sort IS a decision — surface it, don't bury it in the payload |
 | "This view doesn't need a sort, so I won't mention it" | Omitting a dimension = deciding it silently. Every applicable line (sort, visible props) MUST appear — "none/default" is a stated answer, not a skip |
 | "'Current sprint' implies the filter" | Which property = which value? Name it and confirm — never guess a filter |
-| "'Create a gallery' implies large covers" | Implicit intent ≠ approval — show the brief |
+| "'Create a gallery' implies large covers" | Implicit intent ≠ a decided dimension — decide it explicitly before writing |
 | "Defaults are fine, skip the brief" | "Default" is a design decision you're making for them — surface it |
 
 ### The Bottom Line
 
-Draft the design brief (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views), present it, wait for approval, then proceed through the standard approval-gate write cycle. Non-negotiable.
+Decide every dimension (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views) before writing, then act directly and report; verify with `render_mockup` after. Non-negotiable.
 
 ## MANDATORY — design the whole object before creating it (logical *and* aesthetic)
 
-Creating any structure-bearing object — a **database** (and its underlying data source), a **page**, or **new properties** on one — is a design act. Propose the COMPLETE design — every logical AND aesthetic choice — in the approval batch, before the first `POST`/`PATCH`. A column with no icon, a select with default colors, an unformatted number: each is a decision you made silently for the user.
+Creating any structure-bearing object — a **database** (and its underlying data source), a **page**, or **new properties** on one — is a design act. Decide EVERY logical AND aesthetic choice before the first `POST`/`PATCH`, then create it directly and report. A column with no icon, a select with default colors, an unformatted number: each is a decision made silently for the user.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 
 ```
-NO CREATE (data source, page, or property) UNTIL ITS FULL DESIGN — LOGICAL + AESTHETIC — IS PROPOSED AND APPROVED
+NO CREATE (data source, page, or property) UNTIL ITS FULL DESIGN — LOGICAL + AESTHETIC — IS DECIDED; THEN ACT DIRECTLY AND REPORT
 ```
 
 ### What to design — state every applicable line ("default" is a stated answer, never a skip)
@@ -333,11 +365,11 @@ Conform to the nearest `AGENTS.md` (read its recorded conventions; if none exist
 
 ### The Bottom Line
 
-Every create proposes the whole object — data model, names, descriptions, views, icons, colors, formats — conforming to the nearest `AGENTS.md`, in one approval batch; then apply (`upsert_property` for columns + icons + values, `request` for the db/page + its icon/cover) and record any new convention back. Non-negotiable.
+Every create decides the whole object — data model, names, descriptions, views, icons, colors, formats — conforming to the nearest `AGENTS.md`; then apply directly in one batch (`upsert_property` for columns + icons + values, `request` for the db/page + its icon/cover), report the result, and record any new convention back. Non-negotiable.
 
-## MANDATORY — enumerate EVERY design dimension for EVERY object before the build is approved (the pre-build completeness gate)
+## MANDATORY — enumerate EVERY design dimension for EVERY object before the build begins (the pre-build completeness self-check)
 
-The two rules above fire **per-object, at create-time** — so a whole build designed up front (a tracker, hub, or refactor, often via `brainstorming` + `writing-plans`) can be fully approved while every icon, cover, option colour, view sort, format, and description stays silently undecided, and the user gets a skeleton instead of a finished workspace. This gate fires **once, before the first write**, putting every per-object decision in one reviewable document.
+The two rules above fire **per-object, at create-time** — so a whole build designed up front (a tracker, hub, or refactor, often via `brainstorming` + `writing-plans`) can proceed while every icon, cover, option colour, view sort, format, and description stays silently undecided, and the user gets a skeleton instead of a finished workspace. This self-check fires **once, before the first write**, ensuring every per-object decision is made before touching the API.
 
 **Applies to any build with two or more design dimensions to decide** — a multi-database tracker or hub, OR a single database that gains a view, a select/status option, a cover, or **two or more properties in one batch**. (A lone single-property add that changes no view/option/cover runs under the per-object rules above.)
 
@@ -346,29 +378,35 @@ The two rules above fire **per-object, at create-time** — so a whole build des
 ### The Iron Law
 
 ```
-NO BUILD BEGINS UNTIL A COMPLETE DESIGN DOCUMENT — EVERY OBJECT, EVERY DIMENSION — IS PRESENTED AND APPROVED IN ONE TURN
+NO BUILD BEGINS UNTIL EVERY OBJECT × EVERY DIMENSION IS DECIDED — NO SILENT DEFAULTS, NO SKELETON-NOW-DETAILS-LATER
 ```
 
 Not "the user specified most of it", not "some are obvious", not "we'll decide covers at the gallery gate", not "it's just a quick tracker."
 
-### The Gate — a Pre-build Design Document
+### The Self-Check — a Pre-build Design Document (internal, then act)
 
-One section per object. **Reproduce, per object, every applicable line from the two rules above** — database: name/casing/inline/description/icon/cover/parent; property: type · format · option names+colours · relation · rollup · formula+guards · column-icon · default-visibility (`upsert_property.visible`) · description; view: type · name · filter · sort · group · visible+order · gallery/board cover-source+size+fit+layout · tab-position (`references/views.md`). Each is **stated, or `none / N/A` with a reason** — a blank line is a silent skip; "default" is spelled out. Whole-build-level additions and the easily-missed:
+One section per object. **Decide, per object, every applicable line from the two rules above** — database: name/casing/inline/description/icon/cover/parent; property: type · format · option names+colours · relation · rollup · formula+guards · column-icon · default-visibility (`upsert_property.visible`) · description; view: type · name · filter · sort · group · visible+order · gallery/board cover-source+size+fit+layout · tab-position (`references/views.md`). Each is **stated, or `none / N/A` with a reason** — a blank line is a silent skip; "default" is spelled out. Whole-build-level additions and the easily-missed:
 
 - **Default-view rename** — name what each DB's auto `Default view` becomes AND give that renamed view its own full VIEW entry (filter/sort/group/visible) like any other; the rename supplies the name only.
 - **Relation reverse property** — it is a full property: state its name (house casing/language), icon, and default visibility, not just "dual".
 - **Linked views in a page body** — a linked database view embedded in a page is a full VIEW (type/filter/sort/group/visible/name/card-look), not a body-block reference.
 - **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200; the sourcing loop + cover taste live in `references/aesthetics.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
 - **A named page's cover** (area / nav / section) is sourced HERE — the "commit at creation" exemption is for not-yet-created DB *rows* only.
-- **Refactor / rebuild → a MIGRATION block** — for each existing DB: row count (`read_database`), every property that must survive (old name → new name/type), every relation to re-wire, every formula referencing an old name. A property you drop is stated `OUT OF SCOPE` with a reason. Approved in this same turn — *enumerating only the headline table and silently ignoring the others is the classic migration miss.*
+- **Refactor / rebuild → a MIGRATION block** — for each existing DB: row count (`read_database`), every property that must survive (old name → new name/type), every relation to re-wire, every formula referencing an old name. A property you drop is stated `OUT OF SCOPE` with a reason. All decided in this same self-check turn — *enumerating only the headline table and silently ignoring the others is the classic migration miss.*
 
 **Stated, not skipped:** `none` / `no filter` / `no sort` / `all default order` are valid stated answers. `TBD`/`OR`/`somehow`/`optional`/`must-confirm` are gaps — resolve now (a location is a *specific proposed* value via `search`, never a question handed back) or mark **out of scope**. When the **user explicitly defers** a dimension ("no icons yet", "views later"), record it as **`deferred by user — out of scope`** (a stated answer) and don't re-propose it until they re-open it.
 
-Present it, **stop and wait**. After approval, execution goes straight to the write cycle (intent + operations + preview mockup) per object — **the per-object design-brief steps of the two rules above are already satisfied by this approved document**; do not re-seek design approval.
+Once every dimension is decided, **build directly** — create each object and verify with a `render_mockup` / read **after**; do not pause between objects.
 
-**Verify the build matched the design — the loop isn't closed until you check.** A dimension can be approved yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database`) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
+**This is a SELF-check, not an approval gate — and a dimension the user didn't specify is YOUR call, never a reason to wait.** When the user hasn't stated a dimension, **you decide a sensible default that conforms to the nearest `AGENTS.md` / house style, and build.** "The user gave no property names / icons / colours / view sorts" is NOT a reason to present a design and wait for sign-off — decide them and act. The only thing that ever pauses you is a *genuinely consequential, genuinely ambiguous* choice with no sensible default — then ask **one specific question** (a question, not a design-for-approval). **Never present the full design and wait for a go.**
 
-**Collapse** to a one-sentence confirm ONLY when the user already stated EVERY line for EVERY object, verified line-by-line. The per-view and per-object collapse shortcuts **cannot proxy** for this gate; in a multi-object build they are unavailable until this document is approved.
+| Thought | Reality |
+|---|---|
+| "The user gave no dimensions, so I'll present a design and wait" | A missing dimension is YOUR decision (sensible default + nearest `AGENTS.md`). Decide it and build — not a gate. |
+| "It's a multi-database build, so I should get approval first" | Multi-object → do the self-check (decide every dimension), then build directly. No approval, ever. |
+| "I'll show the full plan and wait for the go-ahead" | That's the banned approval gate. Decide → act → report. A single specific question for genuine ambiguity is fine; a design-for-sign-off is not. |
+
+**Verify the build matched the design — the loop isn't closed until you check.** A dimension can be decided yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database`) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -387,7 +425,7 @@ Present it, **stop and wait**. After approval, execution goes straight to the wr
 
 ### The Bottom Line
 
-Any build with more than one dimension to decide gets one pre-build design document — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design — approved as a whole before the first write. Approval of that document IS the per-object design approval; execution then runs the write cycle per object. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
+Any build with more than one dimension to decide requires a complete internal self-check before the first write — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design decided as a whole. Once the self-check is complete, build directly and report. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
 
 ## MANDATORY — every operation runs through the agent; NEVER hand a step to the user's UI
 
@@ -439,6 +477,7 @@ A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read pro
 - SDK: the `@notionhq/client` TypeScript SDK needs **v5.12.0+** for `2026-03-11` — note this SDK is on the **5.x** line (npm-verified 2026-06: latest `5.22.0`, `5.12.0` exists), NOT the legacy 2.x; relevant only to external app developers — the bundled `notion` MCP server makes raw HTTP calls (no Notion SDK)
 - Databases are queried/mutated via `/v1/data_sources/{id}` — prefer it over the **legacy** `/v1/databases/{id}` (only its **GET / PATCH** still coexist on 2026-03-11; `POST /v1/databases/{id}/query` was **removed** → `400 Invalid request URL` — use `/v1/data_sources/{id}/query`). The **data-source** endpoint covers schema `PATCH`, row queries, **and** relation targets: a relation/rollup property references a `data_source_id`, not a `database_id` (a 2026-03-11 change; pre-2026 priors that say `database_id` are stale)
 - `POST /v1/databases` response → use `data_sources[0]['id']` as the data source ID; `is_inline: true` supported at creation
+- **Create a DB row** with `POST /v1/pages` `parent: { type: "data_source_id", data_source_id }` — **NOT** `{ database_id }` (400 on 2026-03-11). **This binds external scripts / SDK / seed code you write, too:** query `/v1/data_sources/{id}/query`, create rows with a `data_source_id` parent, read a schema via `GET /v1/data_sources/{id}` — **never** the legacy `/v1/databases/{id}` query/parent/GET-schema paths. A seed or import script that hits `/databases/{id}/query` or uses a `{ database_id }` page parent **will 400** (`invalid_request_url` / `validation_error`). (Live-verified 2026-06-19: a TACO seed script failed twice on exactly these before being corrected to `/data_sources`.)
 - Inline DB IDs (from block children, i.e. a `child_database` block id) ARE valid `database_id` values (resolve via `GET /v1/databases/{id}` → `data_sources[0].id`) but are **NOT** valid `data_source_id` values (`GET /v1/data_sources/{that-id}` → **404** "Could not find data_source" — the data_source_id is a *distinct* UUID) and NOT a valid `page_id` for `GET /pages/{id}`. (`read_database` accepts either and auto-resolves a database_id → its data_source, so the practical flow is unchanged.)
 - Search API: `filter.value` accepts `'page'` or `'data_source'` — **not** `'database'` (breaking change in 2025-09-03)
 

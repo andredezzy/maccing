@@ -49,3 +49,23 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
   ```
 - Multi-database Notion setups (e.g. per-month child databases) may each have their own separate Categories database — categories are NOT automatically shared; unify by name when migrating or restructuring
 
+---
+
+## Rollup values inside `formula2` ASTs — unwrap with `.first()`
+
+**`show_original` (and other single-value rollup functions) return an ARRAY when referenced inside a private `formula2` AST.** Even though the rollup resolves to a single scalar in the UI, the compiled token for that rollup has type `list<T>` inside the formula engine. Arithmetic over an unwrapped array yields wrong or empty results.
+
+**Fix: append `.first()` to unwrap to a scalar before use.** Example:
+
+```
+// Wrong — `{rollup}` is a list, multiplication yields empty/wrong
+{rollup} * 7
+
+// Correct — `.first()` unwraps to scalar first
+{rollup}.first() * 7
+```
+
+Live-verified 2026-06-19 building a macro tracker (calories = protein rollup × 4 failed until `.first()` was added).
+
+**Chaining `formula2` formulas is also fragile.** If a `formula2` formula references ANOTHER `formula2` formula via its compiled tokens, the AST can fail to resolve at runtime. **Prefer inlining the dependency** — copy the referenced formula's expression directly into the consuming formula — rather than chaining through a named formula property.
+

@@ -168,6 +168,18 @@ This is how the property-icon and "This month" formats were found. To learn the 
 
 ---
 
+## Database row templates — NOT creatable via any API
+
+**Notion database row templates cannot be created via the public OR private API.** There is no endpoint (public `api.notion.com/v1` or private `api/v3`) that creates a template object for a database. Do not attempt it — it will silently fail or 400.
+
+**What to do instead:**
+- Set per-row defaults directly on each row after creation (PATCH each property to its default value).
+- Duplicate an existing row that already has the desired defaults (no API endpoint for duplication either — use the UI, or copy fields manually via PATCH).
+
+Live-verified 2026-06-19.
+
+---
+
 ## For everyone on the PUBLIC API (no private access)
 If you can't (or won't) touch the private API, know the public-API limits and fallbacks:
 - **Property (column) icons: NOT settable via the public API.** Writing an `icon` key inside a property def (via `PATCH /v1/data_sources/{id}` or on `POST /v1/databases` at creation) returns `200` and is **silently dropped**; reads never expose it. (Pages and databases *do* take icons — see `pages-properties.md`.)
