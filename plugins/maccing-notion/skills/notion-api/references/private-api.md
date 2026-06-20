@@ -168,15 +168,34 @@ This is how the property-icon and "This month" formats were found. To learn the 
 
 ---
 
-## Database row templates — NOT creatable via any API
+## Database row templates — EDIT the existing default to auto-populate new rows
 
-**Notion database row templates cannot be created via the public OR private API.** There is no endpoint (public `api.notion.com/v1` or private `api/v3`) that creates a template object for a database. Do not attempt it — it will silently fail or 400.
+A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row starts pre-filled" — and you can **re-point it via the API**. Most databases ALREADY have one (the UI / a CSV-import / a migration creates it) — **read before assuming you must make one.**
 
-**What to do instead:**
-- Set per-row defaults directly on each row after creation (PATCH each property to its default value).
-- Duplicate an existing row that already has the desired defaults (no API endpoint for duplication either — use the UI, or copy fields manually via PATCH).
+**Where it lives (private — `getRecordValues`/`syncRecordValues` on `{table:"collection", id:<ds_id>}`):**
+- `collection.template_pages` — array of template-page block ids.
+- `collection.format.collection_default_template.template_page_id` — which one is the **default** (applied on **"+ New"**).
+- Each template page is a `block` with `is_template:true`, `parent_table:"collection"`. Its `properties` are the values copied into every new row — including live tokens like a **today Date**: `"BbMF":[["‣",[["tv",{"type":"today"}]]]]`.
 
-Live-verified 2026-06-19.
+**EDIT an existing template — public API, VERIFIED 2026-06-20:** a template page PATCHes like any row — `PATCH /v1/pages/{template_page_id} {properties:{…}}`. A pre-set **relation** (or any value) then carries into every new row made from it. (The public *read* shows the pre-set date/relation oddly — a `today` token reads back as `Date:null` — but `getRecordValues` confirms both the token AND your new value coexist; trust the private read, not the public one.)
+
+**CREATE a new template:** no public endpoint. The private `api/v3` path (per notion-py) is one `saveTransactions` with two ops — `set` a `block {is_template:true, type:"page", parent_table:"collection", parent_id:<ds_id>}` + `listAfter` it onto `collection.template_pages` — but it's **unverified here; prefer editing the existing default.** SETTING which template is default has no confirmed API path (UI-only) — and you rarely need it: edit the one already default.
+
+### ⭐ Recipe: auto-link every new log row to a fixed card (feed a relation-read latest-value formula)
+**Goal:** a "stat card" shows the latest value from a growing log DB (`formulas.md` "Flagship — latest value by date") AND new log rows auto-join the card's relation with **zero per-entry action**. Two API writes:
+1. Make the card↔log relation **DUAL** so the LOG DB gains a synced back-relation to the card:
+   `PATCH /v1/data_sources/{card_ds} {"properties":{"<Rel>":{"relation":{"data_source_id":"<log_ds>","type":"dual_property","dual_property":{"synced_property_name":"<BackRel>"}}}}}`
+2. **Pre-set that back-relation on the log DB's default template** = the fixed card:
+   `PATCH /v1/pages/{log_default_template_id} {"properties":{"<BackRel>":{"relation":[{"id":"<card_page_id>"}]}}}`
+
+Now a row added via the log DB's **"+ New"** auto-links to the card → joins the card's relation → the relation-read formula recomputes to the latest. (A `today` token on the template also auto-dates the row, so the latest-by-date sort needs no input.)
+
+**Coverage + the "why" (so you don't chase a cleaner path that doesn't exist):**
+- Covers the **"+ New" button** (the normal add path). Does **NOT** cover **paste / CSV-import** (they skip the default template), and the public **`POST /v1/pages {template:{type:"default"}}` is a NO-OP** here (does not apply the template — verified).
+- **Free plan → NO database automations** (the UI "when row added → set relation" rule needs Plus); the default template is the free mechanism. Automations also have **no create API** (public or private).
+- For **ALL** add-methods, Notion's native **webhooks** (API version `2026-03-01`): subscribe `page.created` on the log DB → handler `PATCH`es the new page's relation = the card. Needs a public HTTPS endpoint (a localhost MCP server needs a tunnel).
+
+Live-verified 2026-06-20 (edit-existing-default-template + dual-relation auto-link, free plan).
 
 ---
 

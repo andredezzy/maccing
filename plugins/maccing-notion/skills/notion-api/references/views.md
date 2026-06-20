@@ -143,6 +143,22 @@ PATCH /v1/views/{id}
 ] } }   // → A then B visible; EVERY other column auto-hidden
 ```
 
+**Hide a property from the ROW-DETAIL PANEL (what you see when you OPEN a row) — `property_visibility` (PRIVATE, on the COLLECTION).** ⚠️ Three "visibility" knobs are easy to confuse — pick the right one:
+- a **view's** columns → `configuration.properties[].visible` (per-view, public — above);
+- `upsert_property.visible` → the property's **new-view / card default** (`collection_page_properties`) — does NOT touch the row-detail panel;
+- the **row-detail panel** (the Order/Description rows shown when you OPEN a page) → the COLLECTION's `format.property_visibility` — an array of `{ "property":"<id>", "visibility":"show" | "hide" }` (a property omitted from the array shows by default).
+
+Set it via private `saveTransactions` on the `collection` (its id == the data_source id):
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"collection", id:"<ds id>", spaceId:"<space>"},
+    command: "set", path: ["format","property_visibility"],
+    args: [ {property:"<prop id>", visibility:"hide"}, {property:"<keep>", visibility:"show"} ] },
+  { pointer: {table:"collection", id:"<ds id>", spaceId:"<space>"}, path:[], command:"update",
+    args: {last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} } ]})
+```
+Read back via `getRecordValues` on the `collection` → `format.property_visibility`; the `200 {}` write doesn't prove it rendered — verify in the UI. Live-verified 2026-06-19 (hid a nav-hub `Order` from the row-detail panel; `upsert_property.visible:false` only set `collection_page_properties` and did NOT hide it — the original wrong guess).
+
 **Reorder columns** — send the full `configuration.properties` array in the desired left-to-right order (same PATCH; include every property with its `visible`/`width`). **The title column IS reorderable** — placing the `title` entry mid-array renders it there (live-verified 2026-06-14: a Training Log "Note" title column moved to after "Hard sets"); it is NOT pinned first as older Notion behaved. (`order_properties` does this across views — list `title` in `order` to move it.)
 
 **Column width (table views).** `configuration.properties[].width` is an **integer in PIXELS** — table views only (gallery/board accept it but ignore it, `gallery-view.md`). No documented max; **default ≈ 200** when unset. API-set widths render AS-SET — the UI's ~100 px drag-resize minimum does NOT clamp them — so a too-small width truncates the **HEADER** (type-icon + label + sort caret), e.g. `Last weight` at width 110 renders `Last wei…`. Budget by the longer of header-vs-content: a short label + 1–2-digit number ≈ 90–110; a date (`June 19, 2026`) ≈ 140; a title / long relation ≈ 220–320. Set width in the SAME full-`properties` PATCH as visibility + order (one array, one call — see the replace-not-merge rule above). Siblings in `configuration`: **`frozen_column_index`** (int — freeze the first N columns from the left; `-1` = none) and **`wrap_cells`** (bool). Live-verified 2026-06-19.

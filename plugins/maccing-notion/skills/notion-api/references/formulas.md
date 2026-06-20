@@ -104,6 +104,8 @@ prop("<Relation>").filter(not(empty(current.prop("Date")))).sort(current.prop("D
 ```
 (1) filter strips date-less rows — null dates poison the sort; (2) sort ascending by date; (3) `.last()` = chronologically latest page; (4) `.prop()` reads its value. ⚠️ **NOT writable via the public REST API** (per the warning above — `current.prop()`/`.last().prop()` off a related page → `400 "Type error"`). Author it in the UI, or via the private `formula2` AST path (`private-api.md`). (Filterability follows the formula's stored type: a **public-string** formula is typed `unknown` → not view-filterable; a UI/AST formula carries a real `result_type`, so it can be — verify against your view if you depend on it.)
 
+**Keeping the relation auto-populated** — this formula only sees rows that are IN the relation, so for it to stay current as new log rows are added (zero per-entry action): make the relation DUAL + pre-set it on the log DB's **default template** so every "+ New" row auto-links. Full recipe → `private-api.md` → "Recipe: auto-link every new log row to a fixed card".
+
 ### Live category aggregation — current-period value (the no-rollup-of-rollup workaround)
 
 When a Categories DB must show "this period's total per category" live, and rollup-of-rollup is blocked (`relations-rollups.md`): (1) a **per-row formula** on each source row outputting its value only when the row is the current period — `if(formatDate(prop("Month date"),"YYYYMM") == formatDate(now(),"YYYYMM"), prop("Value"), 0)` (the "intersection cell"); (2) a **rollup `sum`** of that formula on the Category relation. Auto-advances with `now()`, zero maintenance. (Filter rows to the current period via the underlying date prop — `after one_month_ago` + `on_or_before today` — not the formula.)
