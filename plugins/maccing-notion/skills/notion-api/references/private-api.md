@@ -207,7 +207,7 @@ A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row star
 
 **EDIT an existing template — public API, VERIFIED 2026-06-20:** a template page PATCHes like any row — `PATCH /v1/pages/{template_page_id} {properties:{…}}`. A pre-set **relation** (or any value) then carries into every new row made from it. (The public *read* shows the pre-set date/relation oddly — a `today` token reads back as `Date:null` — but `getRecordValues` confirms both the token AND your new value coexist; trust the private read, not the public one.)
 
-**CREATE a new template:** no public endpoint. The private `api/v3` path (per notion-py) is one `saveTransactions` with two ops — `set` a `block {is_template:true, type:"page", parent_table:"collection", parent_id:<ds_id>}` + `listAfter` it onto `collection.template_pages` — but it's **unverified here; prefer editing the existing default.** SETTING which template is default has no confirmed API path (UI-only) — and you rarely need it: edit the one already default.
+**CREATE a new template — private `api/v3`, VERIFIED 2026-06-21:** one `saveTransactions` — `set` a `block {type:"page", space_id}`, `update {is_template:true}`, `update {parent_id:<ds>, parent_table:"collection", alive:true}`, then `listAfter {id:<template>}` onto the collection's `["template_pages"]`; pre-fill values in the SAME txn (`set ["properties","<propId>"] [["<num>"]]` for a number; `updateBlockPropertyValue` → `primitiveOp {command:"addRelationAfter", args:{id:<page>, spaceId}}` at `["properties","<relId>"]` for a relation) — plus the trailing collection commit. **SET which template is the default — VERIFIED 2026-06-21:** `update` the collection's `["format"]` → `{collection_default_template:{template_page_id:<id>}}` (and/or a view's `collection_view.format.collection_view_default_template` for a per-view default). If a default already exists, editing it (above) is fewer ops.
 
 ### ⭐ Auto-link every new row to a card (the headline use of a pre-set template) → `relations.md`
 
@@ -217,7 +217,7 @@ Pre-setting a **relation** on this default template is how you auto-link every n
 - the **public-API-dual-sync vs one-sided-private-write desync** rule (set/repair links via `PATCH /v1/pages` so both sides sync — a private one-sided write desyncs);
 - free-plan reality (no automations) and the all-methods **webhook** (`page.created`, API `2026-03-01`) fallback.
 
-Live-verified 2026-06-20 (edit-existing-default-template, free plan) / 2026-06-21 (blue-New-vs-inline-+New + dual-sync-vs-desync).
+Live-verified 2026-06-20 (edit-existing-default-template, free plan) / 2026-06-21 (blue-New-vs-inline-+New + dual-sync-vs-desync + create-template + set-as-default + pre-fill relation/number in the create txn).
 
 ---
 
