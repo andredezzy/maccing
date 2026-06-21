@@ -35,7 +35,7 @@ Cards pointed at `page_cover` are only as good as the page covers behind them. S
 
 **Never ship naked cards.** A `page_cover` card is only as good as the cover + icon behind it. Before pointing a gallery at `page_cover`, ensure **every row has BOTH a cover and a page icon** — a coverless card is a grey void that breaks the grid.
 
-**Card budget: ≤ 2–3 properties.** The gallery's whole advantage is speed-scanning; a 4th property makes the card read like a mini-table. Hide the title for pure-visual galleries; keep it for navigational ones.
+**Card budget: ≤ 2–3 properties.** The gallery's whole advantage is speed-scanning; a 4th property makes the card read like a mini-table. **Keep `title visible:true` whenever the card's identity is its NAME** — navigation launchers AND KPI/stat-tiles (the metric name labels the card). Hide the title ONLY for a purely-visual gallery where the cover image alone says what the card is — and note `title visible:false` removes the card name *entirely* (no surviving heading — `gallery-view.md`), so a nameless metric tile is the tell you hid it by mistake.
 
 **Nav gallery vs content gallery are sized differently** (benchmarked against hand-built hubs):
 
@@ -53,6 +53,7 @@ Cards pointed at `page_cover` are only as good as the page covers behind them. S
 
 A row of small covered tiles, each showing **one** number, is the most legible "at a glance" dashboard. Because **gallery cards == database ROWS**, N metrics = **N rows** — not N columns. The catch and the recipe:
 
+- **Card config — `cover_size: small`, `title visible:true`, ≤ 2 props.** Stat-tiles are scanned in a ROW, so use **`small`** covers — NOT the `medium` of a browse-the-subject content gallery (the table above; `medium` here makes oversized, page-eating cards). And the **title MUST stay `visible:true`** — it is the metric NAME (`Calories`/`Protein`/…), the card's whole label; `title visible:false` blanks the card name (`gallery-view.md`). Show only: title + the native ring/bar + one `Value`/label line — nothing else.
 - **The discriminator is the row title; the value must branch on it.** Every shared formula/rollup computes *identically on every row* (they read the same relations), so the only thing that differs per card is the title. To show a *different* value per card, add ONE **Display formula** that branches on the title:
   `if(<title-token> == "This week volume", format(<metric A>) + " kg", format(<metric B>))`. Show only this `Value` on the card; hide the underlying metric columns.
 - **Reference sibling formulas via compiled tokens, never `prop()`.** `prop("A formula")` → `400 Type error` (the public API unknown-types a formula referenced by name). Use the compiled token `{{notion:block_property:<encoded id>:<ds>:<space>}}` (`formulas.md`). `format(<token>)` even *launders* an `unknown`-typed relation-read formula into text.

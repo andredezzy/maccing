@@ -73,7 +73,8 @@ Set on create or `PATCH /v1/views/{id}` via `configuration`:
 ### Property visibility & order
 - **Array position IS the display order** — there is no separate `position` field on a property.
 - Hide a property on cards: include it with `visible: false`.
-- Hide the title (Name): include the `title` property with `visible: false` — there is no top-level `hide_name`. (Note: the page title still renders as the card's heading; `visible:false` only drops it from the property lines.)
+- **The card's NAME *is* the `title` property's `visible` flag** (live-verified 2026-06-21). `title visible:false` **HIDES the card name ENTIRELY** — there is NO separate always-on card heading; the `title` line IS the card name, and there is no top-level `hide_name`. So any gallery whose cards must show **what each row IS** — KPI / stat-tiles (the metric name), navigation launchers — MUST keep **`title visible:true`**. Set it `false` ONLY for a purely-visual gallery where the cover image alone identifies the card. (An earlier version of this note wrongly claimed the heading survives `visible:false` — it does not.)
+  - ⚠️ **`render_mockup` draws the card title even when it is hidden**, so a mockup CANNOT catch a wrongly-hidden title (nor confirm one shows). Verify the `title` entry's `visible` flag in the view's `properties[]` / private `gallery_properties` directly — never trust a mockup for card-title visibility.
 - `width` is accepted but has no visual effect in gallery (table-only). `status_show_as: "select" | "checkbox"` controls Status rendering.
 
 ### Response-only (never send in a request)
