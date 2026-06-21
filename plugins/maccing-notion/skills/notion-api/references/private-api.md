@@ -152,6 +152,32 @@ private_request({ endpoint: "saveTransactions", operations: [
 - **VERIFY** with `read_page(page_id, "outline")` — `200 {}` alone doesn't prove the move landed.
 - **Live-verified 2026-06-14** — moved an inline "Gym Navigation" DB to the top of its area page and repositioned 4 spacer paragraphs, one `listAfter` each.
 
+## Native number progress Bar/Ring (`show_as`) — public API CAN'T, private app API CAN (live-verified 2026-06-21)
+
+Notion's **Show as → Bar / Ring** display for a number is stored in the **collection `schema`, per-property, under a `show_as` key** — invisible to the public REST API (which exposes only `number_format`) and absent from the `notion-types` / `kjk/notionapi` reverse-eng libraries, so it long *looked* UI-only. It IS settable via one private op:
+
+```jsonc
+private_request({ endpoint: "saveTransactions", operations: [
+  { pointer: {table:"collection", id:"<collectionId>", spaceId:"<space>"},
+    command: "updateCollectionPropertySchema", path: ["schema"],
+    args: { primitiveOp: { command: "update", args: {
+      "<propId>": {                       // the prop's FULL existing schema, verbatim…
+        "name":"Actual Calories", "type":"rollup", "aggregation":"sum",
+        "target_property":"CalF", "relation_property":">s<^", "target_property_type":"formula",
+        "show_as": { "type":"bar", "color":"green", "maxValue":2200, "showValue":true }  // …plus show_as
+      }
+    } } } },
+  { pointer: {table:"collection", id:"<collectionId>", spaceId:"<space>"}, path:[], command:"update",
+    args:{last_edited_by_id:"<activeUser>", last_edited_by_table:"notion_user"} }   // mandatory commit op
+] })
+```
+
+- **`show_as` shape:** `{ type: "bar" | "ring", color: <notion color name — green/blue/orange/yellow/red/…>, maxValue: <number>, showValue: <bool> }`. **`maxValue` is the "Divide by"** — a STATIC number (CANNOT reference another property). `showValue` = the show/hide-number toggle. Omit `show_as` (re-send the schema without it) to revert to a plain number.
+- **Works on ANY numeric column** — a plain `number`, OR a numeric `rollup` / numeric-`formula` prop (set it on the rollup/formula directly; no separate `%` helper column needed). A `format()`-wrapped (text) formula can't take it — keep the value numeric.
+- **`updateCollectionPropertySchema` REPLACES that prop's schema entry** — so read the prop's current schema first (`syncRecordValues` `table:"collection"` → `schema.<propId>`) and re-send it **verbatim with `show_as` appended**, or you wipe its icon/type/rollup config. Batch many props in ONE `primitiveOp.update` (one key per propId).
+- **Discovery = DevTools capture** (next section): the UI action is `CollectionSettingsProperty.handleNumberShowAsChange`. Toggle ONE column's Show-as in the UI, capture the `saveTransactions` payload, then replicate the `show_as` to every other column via API. The same capture-then-replicate cracks any UI-only setting not yet documented here.
+- **Live-verified 2026-06-21** — captured the UI op, then set `show_as` bars on 4 rollup props (`Actual Calories/Protein/Carbs/Fat`, `maxValue` = each macro's target, distinct colors) in the nutrition **Days** collection in one transaction; all persisted and render as native bars. This RETIRES the old "native bars are UI-only / not API-settable" guidance.
+
 ## Discovering NEW operations — the DevTools capture method (reusable)
 This is how the property-icon and "This month" formats were found. To learn the exact `command`/`path`/`args` for ANY UI-only action:
 1. Open Notion in the browser, DevTools → **Network**, filter `saveTransactions`.
