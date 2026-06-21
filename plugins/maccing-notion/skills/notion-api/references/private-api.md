@@ -174,28 +174,22 @@ A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row star
 
 **Where it lives (private — `getRecordValues`/`syncRecordValues` on `{table:"collection", id:<ds_id>}`):**
 - `collection.template_pages` — array of template-page block ids.
-- `collection.format.collection_default_template.template_page_id` — which one is the **default** (applied on **"+ New"**).
+- `collection.format.collection_default_template.template_page_id` — which one is the **default** (applied by the **blue "New" button** — NOT the inline bottom-of-table "+ New"; see `relations.md` → "Auto-link every new row to a fixed card" for the full add-action table).
 - Each template page is a `block` with `is_template:true`, `parent_table:"collection"`. Its `properties` are the values copied into every new row — including live tokens like a **today Date**: `"BbMF":[["‣",[["tv",{"type":"today"}]]]]`.
 
 **EDIT an existing template — public API, VERIFIED 2026-06-20:** a template page PATCHes like any row — `PATCH /v1/pages/{template_page_id} {properties:{…}}`. A pre-set **relation** (or any value) then carries into every new row made from it. (The public *read* shows the pre-set date/relation oddly — a `today` token reads back as `Date:null` — but `getRecordValues` confirms both the token AND your new value coexist; trust the private read, not the public one.)
 
 **CREATE a new template:** no public endpoint. The private `api/v3` path (per notion-py) is one `saveTransactions` with two ops — `set` a `block {is_template:true, type:"page", parent_table:"collection", parent_id:<ds_id>}` + `listAfter` it onto `collection.template_pages` — but it's **unverified here; prefer editing the existing default.** SETTING which template is default has no confirmed API path (UI-only) — and you rarely need it: edit the one already default.
 
-### ⭐ Recipe: auto-link every new log row to a fixed card (feed a relation-read latest-value formula)
-**Goal:** a "stat card" shows the latest value from a growing log DB (`formulas.md` "Flagship — latest value by date") AND new log rows auto-join the card's relation with **zero per-entry action**. Two API writes:
-1. Make the card↔log relation **DUAL** so the LOG DB gains a synced back-relation to the card:
-   `PATCH /v1/data_sources/{card_ds} {"properties":{"<Rel>":{"relation":{"data_source_id":"<log_ds>","type":"dual_property","dual_property":{"synced_property_name":"<BackRel>"}}}}}`
-2. **Pre-set that back-relation on the log DB's default template** = the fixed card:
-   `PATCH /v1/pages/{log_default_template_id} {"properties":{"<BackRel>":{"relation":[{"id":"<card_page_id>"}]}}}`
+### ⭐ Auto-link every new row to a card (the headline use of a pre-set template) → `relations.md`
 
-Now a row added via the log DB's **"+ New"** auto-links to the card → joins the card's relation → the relation-read formula recomputes to the latest. (A `today` token on the template also auto-dates the row, so the latest-by-date sort needs no input.)
+Pre-setting a **relation** on this default template is how you auto-link every new log row into a card's relation, feeding a relation-read latest-value formula. The full recipe lives in `relations.md` → "Auto-link every new row to a fixed card" — it's relation knowledge, kept with the rest of relations; **this file owns only the template *mechanics* above.** That recipe covers:
+- the two API writes (make the relation **DUAL**, then `PATCH` the back-relation on `{log_default_template_id}` = the card);
+- the **add-action coverage table** — the blue **"New"** button applies the template; the **inline "+ New" at the bottom of a table view does NOT** (blank, unlinked row — the #1 reason an auto-link silently stops), and neither do paste / CSV-import / API;
+- the **public-API-dual-sync vs one-sided-private-write desync** rule (set/repair links via `PATCH /v1/pages` so both sides sync — a private one-sided write desyncs);
+- free-plan reality (no automations) and the all-methods **webhook** (`page.created`, API `2026-03-01`) fallback.
 
-**Coverage + the "why" (so you don't chase a cleaner path that doesn't exist):**
-- Covers the **"+ New" button** (the normal add path). Does **NOT** cover **paste / CSV-import** (they skip the default template), and the public **`POST /v1/pages {template:{type:"default"}}` is a NO-OP** here (does not apply the template — verified).
-- **Free plan → NO database automations** (the UI "when row added → set relation" rule needs Plus); the default template is the free mechanism. Automations also have **no create API** (public or private).
-- For **ALL** add-methods, Notion's native **webhooks** (API version `2026-03-01`): subscribe `page.created` on the log DB → handler `PATCH`es the new page's relation = the card. Needs a public HTTPS endpoint (a localhost MCP server needs a tunnel).
-
-Live-verified 2026-06-20 (edit-existing-default-template + dual-relation auto-link, free plan).
+Live-verified 2026-06-20 (edit-existing-default-template, free plan) / 2026-06-21 (blue-New-vs-inline-+New + dual-sync-vs-desync).
 
 ---
 

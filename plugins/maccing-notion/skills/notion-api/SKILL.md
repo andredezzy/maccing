@@ -607,6 +607,6 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |
 | Formulas (gotchas; **`prop().split()` folds to `[]` — use compiled-token workaround for display-only storage (public API); relation-read formulas (`current.prop()`/`.last().prop()`) are NOT public-API-writable → private `formula2` AST required**; arithmetic over a parsed list also requires private AST; pt-BR currency) & number formatting | `references/formulas.md` |
-| Relations & rollups | `references/relations-rollups.md` |
+| Relations — shapes, dual & the one-sided-desync trap, the ~25-item read cap, **reading a relation in a formula** (list-ops + the latest-value-by-date flagship), **auto-linking new rows to a card** (template + blue-"New"-button gotcha), & rollups | `references/relations.md` |
 | Querying/filtering rows, search, extracting a `data_source_id` from a URL; webhooks, caching, idempotency | `references/patterns.md` |
 | **Debugging an API error** (`400`/`409`/`429`/`401`/`403`, `validation_error`, permission) | `references/patterns.md` + the matching domain file above |
