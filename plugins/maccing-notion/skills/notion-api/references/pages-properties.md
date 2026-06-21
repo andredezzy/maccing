@@ -51,6 +51,16 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 
 ---
 
+## Progress bars — use the NATIVE Bar/Ring display, NOT an ASCII text-formula
+
+A value-vs-target progress bar is a **display setting, not a property type.** ANY **number** property — or a **formula / rollup that RETURNS a number** — can be shown as a **Bar** or a **Ring** (the property's *Show as* → Bar / Ring), with a **Divide by** (a fixed max, or another property) and an optional *Show number*. This is Notion's built-in, color-aware progress bar; it renders on table rows AND gallery cards. **It is the right tool — prefer it.** Hand-rolling a `"▓▓▓░░ 62%"` formula is the classic mistake: it looks blockier, returns TEXT (so it can't itself be a native Bar), isn't view-filterable, and is harder to read.
+
+- ⚠️ **`format()` DESTROYS the native bar.** The instant a number is wrapped in `format(...)` it becomes TEXT and the *Show as → Bar/Ring* option disappears. Keep the value **numeric** — use `round()` for decimals (never `format()`), set the property's **number format = `percent`** if you want a 0–100% read — then pick Show as Bar/Ring. A formula keeps the Bar option only when its `result_type` is `number`. ([Notion docs / community, verified 2026-06-21](https://www.claritymastery.co/blog/round-numbers-any-decimal-place-in-notion))
+- 🔌 **Bar/Ring is NOT API-settable — it's a UI toggle.** The public `number.format` accepts only the number-FORMAT enums (`number` / `number_with_commas` / `percent` / currencies) — there is **no `bar`/`ring`**, and the Show-as + Divide-by display is **absent from the private `api/v3` collection schema too** (a number prop there carries just `number_format`). So when building a DB programmatically: create the **number / numeric-formula** property (e.g. `Progress = round(prop("Actual") / prop("Target") * 100)`, number-format `percent`, divide-by 100), then **the user flips Property → Show as → Bar/Ring in the UI** (two clicks). Do NOT substitute a text-bar formula just because the API can't set the display — set up the numeric property and hand off the one-time toggle.
+- ✅ **A text-bar formula (`▓▓░░`) is justified ONLY when** you need a bar that's (a) authored entirely via the API with zero UI follow-up, or (b) glued onto other text on one card line (emoji status + bar + `n/target`). It's display-only: un-filterable, and it can't become a native Bar. Otherwise default to the native display. (Root cause, 2026-06-21: a macro tracker's `Calories bar`/`Protein bar` were built as text-formula hacks *because this was undocumented* — the native Bar on the numeric `% Calories` ÷ target is the proper fix.)
+
+---
+
 ## Reading property values from a raw `request` response (write-response / GET parsing)
 
 > Only needed when parsing a raw `request` response. `read_page` / `read_database` already resolve relations to titles and flatten rollups/formulas to scalars — no manual traversal.
