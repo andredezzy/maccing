@@ -24,7 +24,7 @@ Applies to new playbooks AND edits. Not for "obvious" rules, not for a one-line 
 
 The top callout must let a future agent answer **"do these rules bind me here, right now?"** — so it states **what subtree it governs + that it inherits/overrides the parent**, NOT a recap of the workflow.
 
-- ✅ `Agent guide for the Recipes subtree. Read before any read/write here. Inherits the root LifeOS AGENTS.md; this file wins on conflict for its subtree.`
+- ✅ `Agent guide for the Recipes subtree. Read before any read/write here. Inherits the root workspace AGENTS.md; this file wins on conflict for its subtree.`
 - ❌ `This guide explains how to add a recipe: first create the row, then set properties, then…` (a workflow dump — the agent follows the summary and skips the actual rules below).
 
 Use words an agent will recognize/search: the subtree name, DB names, property names, the error or mistake the rule prevents.

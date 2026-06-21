@@ -79,7 +79,7 @@ NO WRITE-TASK IS COMPLETE UNTIL THE NEAREST GOVERNING AGENTS.md REFLECTS THE NEW
 3. **Bring every touched line to the new reality** — DELETE references to deleted objects (the most misleading kind of stale), RENAME renamed ones, ADD new structure, FIX counts and positions. A change that establishes a NEW convention is recorded **as a convention**, at the right level (closest wins — `references/agents-md-authoring.md`).
 4. **Verify** the playbook reads true end-to-end — no surviving mention of anything you removed or renamed, and no "disregard the section above" disclaimers left as a substitute for actually fixing the section.
 
-**Scope:** structural / architectural writes fire this gate — create / delete / rename / move a database, property, or view; restructure blocks; change a hub or layout; establish a convention. **Pure data-row edits** (logging a workout, updating a value) don't change what the playbook describes — skip the gate for those.
+**Scope:** structural / architectural writes fire this gate — create / delete / rename / move a database, property, or view; restructure blocks; change a hub or layout; establish a convention. **Pure data-row edits** (logging a value, updating a cell) don't change what the playbook describes — skip the gate for those.
 
 ### Red Flags — STOP, you're rationalizing
 | Thought | Reality |
@@ -481,7 +481,7 @@ The user installed this MCP so the AGENT performs the change. Telling them "open
 NOTHING IS "UI-ONLY" UNTIL THE PRIVATE api/v3 PATH HAS BEEN TRIED — NEVER PUNT A WRITE BACK TO THE USER
 ```
 
-Public REST first; when it 400s or silently folds — parse/list/**relation-read** formulas, column/property icons, block reorder, relative-date filters, default visibility — the private `api/v3` path does it via `private_request` (`saveTransactions`: `formula2` AST planting, `listAfter`/`listBefore`, schema/icon ops). **A relation-read formula with no copyable example is STILL agent-authorable** — crack the `formula2` AST by isolated probing (private-api.md → "Relation-read encoding"). Live-proof: Muscle Groups `To beat` (a `filter → map → sum` over a relation) was planted entirely via the agent, zero UI.
+Public REST first; when it 400s or silently folds — parse/list/**relation-read** formulas, column/property icons, block reorder, relative-date filters, default visibility — the private `api/v3` path does it via `private_request` (`saveTransactions`: `formula2` AST planting, `listAfter`/`listBefore`, schema/icon ops). **A relation-read formula with no copyable example is STILL agent-authorable** — crack the `formula2` AST by isolated probing (private-api.md → "Relation-read encoding"). Live-proof: a strength-log DB `Top set` formula (a `filter → map → sum` over a relation) was planted entirely via the agent, zero UI.
 
 ### Red Flags — STOP, you're rationalizing
 | Thought | Reality |

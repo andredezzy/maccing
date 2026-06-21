@@ -59,7 +59,7 @@ POST /v1/views
 {
   "database_id": "<database_id>",
   "data_source_id": "<ds_id>",
-  "name": "Net Worth Over Time",
+  "name": "Balance over time",
   "type": "chart",
   "configuration": {
     "type": "chart",
@@ -90,7 +90,7 @@ Full aggregator vocabulary: `count`, `count_values`, `sum`, `average`, `median`,
 **Group ANY view (table / list / …) by a property — and the DATE rule.** Same `group_by` config; it's a oneOf with two shapes:
 - **Simple types** (`select` · `multi_select` · `status` · `relation` · `person` · `created_by` · `last_edited_by` · `text` · `title` · `number` · `checkbox` · `url` · `email` · `phone_number`): `group_by: { "type": <that type>, "property_id": "<id>", "sort": {...} }`.
 - **Date/time types** (`date` · `created_time` · `last_edited_time`): MUST add a nested `group_by` **granularity** — `{ "type": "date", "property_id": "<id>", "group_by": "day", "sort": { "type": "descending" } }` (granularity ∈ `day` / `week` / `month` / `year` / `relative`). ⚠️ Missing the granularity → `400 "group_by.group_by should be defined"`; missing `type` → `400 "type should be defined"` — you need BOTH. `formula` is NOT a valid `group_by.type` (group by a real property, not a formula).
-- **`PATCH /v1/views/{id}` MERGES `configuration`** — sending only `group_by` preserves the column `properties` (no need to resend the whole list). Live-verified 2026-06-17 (Training Log "All logs" grouped by session Date, day granularity, descending).
+- **`PATCH /v1/views/{id}` MERGES `configuration`** — sending only `group_by` preserves the column `properties` (no need to resend the whole list). Live-verified 2026-06-17 (a sessions-log DB "All logs" view grouped by session Date, day granularity, descending).
 - **Hide empty groups — undocumented but PUBLIC.** Add `"hide_empty_groups": true` **inside** the `group_by` object (`{ "type":"date", …, "sort":{…}, "hide_empty_groups": true }`). The public API accepts, persists, and echoes it back even though it's absent from the docs. Live-verified 2026-06-18.
 - **Group sort ≠ row sort — two different fields.** `group_by.sort` orders the GROUPS; the view's **top-level `sorts: [{ "property", "direction" }]`** orders the ROWS *within* each group. To sequence rows inside a group (e.g. a numbered plan whose titles are `"1 · …"` … `"7 · …"`), set a top-level `sorts` on that property — the `group_by.sort` won't touch row order. Live-verified 2026-06-18.
 
@@ -118,7 +118,7 @@ private_request({ endpoint: "saveTransactions", operations: [
 ```
 - Set it on **every** view of the block — the gallery AND table tabs share the one heading, so set the flag on each view id (live-verified 2026-06-14). Read back via `getRecordValues` on the `collection_view` → `format.hide_linked_collection_name`. The `200 {}` write doesn't prove it rendered — verify (read-back, ideally a browser check).
 - **House style:** navigation-hub galleries hide the title — set `hide_linked_collection_name:true` on every nav-hub view (pairs with `collection_peek_mode:"full_page"` above).
-- **`hide_linked_collection_name` hides only the gray *database* name; the *view* name still renders as the block's label** — a "This week" table view shows a "This week" pill even with the collection name hidden. Live-verified 2026-06-17 (Gym daily hub). (Design taste — *let the view name BE the section title; don't stack a redundant `heading_3` above it* — see `aesthetics.md` §5.)
+- **`hide_linked_collection_name` hides only the gray *database* name; the *view* name still renders as the block's label** — a "This week" table view shows a "This week" pill even with the collection name hidden. Live-verified 2026-06-17 (an inline daily hub). (Design taste — *let the view name BE the section title; don't stack a redundant `heading_3` above it* — see `aesthetics.md` §5.)
 
 **View icon — the switcher-TAB icon (`collection_view_icon`, PRIVATE-only).** The icon on a view's tab (left of the view name) is **not** in the public API — `PATCH /v1/views/{id}` with an `icon` returns `200` but silently DROPS it (the returned view has no `icon` field). It's a private `format` string on the `collection_view`, set exactly like peek mode / hide-name:
 ```jsonc
@@ -159,7 +159,7 @@ private_request({ endpoint: "saveTransactions", operations: [
 ```
 Read back via `getRecordValues` on the `collection` → `format.property_visibility`; the `200 {}` write doesn't prove it rendered — verify in the UI. Live-verified 2026-06-19 (hid a nav-hub `Order` from the row-detail panel; `upsert_property.visible:false` only set `collection_page_properties` and did NOT hide it — the original wrong guess).
 
-**Reorder columns** — send the full `configuration.properties` array in the desired left-to-right order (same PATCH; include every property with its `visible`/`width`). **The title column IS reorderable** — placing the `title` entry mid-array renders it there (live-verified 2026-06-14: a Training Log "Note" title column moved to after "Hard sets"); it is NOT pinned first as older Notion behaved. (`order_properties` does this across views — list `title` in `order` to move it.)
+**Reorder columns** — send the full `configuration.properties` array in the desired left-to-right order (same PATCH; include every property with its `visible`/`width`). **The title column IS reorderable** — placing the `title` entry mid-array renders it there (live-verified 2026-06-14: a sessions-log DB "Note" title column moved to after "Hard sets"); it is NOT pinned first as older Notion behaved. (`order_properties` does this across views — list `title` in `order` to move it.)
 
 **Column width (table views).** `configuration.properties[].width` is an **integer in PIXELS** — table views only (gallery/board accept it but ignore it, `gallery-view.md`). No documented max; **default ≈ 200** when unset. API-set widths render AS-SET — the UI's ~100 px drag-resize minimum does NOT clamp them — so a too-small width truncates the **HEADER** (type-icon + label + sort caret), e.g. `Last weight` at width 110 renders `Last wei…`. Budget by the longer of header-vs-content: a short label + 1–2-digit number ≈ 90–110; a date (`June 19, 2026`) ≈ 140; a title / long relation ≈ 220–320. Set width in the SAME full-`properties` PATCH as visibility + order (one array, one call — see the replace-not-merge rule above). Siblings in `configuration`: **`frozen_column_index`** (int — freeze the first N columns from the left; `-1` = none) and **`wrap_cells`** (bool). Live-verified 2026-06-19.
 ⚠️ **A freshly API-built DB's default view often renders with ALL columns hidden.** After `POST /v1/databases` + PATCH-adding properties (relations/formulas/rollups) + `order_properties`, the default view's `configuration.properties` can come back all `visible:false` — a blank table. **Always explicitly PATCH each view's full visible-column list** (list the ones you want `visible:true` first, then the rest `false`) — don't assume new properties show. Live-verified 2026-06-14.
