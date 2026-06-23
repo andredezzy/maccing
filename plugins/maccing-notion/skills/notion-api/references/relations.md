@@ -1,6 +1,6 @@
 # Relations & rollups
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
+Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **This is the single home for relations** — property shape, create/convert, dual-sync & the one-sided desync trap, the ~25-item read cap, reading a relation in a formula (list-ops + the latest-value flagship), auto-linking new rows, and rollups (which exist only *over* a relation). Two pointers out: the raw property-object catalog → `pages-properties.md`; authoring a relation-read `formula2` AST via the private API → `private-api.md` → "Relation-read encoding".
 
@@ -33,12 +33,12 @@ A relation is created/edited via a schema `PATCH /v1/data_sources/{id}`. Two fla
   { "properties": { "RelProp": { "relation": { "data_source_id": "...", "type": "dual_property", "dual_property": {} } } } }
   ```
   ⚠️ **Conversion does NOT backfill** existing rows onto the reverse side — new rows auto-mirror, but pre-existing rows need explicit PATCH **from the target/reverse side** (patching from the source/forward side is a silent no-op):
-  ```python
+  ```
   # Query BOTH data sources via raw POST /v1/data_sources/{id}/query (each result carries .id + the relation prop) —
-  # read_database returns titles/values, not the page ids the PATCH needs. Build category_page_id → [snapshot_ids],
+  # read_database returns titles/values, not the page ids the PATCH needs. Build source_page_id → [target_page_ids],
   # then patch from the TARGET side:
-  PATCH /v1/pages/{category_id}
-  { "properties": { "Snapshots": { "relation": [{"id": s_id} for s_id in snapshot_ids] } } }
+  PATCH /v1/pages/{source_page_id}
+  { "properties": { "<BackRelProp>": { "relation": [{"id": t_id} for t_id in target_page_ids] } } }
   ```
   Batch ≤100 relation entries per PATCH.
 - **Set a relation value on a row** (get the target row's page id from raw `POST /v1/data_sources/{id}/query` — `.id` per result; the readers don't expose page ids):
@@ -82,7 +82,7 @@ prop("<Relation>").filter(not(empty(current.prop("Date")))).sort(current.prop("D
 ```
 (1) filter strips date-less rows — null dates poison the sort; (2) sort ascending by date; (3) `.last()` = chronologically latest page; (4) `.prop()` reads its value.
 
-⚠️ **A relation list-op that reads a *related page's* property (`current.prop("X")`, `.last().prop("X")`) is UI-ONLY to author via the public REST API** — writing it as a `formula.expression` string returns `400 "Type error with formula"` in BOTH the `prop()` and compiled-`{{…}}` forms (empirically confirmed: even `{{relRef}}.map(current.prop("Weight")).sum()` fails). The public string compiler cannot resolve a related-page property's type. To set it programmatically, author the typed **`formula2` AST** via the private path — the full encoding is **hand-craftable, no UI seed needed** → `private-api.md` → "Relation-read encoding". (Filterability follows the stored type: a **public-string** formula is typed `unknown` → not view-filterable; a UI/AST formula carries a real `result_type`, so it can be — verify against your view if you depend on it.)
+⚠️ **A relation list-op that reads a *related page's* property (`current.prop("X")`, `.last().prop("X")`) is UI-ONLY to author via the public REST API** — writing it as a `formula.expression` string returns `400 "Type error with formula"` in BOTH the `prop()` and compiled-`{{…}}` forms (empirically confirmed: even `{{relRef}}.map(current.prop("Value")).sum()` fails). The public string compiler cannot resolve a related-page property's type. To set it programmatically, author the typed **`formula2` AST** via the private path — the full encoding is **hand-craftable, no UI seed needed** → `private-api.md` → "Relation-read encoding". (Filterability follows the stored type: a **public-string** formula is typed `unknown` → not view-filterable; a UI/AST formula carries a real `result_type`, so it can be — verify against your view if you depend on it.)
 
 ## Auto-link every new row to a fixed card (feed the latest-value formula)
 
@@ -107,13 +107,14 @@ Once linked, the relation feeds the latest-value formula in "Reading a relation 
 
 - Add rollup: `PATCH /v1/data_sources/{id}` with the full property envelope — `{ "properties": { "MyRollup": { "rollup": { "relation_property_name": "RelProp", "rollup_property_name": "TargetProp", "function": "sum" } } } }` (the `{ "properties": { "<name>": … } }` wrapper is required, same as every schema PATCH)
 - Functions (the COMPLETE valid set — a wrong one 400s with this list): `count` · `count_values` · **`unique`** (count of DISTINCT values — e.g. `unique` of a Date = number of distinct days = gym visits, NOT row count) · `show_unique` · `empty` · `not_empty` · `percent_empty` · `percent_not_empty` · `sum` · `average` · `median` · `min` · `max` · `range` · `earliest_date` · `latest_date` · `date_range` · `checked` · `unchecked` · `percent_checked` · `percent_unchecked` · `count_per_group` · `percent_per_group` · `show_original`. ⚠️ The distinct-count function is **`unique`**, NOT `count_unique_values` (that 400s). ⚠️ Plain **`count`** counts ALL related rows (one per relation entry) — to count distinct values of a property (sessions/visits, distinct categories) use **`unique`** on that property.
-- **No rollup-of-rollup** — API returns: `"Cannot create a rollup of a related rollup property."` Blocks rolling up a *rollup property* directly (any function, including date rollups). ⚠️ **Carve-out — rolling up a *formula* column through a relation WORKS** (`sum`/`count`/`max` of a formula property is fine; e.g. `Weeks.Hard sets = sum(Sessions.Hard sets)` where the log's Hard sets is a formula — live-verified 2026-06-14). So to aggregate two hops up (e.g. log→Week→Month), expose the middle value as a **formula** (not a rollup) for the next rollup to consume, or add a direct relation. See `formulas.md` and the "current-period value" workaround below.
+- **No rollup-of-rollup** — API returns: `"Cannot create a rollup of a related rollup property."` Blocks rolling up a *rollup property* directly (any function, including date rollups). ⚠️ **Carve-out — rolling up a *formula* column through a relation WORKS** (`sum`/`count`/`max` of a formula property is fine; e.g. `ParentDB.Metric = sum(ChildDB.Metric)` where the log's Metric is a formula — live-verified 2026-06-14). So to aggregate two hops up (e.g. log→Week→Month), expose the middle value as a **formula** (not a rollup) for the next rollup to consume, or add a direct relation. See `formulas.md` and the "current-period value" workaround below.
   - **Live cross-DB aggregation workaround** — a per-row formula `if(formatDate(prop("Month date"),"YYYYMM") == formatDate(now(),"YYYYMM"), prop("Value"), 0)` summed by a rollup on the category relation: the "current-period value" pattern. Full recipe + cautions in `formulas.md` → "Live category aggregation".
 - When creating a rollup referencing a new relation, Notion auto-names the reverse property `"Related to X (DB Name)"` — **rename it BEFORE adding the rollup**, not after; using the unrenamed name produces 400 'Cannot create rollup with relation property':
   ```json
   PATCH /v1/data_sources/{id}
   { "properties": { "Related to X (DB Name)": { "name": "Related to X" } } }
   ```
+  (Only applies when the relation was created without `dual_property.synced_property_name` — if you used it at creation, this step is not needed. See "Create & convert" above.)
 - Rollup recompute lag: querying immediately after a schema change may return `null` — re-read a moment later until non-null before depending on the value (this is Notion-side propagation delay, NOT a rate limit; the MCP clients handle real throttles themselves)
 - `read_page`/`read_database` return rollup values as plain scalars. (If using raw `request` instead: `latest_date` → `rollup.date.start`, numeric → `rollup.number` — the readers flatten these for you.)
 
@@ -124,13 +125,14 @@ Once linked, the relation feeds the latest-value formula in "Reading a relation 
 **Fix: append `.first()` to unwrap to a scalar before use.** Example:
 
 ```
-// Wrong — `{rollup}` is a list, multiplication yields empty/wrong
-{rollup} * 7
+// {rollup} = placeholder for the compiled token {{notion:block_property:<propId>:...}} of the rollup property
+// Wrong — <rollup-token> is a list, multiplication yields empty/wrong
+<rollup-token> * 7
 
 // Correct — `.first()` unwraps to scalar first
-{rollup}.first() * 7
+<rollup-token>.first() * 7
 ```
 
-Live-verified 2026-06-19 building a daily-totals tracker (a computed-rollup formula — e.g. protein rollup × 4 — failed until `.first()` was added).
+Live-verified 2026-06-19 building a daily-totals tracker (a computed-rollup formula — e.g. a metric rollup × 4 — failed until `.first()` was added).
 
 **Chaining `formula2` formulas is also fragile.** If a `formula2` formula references ANOTHER `formula2` formula via its compiled tokens, the AST can fail to resolve at runtime. **Prefer inlining the dependency** — copy the referenced formula's expression directly into the consuming formula — rather than chaining through a named formula property.

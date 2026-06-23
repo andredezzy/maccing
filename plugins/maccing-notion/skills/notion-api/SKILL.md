@@ -1,6 +1,6 @@
 ---
 name: notion-api
-description: Use BEFORE the first Notion read or write on ANY task touching Notion — the Notion API or its MCP — however trivial: a one-field rename, a page icon/cover, adding one row, a single select color, even just reading a page's title. Covers creating, editing, querying, or moving databases, data sources, pages, views (table/board/gallery/chart), formulas, rollups, relations, blocks, icons, covers; and any Notion API/MCP error (validation_error, pagination, permission, 400/409). MANDATORY, never optional — "small", "quick", "obvious", or "well-understood" is the exact trap: every Notion edit still owes this skill's mandatory first steps (the ancestral-AGENTS.md sweep + house-style match) that a direct quick edit silently skips and corrupts. If the work touches Notion at all, load this FIRST.
+description: Use BEFORE the first Notion read or write on ANY task touching Notion — the Notion API or its MCP — however trivial: a one-field rename, a page icon/cover, adding one row, a single select color, even just reading a page's title. Covers creating, editing, querying, or moving databases, data sources, pages, views (table/board/gallery/calendar/timeline/list/chart/dashboard/map/form), formulas, rollups, relations, blocks, icons, covers; and any Notion API/MCP error (validation_error, pagination, permission, 400/409). MANDATORY, never optional — "small", "quick", "obvious", or "well-understood" is the exact trap: every Notion edit still owes this skill's mandatory first steps (the ancestral-AGENTS.md sweep + house-style match) that a direct quick edit silently skips and corrupts. If the work touches Notion at all, load this FIRST.
 ---
 
 > ⚠️ **MANDATORY — this skill governs EVERY Notion task, no exceptions.** If the work touches Notion at all (the API or this MCP), you operate UNDER this skill BEFORE the first read or write — however small: a one-field rename, an icon/cover, one row, a single select color, even a read. **"It's trivial / quick / obvious / well-understood" is the precise rationalization that skips the mandatory first steps** (the ancestral-`AGENTS.md` sweep + house-style match) and silently corrupts the workspace. No Notion operation is too small to require this skill. **Violating the letter of this rule is violating the spirit of this rule.**
@@ -233,7 +233,7 @@ NEVER WRITE A SINGLE GLYPH UNTIL YOU KNOW THE HOUSE STYLE
 **What to infer** — scan for all of the following before any write:
 
 - **Naming casing** — Title Case, sentence case, ALL CAPS, camelCase in page/DB titles?
-- **Language** — pt-BR, EN, or a deliberate pt-BR/EN mix (e.g. hub names in pt-BR, property names in EN)?
+- **Language** — pt-BR, EN, or a deliberate mix (e.g. navigation labels in one language, data-property names in another)?
 - **Singular vs plural** — collection/DB names: "Task" or "Tasks", "Month" or "Months"?
 - **Hub patterns** — inline DBs with an "X Navigation" header, full-page DBs, linked views, dashboard layouts?
 - **Icon/emoji style** — infer which type is used where (`emoji` vs Notion named `icon`) and which color palette applies to which category of page (cross-ref: "Icons, emoji & covers"). **Fixed exception: every `AGENTS.md` page uses the 🤖 emoji icon — a signature marking the agent playbook, independent of the surrounding house style.**
@@ -247,16 +247,16 @@ NEVER WRITE A SINGLE GLYPH UNTIL YOU KNOW THE HOUSE STYLE
 
 ### MANDATORY — write new content in the workspace's language; never introduce a second one
 
-The inferred **language** is a hard default, not a hint. **All new content you create — area/page/database/property/view names, select-option labels, headings, callouts, descriptions — goes in the language already in use** (e.g. English structure). **NEVER introduce a second language on your own** — not because the user lives in that locale, not because it "feels natural," not because a data SOURCE is in it.
+The inferred **language** is a hard default, not a hint. **All new content you create — area/page/database/property/view names, select-option labels, headings, callouts, descriptions — goes in the language already in use**. **NEVER introduce a second language on your own** — not because the user lives in that locale, not because it "feels natural," not because a data SOURCE is in it.
 
-**Foreign-language source data is the trap:** when you seed or import from a source in another language (a Brazilian TACO food table, a Spanish API…), **translate the values into the workspace language as you import** — do not pour the source's language into the workspace. The only things that stay in the source language are genuine proper nouns with no translation, or content the user EXPLICITLY says to keep.
+**Foreign-language source data is the trap:** when you seed or import from a source in another language (a Portuguese-language food database, a Spanish API…), **translate the values into the workspace language as you import** — do not pour the source's language into the workspace. The only things that stay in the source language are genuine proper nouns with no translation, or content the user EXPLICITLY says to keep.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 | Thought | Reality |
 |---|---|
-| "The user is Brazilian, so pt-BR labels feel natural" | Match the workspace's established language, not the user's locale. Here it's English. |
-| "The food data is Portuguese, so its groups/names should be too" | Translate the source into the workspace language on import — never import its language. |
+| "The user is Brazilian, so pt-BR labels feel natural" | Match the workspace's established language, not the user's locale — infer from the root AGENTS.md or a live sample. |
+| "The source data is in a foreign language, so its groups/names should be too" | Translate the source into the workspace language on import — never import its language. |
 | "A pt-BR/EN mix is fine here" | Only if the workspace ALREADY does a deliberate, documented mix. Otherwise it's one language — don't invent a mix. |
 | "I'll build it in pt-BR now and translate later if needed" | Building in the wrong language forces a full rework. Default to the workspace language from the first glyph. |
 
@@ -310,7 +310,7 @@ Not for "obvious" covers, not for "it's just a table", not when defaults look fi
 
 ### What counts as a design choice
 
-- **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`) · the view **icon** (the switcher-tab icon — a gray named icon, like every property/column gets one; private `collection_view_icon`). Field reference: `references/views.md`.
+- **Data shape (EVERY view, including a plain table):** view **type** (`table`/`board`/`gallery`/`calendar`/`timeline`/`list`/`chart` + `dashboard`/`map`/`form` — see `references/views.md`) · **filter** — which rows show · **sort** — property + direction · **grouping** — `group_by` (board columns, sub-groups) · which **properties** are visible + their order · the view **name** (self-describing — never leave `Default view`) · the view **icon** (the switcher-tab icon — a gray named icon, like every property/column gets one; private `collection_view_icon`). Field reference: `references/views.md`.
 - **Appearance (visual view types — gallery/board cards):** cover source (`page_cover` / `page_content` / a Files-&-media property / none) · card size (small/medium/large) · fit-image (`contain` vs `cover`/crop) · card layout (`list` vs `compact`) · per-property width. Field reference: `references/gallery-view.md`.
 
 ### The Self-Check
@@ -390,7 +390,7 @@ One section per object. **Decide, per object, every applicable line from the two
 - **Default-view rename** — name what each DB's auto `Default view` becomes AND give that renamed view its own full VIEW entry (filter/sort/group/visible) like any other; the rename supplies the name only.
 - **Relation reverse property** — it is a full property: state its name (house casing/language), icon, and default visibility, not just "dual".
 - **Linked views in a page body** — a linked database view embedded in a page is a full VIEW (type/filter/sort/group/visible/name/card-look), not a body-block reference.
-- **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200; the sourcing loop + cover taste live in `references/aesthetics.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
+- **page_cover galleries** — source each existing row's cover here (verified Unsplash URL via WebSearch→WebFetch→200; the sourcing loop + cover taste live in `references/visual-design.md`); for a not-yet-populated DB, commit the **search query + style** and cross-check every row has a cover before the build is "done".
 - **A named page's cover** (area / nav / section) is sourced HERE — the "commit at creation" exemption is for not-yet-created DB *rows* only.
 - **Refactor / rebuild → a MIGRATION block** — for each existing DB: row count (`read_database`), every property that must survive (old name → new name/type), every relation to re-wire, every formula referencing an old name. A property you drop is stated `OUT OF SCOPE` with a reason. All decided in this same self-check turn — *enumerating only the headline table and silently ignoring the others is the classic migration miss.*
 
@@ -444,7 +444,7 @@ The pre-build self-check above designs every dimension; this fires at the **othe
 | Gallery **card covers** (coverless vs shown) | `read_database` → Views: `configuration.cover == {type:"page_cover"}` (+ `cover_size`/`cover_aspect`) | a gallery is **coverless by default** — rows HAVING covers is not enough (gallery-view.md) |
 | A **leftover default view** / gallery-vs-table tabs | `read_database` → Views list | a nav hub is the **gallery ONLY** — DELETE the auto `Table` / `Default view` (gallery-view.md) |
 | **Multi-bucket = N stacked DBs vs ONE tabbed block** | `read_page` outline → count `child_database` blocks per section | time/status slices of one DB are TABS on ONE linked block (views.md) |
-| Real **block spacing** | `read_page` outline → the block sequence | an empty `paragraph` between EVERY back-to-back section — callout↔first block, a DB↔the next block (heading / page-link / DB), stacked views (aesthetics.md §4) |
+| Real **block spacing** | `read_page` outline → the block sequence | an empty `paragraph` between EVERY back-to-back section — callout↔first block, a DB↔the next block (heading / page-link / DB), stacked views (visual-design.md §4) |
 | **Inline vs link** (`↗`) | block `.parent == the page` AND `is_inline` | a moved DB renders as a link unless re-parented (blocks.md) |
 | **Column widths** / truncated headers | `read_database` → Views: each visible column `width` fits its header | (views.md → Column width) |
 | **Hidden collection name** + **peek mode** | `getRecordValues` on the `collection_view` `format` | nav-hub views hide the name + open Full page (views.md) |
@@ -481,7 +481,7 @@ The user installed this MCP so the AGENT performs the change. Telling them "open
 NOTHING IS "UI-ONLY" UNTIL THE PRIVATE api/v3 PATH HAS BEEN TRIED — NEVER PUNT A WRITE BACK TO THE USER
 ```
 
-Public REST first; when it 400s or silently folds — parse/list/**relation-read** formulas, column/property icons, block reorder, relative-date filters, default visibility — the private `api/v3` path does it via `private_request` (`saveTransactions`: `formula2` AST planting, `listAfter`/`listBefore`, schema/icon ops). **A relation-read formula with no copyable example is STILL agent-authorable** — crack the `formula2` AST by isolated probing (private-api.md → "Relation-read encoding"). Live-proof: a strength-log DB `Top set` formula (a `filter → map → sum` over a relation) was planted entirely via the agent, zero UI.
+Public REST first; when it 400s or silently folds — parse/list/**relation-read** formulas, column/property icons, block reorder, relative-date filters, default visibility — the private `api/v3` path does it via `private_request` (`saveTransactions`: `formula2` AST planting, `listAfter`/`listBefore`, schema/icon ops). **A relation-read formula with no copyable example is STILL agent-authorable** — crack the `formula2` AST by isolated probing (private-api.md → "Relation-read encoding"). Live-proof: a strength-log DB relation-read formula (a `sort → last → string-concat` over a relation) was planted entirely via the agent, zero UI.
 
 ### Red Flags — STOP, you're rationalizing
 | Thought | Reality |
@@ -518,9 +518,9 @@ A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read pro
 
 - API base: `https://api.notion.com/v1` — header `Notion-Version: 2026-03-11`
 - SDK: the `@notionhq/client` TypeScript SDK needs **v5.12.0+** for `2026-03-11` — note this SDK is on the **5.x** line (npm-verified 2026-06: latest `5.22.0`, `5.12.0` exists), NOT the legacy 2.x; relevant only to external app developers — the bundled `notion` MCP server makes raw HTTP calls (no Notion SDK)
-- Databases are queried/mutated via `/v1/data_sources/{id}` — prefer it over the **legacy** `/v1/databases/{id}` (only its **GET / PATCH** still coexist on 2026-03-11; `POST /v1/databases/{id}/query` was **removed** → `400 Invalid request URL` — use `/v1/data_sources/{id}/query`). The **data-source** endpoint covers schema `PATCH`, row queries, **and** relation targets: a relation/rollup property references a `data_source_id`, not a `database_id` (a 2026-03-11 change; pre-2026 priors that say `database_id` are stale)
+- Databases are queried/mutated via `/v1/data_sources/{id}` — prefer it over the **legacy** `/v1/databases/{id}` (only `GET /v1/databases/{id}` — for id-resolution and `.parent` — and `PATCH /v1/databases/{id}` — for property mutations and DB moves — still coexist on 2026-03-11; `POST /v1/databases/{id}/query` was **removed** → `400 Invalid request URL` — use `/v1/data_sources/{id}/query`). The **data-source** endpoint covers schema `PATCH`, row queries, **and** relation targets: a relation/rollup property references a `data_source_id`, not a `database_id` (a 2026-03-11 change; pre-2026 priors that say `database_id` are stale)
 - `POST /v1/databases` response → use `data_sources[0]['id']` as the data source ID; `is_inline: true` supported at creation
-- **Create a DB row** with `POST /v1/pages` `parent: { type: "data_source_id", data_source_id }` — **NOT** `{ database_id }` (400 on 2026-03-11). **This binds external scripts / SDK / seed code you write, too:** query `/v1/data_sources/{id}/query`, create rows with a `data_source_id` parent, read a schema via `GET /v1/data_sources/{id}` — **never** the legacy `/v1/databases/{id}` query/parent/GET-schema paths. A seed or import script that hits `/databases/{id}/query` or uses a `{ database_id }` page parent **will 400** (`invalid_request_url` / `validation_error`). (Live-verified 2026-06-19: a TACO seed script failed twice on exactly these before being corrected to `/data_sources`.)
+- **Create a DB row** with `POST /v1/pages` `parent: { type: "data_source_id", data_source_id }` — **NOT** `{ database_id }` (400 on 2026-03-11). **This binds external scripts / SDK / seed code you write, too:** query `/v1/data_sources/{id}/query`, create rows with a `data_source_id` parent, read a schema via `GET /v1/data_sources/{id}` — **never** the legacy `/v1/databases/{id}` query/parent/GET-schema paths. A seed or import script that hits `/databases/{id}/query` or uses a `{ database_id }` page parent **will 400** (`invalid_request_url` / `validation_error`). (Live-verified 2026-06-19: a food-data seed script failed twice on exactly these before being corrected to `/data_sources`.)
 - Inline DB IDs (from block children, i.e. a `child_database` block id) ARE valid `database_id` values (resolve via `GET /v1/databases/{id}` → `data_sources[0].id`) but are **NOT** valid `data_source_id` values (`GET /v1/data_sources/{that-id}` → **404** "Could not find data_source" — the data_source_id is a *distinct* UUID) and NOT a valid `page_id` for `GET /pages/{id}`. (`read_database` accepts either and auto-resolves a database_id → its data_source, so the practical flow is unchanged.)
 - Search API: `filter.value` accepts `'page'` or `'data_source'` — **not** `'database'` (breaking change in 2025-09-03)
 
@@ -601,8 +601,8 @@ The heavy API reference is split into sibling files under `references/`. Load on
 | **Property/column icons** (the icon next to a column name), **authoring parse/list/relation formulas (the typed `formula2` AST)** **& other UI-only features the public API can't do** — column icons via `upsert_property`; other UI-only writes via `private_request` (never answer "impossible") | `references/private-api.md` |
 | Built-in icon **name catalog** (the `{type:"icon"}` names) | `references/icon-names.md` |
 | Blocks, positioning, the **reorder workaround**, Markdown content API | `references/blocks.md` |
-| Views — list/create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
-| **Design / aesthetics / taste** — the *which / when / why* of covers (B&W Unsplash + sourcing loop), icons, gallery look, **the KPI stat-tile pattern**, layout & spacing, visual hierarchy, colour, hub/dashboard patterns (the mechanics live in the rows below) | `references/aesthetics.md` |
+| Views — list/create/update/delete, linked views, board/calendar/timeline/list/chart/dashboard/map/form, column visibility, **view filters & sorts** (date conditions, rollup/formula filterability) | `references/views.md` |
+| **Design / aesthetics / taste** — the *which / when / why* of covers (B&W Unsplash + sourcing loop), icons, gallery look, **the KPI stat-tile pattern**, layout & spacing, visual hierarchy, colour, hub/dashboard patterns (the mechanics live in the rows below) | `references/visual-design.md` |
 | **Gallery view** visual config (cover, card size, visible props) — API mechanics | `references/gallery-view.md` |
 | **Authoring / editing an `AGENTS.md`** playbook well (the `writing-skills` discipline, adapted to Notion) | `references/agents-md-authoring.md` |
 | Charts — limits & gotchas | `references/charts.md` |

@@ -1,6 +1,6 @@
 # Authoring AGENTS.md playbooks on Notion
 
-Part of the `notion-api` skill — loaded on demand. The SKILL.md MANDATORY rules still apply (sweep, pagination, approval gate, tree view, match-conventions). The sweep rule covers **reading & obeying** AGENTS.md pages; **this file is the complement — how to WRITE and EDIT them well.**
+Part of the `notion-api` skill — loaded on demand. The SKILL.md MANDATORY rules still apply (sweep, pagination, match-conventions). The sweep rule covers **reading & obeying** AGENTS.md pages; **this file is the complement — how to WRITE and EDIT them well.**
 
 **Core principle:** an AGENTS.md page **is a skill for future agents.** So authoring one **is test-driven** — you do not know it works until a *fresh* agent, given only that page plus a task, actually obeys it. This mirrors `superpowers:writing-skills`, adapted to Notion playbook pages.
 
@@ -18,7 +18,7 @@ Applies to new playbooks AND edits. Not for "obvious" rules, not for a one-line 
 
 - **Root (workspace) AGENTS.md** — the canonical source of truth: house style + a map of the workspace + the working agreement. Every other AGENTS.md inherits from it.
 - **Sub AGENTS.md** — a subtree's own schema, conventions, and **overrides**; the closest-to-target file wins on conflict. Write one when a subtree has rules the root doesn't capture (a tracker's data model, a closed vocabulary, a "never store derived values" rule).
-- All AGENTS.md pages carry the fixed 🤖 icon (signature), regardless of surrounding house style.
+- All AGENTS.md pages carry the fixed 🤖 icon (signature), regardless of surrounding house style (set via `PATCH /v1/pages/{id}` `icon: {type:'emoji', emoji:'🤖'}` — see `pages-properties.md`).
 
 ## 1. The opening is a trigger, not a summary (CSO)
 
@@ -58,7 +58,7 @@ Before you finalize a new AGENTS.md or land an edit:
 2. **GREEN** — rewrite the offending rule to address that exact failure: tighten wording, close the loophole, add the missing fact. Don't add content for hypothetical failures — only the ones you saw.
 3. **REFACTOR** — re-run the task with the revised page. New rationalization? Add an explicit counter (and a Red-Flags row). Repeat until it complies **under pressure** (combine time pressure + "the user's in a hurry" + a tempting shortcut).
 
-This whole loop is a *read-only* dry run (the subagent proposes; you don't execute its writes), so it needs **no approval gate** — only the real write to the AGENTS.md page does (approval gate per SKILL.md).
+This whole loop is a *read-only* dry run (the subagent proposes; you don't execute its writes), so it needs **no approval gate** — only the real write to the AGENTS.md page does (act-and-report per SKILL.md — no approval gate).
 
 ## Red Flags — STOP, you're writing a bad playbook
 

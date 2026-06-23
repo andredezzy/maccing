@@ -1,6 +1,6 @@
 # Pages, properties, icons & covers
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, approval gate before writes, tree view after structural changes, match-conventions) still apply to everything here.
+Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** prefer `read_page` / `read_database` (SKILL.md "MCP tools — pick by job") — they resolve relations→titles and flatten rollups/formulas to scalars. The raw shapes here are for **writes** and for processing a `request` response (e.g. a write's returned object).
 
@@ -47,7 +47,7 @@ Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's
 { "PropName": { "status": {} } }
 { "PropName": { "unique_id": {} } }      // or { "unique_id": { "prefix": "TASK" } }
 ```
-- **`status` and `unique_id` columns ARE API-creatable** (live-verified 2026-06-14): `{"status":{}}` creates a status column auto-populated with Notion's default options/groups (**Not started · In progress · Done**) — add/rename options afterward via `PATCH /v1/data_sources/{id}`; `{"unique_id":{}}` (or `{"unique_id":{"prefix":"TASK"}}`) creates an auto-incrementing id column. Both their *values* read/write fine (shapes below).
+- **`status` and `unique_id` columns ARE API-creatable** (live-verified 2026-06-14): `{"status":{}}` creates a status column auto-populated with Notion's default options/groups (**Not started · In progress · Done**) — add/rename options afterward via `PATCH /v1/data_sources/{id}`; `{"unique_id":{}}` (or `{"unique_id":{"prefix":"TASK"}}`) creates an auto-incrementing id column. `status` values read/write fine (write shape below). `unique_id` values are read-only (auto-incremented by Notion — no write shape; read as `{prefix, number}`).
 
 ---
 
@@ -57,7 +57,7 @@ A value-vs-target progress bar is a **display setting, not a property type.** AN
 
 - ⚠️ **`format()` DESTROYS the native bar.** The instant a number is wrapped in `format(...)` it becomes TEXT and the *Show as → Bar/Ring* option disappears. Keep the value **numeric** — use `round()` for decimals (never `format()`), set the property's **number format = `percent`** if you want a 0–100% read — then pick Show as Bar/Ring. A formula keeps the Bar option only when its `result_type` is `number`. ([Notion docs / community, verified 2026-06-21](https://www.claritymastery.co/blog/round-numbers-any-decimal-place-in-notion))
 - 🔌 **The PUBLIC REST API can't set Bar/Ring — but the PRIVATE app API CAN (live-verified 2026-06-21).** Public `number.format` accepts only the number-FORMAT enums (`number`/`number_with_commas`/`percent`/currencies) — no `bar`/`ring`. The display lives in the **collection `schema`, per-property, under a `show_as` key**, settable via the private `saveTransactions` command **`updateCollectionPropertySchema`** — full op recipe in `private-api.md` → **"Native number progress Bar/Ring (`show_as`)"**. Shape: `show_as: { type: "bar" | "ring", color: "<notion color, e.g. green/blue/orange>", maxValue: <number = the Divide-by>, showValue: <bool> }`, on any **number OR numeric rollup/formula** prop. So you CAN deliver native bars end-to-end via tooling — **no UI handoff required.** (It long *looked* UI-only because `show_as` is absent from the public API AND from the older reverse-eng type libs `notion-types` / `notionapi`; it only appears in the private collection schema once set.)
-- ✅ **A text-bar formula (`▓▓░░`) is now justified ONLY** for (a) a **label-less gallery card** — cards don't render property names, so a self-labeling `🔥 1450/2200 ▓▓░` formula beats an *unlabeled* native bar — or (b) a **public-API-only** context (no private app API reachable). Anywhere a column header labels it (TABLES), use the native `show_as` Bar. (2026-06-21: a daily-totals tracker's text `Progress bar` formulas were *replaced* by native `show_as` bars on the `Actual <metric>` rollups — `maxValue` = each metric's target — in the daily-totals table tabs; the gallery card kept its self-labeled text bars.)
+- ✅ **A text-bar formula (`▓▓░░`) is now justified ONLY** for (a) a **label-less gallery card** — cards don't render property names, so a self-labeling `🔥 1450/2200 ▓▓░` formula beats an *unlabeled* native bar — or (b) a **public-API-only** context (no private app API reachable). Anywhere a column header labels it (TABLES), use the native `show_as` Bar. (2026-06-21: a daily-totals tracker's text-bar formula columns were *replaced* by native `show_as` bars on the `Actual <metric>` rollups — `maxValue` = each metric's target — in the daily-totals table tabs; the gallery card kept its self-labeled text bars.)
 
 ---
 
@@ -87,7 +87,7 @@ row["properties"]["ID"]["unique_id"]                         # {prefix, number} 
 row["properties"]["Created"]["created_time"]                 # ISO string (also last_edited_time)
 ```
 
-- ⚠️ **A `title` property stores its text under `.title`, NOT `.rich_text`.** A *generic* text-reader that only checks `.rich_text` (e.g. `p.rich_text?.map(t=>t.plain_text)`) silently returns `""` for a title — a classic **migration bug**: you read the source's Title/Name with a rich_text-only helper, get empty strings, and migrate blank titles/notes (no error). A reusable reader must coalesce both: `(p.rich_text ?? p.title ?? []).map(t => t.plain_text).join("")`. (Cost a full 1320-row re-run when missed.)
+- ⚠️ **A `title` property stores its text under `.title`, NOT `.rich_text`.** A *generic* text-reader that only checks `.rich_text` (e.g. `p.rich_text?.map(t=>t.plain_text)`) silently returns `""` for a title — a classic **migration bug**: you read the source's Title/Name with a rich_text-only helper, get empty strings, and migrate blank titles/notes (no error). A reusable reader must coalesce both: `(p.rich_text ?? p.title ?? []).map(t => t.plain_text).join("")`. (Cost a full re-run of every migrated row when missed.)
 - `formula.number` may be `null` if upstream referenced fields are empty (e.g., missing number field → formula produces null instead of 0)
 - Rollup `Show Original` outputs a **string** even when the target is a number property — the raw API preserves it as a string (verify `read_database`'s handling if numeric coercion matters)
 
@@ -100,12 +100,12 @@ row["properties"]["Created"]["created_time"]                 # ISO string (also 
 POST /v1/databases
 {
   "parent": { "type": "page_id", "page_id": "<page>" },
-  "title": [{ "type": "text", "text": { "content": "Months" } }],
+  "title": [{ "type": "text", "text": { "content": "Projects" } }],
   "is_inline": true,
   "icon": { "type": "icon", "icon": { "name": "calendar-month", "color": "gray" } },
   "initial_data_source": { "properties": {
-    "Month": { "title": {} },
-    "Date":  { "date": {} }
+    "Name":     { "title": {} },
+    "Due date": { "date": {} }
   } }
 }
 ```
@@ -171,7 +171,7 @@ Why not just `POST /v1/pages/{row}/move` the row itself? It does re-parent the r
 - `multi_select` requires array of objects `[{"name":"A"}]`, not strings
 - `select` and `multi_select` auto-create options by name if they don't exist in the schema — no pre-flight schema write needed
 - `people` property uses user IDs, not email addresses
-- `date` requires `{"start":"YYYY-MM-DD"}` object, not a plain string
+- `date` requires `{"start":"YYYY-MM-DD"}` object, not a plain string. Add `"end":"YYYY-MM-DD"` for a range; `"time_zone":"America/New_York"` for timezone-aware datetimes.
 - `checkbox` must be boolean `true`/`false`, not the string `"true"`
 
 ---

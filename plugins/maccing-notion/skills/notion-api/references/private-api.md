@@ -6,7 +6,7 @@ The public REST API (`api.notion.com/v1`) covers most things — **use it first,
 > - Authenticated by your **browser session cookie** (`token_v2`), not an integration token. Anyone with the cookie can act fully as you.
 > - **Undocumented, no stability guarantees** — Notion can change/break it without notice, and using it programmatically is against Notion's Terms.
 > - **Aggressively rate-limited / bot-protected** — rapid calls get an HTML bot page or silently no-op.
-> - Use it only for **your own workspace**, only when the public API genuinely can't, and **propose it to the user first** (same approval gate as any write). Prefer the public API or a UI action when either suffices.
+> - Use only when the public API genuinely can't do it. Act directly and report the result (SKILL.md act-and-report, no approval gate). Prefer the public API; fall back to private api/v3 before ever suggesting a manual UI action — only if both API paths are genuinely impossible, explain why.
 > - The session cookie **rotates** (logging out invalidates it). Store it ONLY in a gitignored secrets file; never echo, log, or commit it.
 
 ## Access — through the bundled `notion` MCP ONLY (never a standalone script)
@@ -83,7 +83,7 @@ The public `GET /v1/data_sources/{id}` will **never** show it (`property` object
 
 ## ⭐ Verified recipe: author a Formula 2.0 formula (parse / list / relation) the public API can't
 
-The public API stores `formula.expression` as a **string** and compiles it server-side — which **constant-folds `prop("x").split()` to `[]`** and types any parsed-list / related-page value as `unknown` (un-composable, un-filterable; full diagnosis in `formulas.md`). The Notion UI instead stores a **typed `formula2` AST** — every leaf carries a `result_type`. Write that AST directly here and the formula is correct. **Live-verified 2026-06-14** (converted a number column into a live `sum(Reps.split(";").map(toNumber(current)))` that computed `30` from `"12;10;8"`).
+The public API stores `formula.expression` as a **string** and compiles it server-side — which **constant-folds `prop("x").split()` to `[]`** and types any parsed-list / related-page value as `unknown` (un-composable, un-filterable; full diagnosis in `formulas.md`). The Notion UI instead stores a **typed `formula2` AST** — every leaf carries a `result_type`. Write that AST directly here and the formula is correct. **Live-verified 2026-06-14** (converted a number column into a live `sum(Scores.split(";").map(toNumber(current)))` that computed `30` from `"12;10;8"`).
 
 **Don't hand-craft the AST — copy a working one.** Author the formula ONCE in the Notion UI (or find a DB that already has it), read its `formula2` back, swap the property pointers, write it to your target.
 
@@ -102,9 +102,9 @@ The public API stores `formula.expression` as a **string** and compiles it serve
    private_request({ endpoint: "saveTransactions", operations: [
      { pointer:{table:"collection", id:"<target_ds_id>", spaceId:"<space>"},
        command:"set", path:["schema","<target_propId>"],
-       args:{ name:"Total reps", type:"formula", version:"v2", icon:"/icons/mathematics_gray.svg",
+       args:{ name:"<formulaColName>", type:"formula", version:"v2", icon:"/icons/mathematics_gray.svg",
               formula2:{ code:[ ["sum("],
-                                ["‣",[["fpp",{name:"Reps", property:"Wr{h",
+                                ["‣",[["fpp",{name:"<inputProp>", property:"<rawPropId>",
                                        collection:{id:"<target_ds_id>", table:"collection", spaceId:"<space>"}}]]],
                                 [".split(\";\").map(toNumber(current)))"] ],
                          result_type:{type:"number"} } } },
@@ -113,8 +113,8 @@ The public API stores `formula.expression` as a **string** and compiles it serve
    ] })
    ```
    - **`set` replaces the whole schema entry** — include `name`/`type`/`icon`/`version` so you don't drop them. (`update` would *merge*, leaving a stale `number_format` when converting a number→formula.)
-   - **Raw prop ids are URL-DECODED** (`Wr%7Bh` → `Wr{h`); `<target_ds_id>` == the collection id == your public `data_source_id`; **`spaceId`** is the 3rd UUID in any public compiled `{{notion:block_property:…}}` token.
-   - **The `code` array is freely EDITABLE — not just pointer-swappable.** You can ADD and NEST list-ops to extend a formula, not only re-point an existing one — splice the extra literal fragments + reused `‣`/`fpp` tokens into the array. Live example (2026-06-18): turned a strength-log DB `Top set` formula from *”sum Volume on the latest session”* into *”sum Volume on the latest session whose volume > 0”* (skips non-lifting / unparseable-rep days) by nesting a sub-query as the reference date — `<rel>.filter(current.<Volume‣> > 0).map(current.<Date‣>).sort().last()` inside the outer `.filter(dateBetween(current.<Date‣>, <that>, “days”) == 0).map(current.<Volume‣>).sum()`. (`.sort().last()` = the MAX/latest of a date list; nested `current` scopes to its own enclosing lambda.)
+   - **Raw prop ids are URL-DECODED** (e.g. `<urlEncodedPropId>` → `<rawPropId>`); `<target_ds_id>` == the collection id == your public `data_source_id`; **`spaceId`** is the 3rd UUID in any public compiled `{{notion:block_property:…}}` token.
+   - **The `code` array is freely EDITABLE — not just pointer-swappable.** You can ADD and NEST list-ops to extend a formula, not only re-point an existing one — splice the extra literal fragments + reused `‣`/`fpp` tokens into the array. Live example (2026-06-18): turned a strength-log DB computed-score formula from *“sum a metric on the latest session”* into *“sum a metric on the latest session whose metric > 0”* (skips non-recording / unparseable days) by nesting a sub-query as the reference date — `<rel>.filter(current.<Metric‣> > 0).map(current.<Date‣>).sort().last()` inside the outer `.filter(dateBetween(current.<Date‣>, <that>, “days”) == 0).map(current.<Metric‣>).sum()`. (`.sort().last()` = the MAX/latest of a date list; nested `current` scopes to its own enclosing lambda.)
 
 3. **VERIFY** — `200 {}` does NOT prove persistence. Create a probe row, read it back via the **public** API: the formula cell must show the computed value. Then trash the probe row.
 
@@ -122,14 +122,14 @@ The public API stores `formula.expression` as a **string** and compiles it serve
 
 ### Relation-read encoding (`current.prop` / `.last().prop`) — hand-craftable, no UI seed needed (live-verified 2026-06-17)
 
-The recipe above says "copy a working one," but a relation-read example may not exist anywhere in the workspace (rollups, not formulas, do relation aggregation — so even mature trackers like a net-worth DB have none to copy). You can still hand-craft it directly, because the encoding is now known. **A related-page property read is literal `current.` (inside a `.map`/`.filter`/`.sort` lambda) or `.last().` glued to a typed `‣`/`fpp` mention whose `collection` is the RELATED data source.** Two collections are in play: the relation mention's `collection` = the formula's OWN ds; every `current.`/`.last().`-bound mention's `collection` = the RELATED ds.
+The recipe above says "copy a working one," but a relation-read example may not exist anywhere in the workspace (rollups, not formulas, do relation aggregation — so even a mature tracker may have none to copy). You can still hand-craft it directly, because the encoding is now known. **A related-page property read is literal `current.` (inside a `.map`/`.filter`/`.sort` lambda) or `.last().` glued to a typed `‣`/`fpp` mention whose `collection` is the RELATED data source.** Two collections are in play: the relation mention's `collection` = the formula's OWN ds; every `current.`/`.last().`-bound mention's `collection` = the RELATED ds.
 
-- ✅ **Works:** `prop("Rel").sort(current.‣Date).last().‣Weight` → fragments: `["‣",[["fpp",{relation, collection:OWN ds}]]]`, `[".sort(current."]`, `["‣",[["fpp",{name:"Date", property:"<related raw id>", collection:RELATED ds}]]]`, `[").last()."]`, `["‣",[["fpp",{name:"Weight", property:"<related raw id>", collection:RELATED ds}]]]`. Chains like `.last().‣Reps.split(";").first()` glue literal text after the related mention (same as the same-collection split). `result_type` `{type:"text"}` or `{type:"number"}`.
+- ✅ **Works:** `prop("Rel").sort(current.‣Date).last().‣Weight` → fragments: `["‣",[["fpp",{relation, collection:OWN ds}]]]`, `[".sort(current."]`, `["‣",[["fpp",{name:"Date", property:"<related raw id>", collection:RELATED ds}]]]`, `[").last()."]`, `["‣",[["fpp",{name:"Weight", property:"<related raw id>", collection:RELATED ds}]]]`. Chains like `.last().‣Tags.split(";").first()` glue literal text after the related mention (same as the same-collection split). `result_type` `{type:"text"}` or `{type:"number"}`.
 - ❌ **Literal `current.prop("Date")`** (plain text, no mention) → computes **empty** — the related prop never resolves (same wall as the public string compiler).
 - ❌ **Bare `‣Weight` mention WITHOUT the `current.` literal** → binds to the OUTER row (reads the formula's-own-collection `Weight`, which is absent) → computes **0 / empty**. The `current.` literal is what binds the typed mention to the lambda item.
 - **Diagnostic discipline:** a wrong relation-read AST computes **empty/0, never an error** — so probe in isolation with a signal-producing op (`.map(current.‣X).sum()` → a non-zero number means the bind works) before assembling the full chain. Blind full-formula guesses give no signal.
-- **Live example** — strength-log DB `Top set` = latest session's weight × top-set reps:
-  `format(‣Sessions.sort(current.‣Date).last().‣Weight) + " × " + ‣Sessions.sort(current.‣Date).last().‣Reps.split(";").first()`
+- **Live example** — strength-log DB relation-read formula = latest entry's metric × count:
+  `format(‣RelatedItems.sort(current.‣Date).last().‣Weight) + " × " + ‣RelatedItems.sort(current.‣Date).last().‣Count.split(";").first()`
 
 ## ⭐ Verified recipe: reorder / MOVE any block in place (`listAfter` / `listBefore`)
 
@@ -162,8 +162,8 @@ private_request({ endpoint: "saveTransactions", operations: [
     command: "updateCollectionPropertySchema", path: ["schema"],
     args: { primitiveOp: { command: "update", args: {
       "<propId>": {                       // the prop's FULL existing schema, verbatim…
-        "name":"Actual metric", "type":"rollup", "aggregation":"sum",
-        "target_property":"CalF", "relation_property":">s<^", "target_property_type":"formula",
+        "name":"<propName>", "type":"rollup", "aggregation":"sum",
+        "target_property":"<targetPropId>", "relation_property":"<relationPropId>", "target_property_type":"formula",
         "show_as": { "type":"bar", "color":"green", "maxValue":2200, "showValue":true }  // …plus show_as
       }
     } } } },
@@ -203,7 +203,7 @@ A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row star
 **Where it lives (private — `getRecordValues`/`syncRecordValues` on `{table:"collection", id:<ds_id>}`):**
 - `collection.template_pages` — array of template-page block ids.
 - `collection.format.collection_default_template.template_page_id` — which one is the **default** (applied by the **blue "New" button** — NOT the inline bottom-of-table "+ New"; see `relations.md` → "Auto-link every new row to a fixed card" for the full add-action table).
-- Each template page is a `block` with `is_template:true`, `parent_table:"collection"`. Its `properties` are the values copied into every new row — including live tokens like a **today Date**: `"BbMF":[["‣",[["tv",{"type":"today"}]]]]`.
+- Each template page is a `block` with `is_template:true`, `parent_table:"collection"`. Its `properties` are the values copied into every new row — including live tokens like a **today Date**: `"<datePropId>":[["‣",[["tv",{"type":"today"}]]]]` (replace `<datePropId>` with the raw internal id of your date property — readable via `getRecordValues` on the collection).
 
 **EDIT an existing template — public API, VERIFIED 2026-06-20:** a template page PATCHes like any row — `PATCH /v1/pages/{template_page_id} {properties:{…}}`. A pre-set **relation** (or any value) then carries into every new row made from it. (The public *read* shows the pre-set date/relation oddly — a `today` token reads back as `Date:null` — but `getRecordValues` confirms both the token AND your new value coexist; trust the private read, not the public one.)
 

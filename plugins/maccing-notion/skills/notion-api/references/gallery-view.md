@@ -1,6 +1,6 @@
 # Gallery view — visual configuration
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — brainstorm the view design** (propose type / filter / sort / grouping / visible-props + cover / size / aspect / layout and get approval) *and* the standard approval gate, before any gallery write. **For the design *taste* — which cover/size/icon, when a gallery beats a table, the KPI-tile pattern — see `aesthetics.md`; this file is the API mechanics only.**
+Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules apply — in particular **MANDATORY — design every dimension of a view before creating it (no silent defaults)** (SKILL.md) — decide type / filter / sort / grouping / visible-props + cover / size / aspect / layout — then act directly and report; no approval gate. **For the design *taste* — which cover/size/icon, when a gallery beats a table, the KPI-tile pattern — see `visual-design.md`; this file is the API mechanics only.**
 
 **Reads:** every `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) dumps the gallery config (cover/preview, card size, aspect, layout, visible props, sorts, filters) in a trailing `# Views` section — full config with property ids resolved to names, no flag, every format. `read_database` also reads row values; `read_page(page_id, "outline")` reads the block tree. Schema/property-id lookup for PATCH bodies needs `GET /v1/data_sources/{id}`; but the Views section carries both `property_id` and resolved `property_name`, so you can often harvest the ids you need from there first.
 
@@ -18,7 +18,7 @@ POST /v1/views
 {
   "database_id":     "<database_id>",   // the container DB (NOT just the data source)
   "data_source_id":  "<ds_id>",
-  "name":            "Gallery",          // sentence case, no emoji (per conventions)
+  "name":            "Gallery",          // name per the workspace's convention (infer from AGENTS.md); no emoji
   "type":            "gallery",
   "position":        { "type": "start" } // first tab = the default view
 }
@@ -58,6 +58,8 @@ Set on create or `PATCH /v1/views/{id}` via `configuration`:
 }
 ```
 
+> **`configuration.properties` is a FULL REPLACE, not a merge** — whatever array you send becomes the complete card-property spec. Any entry you omit auto-reverts to `visible:false`. Always send the complete desired array. (Analogous to the table-view column rule in `views.md`.)
+
 ### UI label → API field
 
 | Notion UI | API field |
@@ -74,7 +76,7 @@ Set on create or `PATCH /v1/views/{id}` via `configuration`:
 - **Array position IS the display order** — there is no separate `position` field on a property.
 - Hide a property on cards: include it with `visible: false`.
 - **The card's NAME *is* the `title` property's `visible` flag** (live-verified 2026-06-21). `title visible:false` **HIDES the card name ENTIRELY** — there is NO separate always-on card heading; the `title` line IS the card name, and there is no top-level `hide_name`. So any gallery whose cards must show **what each row IS** — KPI / stat-tiles (the metric name), navigation launchers — MUST keep **`title visible:true`**. Set it `false` ONLY for a purely-visual gallery where the cover image alone identifies the card. (An earlier version of this note wrongly claimed the heading survives `visible:false` — it does not.)
-  - ⚠️ **`render_mockup` draws the card title even when it is hidden**, so a mockup CANNOT catch a wrongly-hidden title (nor confirm one shows). Verify the `title` entry's `visible` flag in the view's `properties[]` / private `gallery_properties` directly — never trust a mockup for card-title visibility.
+  - ⚠️ **`render_mockup` draws the card title even when it is hidden**, so a mockup CANNOT catch a wrongly-hidden title (nor confirm one shows). Verify the `title` entry's `visible` flag in the view's `properties[]` directly — never trust a mockup for card-title visibility.
 - `width` is accepted but has no visual effect in gallery (table-only). `status_show_as: "select" | "checkbox"` controls Status rendering.
 
 ### Response-only (never send in a request)
@@ -89,4 +91,4 @@ Any nullable field (`cover`, `cover_size`, `cover_aspect`, `card_layout`, `prope
 
 ---
 
-**Design taste — which cover/size/icon, nav-vs-content sizing, never-ship-naked-cards, the KPI stat-tile pattern, and the Unsplash cover-sourcing loop — moved to `aesthetics.md`.** This file stays the gallery API mechanics.
+**Design taste — which cover/size/icon, nav-vs-content sizing, never-ship-naked-cards, the KPI stat-tile pattern, and the Unsplash cover-sourcing loop — moved to `visual-design.md`.** This file stays the gallery API mechanics.
