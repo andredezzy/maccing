@@ -199,7 +199,7 @@ This is how the property-icon and "This month" formats were found. To learn the 
 
 ## Database row templates — EDIT the existing default to auto-populate new rows
 
-A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row starts pre-filled" — and you can **re-point it via the API**. Most databases ALREADY have one (the UI / a CSV-import / a migration creates it) — **read before assuming you must make one.**
+A database's **DEFAULT TEMPLATE** is the free-plan lever for "every new row starts pre-filled" — and you can **re-point it via the API**. Most databases ALREADY have one (the UI / a CSV-import / a migration creates it) — **read before assuming you must make one** (EXCEPTION: a DB created via the public API may cross-cell on `getRecordValues` — see the `MemcachedCrossCellError` gotcha above; there you cannot read the template state at all, so skip straight to a **blind** `saveTransactions` create + set-default and verify the result via the public API).
 
 **Where it lives (private — `getRecordValues`/`syncRecordValues` on `{table:"collection", id:<ds_id>}`):**
 - `collection.template_pages` — array of template-page block ids.
