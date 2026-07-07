@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "notion": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/notion/start.sh",
+      "env": {
+        "NOTION_TOKEN": "${NOTION_TOKEN}"
+      }
+    },
+    "workspace": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/google-workspace/start.sh",
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "${GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "${GOOGLE_OAUTH_CLIENT_SECRET}",
+        "USER_GOOGLE_EMAIL": "${USER_GOOGLE_EMAIL}"
+      }
+    }
+  }
+}

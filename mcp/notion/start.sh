@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launcher for the bundled Notion MCP server (Bun, official MCP SDK, full Notion API at 2026-03-11).
 #
-# Registered by ../.mcp.json as the `notion` stdio server. Secrets are NEVER committed.
+# Registered by the repo-root .mcp.json as the `notion` stdio server. Secrets are NEVER committed.
 # Load order (last source wins — .env.local overrides the stable file):
 #   1. ${MACCING_NOTION_ENV:-$HOME/.config/maccing/notion.env}  — stable per-user secrets file,
 #      outside the repo and cache; survives plugin version bumps. Create once, chmod 600.

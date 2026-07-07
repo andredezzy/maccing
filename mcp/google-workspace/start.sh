@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launcher for the bundled Google Workspace MCP server (single-user, stdio).
 #
-# Registered by ../.mcp.json as the `workspace` stdio server. Secrets are NEVER committed.
+# Registered by the repo-root .mcp.json as the `workspace` stdio server. Secrets are NEVER committed.
 # Load order (last source wins — .env.local overrides the stable file):
 #   1. ${MACCING_WORKSPACE_ENV:-$HOME/.config/maccing/google-workspace.env}  — stable per-user
 #      secrets file, outside the repo and cache; survives plugin version bumps. Create once, chmod 600.
