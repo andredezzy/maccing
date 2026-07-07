@@ -42,6 +42,8 @@ Composition is a HARD RULE, not a preference: structure comes from composing nam
 | "Refactoring is out of scope" | The refactor IS the scope the moment the component shows god signals |
 | "The existing pattern uses flags" | Matching a broken pattern extends the breakage |
 
+**Operator override:** if the operator, seeing the trade-off, still orders the flag or the revert — comply; it is their call. But never silently: one line stating what shape remains and where the composed version lives (git history counts). The observed failure is the silent revert that loses the judgment.
+
 ## Red flags — STOP and decompose
 
 - About to add a `showX`/`hideX`/`variant` prop that toggles a section
