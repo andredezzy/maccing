@@ -1,7 +1,7 @@
 # CLAUDE.md → maccing skills + single-plugin restructure — Design
 
 Date: 2026-07-07
-Status: awaiting user approval
+Status: implemented 2026-07-07 (all phases; respecting-lockfiles dropped by existence test; SessionStart hook un-deferred by GREEN evidence)
 
 ## Goal
 
