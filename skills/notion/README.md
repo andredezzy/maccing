@@ -5,7 +5,7 @@ Notion API engineering reference for coding agents — the low-level details for
 ## Install
 
 ```
-/plugin install maccing-notion@maccing
+/plugin install maccing@maccing
 ```
 
 ## Skills

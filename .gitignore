@@ -20,3 +20,6 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+
+# maccing-pictura legacy output (untracked tool output, never committed)
+pictura-output/

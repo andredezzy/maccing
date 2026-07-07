@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Use when working with André's self-hosted Google Workspace MCP (the `google-workspace` plugin) — driving Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, or Contacts via the `mcp__plugin_google-workspace_workspace__*` tools, OR setting up / troubleshooting its OAuth (first-run consent, 7-day test-mode re-auth, credential storage). Covers the account-isolation rule (never use the `mcp__claude_ai_*` Google connectors — different account).
+description: Use when working with André's self-hosted Google Workspace MCP (the `google-workspace` plugin) — driving Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, or Contacts via the `mcp__plugin_maccing_workspace__*` tools, OR setting up / troubleshooting its OAuth (first-run consent, 7-day test-mode re-auth, credential storage). Covers the account-isolation rule (never use the `mcp__claude_ai_*` Google connectors — different account).
 ---
 
 # Google Workspace
@@ -9,7 +9,7 @@ Self-hosted Google Workspace MCP server for Claude Code, built on `workspace-mcp
 
 ## Account-isolation rule — the single most important rule
 
-**Always use `mcp__plugin_google-workspace_workspace__*`; NEVER the `mcp__claude_ai_Google_Calendar__*` / `mcp__claude_ai_Gmail__*` / `mcp__claude_ai_Google_Drive__*` connectors — they are wired to a different, unrelated Google account (`nicolas1120201@gmail.com`). The user's Workspace account is `andrevcv1@gmail.com`.**
+**Always use `mcp__plugin_maccing_workspace__*`; NEVER the `mcp__claude_ai_Google_Calendar__*` / `mcp__claude_ai_Gmail__*` / `mcp__claude_ai_Google_Drive__*` connectors — they are wired to a different, unrelated Google account (`nicolas1120201@gmail.com`). The user's Workspace account is `andrevcv1@gmail.com`.**
 
 ## References — load on demand
 

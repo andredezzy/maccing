@@ -82,10 +82,10 @@ This plugin ships as part of the [`maccing`](https://github.com/andredezzy/macci
 Workspace tools are exposed to Claude under the namespace:
 
 ```
-mcp__plugin_google-workspace_workspace__<tool_name>
+mcp__plugin_maccing_workspace__<tool_name>
 ```
 
-For example: `mcp__plugin_google-workspace_workspace__list_events`, `mcp__plugin_google-workspace_workspace__search_gmail_messages`, and so on.
+For example: `mcp__plugin_maccing_workspace__list_events`, `mcp__plugin_maccing_workspace__search_gmail_messages`, and so on.
 
 ### Tool tiers
 
@@ -121,7 +121,7 @@ If the tool call times out before you complete the browser flow, just retry the 
 
 The plugin ships a companion skill named **`google-workspace`** (at `skills/google-workspace/`). It is the canonical reference for:
 
-- Account-isolation rule — always use `mcp__plugin_google-workspace_workspace__*`; never the `mcp__claude_ai_*` Google connectors (they are wired to a different account).
+- Account-isolation rule — always use `mcp__plugin_maccing_workspace__*`; never the `mcp__claude_ai_*` Google connectors (they are wired to a different account).
 - First-run OAuth flow, credential storage, and reset procedure (`references/auth-and-credentials.md`).
 - Full tool inventory by service with common workflows and parameter gotchas (`references/tools.md`).
 - Google Cloud setup, tool tiers, and secrets (`references/setup.md`).

@@ -7,7 +7,7 @@ Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) an
 ## Install
 
 ```
-/plugin install maccing-growth@maccing
+/plugin install maccing@maccing
 ```
 
 ## Skills
@@ -35,7 +35,7 @@ skills/
 
 ## Command
 
-`/growth <task>` — routes into the orchestrator.
+`/maccing:growth <task>` — routes into the orchestrator.
 
 ## Project state convention
 

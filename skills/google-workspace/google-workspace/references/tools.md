@@ -2,7 +2,7 @@
 
 Part of the `google-workspace` skill — loaded on demand from `SKILL.md`. All tool names below are real — sourced live from `workspace-mcp==1.21.2` via `tools/list` (121 tools total at tier `complete`). The full registry is available at runtime via the MCP `tools/list` method.
 
-All tools share the prefix `mcp__plugin_google-workspace_workspace__`.
+All tools share the prefix `mcp__plugin_maccing_workspace__`.
 
 ## User defaults
 
