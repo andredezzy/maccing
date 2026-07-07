@@ -15,7 +15,7 @@ Transform the genuinely shareable engineering rules from the private `~/.claude/
 4. **Bucketed `skills/` layout** — mattpocock-style domain buckets, not a flat namespace.
 5. **Skill granularity: one skill per shareable CLAUDE.md domain** (6 certain + 1 conditional), each <500 words, individually pressure-tested. `passing-quality-gates` was considered and removed by user decision — quality gates and commit style stay private. `formatting-code` was merged into `organizing-code` by user decision (2026-07-07 shelf-appeal judgment): its three rules survive as the visual-structure cluster; only the standalone name — which read redundant next to Biome/Prettier — was dropped.
 6. **Maestri team: mind + writer + fresh verifiers** — Claude is maestro/mind and source of truth; one Writer recruit executes; disposable Verifier recruits are fresh-context test subjects.
-7. **Naming scheme: superpowers gerund-process school**, applied wholesale — validated against skills.sh top-10, Anthropic official skills, mattpocock, and superpowers corpora; no collisions.
+7. **Naming scheme: superpowers gerund-process school**, applied wholesale — validated against skills.sh top-10, Anthropic official skills, mattpocock, and superpowers corpora; no collisions. One deliberate non-gerund exception, user-ratified: `dx` (the umbrella doctrine — the `tdd` initialism pattern; registry-searched 2026-07-07, no exact-name collision, nearest hits are Salesforce `dx-*` tooling skills, disambiguated by the description).
 
 ## Target repo structure
 
@@ -49,7 +49,7 @@ maccing/
 
 | Skill | Source CLAUDE.md section | Type | Notes |
 |---|---|---|---|
-| `designing-for-dx` | DX — TOP PRIORITY | Pattern | Description must carry: developer experience, simplicity, over-engineering, cognitive load, discoverability, open/closed, local reasoning |
+| `dx` | DX — TOP PRIORITY | Pattern | The umbrella doctrine. Description must open with "developer experience" (also disambiguates from Salesforce DX) and carry: simplicity, over-engineering, cognitive load, discoverability, open/closed, local reasoning |
 | `modeling-domains` | Data Model & Architecture | Pattern | Description must list: domain mirroring, registries/engines, middleware, zero-ceremony init, no tech mixing, no redundant fields |
 | `organizing-code` | Code Organization + "never silently swallow an error" (moved from Problem-Solving) + Formatting & Aesthetics (merged) | Pattern | `errors/` folder, one concern per file, no pass-throughs, no barrels, test-file conventions, circular imports, env var ownership, visual structure (blank-line grouping, named types, no dividers) |
 | `naming` | Naming & Enums | Pattern | Enum preference + casing, precision, whole-behavior naming, truncations, no Base/Contract |
@@ -71,9 +71,9 @@ Common shape for all seven — **progressive disclosure via `references/`**, the
 
 Descriptions below are drafts — final wording is set in GREEN after RED evidence, but must stay trigger-only.
 
-### designing-for-dx
+### dx
 
-- **Description (draft):** `Use when designing or reviewing any code structure, choosing between implementation approaches, or tempted to add abstraction, configuration, indirection, or generality. Triggers: over-engineering, speculative flexibility, "we might need it later", developer experience, cognitive load, extension points, buried conditionals, clever code.`
+- **Description (draft):** `Use when developer experience is at stake — designing or reviewing any code structure, choosing between implementation approaches, or tempted to add abstraction, configuration, indirection, or generality. Triggers: over-engineering, speculative flexibility, "we might need it later", cognitive load, extension points, buried conditionals, clever code.`
 - **Form:** Pattern — positive contract (the DX test) + counter-examples; NOT a prohibition list.
 - **Rules carried (complete):** (1) DX outweighs every other trade-off heuristic; (2) simplicity over cleverness — simplest design fully solving the present problem wins, no speculative machinery, patterns exist to remove complexity never to decorate; (3) discoverability — extension points obvious from listing a directory; (4) consistency of mental model — one pattern per concern class, applied everywhere; (5) open/closed — new case = new file + one registration, never a growing conditional; (6) test isolation via seams — inject strategy, substitute small fake, one-line setup; (7) self-documenting architecture — structure is the docs; (8) local reasoning — no state-at-a-distance, explicit params, caching earns its place only when expensive + input unavailable + several callers; (9) the single re-evaluation question: easier to read, debug, test, extend well into the future?
 - **Also carries:** a 2–3 sentence distillation of the "principles to reason from, not templates to copy" preamble — this is the umbrella skill, and that framing governs how agents apply the whole set.
