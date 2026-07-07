@@ -174,14 +174,15 @@ Per-skill cycle (superpowers:writing-skills, Iron Law: no skill without a failin
 
 ## Sequencing
 
-1. **Phase 1 — restructure:** move skills/commands/mcp, write new manifests, merged `.mcp.json`, bucket READMEs, root CLAUDE.md, README rewrite; unify growth's `reference/` dirs to `references/` (with mechanical link updates in their SKILL.md files); verify both MCP servers boot and all existing skills resolve; migrate the local dev install (single symlinked cache dir → repo root, `installed_plugins.json` updated); commit.
+1. **Phase 1 — restructure:** move skills/commands/mcp and write the new manifests + merged `.mcp.json` FIRST, then immediately gate: install the plugin locally and verify both MCP servers boot, all skills resolve, and `/growth` still invokes — before any README/docs polish (the assumption-killing check runs first; multi-server plugins and the `plugin.json` `skills` array are doc-verified, but the gate proves them in this runtime). Then: bucket READMEs, root CLAUDE.md, README rewrite; unify growth's `reference/` dirs to `references/` (with mechanical link updates in their SKILL.md files); migrate the local dev install (single symlinked cache dir → repo root, `installed_plugins.json` updated); commit. `/reload-plugins` switches hooks/MCP to edited paths mid-session — useful during Phase 2 iteration.
 2. **Phase 2 — engineering skills:** one at a time through RED→GREEN→REFACTOR, starting with the conditional `respecting-lockfiles` baseline (cheapest existence test), then the 7 certain skills.
 3. **Phase 3 — cutover:** slim the private `~/.claude/CLAUDE.md` (remove migrated sections, add the bridge line, update MCP tool prefixes in My Accounts), final README pass, version 1.0.0, push, marketplace update.
 
 ## Breaking changes & migration
 
 - Installs: 3 plugins → 1. Old names (`maccing-growth`, `maccing-notion`, `google-workspace`) die; users reinstall as `maccing@maccing`. README documents this.
-- **MCP tool prefixes change:** `mcp__plugin_maccing-notion_notion__*` → `mcp__plugin_maccing_notion__*`; `mcp__plugin_google-workspace_workspace__*` → `mcp__plugin_maccing_workspace__*`. The private CLAUDE.md "My Accounts" section is updated in Phase 3.
+- **MCP tool prefixes change:** `mcp__plugin_maccing-notion_notion__*` → `mcp__plugin_maccing_notion__*`; `mcp__plugin_google-workspace_workspace__*` → `mcp__plugin_maccing_workspace__*` (verified against the plugins reference: scoped names are `mcp__plugin_<plugin-name>_<server-name>__<tool>`). The private CLAUDE.md "My Accounts" section is updated in Phase 3 — and Phase 3 also greps `~/.claude/settings.json` + project settings for `mcp__plugin_` references (permission allow-lists, hooks) and updates them.
+- **Skill namespace changes:** every existing skill moves from `maccing-growth:`/`maccing-notion:`/`google-workspace:` to the `maccing:` namespace (the plugin name is the skill namespace). Bare skill names stay the same; anything referencing the old namespaced form breaks.
 - skills.sh flow unaffected (it scans for `SKILL.md` anywhere); existing skill names unchanged, so `npx skills add andredezzy/maccing -s notion-api` keeps working.
 - `/growth` command name unchanged.
 - `pictura-output/` at repo root: inspected in Phase 1; if untracked output, gitignored — never silently deleted.
