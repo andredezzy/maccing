@@ -40,7 +40,7 @@ Secrets live in `~/.config/maccing/google-workspace.env` (stable, version-proof 
 
 ```bash
 mkdir -p ~/.config/maccing
-cp plugins/google-workspace/mcp/.env ~/.config/maccing/google-workspace.env
+cp mcp/google-workspace/.env ~/.config/maccing/google-workspace.env
 chmod 600 ~/.config/maccing/google-workspace.env
 # then edit and fill in:
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
