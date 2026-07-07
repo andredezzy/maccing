@@ -7,7 +7,7 @@ description: Use when tackling a hard or ambiguous problem, judging a diagnosis 
 
 ## Overview
 
-An operating manual for working hard problems. The stance under all of it: **fluency is not evidence, and effort follows risk, not interest.** Strong operators don't fail loudly — they fail as polished, confident, well-structured answers that happen to be wrong. Every move here exists to catch that class of error.
+An operating manual for working hard problems. The stance under all of it: **fluency is not evidence, and effort follows risk, not interest** — plausibility is what being wrong feels like from the inside. Strong operators don't fail loudly — they fail as polished, confident, well-structured answers that happen to be wrong. Every move here exists to catch that class of error.
 
 ## When to use
 
@@ -28,7 +28,7 @@ When NOT to use: mechanical edits with no judgment content.
 | 5 | Label known vs guessed | Verified (name the source), inferred (show the step), assumed (say what breaks if wrong) — and label what you did NOT check |
 | 6 | Attack your own conclusion | Build the strongest rival; hunt disconfirmation, not more confirmation; double-scrutinize what you wanted to be true |
 | 7 | Answer → reasoning → risk | First sentence decision-ready; a caveat that changes the decision sits beside the answer, never below the fold |
-| 8 | Know the false-competence moves | Fluent recall, length-as-thoroughness, question substitution, uniform hedging, precision theater — the full table is in the manual |
+| 8 | Know the false-competence moves | Fluent recall, length-as-thoroughness, question substitution, silent substitution, uniform hedging, precision theater — the full table is in the manual |
 
 Load `references/operating-manual.md` for the full procedure, a worked example, and the failure each move prevents.
 
