@@ -24,3 +24,12 @@ Illustrative **values** are fine — `maxValue: 2200`, `prop("Actual") / prop("T
 ## Skill edits are test-driven
 
 Per the user's global rules, every `SKILL.md` / reference edit goes through `superpowers:writing-skills` (RED→GREEN before the edit). Pure content-anonymization is the one exception — its "failing test" is the agnostic grep above.
+
+## Dev workflow — iterate via a dev symlink, never reinstall per edit
+
+A marketplace-installed plugin runs from its CACHED copy (`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`), NOT your working tree, so edits go live only on reinstall/republish. Fix: point the active cache dir at the repo. Find the install in `~/.claude/plugins/installed_plugins.json` (`<plugin>@<marketplace>` → `installPath`), move that dir aside as a backup, then `ln -s <repo> <installPath>` — `CLAUDE_PLUGIN_ROOT` resolves through the symlink, so the MCP servers AND skills run live repo code.
+
+- **Takes effect on the next Claude Code restart** — MCP servers launch at session start; there is no hot reload (`/reload-plugins` switches hooks/MCP mid-session).
+- **A `/plugin` reinstall/update overwrites the symlink with a real copy** (retiring dev mode) — re-create the symlink to resume. Session-start marketplace reconciliation can also DELETE the cache dir when the marketplace source is stale; sourcing the marketplace as a local directory (`claude plugin marketplace add <repo-path>`) eliminates that class (adopted 2026-07-07).
+- **After releasing a new version, RELABEL rather than reinstall** to stay live AND show the new version: symlink a fresh `<new-version>` cache dir → repo, update that install's `installPath` + `version` + `gitCommitSha` in `installed_plugins.json`.
+- **Gitignore the in-use marker** (`**/.in_use/`) and keep real secrets OUT of the repo — the symlink makes the repo itself the plugin root.
