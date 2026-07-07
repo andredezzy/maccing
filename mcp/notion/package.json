@@ -1,0 +1,16 @@
+{
+  "name": "maccing-notion-mcp",
+  "private": true,
+  "type": "module",
+  "description": "Bun MCP server for the Notion API (public + private app API), built on the official @modelcontextprotocol/sdk. Source in src/; runs via `bun src/server.ts`. The `imports` map aliases the SDK's public .js subpaths to `#sdk/*` so our import statements stay extension-free.",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "imports": {
+    "#sdk/*": "@modelcontextprotocol/sdk/*.js"
+  }
+}

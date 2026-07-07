@@ -1,0 +1,178 @@
+// order_properties — re-order a database's properties (ORDER only; visibility is upsert_property's
+// canonical `visible`). One `order` list applied to a composable set of `targets`:
+//   "all"      → every VIEW's column order — ALL view types, not just tables (public configuration.properties)
+//   "page"     → the canonical property order (private collection.format.collection_page_properties)
+//   <view_id>  → a specific view's column order (public)
+// A "column" is a property rendered in a view — the property is the entity, hence order_properties.
+
+import { z } from "zod";
+import { decodePropertyId, normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import {
+  describePrivateFailure,
+  type PageOrderEntry,
+  privateConfig,
+  ReadStatus,
+  readCollectionPageProperties,
+  writeCollectionFormat,
+} from "../notion/private-client";
+import { hasPublicToken, publicRequest } from "../notion/public-client";
+import { extractDataSourceId, findSchemaPropertyId, type SchemaBody, type SchemaPropertyRef } from "../readers/schema";
+import { listViewIds } from "../readers/views";
+import { err, errorMessage, ok, type ToolModule } from "../tool";
+import {
+  reorderPageProperties,
+  reorderViewProperties,
+  seedPageOrderFromSchema,
+  type ViewProperty,
+} from "../writers/reorder-properties";
+
+interface ViewConfiguration {
+  type?: string;
+  properties?: ViewProperty[];
+}
+
+interface ViewBody {
+  name?: string;
+  configuration?: ViewConfiguration;
+}
+
+// Stricter than read-database's optimistic resolver, by design: this tool WRITES, so probe /data_sources
+// FIRST (confirm the id is a real data source before mutating), then fall back to /databases, and return
+// null on failure so the caller errors cleanly instead of PATCHing a bogus id.
+async function resolveDataSourceId(id: string): Promise<string | null> {
+  const dataSource = await publicRequest("GET", `/v1/data_sources/${id}`);
+  if (dataSource.ok) {
+    return id;
+  }
+  const database = await publicRequest("GET", `/v1/databases/${id}`);
+  if (database.ok) {
+    return extractDataSourceId(database.body) ?? null;
+  }
+  return null;
+}
+
+function namesToDecodedIds(names: string[], schema: Record<string, SchemaPropertyRef>): string[] {
+  // findSchemaPropertyId returns null for unmatched inputs; fallback treats the input as an id and decodes it.
+  return names.map((name) => findSchemaPropertyId(schema, name) ?? decodePropertyId(name));
+}
+
+/** Reorder one view's columns (public). */
+async function reorderView(viewId: string, orderIds: string[]): Promise<string> {
+  const viewResponse = await publicRequest("GET", `/v1/views/${viewId}`);
+  if (!viewResponse.ok) {
+    return `${viewId}: read failed`;
+  }
+  const view = viewResponse.body as ViewBody;
+  const configuration = view.configuration ?? {};
+  const newProperties = reorderViewProperties(configuration.properties ?? [], orderIds);
+
+  const patch = await publicRequest("PATCH", `/v1/views/${viewId}`, {
+    configuration: { ...configuration, properties: newProperties },
+  });
+  return patch.ok
+    ? `${view.name ?? "(view)"} ${viewId}: reordered ✓`
+    : `${view.name ?? "(view)"} ${viewId}: PATCH failed — ${JSON.stringify(patch.body).slice(0, 120)}`;
+}
+
+/** Reorder the canonical page-property order (private), preserving each property's default visibility. */
+async function reorderPage(
+  dataSourceId: string,
+  orderIds: string[],
+  schema: Record<string, SchemaPropertyRef>,
+): Promise<string> {
+  if (!privateConfig().ok) {
+    return "skipped (private API not configured)";
+  }
+  try {
+    const read = await readCollectionPageProperties(dataSourceId);
+    if (read.status === ReadStatus.THROTTLED) {
+      return describePrivateFailure("throttled");
+    }
+    // Seed from the schema (all properties, default-visible) when the collection has no page order yet.
+    const current: PageOrderEntry[] =
+      read.pageProperties.length > 0 ? read.pageProperties : seedPageOrderFromSchema(schema);
+
+    const reordered = reorderPageProperties(current, orderIds);
+    const setResponse = await writeCollectionFormat(dataSourceId, { collection_page_properties: reordered });
+    return setResponse.ok ? "page order set ✓ (verify in Notion)" : describePrivateFailure(setResponse.body);
+  } catch (error) {
+    return describePrivateFailure(errorMessage(error));
+  }
+}
+
+export const orderProperties: ToolModule = {
+  name: "order_properties",
+  config: {
+    title: "Order a database's properties",
+    description:
+      "Re-order a database's properties (ORDER only — visibility is a separate concern). One `order` list " +
+      '(property names, desired left-to-right) applied to a composable set of `targets`: "all" = every ' +
+      'view\'s column order — ALL view types (gallery/board/list card-property order too, not just tables), public; "page" = the canonical property order (the row-detail panel + new-view ' +
+      'default — private app API); or a specific view id. Default targets = ["all"]. Title is kept first ONLY ' +
+      'when unlisted — to MOVE it, list "title" (the Name property) in `order` at the desired spot; the title ' +
+      "column IS reorderable in table views (live-verified 2026-06-14). Unlisted properties keep their relative " +
+      "order; each target's existing VISIBILITY/width is PRESERVED " +
+      "(filtered views keep their hidden columns). A column is a property rendered in a view — the property is " +
+      "the entity. To change a property's default visibility, use upsert_property's `visible`; to redefine a " +
+      "property, upsert_property.",
+    annotations: { title: "Order a database's properties", openWorldHint: true, destructiveHint: true },
+    inputSchema: {
+      data_source_id: z.string().describe("The data source id (or a database id; auto-resolved)."),
+      order: z.array(z.string()).describe("Property names (or ids) in the desired order."),
+      targets: z
+        .array(z.string())
+        .optional()
+        .describe('Where to apply: "all" (every view), "page" (canonical order), and/or view ids. Default ["all"].'),
+    },
+  },
+
+  handler: async (args) => {
+    if (!hasPublicToken()) {
+      return err("NOTION_TOKEN is not set.");
+    }
+    const inputId = normalizeUuid(String(args.data_source_id ?? ""));
+    if (!UUID_PATTERN.test(inputId)) {
+      return err("data_source_id must be a UUID.");
+    }
+    const order = Array.isArray(args.order) ? (args.order as string[]) : null;
+    if (!order || order.length === 0) {
+      return err("`order` must be a non-empty array of property names.");
+    }
+
+    try {
+      const dataSourceId = await resolveDataSourceId(inputId);
+      if (!dataSourceId) {
+        return err(`Could not resolve ${inputId} to a data source.`);
+      }
+
+      const schemaResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+      if (!schemaResponse.ok) {
+        return err(`Could not read the data source ${dataSourceId} — check the id and that NOTION_TOKEN has access.`);
+      }
+      const schema = (schemaResponse.body as SchemaBody).properties ?? {};
+      const orderIds = namesToDecodedIds(order, schema);
+
+      const targets = Array.isArray(args.targets) && args.targets.length > 0 ? (args.targets as string[]) : ["all"];
+      const wantsAll = targets.includes("all");
+      const wantsPage = targets.includes("page");
+      const explicitViewIds = targets.filter((target) => target !== "all" && target !== "page");
+      const viewIds = wantsAll ? await listViewIds(dataSourceId) : explicitViewIds;
+
+      const views: string[] = [];
+      for (const viewId of viewIds) {
+        views.push(await reorderView(viewId, orderIds));
+      }
+
+      const page = wantsPage ? await reorderPage(dataSourceId, orderIds, schema) : "not targeted";
+
+      return ok({
+        data_source: dataSourceId,
+        views_reordered: views.length,
+        views,
+        page,
+      });
+    } catch (error) {
+      return err(errorMessage(error));
+    }
+  },
+};
