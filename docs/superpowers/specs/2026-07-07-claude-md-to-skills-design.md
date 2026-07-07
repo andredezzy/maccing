@@ -151,7 +151,7 @@ Descriptions below are drafts — final wording is set in GREEN after RED eviden
 - "How to Read These Rules" preamble, rewritten shorter
 - NEW bridge line: the maccing engineering skills are mandatory standing rules — invoke the matching one before designing/coding
 
-A superpowers-style SessionStart hook is deliberately deferred (YAGNI) until description-based invocation proves insufficient.
+~~A superpowers-style SessionStart hook is deliberately deferred (YAGNI) until description-based invocation proves insufficient.~~ **Un-deferred 2026-07-07: the named condition was met.** Two controlled GREEN runs (dx, notifier scenario) failed — fresh Verifiers with `maccing:dx` confirmed loadable never consulted skills for a "quick" edit. The plugin now ships a SessionStart hook (superpowers pattern) injecting a ~100-word dispatcher: doctrine skills are standing rules; the skill list is generated from the `skills/engineering/` tree at runtime so new skills self-register.
 
 ## Maestri team + per-skill TDD
 
