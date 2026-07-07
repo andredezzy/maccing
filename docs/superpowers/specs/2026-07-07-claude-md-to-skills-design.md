@@ -61,7 +61,15 @@ Skill authoring rules (from superpowers:writing-skills): `Use when…` trigger-o
 
 ## Skill reference
 
-Common shape for all eight: `SKILL.md` only (no supporting files — none carries heavy reference or reusable tools), body sections `Overview` (core principle) → `When to use` (incl. when NOT) → `Quick reference` (table) → rules → `Common mistakes`. One excellent TypeScript example per skill where an example earns its place. Descriptions below are drafts — final wording is set in GREEN after RED evidence, but must stay trigger-only.
+Common shape for all eight — **progressive disclosure via `references/`**, the pattern the famous skills use (Anthropic official skills, superpowers, mattpocock) and maccing's own house style:
+
+- `SKILL.md` — lean body (<500 words): `Overview` (core principle) → `When to use` (incl. when NOT) → `Quick reference` (a table listing EVERY rule in compressed form) → `Common mistakes`, plus "load `references/<file>.md` when …" pointers. **The rule inventory is never split across tiers** — SKILL.md always names every rule so nothing is undiscoverable; references only deepen.
+- `references/*.md` — the WHY, worked before/after TypeScript examples, and edge cases for each rule cluster. This preserves the original CLAUDE.md reasoning depth that a 500-word body would destroy.
+- **Discipline-skill caveat:** rationalization tables and red-flag lists stay in `SKILL.md` — bulletproofing hidden in a reference is bulletproofing skipped.
+- A references file must earn its existence (real depth, independently loadable); small skills stay `SKILL.md`-only.
+- **Directory name unification:** growth skills' `reference/` (singular) renames to `references/` (plural) in Phase 1, matching notion, Anthropic, and superpowers — one convention repo-wide.
+
+Descriptions below are drafts — final wording is set in GREEN after RED evidence, but must stay trigger-only.
 
 ### designing-for-dx
 
@@ -69,64 +77,72 @@ Common shape for all eight: `SKILL.md` only (no supporting files — none carrie
 - **Form:** Pattern — positive contract (the DX test) + counter-examples; NOT a prohibition list.
 - **Rules carried (complete):** (1) DX outweighs every other trade-off heuristic; (2) simplicity over cleverness — simplest design fully solving the present problem wins, no speculative machinery, patterns exist to remove complexity never to decorate; (3) discoverability — extension points obvious from listing a directory; (4) consistency of mental model — one pattern per concern class, applied everywhere; (5) open/closed — new case = new file + one registration, never a growing conditional; (6) test isolation via seams — inject strategy, substitute small fake, one-line setup; (7) self-documenting architecture — structure is the docs; (8) local reasoning — no state-at-a-distance, explicit params, caching earns its place only when expensive + input unavailable + several callers; (9) the single re-evaluation question: easier to read, debug, test, extend well into the future?
 - **Also carries:** a 2–3 sentence distillation of the "principles to reason from, not templates to copy" preamble — this is the umbrella skill, and that framing governs how agents apply all nine.
+- **References:** `references/simplicity.md` (over-engineering, speculative flexibility, when patterns earn their place — before/after), `references/extension-points.md` (discoverability, open/closed, consistency of mental model, self-documenting structure, registry example), `references/local-reasoning.md` (state-at-a-distance, the 3-condition caching test, test seams via injection).
 - **RED scenarios (recognition/application):** (a) fixture: config loader task with "we may add YAML and remote config later" bait — does baseline build speculative abstraction? (b) fixture: module with a 3-branch conditional, task "add a fourth case fast" — does baseline judge when a registry reduces complexity vs when the conditional is still simplest?
-- **Word budget:** ~450. Fits.
+- **Word budget:** SKILL.md ~350 + 3 references. Fits.
 
 ### modeling-domains
 
 - **Description (draft):** `Use when defining domain types, database or validation schemas, config shapes, wire payloads, or translation/message trees; when adding a domain type, union member, registry, or dispatcher; when data is flat, joined by ID references, duplicated across fields, or its nesting doesn't match the real-world thing it describes.`
 - **Form:** Pattern — recipes with before/after type examples.
 - **Rules carried (complete):** (1) data model mirrors the business domain — nest what belongs, explicit relation only for genuine many-to-many; (2) structure isomorphic to the described thing everywhere (types, config, wire, translation trees) — every nesting level a real nameable boundary, no concatenated-name flattening, no invented levels; (3) one registry/engine per domain — never conflate concept-spaces in one union/dispatcher, generic registry factory instantiated per concern, one explicit one-direction bridge, mixed-containment union = split signal; (4) mirror the domain's exact type-set — verify the current set against official docs/live API, never memory; containment rules enforced in static types AND wire schema; (5) middleware over manual orchestration for cross-cutting concerns; (6) zero-ceremony initialization — self-detecting, lazy, self-hydrating; (7) no technology mixing; (8) no redundant/derivable stored fields; (9) defaults detected from the user's actual context, never hardcoded.
+- **References:** `references/isomorphic-structure.md` (nesting = real boundaries; domain/config/wire/translation worked examples; no redundant fields), `references/registries-and-engines.md` (one registry per domain, generic factory, one-direction bridge, the mixed-union split signal), `references/domain-type-fidelity.md` (exact type-set, verifying against live docs/API, containment enforced in types AND wire schema), `references/self-initializing-architecture.md` (middleware over orchestration, zero-ceremony init). Defaults-from-context and no-tech-mixing stay inline in SKILL.md.
 - **RED scenarios (application):** (a) design types + schema for orders/items/tags (items belong-to, tags many-to-many) — does baseline nest vs flat-FK everything?; (b) translation file task — does baseline produce `checkout_button_label`-style concatenated keys?
-- **Word budget:** ~500. Tight; compress rule 3 hard.
+- **Word budget:** SKILL.md ~400 + 4 references. Fits.
 
 ### organizing-code
 
 - **Description (draft):** `Use when creating, splitting, or moving files; defining error classes or writing catch blocks; adding helpers, wrappers, or utils; structuring test files; or deciding where types, env vars, or server/client context live. Triggers: a file doing several things, circular imports, barrel files, a function that only forwards its arguments, an empty catch.`
 - **Form:** Pattern — quick-reference table + terse recipes; the pass-through rule gets its earn-its-existence test as a checklist.
 - **Rules carried (complete):** (1) no barrel files or abstract-taxonomy dirs — code lives with its owner; (2) custom errors in top-level `errors/`, one class per file, catch by `instanceof` never message-string, error messages in English; (3) one responsibility per file, file name = documentation; (4) split by responsibility not size, inline once-used short helpers; (5) inline over premature extraction — local duplication beats a single-caller abstraction; (6) no pure pass-through wrappers + the earn-its-existence test; (7) OOP for stateful responsibility with a lifecycle, functions for stateless transforms; (8) entry points are thin orchestrators; (9) single-static-method class = function (mapper-namespace exception); (10) no circular runtime imports — extract the shared dependency; type-only cycles fine; (11) env vars owned by apps, packages receive config; (12) server vs client context in separate files; (13) one test file per file-under-test, named after it; e2e tests belong to infrastructure files; split only past ~1000 lines with shared prefix; (14) no per-module READMEs in src/; (15) **never silently swallow an error** — every catch re-throws, logs, or transforms; empty catch is always a bug (moved here from Problem-Solving).
+- **References:** `references/errors.md` (top-level `errors/` folder, one class per file, `instanceof` catching, English messages, never-swallow rule), `references/extraction-and-wrappers.md` (inline-over-premature-extraction + the pass-through earn-its-existence test — the two longest rules), `references/file-boundaries.md` (barrels, one responsibility per file, thin entry points, OOP vs functions, circular imports, env-var ownership, server/client context), `references/test-files.md` (one test file per file-under-test, e2e-in-infrastructure rule, split threshold).
 - **RED scenarios (application):** (a) "add a NotFound error to this service and handle it in the router" — does baseline colocate the error class in the thrower and/or match on message strings?; (b) "clean up this module" with a once-used 4-line block — does baseline extract a single-caller helper and add a forwarding wrapper?
-- **Word budget:** the heaviest skill, ~600–650 words even compressed. Accepted deviation from the 500 target: rule completeness outranks the word target; compress via the quick-reference table, no supporting file (rules are principles, not heavy reference).
+- **Word budget:** SKILL.md ~450 (all 15 rules in the quick-reference table) + 4 references. The earlier 600–650-word deviation is resolved by the references tier.
 
 ### naming
 
 - **Description (draft):** `Use when naming anything — files, functions, types, variables, enum members — or choosing between a boolean, string union, and enum for a set of states. Triggers: vague or abbreviated names, single-letter values, Base-prefixed classes, Contract-suffixed interfaces, casing questions, a name that only covers part of what the function does.`
 - **Form:** Pattern — recipes + naming decision table.
 - **Rules carried (complete):** (1) enums over booleans/string unions for closed sets — 3+ states or 2 meaning-bearing ones; plain boolean stays right for an unambiguous flag; (2) enum keys AND values UPPERCASE; wire-boundary values keep the external contract's exact casing as a string union; (3) names precise, never a vague gesture; (4) name the whole behavior, not the salient sub-step — prefer the established domain term, avoid sibling collisions; (5) spell out truncations that cost decoding, no bare single letters, universal conventional short forms exempt; (6) no manufactured verbosity — drop meaningless suffixes, fewest unambiguous words; (7) dot-notation filename suffixes only for framework kinds; every other file = kebab-case of its main export; (8) no `Base` prefix — the interface owns the plain name, the skeleton is named for what it adds; (9) no `Contract` suffix — the interface IS the concept.
+- **References:** `references/enums.md` (the full enum-vs-boolean-vs-string-union reasoning, UPPERCASE rule, wire-boundary casing exception). Precision/whole-behavior/truncation rules stay inline — they ARE the skill's heart. One reference only: restraint where content is small.
 - **RED scenarios (recognition):** (a) code with `isActive`/`isPending` needing a third state — does baseline add a third boolean or a lowercase string union?; (b) "create an abstract base for these repositories" — does baseline produce `BaseRepository`?
-- **Word budget:** ~450. Fits.
+- **Word budget:** SKILL.md ~400 + 1 reference. Fits.
 
 ### formatting-code
 
 - **Description (draft):** `Use when code reads as a dense wall, when writing an inline object type with multiple properties, or when tempted to add section-divider comments. Covers the visual structure formatters like Biome and Prettier do NOT enforce: blank-line grouping, named types, divider-free files.`
 - **Form:** Reference — three positive rules with one before/after example.
 - **Rules carried (complete):** (1) blank lines mandatory — group related statements, separate concerns, no dense walls; (2) no inline structural types — name every return type, parameter object, multi-member union; trivial single-member nullable exempt; 2+ properties or 2+ non-primitive union members = extract; (3) no decorative section-divider comments — needing them signals a split-by-responsibility, plain comments + blank lines within a file.
+- **References:** none — 250 words total; a references folder here would be folders for their own sake.
 - **RED scenarios (application):** "organize this long file visually" — does baseline reach for `// ────` dividers and leave inline types?
-- **Word budget:** ~250. Smallest skill; earns standalone existence via the beyond-formatters framing.
+- **Word budget:** SKILL.md ~250, no references. Smallest skill; earns standalone existence via the beyond-formatters framing.
 
 ### researching-before-coding
 
 - **Description (draft):** `Use when about to write code against any external library, API, framework, or tool; when hitting an error, incompatibility, or unfamiliar technology; before proposing a fix or presenting a design. Especially when confident from memory, under time pressure, or the API "is well known".`
 - **Form:** Discipline — prohibition + rationalization table + red flags (baseline rationalizations harvested in RED).
 - **Rules carried (complete):** (1) always verify against current sources before code touching anything external — API surface, version, breaking changes, deprecations; memory assertions never acceptable, a named current source is the standard; (2) research before attempting fixes — understand why a working approach works; no guess-test-fail loops; (3) diagnose before prescribing — read the error, consult docs, search the exact message; fix the root cause; (4) enumerate every dimension before presenting a design — every applicable axis marked specified / not-applicable-with-reason / user-deferred; verify the build against the design dimension by dimension.
+- **References:** `references/dimension-sweep.md` (the enumerate-every-dimension method: axis checklist, specified/not-applicable/deferred marking, post-build verification). The rationalization table and red flags stay in SKILL.md — discipline bulletproofing must live in the loaded body.
 - **RED scenarios (pressure, 3+ combined):** "our payment-SDK webhook verification broke after an upgrade — patch it now, deploying in 10 minutes, you've used this SDK a hundred times" (time + authority + confidence). Document verbatim rationalizations for the table.
-- **Word budget:** ~450 + rationalization table grown from RED evidence.
+- **Word budget:** SKILL.md ~450 (incl. rationalization table grown from RED evidence) + 1 reference.
 
 ### composing-ui
 
 - **Description (draft):** `Use when building or refactoring UI components in React or any component framework — structuring components, adding props, building forms, styling, or writing labels. Triggers: a prop that controls layout or conditionally renders a section, dot-notation sub-components (Card.Header), raw inputs with hand-rolled validation, title-case labels.`
 - **Form:** Pattern — composition recipes with one compound-component example.
 - **Rules carried (complete):** (1) composition mandatory — props never control layout, conditional sub-sections, or behavioral branches; appearance/domain-value props fine; (2) no dot-notation namespacing (breaks RSC) — named exports per part; (3) one file per compound — root + all parts as named exports, deliberate override of one-responsibility-per-file; primitives get their own file; (4) compose at parent/screen level — leaf parts live beside the screen, flat screen folder, no sub-components bucket; (5) compounds colocated with usage; shared primitives in the UI package, source-level exports, no build step; (6) className over visual props; (7) no custom CSS classes in globals — theme variables, imports, resets only; (8) sentence case for all labels; (9) standard form stack — schema-validated form library + resolver, never raw field state; (10) full component-library adoption — field/control/label/message together.
+- **References:** `references/compound-components.md` (one-file compound pattern, RSC/dot-notation rule, parent/screen-level composition, colocation, one full worked example), `references/forms.md` (schema-validated form stack, resolver, full component-library adoption). Styling rules (className, globals, sentence case) stay inline.
 - **RED scenarios (recognition/application):** (a) "add a `variant` prop that shows or hides this Card's sidebar" — does baseline add the conditional prop instead of a composition part?; (b) "add a small form" — does baseline hand-roll useState fields?
-- **Word budget:** ~500. Tight; compress rules 4–5.
+- **Word budget:** SKILL.md ~400 + 2 references. Fits.
 
 ### respecting-lockfiles — CONDITIONAL
 
 - **Description (draft):** `Use when installing dependencies, adding or removing packages, or running scripts in any JavaScript/TypeScript repo — before reaching for npm, pnpm, yarn, or bun.`
 - **Form:** Discipline — one iron rule + detection recipe (lockfile table: bun.lock/bun.lockb, pnpm-lock.yaml, package-lock.json, yarn.lock, packageManager field).
 - **Rules carried (complete):** (1) the repo's lockfile/`packageManager` field decides the tool — use exactly it; (2) never switch tools, never introduce a second lockfile, never run a different installer.
+- **References:** none.
 - **RED scenarios (existence test, runs FIRST in Phase 2):** pnpm-lock fixture, task "add lodash and run the tests" phrased npm-flavored ("npm install whatever you need"). 3+ fresh Verifier reps. **If baseline complies, the skill is dropped** — this RED run is the existence gate, not just a quality gate.
-- **Word budget:** ~150 if it exists at all.
+- **Word budget:** SKILL.md ~150 if it exists at all, no references.
 
 ### Stays in the private ~/.claude/CLAUDE.md
 
@@ -157,7 +173,7 @@ Per-skill cycle (superpowers:writing-skills, Iron Law: no skill without a failin
 
 ## Sequencing
 
-1. **Phase 1 — restructure:** move skills/commands/mcp, write new manifests, merged `.mcp.json`, bucket READMEs, root CLAUDE.md, README rewrite; verify both MCP servers boot and all existing skills resolve; migrate the local dev install (single symlinked cache dir → repo root, `installed_plugins.json` updated); commit.
+1. **Phase 1 — restructure:** move skills/commands/mcp, write new manifests, merged `.mcp.json`, bucket READMEs, root CLAUDE.md, README rewrite; unify growth's `reference/` dirs to `references/` (with mechanical link updates in their SKILL.md files); verify both MCP servers boot and all existing skills resolve; migrate the local dev install (single symlinked cache dir → repo root, `installed_plugins.json` updated); commit.
 2. **Phase 2 — engineering skills:** one at a time through RED→GREEN→REFACTOR, starting with the conditional `respecting-lockfiles` baseline (cheapest existence test), then the 7 certain skills.
 3. **Phase 3 — cutover:** slim the private `~/.claude/CLAUDE.md` (remove migrated sections, add the bridge line, update MCP tool prefixes in My Accounts), final README pass, version 1.0.0, push, marketplace update.
 
@@ -183,5 +199,5 @@ Per-skill cycle (superpowers:writing-skills, Iron Law: no skill without a failin
 
 - Multi-harness packagings (.codex-plugin, .cursor-plugin, etc. from superpowers) — not requested.
 - Changesets/CI release pipeline.
-- Any change to skill *content* of existing growth/notion/google-workspace skills (moves only).
+- Any change to skill *content* of existing growth/notion/google-workspace skills (moves, the `reference/`→`references/` rename, and mechanical link updates only — no prose changes).
 - The `~/.claude/skills/maestri*` skills — they belong to the Maestri app, not maccing.
