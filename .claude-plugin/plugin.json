@@ -26,7 +26,8 @@
     "./skills/engineering/dx/",
     "./skills/engineering/modeling-domains/",
     "./skills/engineering/organizing-code/",
-    "./skills/engineering/naming/"
+    "./skills/engineering/naming/",
+    "./skills/engineering/researching-before-coding/"
   ],
   "commands": ["./commands/"]
 }
