@@ -86,7 +86,7 @@ grep -rln "reference/" skills/growth --include="SKILL.md" | xargs sed -i '' 's|r
 
 - [ ] **Step 3: Verify**
 
-Run: `find skills -name SKILL.md | wc -l` → Expected: `10`
+Run: `find skills -name SKILL.md | wc -l` → Expected: `11` (the 10 moved skills + the pre-existing `skills/reasoning/SKILL.md`)
 Run: `find skills -type d -name reference | wc -l` → Expected: `0`
 Run: `grep -rn "](reference/" skills --include="SKILL.md" | wc -l` → Expected: `0`
 
@@ -320,7 +320,7 @@ git add -A && git commit -m "restructure(docs): bucket READMEs, root repo CLAUDE
 **Files:**
 - Rewrite: `README.md`
 
-- [ ] **Step 1: Rewrite `README.md`** with exactly these sections: title + tagline (keep "Maxxing plugins and skills for coding agents."); **Claude Code plugin** (`/plugin marketplace add andredezzy/maccing` then `/plugin install maccing@maccing`; auto-update note kept); **Migrating from the old plugins** (the three old install names are gone — uninstall them, install `maccing@maccing`; MCP tool prefixes changed to `mcp__plugin_maccing_notion__*` / `mcp__plugin_maccing_workspace__*`; skill namespaces changed to `maccing:` — bare skill names unchanged); **Agent skills via skills.sh** (same commands as today); **Skills table** — one row per skill with bucket: reasoning · growth ×8 · notion-api · google-workspace (engineering rows added as they land in Phase 2); MCP setup pointers to the two bucket READMEs; Troubleshooting (updated cache paths); License.
+- [ ] **Step 1: Rewrite `README.md`** with exactly these sections: title + tagline (keep "Maxxing plugins and skills for coding agents."); **Claude Code plugin** (`/plugin marketplace add andredezzy/maccing` then `/plugin install maccing@maccing`; auto-update note kept); **Migrating from the old plugins** (the three old install names are gone — uninstall them, install `maccing@maccing`; MCP tool prefixes changed to `mcp__plugin_maccing_notion__*` / `mcp__plugin_maccing_workspace__*`; skill namespaces changed to `maccing:` — bare skill names unchanged; the `/growth` command is now `/maccing:growth`); **Agent skills via skills.sh** (same commands as today); **Skills table** — one row per skill with bucket: reasoning · growth ×8 · notion-api · google-workspace (engineering rows added as they land in Phase 2); MCP setup pointers to the two bucket READMEs; Troubleshooting (updated cache paths); License.
 
 - [ ] **Step 2: skills.sh regression**
 

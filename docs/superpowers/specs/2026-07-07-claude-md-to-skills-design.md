@@ -179,7 +179,7 @@ Per-skill cycle (superpowers:writing-skills, Iron Law: no skill without a failin
 - **MCP tool prefixes change:** `mcp__plugin_maccing-notion_notion__*` → `mcp__plugin_maccing_notion__*`; `mcp__plugin_google-workspace_workspace__*` → `mcp__plugin_maccing_workspace__*` (verified against the plugins reference: scoped names are `mcp__plugin_<plugin-name>_<server-name>__<tool>`). The private CLAUDE.md "My Accounts" section is updated in Phase 3 — and Phase 3 also greps `~/.claude/settings.json` + project settings for `mcp__plugin_` references (permission allow-lists, hooks) and updates them.
 - **Skill namespace changes:** every existing skill moves from `maccing-growth:`/`maccing-notion:`/`google-workspace:` to the `maccing:` namespace (the plugin name is the skill namespace). Bare skill names stay the same; anything referencing the old namespaced form breaks.
 - skills.sh flow unaffected (it scans for `SKILL.md` anywhere); existing skill names unchanged, so `npx skills add andredezzy/maccing -s notion-api` keeps working.
-- `/growth` command name unchanged.
+- `/growth` becomes `/maccing:growth` (commands are namespaced by the plugin name — gate-verified 2026-07-07; the bare form no longer registers). README migration section documents it.
 - `pictura-output/` at repo root: inspected in Phase 1; if untracked output, gitignored — never silently deleted.
 
 ## Dimension sweep
