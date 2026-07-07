@@ -25,7 +25,7 @@ maccing/
 │   ├── plugin.json          ← single plugin "maccing"; skills declared with explicit bucket paths
 │   └── marketplace.json     ← marketplace "maccing", one entry, source "./"
 ├── skills/
-│   ├── reasoning-rigorously/ ← ALREADY BUILT (2026-07-07, user order): cross-domain craft skill authored from a Fable 5 operating manual; SKILL.md + references/operating-manual.md. Placement rule: buckets are for domain families; domain-agnostic skills live directly under skills/. Inert until Phase 1 wires plugin.json (skills.sh picks it up immediately). Scenario validation (GREEN/REFACTOR) queued with Phase 2.
+│   ├── reasoning/           ← ALREADY BUILT (2026-07-07, user order): cross-domain craft skill authored from a Fable 5 operating manual; SKILL.md + references/operating-manual.md. Placement rule: buckets are for domain families; domain-agnostic skills live directly under skills/. Inert until Phase 1 wires plugin.json (skills.sh picks it up immediately). Scenario validation (GREEN/REFACTOR) queued with Phase 2.
 │   ├── engineering/         ← NEW (see below)
 │   ├── growth/              ← moved from plugins/maccing-growth/skills/ (meta/, platforms/ nesting preserved)
 │   ├── notion/notion-api/   ← moved from plugins/maccing-notion/skills/notion-api/

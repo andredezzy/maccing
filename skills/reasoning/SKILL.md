@@ -1,9 +1,9 @@
 ---
-name: reasoning-rigorously
+name: reasoning
 description: Use when tackling a hard or ambiguous problem, judging a diagnosis someone handed you, or about to deliver any conclusion, fix, estimate, or verdict — especially when the answer already looks clean, a load-bearing claim is recalled rather than observed, time pressure says ship it, or the request seems too obvious to question.
 ---
 
-# Reasoning Rigorously
+# Reasoning
 
 ## Overview
 
