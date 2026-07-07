@@ -12,11 +12,12 @@
   "license": "MIT",
   "keywords": ["skills", "dx", "engineering", "reasoning", "growth", "ads", "whatsapp", "notion", "notion-api", "google-workspace", "mcp", "bun"],
   "skills": [
-    "./skills/growth",
-    "./skills/growth/meta",
-    "./skills/growth/platforms/ycloud",
-    "./skills/notion",
-    "./skills/google-workspace"
+    "./skills/",
+    "./skills/growth/",
+    "./skills/growth/meta/",
+    "./skills/growth/platforms/ycloud/",
+    "./skills/notion/",
+    "./skills/google-workspace/"
   ],
   "commands": ["./commands/"]
 }
