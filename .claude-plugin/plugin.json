@@ -22,7 +22,8 @@
     "./skills/growth/platforms/ycloud/ycloud/",
     "./skills/growth/platforms/ycloud/ycloud-api/",
     "./skills/notion/notion-api/",
-    "./skills/google-workspace/google-workspace/"
+    "./skills/google-workspace/google-workspace/",
+    "./skills/engineering/dx/"
   ],
   "commands": ["./commands/"]
 }
