@@ -69,6 +69,8 @@ Common shape for all seven — **progressive disclosure via `references/`**, the
 - A references file must earn its existence (real depth, independently loadable); small skills stay `SKILL.md`-only.
 - **Directory name unification:** growth skills' `reference/` (singular) renames to `references/` (plural) in Phase 1, matching notion, Anthropic, and superpowers — one convention repo-wide.
 
+**Complementary-ecosystem rule (2026-07-07 build-vs-adopt review):** maccing doctrines never re-teach what an adjacent famous skill already does better — they name it as the recommended companion instead (cross-reference by name, per writing-skills). Confirmed content-level comparison against mattpocock's engineering set: his skills are workflows (glossary maintenance, refactor reports, research delegation), ours are code doctrines — orthogonal, all builds justified. Two mandated cross-references: `researching-before-coding` escalates hard bugs to `diagnosing-bugs`/superpowers `systematic-debugging` instead of competing; `dx` points at `codebase-design` for deep-module vocabulary instead of re-teaching Ousterhout.
+
 Descriptions below are drafts — final wording is set in GREEN after RED evidence, but must stay trigger-only.
 
 ### dx
