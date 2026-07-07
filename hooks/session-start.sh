@@ -11,6 +11,6 @@ if [ -d "$ROOT/skills/engineering" ]; then
   doctrine="$(ls "$ROOT/skills/engineering" 2>/dev/null | paste -sd, - | sed 's/,/, /g')"
 fi
 
-context="maccing doctrine: the engineering skills (${doctrine}) and the reasoning skill are STANDING RULES, not suggestions. Before designing, structuring, naming, or EXTENDING any code — including small or quick edits; that this is just a small change is the exact trap — check whether one of them applies and invoke it (adding a branch, case, or flag to existing code → dx). For hard problems, diagnoses, or verdicts → reasoning."
+context="maccing doctrine: the engineering skills (${doctrine}) and the reasoning skill are STANDING RULES, not suggestions. Before ANY code work — including small or quick edits; that this is just a small change is the exact trap — invoke the matching skill: adding a branch, case, or flag to existing code → dx; creating or splitting files, defining error classes, writing catch blocks, adding helpers or wrappers, structuring tests → organizing-code; designing types, schemas, config or payload shapes → modeling-domains. For hard problems, diagnoses, or verdicts → reasoning."
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$context"
