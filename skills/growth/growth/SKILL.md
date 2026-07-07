@@ -105,18 +105,18 @@ Kill underperforming campaigns within 72 hours. Scale winners by max 20% every 5
 
 ### 6. Automation Discipline
 
-Automation discipline (official-surface-first, antidetect browser, human-like): see `reference/automation.md`.
+Automation discipline (official-surface-first, antidetect browser, human-like): see `references/automation.md`.
 
 ### 7. Cost Discipline
 
-Cost discipline (ledger-in-place, present-before-spend, always optimize): see `reference/cost-tracking.md`.
+Cost discipline (ledger-in-place, present-before-spend, always optimize): see `references/cost-tracking.md`.
 
 ## Intent → Reference Routing Table
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `reference/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
-| Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `reference/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
+| Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `references/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
+| Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `references/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
 
 ## Core Metrics
 

@@ -26,7 +26,7 @@ This makes YCloud the best-value Brazil dispatch option at any volume: you pay o
 Growth ($39/mo), Pro ($89/mo), and Enterprise ($399/mo) plans add users, channels, and AI credits at
 the same 0% markup.
 
-For BSP comparison, plan details, and pricing model see `whatsapp` → `reference/pricing-and-billing.md`.
+For BSP comparison, plan details, and pricing model see `whatsapp` → `references/pricing-and-billing.md`.
 
 Risk: free-tier accounts in financial niches have been false-positive-suspended. Resolution via support
 ticket typically takes <24h. One BSP account per disposable BM is required (recommended practice) to
@@ -37,7 +37,7 @@ from connecting a *WABA* (Embedded Signup). The account-signup verification **co
 WhatsApp message** (not email/SMS) — a non-obvious blocker on disposable-BM setups, since it can reuse
 neither another BM's WhatsApp nor the fresh WABA chip. Full per-BM onboarding flow + the burner-WhatsApp
 workaround + account email/domain + profiling-field guidance + the $0.50 signup credit:
-`reference/account-and-waba-setup.md` → **Account Creation / Onboarding (per BM)**.
+`references/account-and-waba-setup.md` → **Account Creation / Onboarding (per BM)**.
 
 ## Console Map
 
@@ -65,25 +65,25 @@ YCloud exposes two separate APIs:
 **Dashboard backend** (`www.ycloud.com/api/...`, SESSION cookie):
 - Per-campaign `unsubscribeNums`, per-button click counts, per-recipient search within a campaign
 - Undocumented, SESSION-cookie only (rejects the public API key)
-- MUST be reached from inside the disposable BM's AdsPower profile (see reference/api-automation.md)
+- MUST be reached from inside the disposable BM's AdsPower profile (see references/api-automation.md)
 
 Campaign-send LAG is critical: after a campaign completes and the wallet is charged, the messages may
 not appear in `/v2/whatsapp/messages` for hours (sometimes next-day). Use the campaign's
 Analytics/Logs tab or `whatsapp.message.updated` webhooks for real-time monitoring.
 
-For the read-only automation discipline (CDP connect, the MCP read recipe, undetectability), see `reference/api-automation.md`.
+For the read-only automation discipline (CDP connect, the MCP read recipe, undetectability), see `references/api-automation.md`.
 
 ## Routing Table
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Account signup wizard, WhatsApp-code gotcha + workaround, account email/domain, profiling fields, $0.50 credit | reference/account-and-waba-setup.md | Creating a new YCloud account per BM |
-| Embedded Signup steps, WABA connection, opt-out chatbot setup | reference/account-and-waba-setup.md | Connecting a WABA + building keyword opt-out flows |
-| Campaign send file format, `.xlsx` spec, Test-send button | reference/account-and-waba-setup.md | Preparing and uploading campaign lists |
-| BSP comparison table, pricing model, YCloud plans | whatsapp → reference/pricing-and-billing.md | Choosing or justifying BSP selection |
-| evaluate.py, Dashboard Backend API, SESSION cookie auth | reference/api-automation.md | Pulling per-campaign analytics programmatically |
-| Reconciliation: unanswered inbox replies, per-campaign stats | reference/api-automation.md | Every YCloud reconcile: pull unanswered inbound + raise as #1 action |
-| Template scoring, what's automatable capability table | reference/api-automation.md | Understanding automation boundaries |
-| AdsPower MCP read recipe, automation loop code | reference/api-automation.md | Automating dashboard backend reads |
-| Read/commit split, rung assignment for YCloud tasks | reference/api-automation.md | Architecture of read-only automation |
-| Isolation rule (AdsPower profile, proxy, BSP-per-BM) | reference/api-automation.md | Safe automation without ban risk |
+| Account signup wizard, WhatsApp-code gotcha + workaround, account email/domain, profiling fields, $0.50 credit | references/account-and-waba-setup.md | Creating a new YCloud account per BM |
+| Embedded Signup steps, WABA connection, opt-out chatbot setup | references/account-and-waba-setup.md | Connecting a WABA + building keyword opt-out flows |
+| Campaign send file format, `.xlsx` spec, Test-send button | references/account-and-waba-setup.md | Preparing and uploading campaign lists |
+| BSP comparison table, pricing model, YCloud plans | whatsapp → references/pricing-and-billing.md | Choosing or justifying BSP selection |
+| evaluate.py, Dashboard Backend API, SESSION cookie auth | references/api-automation.md | Pulling per-campaign analytics programmatically |
+| Reconciliation: unanswered inbox replies, per-campaign stats | references/api-automation.md | Every YCloud reconcile: pull unanswered inbound + raise as #1 action |
+| Template scoring, what's automatable capability table | references/api-automation.md | Understanding automation boundaries |
+| AdsPower MCP read recipe, automation loop code | references/api-automation.md | Automating dashboard backend reads |
+| Read/commit split, rung assignment for YCloud tasks | references/api-automation.md | Architecture of read-only automation |
+| Isolation rule (AdsPower profile, proxy, BSP-per-BM) | references/api-automation.md | Safe automation without ban risk |

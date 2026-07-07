@@ -32,7 +32,7 @@ BROWSER GUIDANCE IS THE FALLBACK, NOT THE DEFAULT.
 1. **TikTok Ads MCP** (`amekala/ads-mcp` or `AdsMCP/tiktok-ads-mcp-server`) — campaign CRUD, reports, analytics
 2. **TikTok Marketing API** (via official SDK `tiktok-business-api-sdk-official`) — full lifecycle management
 3. **TikTok Events API** — server-side conversion tracking (like GA4 MP)
-4. **UI automation** — follow the global AdsPower discipline in `reference/automation.md`; do NOT use Playwriter for antidetect-sensitive surfaces.
+4. **UI automation** — follow the global AdsPower discipline in `references/automation.md`; do NOT use Playwriter for antidetect-sensitive surfaces.
 
 ### 2. Self-Improving Skill
 
@@ -481,7 +481,7 @@ At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Yo
 
 ### Browser Automation (Playwriter)
 
-For UI automation use the global AdsPower fallback ladder (`reference/automation.md`). The Playwriter notes below are retained as reference only; not the recommended path.
+For UI automation use the global AdsPower fallback ladder (`references/automation.md`). The Playwriter notes below are retained as reference only; not the recommended path.
 
 | Gotcha | Detail |
 |--------|--------|

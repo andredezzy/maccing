@@ -72,9 +72,9 @@ No OAuth, no Bearer token. One key grants full read/write access to all resource
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Full endpoint details, curl examples, response shapes, field tables | reference/v2-rest-reference.md | All v2 API endpoint usage |
-| Pagination algorithm, filter gotchas, behavior deviations | reference/v2-rest-reference.md#known-api-behavior-deviations | Debugging unexpected API responses |
-| Template send/deliver/read analytics (computed) | ../ycloud/reference/api-automation.md#computing-template-analytics-no-dedicated-endpoint | Building template performance reports |
-| Webhook event types and registration | reference/v2-rest-reference.md#webhooks | Setting up delivery status tracking |
-| Opt-out list and pre-send check | reference/v2-rest-reference.md#unsubscribers-opt-outs | Suppression logic before sends |
-| Feature-gated / unavailable endpoints | reference/v2-rest-reference.md#feature-gated-and-unavailable-endpoints | Confirming what 403/404s mean |
+| Full endpoint details, curl examples, response shapes, field tables | references/v2-rest-reference.md | All v2 API endpoint usage |
+| Pagination algorithm, filter gotchas, behavior deviations | references/v2-rest-reference.md#known-api-behavior-deviations | Debugging unexpected API responses |
+| Template send/deliver/read analytics (computed) | ../ycloud/references/api-automation.md#computing-template-analytics-no-dedicated-endpoint | Building template performance reports |
+| Webhook event types and registration | references/v2-rest-reference.md#webhooks | Setting up delivery status tracking |
+| Opt-out list and pre-send check | references/v2-rest-reference.md#unsubscribers-opt-outs | Suppression logic before sends |
+| Feature-gated / unavailable endpoints | references/v2-rest-reference.md#feature-gated-and-unavailable-endpoints | Confirming what 403/404s mean |

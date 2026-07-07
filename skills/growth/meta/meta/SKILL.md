@@ -33,7 +33,7 @@ A Business Manager (renamed "Business Portfolio" in 2024) is the container for a
 
 **Architecture rule:** Vault BM (pixels/pages/conversion data) is ALWAYS separate from Campaign BM (runs ads, takes ban risk), which is ALWAYS separate from WABA BM (holds WhatsApp number). WABA cannot be transferred between BMs — choose carefully.
 
-Full BM types table + type reference: `reference/disposable-bm-strategy.md`
+Full BM types table + type reference: `references/disposable-bm-strategy.md`
 
 ---
 
@@ -45,7 +45,7 @@ Meta's enforcement classifier operates in three layers: (1) content ML models on
 
 Actively monitor Account Quality in Business Manager. Financial niche triggers extra scrutiny — niche guilt-by-association means legitimate operators get caught in classifier sweeps targeting black hat operators using identical keywords.
 
-Full intelligence: `reference/brazilian-classifier-defense.md`
+Full intelligence: `references/brazilian-classifier-defense.md`
 
 ---
 
@@ -59,7 +59,7 @@ Brazil is the highest-risk Meta market for financial advertisers. The black hat 
 
 **WhatsApp profile compliance:** Category + About + Description must tell one coherent story. "Gestão de capital" triggers both Meta and CVM risk simultaneously. "Educação financeira" and "compartilhamos análises" are safe. Complete profile is safer than minimal — empty fields signal scam during manual review.
 
-Full playbook + WABA profile risk table: `reference/brazilian-classifier-defense.md`
+Full playbook + WABA profile risk table: `references/brazilian-classifier-defense.md`
 
 ---
 
@@ -71,7 +71,7 @@ Full playbook + WABA profile risk table: `reference/brazilian-classifier-defense
 
 **Appeal:** Tier 1 automated (35% resolution, 24h) → Tier 2 human (3-5 days) → Tier 3 Policy Advisory Board (10-15 days, rare). Critical deadline: 180 days disabled = permanent loss of reinstatement.
 
-Full trigger table, cascade mechanics, appeal tiers: `reference/disposable-bm-strategy.md`
+Full trigger table, cascade mechanics, appeal tiers: `references/disposable-bm-strategy.md`
 
 ---
 
@@ -79,9 +79,9 @@ Full trigger table, cascade mechanics, appeal tiers: `reference/disposable-bm-st
 
 One proxy IP, one payment card, one admin profile, one antidetect browser profile — per BM, never shared. Parallel disposable BMs must also isolate the **IP family** (IPv4 vs IPv6) to prevent Meta graph-linking adjacent ranges.
 
-**Browser automation rule:** Any automation touching a BM's accounts (Business Manager, BSP dashboard) MUST run through that BM's own AdsPower profile — same proxy/fingerprint, never a clean host-IP browser. Install the official AdsPower **skill** (`npx skills add AdsPower/adspower-browser`), **MCP** (`local-api-mcp-typescript`), and **CLI**. Full doctrine (undetectable behavior, keep-open, Hybrid agent-vs-operator split, the MCP read recipe, fallback ladder): `reference/browser-automation.md`.
+**Browser automation rule:** Any automation touching a BM's accounts (Business Manager, BSP dashboard) MUST run through that BM's own AdsPower profile — same proxy/fingerprint, never a clean host-IP browser. Install the official AdsPower **skill** (`npx skills add AdsPower/adspower-browser`), **MCP** (`local-api-mcp-typescript`), and **CLI**. Full doctrine (undetectable behavior, keep-open, Hybrid agent-vs-operator split, the MCP read recipe, fallback ladder): `references/browser-automation.md`.
 
-Full isolation table: `reference/asset-isolation.md`
+Full isolation table: `references/asset-isolation.md`
 
 ---
 
@@ -91,7 +91,7 @@ Hard requirements for a dispatch BM proxy: dedicated/static (NEVER rotating), SO
 
 Top BR-local choices: **ProxyAds** (built for Meta BM + WhatsApp API), **Proxy Roque** (Meta/Google-tuned line, IPv4 dedicated), **Coronium.io** (mobile dedicated, WhatsApp warming protocol).
 
-Full 30-row provider comparison with 2026 pricing: `reference/asset-isolation.md`
+Full 30-row provider comparison with 2026 pricing: `references/asset-isolation.md`
 
 ---
 
@@ -107,7 +107,7 @@ A disposable BM is a purchased, pre-verified BM used to validate WhatsApp broadc
 
 **Cost of a ban cycle:** ~R$400-600 + 2-4 days setup time. Template data and contact segment insights survive the burn.
 
-Full pipeline, setup sequence, Display Name Strategy, BSP migration, number warming protocol: `reference/disposable-bm-strategy.md`
+Full pipeline, setup sequence, Display Name Strategy, BSP migration, number warming protocol: `references/disposable-bm-strategy.md`
 
 ---
 
@@ -115,7 +115,7 @@ Full pipeline, setup sequence, Display Name Strategy, BSP migration, number warm
 
 Pay Meta with a **company corporate card matching the BM's CNPJ and billing address**. Never use personal employee cards or cards with history on other BMs. Meta's dirty-list for payment cards persists 6-12 months — a card used on a banned account stamps every new account it's added to. Use Wise/Revolut virtual cards for disposable BMs (separate card per BM).
 
-See also: `reference/brazilian-classifier-defense.md` (Defense Playbook §5)
+See also: `references/brazilian-classifier-defense.md` (Defense Playbook §5)
 
 ---
 
@@ -127,7 +127,7 @@ For WhatsApp: verified BMs skip the document-submission step when buying pre-ver
 
 Official Business Account (blue badge): requires WABA 30+ days old, verified BM, 2FA, display name approved, notable organic media coverage. Application is via BSP only (not self-service).
 
-Full verification requirements, OBA badge eligibility and process, WhatsApp profile compliance: whatsapp skill → `reference/compliance.md`
+Full verification requirements, OBA badge eligibility and process, WhatsApp profile compliance: whatsapp skill → `references/compliance.md`
 
 ---
 
@@ -135,8 +135,8 @@ Full verification requirements, OBA badge eligibility and process, WhatsApp prof
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Brazilian classifier, niche classification, defense playbook, payment hygiene, profile survival rates, 2025-2026 trends, ban defense note | `reference/brazilian-classifier-defense.md` | Understanding why legitimate operators get flagged; defense playbook |
-| Asset isolation rules, proxy types + full provider table, antidetect browsers, BM architecture for WABA | `reference/asset-isolation.md` | Setting up isolated BM infrastructure; choosing a proxy |
-| Browser automation for Meta properties (BM management, BSP/WhatsApp dashboard reads) | `reference/browser-automation.md` | When any task on a Meta surface requires a browser — BM, BSP dashboard, WhatsApp Manager |
-| Disposable BM pipeline, setup sequence, Operator Data-Request Protocol, BM Invite Acceptance Wizard, verified-vs-lore findings, BM types table, tier system, BM sources + survival rates, number warming, chip warming, Display Name Strategy, phone number strategy, virtual numbers, burn-replace, number longevity + cold lists, ban triggers/cascade/appeal | `reference/disposable-bm-strategy.md` | Running a disposable BM end-to-end; WhatsApp dispatch warmup; number strategy; ban mechanics |
-| Business verification (WhatsApp), Official Business Account (blue badge), WhatsApp profile compliance (financial niche) | whatsapp skill → `reference/compliance.md` | Verification requirements; OBA badge eligibility and process; WABA profile language risk |
+| Brazilian classifier, niche classification, defense playbook, payment hygiene, profile survival rates, 2025-2026 trends, ban defense note | `references/brazilian-classifier-defense.md` | Understanding why legitimate operators get flagged; defense playbook |
+| Asset isolation rules, proxy types + full provider table, antidetect browsers, BM architecture for WABA | `references/asset-isolation.md` | Setting up isolated BM infrastructure; choosing a proxy |
+| Browser automation for Meta properties (BM management, BSP/WhatsApp dashboard reads) | `references/browser-automation.md` | When any task on a Meta surface requires a browser — BM, BSP dashboard, WhatsApp Manager |
+| Disposable BM pipeline, setup sequence, Operator Data-Request Protocol, BM Invite Acceptance Wizard, verified-vs-lore findings, BM types table, tier system, BM sources + survival rates, number warming, chip warming, Display Name Strategy, phone number strategy, virtual numbers, burn-replace, number longevity + cold lists, ban triggers/cascade/appeal | `references/disposable-bm-strategy.md` | Running a disposable BM end-to-end; WhatsApp dispatch warmup; number strategy; ban mechanics |
+| Business verification (WhatsApp), Official Business Account (blue badge), WhatsApp profile compliance (financial niche) | whatsapp skill → `references/compliance.md` | Verification requirements; OBA badge eligibility and process; WABA profile language risk |

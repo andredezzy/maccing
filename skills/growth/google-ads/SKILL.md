@@ -490,7 +490,7 @@ Base: `https://ads.google.com` — replace `<ocid>` with the account's Customer 
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Automating Google Ads: Scripts/API-first, the narrow UI carve-out, official-surface decision tree | `reference/automation.md` | Choosing API vs browser vs operator for Google Ads tasks; staying undetectable when browser is needed |
+| Automating Google Ads: Scripts/API-first, the narrow UI carve-out, official-surface decision tree | `references/automation.md` | Choosing API vs browser vs operator for Google Ads tasks; staying undetectable when browser is needed |
 
 ## Available Script Templates
 

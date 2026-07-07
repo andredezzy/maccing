@@ -135,7 +135,7 @@ DELETE /{TEMPLATE_ID}              # Delete
 
 ## 16. Business Profile Fields
 
-See [reference/compliance.md](reference/compliance.md) for all Business Profile field definitions, the `POST /{PHONE_NUMBER_ID}/whatsapp_business_profile` API reference, display-name approval mechanics, verification, OBA requirements, and financial-niche profile compliance.
+See [references/compliance.md](references/compliance.md) for all Business Profile field definitions, the `POST /{PHONE_NUMBER_ID}/whatsapp_business_profile` API reference, display-name approval mechanics, verification, OBA requirements, and financial-niche profile compliance.
 
 ---
 
@@ -228,17 +228,17 @@ Effective Rate: Marketing >> Utility > Authentication >> Service (free)
 
 | Intent | Reference | Use for |
 |---|---|---|
-| Message types, payloads, interactive messages, typing indicator, read receipt | [reference/message-types.md](reference/message-types.md) | All send-message JSON shapes; text, image, video, document, audio, sticker, location, contacts, reaction, buttons, lists, flows, typing |
-| Template creation, approval, pacing, limits, dispatch strategy | [reference/templates.md](reference/templates.md) | Creating templates via API, template JSON, approval process, quality states, pacing vs pausing, Template Strategy for marketing broadcasts (copy, image headers, forbidden words, opt-out) |
-| Quality KPIs, throughput tiers, daily limits, quality rating, recovery protocol, queue management | [reference/sending-and-scale.md](reference/sending-and-scale.md) | 80 MPS throughput, messaging limit tiers, quality system, quality KPIs, recovery protocol, bulk send queue code |
-| WhatsApp Flows (native in-chat forms, appointments, surveys) | [reference/flows.md](reference/flows.md) | Flow JSON schema, API endpoints, dynamic flows backend, payment flows (Brazil/India) |
-| Webhook events, payloads, signature verification, BSUID, best practices | [reference/webhooks.md](reference/webhooks.md) | Incoming message webhooks, status updates, BSUID June 2026 change, Express handler code, queue-first architecture |
-| Media upload, retrieve, download, caching | [reference/media.md](reference/media.md) | Supported formats, size limits, upload/retrieve/download API, media ID reuse strategy |
-| Node.js/TypeScript SDK, raw fetch, integration patterns | [reference/integration-sdk.md](reference/integration-sdk.md) | `@great-detail/whatsapp` SDK setup, webhook handler, raw fetch, order lifecycle/CTWA/CRM patterns |
-| Error codes, retry logic, delivery failures, 131026/131049/132015 | [reference/error-codes.md](reference/error-codes.md) | Full error code table by category, retry strategy TypeScript snippet, real-world broadcast baselines |
-| Opt-in/opt-out, LGPD (Brazil), GDPR, anti-spam, content restrictions, Business Profile compliance, display-name approval, verification, OBA, financial-niche | [reference/compliance.md](reference/compliance.md) | Consent requirements, opt-out recognition, LGPD 5-year retention, 2026 AI restriction, Business Profile API + field definitions, display-name approval, verification, OBA requirements, financial-niche restrictions |
-| Per-message pricing, free windows (CSW/CTWA), Meta rate card, cost optimization, BSP comparison table, WhatsApp Payments | [reference/pricing-and-billing.md](reference/pricing-and-billing.md) | PMP rates by market, free window rules, volume tier discounts, Meta base rate card, cost calc, full BSP comparison table, WhatsApp Payments (Brazil/India) |
-| Direct Cloud API setup, BSP migration, number quality/longevity, cold lists | [reference/waba-provisioning.md](reference/waba-provisioning.md) | Direct Cloud API setup sequence, switching BSP / migrating WABA (PIN reset, device-trust gotchas), cold list strategy |
+| Message types, payloads, interactive messages, typing indicator, read receipt | [references/message-types.md](references/message-types.md) | All send-message JSON shapes; text, image, video, document, audio, sticker, location, contacts, reaction, buttons, lists, flows, typing |
+| Template creation, approval, pacing, limits, dispatch strategy | [references/templates.md](references/templates.md) | Creating templates via API, template JSON, approval process, quality states, pacing vs pausing, Template Strategy for marketing broadcasts (copy, image headers, forbidden words, opt-out) |
+| Quality KPIs, throughput tiers, daily limits, quality rating, recovery protocol, queue management | [references/sending-and-scale.md](references/sending-and-scale.md) | 80 MPS throughput, messaging limit tiers, quality system, quality KPIs, recovery protocol, bulk send queue code |
+| WhatsApp Flows (native in-chat forms, appointments, surveys) | [references/flows.md](references/flows.md) | Flow JSON schema, API endpoints, dynamic flows backend, payment flows (Brazil/India) |
+| Webhook events, payloads, signature verification, BSUID, best practices | [references/webhooks.md](references/webhooks.md) | Incoming message webhooks, status updates, BSUID June 2026 change, Express handler code, queue-first architecture |
+| Media upload, retrieve, download, caching | [references/media.md](references/media.md) | Supported formats, size limits, upload/retrieve/download API, media ID reuse strategy |
+| Node.js/TypeScript SDK, raw fetch, integration patterns | [references/integration-sdk.md](references/integration-sdk.md) | `@great-detail/whatsapp` SDK setup, webhook handler, raw fetch, order lifecycle/CTWA/CRM patterns |
+| Error codes, retry logic, delivery failures, 131026/131049/132015 | [references/error-codes.md](references/error-codes.md) | Full error code table by category, retry strategy TypeScript snippet, real-world broadcast baselines |
+| Opt-in/opt-out, LGPD (Brazil), GDPR, anti-spam, content restrictions, Business Profile compliance, display-name approval, verification, OBA, financial-niche | [references/compliance.md](references/compliance.md) | Consent requirements, opt-out recognition, LGPD 5-year retention, 2026 AI restriction, Business Profile API + field definitions, display-name approval, verification, OBA requirements, financial-niche restrictions |
+| Per-message pricing, free windows (CSW/CTWA), Meta rate card, cost optimization, BSP comparison table, WhatsApp Payments | [references/pricing-and-billing.md](references/pricing-and-billing.md) | PMP rates by market, free window rules, volume tier discounts, Meta base rate card, cost calc, full BSP comparison table, WhatsApp Payments (Brazil/India) |
+| Direct Cloud API setup, BSP migration, number quality/longevity, cold lists | [references/waba-provisioning.md](references/waba-provisioning.md) | Direct Cloud API setup sequence, switching BSP / migrating WABA (PIN reset, device-trust gotchas), cold list strategy |
 | Disposable BM pipeline, proxy/isolation stack, BM sources, profile acquisition, phone number strategy, display name strategy | `meta` skill | Full disposable-BM strategy, proxy comparison table, BM setup sequence, Number Warming Protocol (official WABA), phone number acquisition |
 | YCloud BSP platform (campaigns, inbox, contacts, webhooks) | `ycloud` skill | BSP platform operations, campaign management, YCloud features |
 | YCloud v2 REST API (send message, list messages, webhook endpoints, pagination) | `ycloud-api` skill | YCloud API reference, pagination gotchas (`page` not `offset`), HMAC signature, campaign-send lag caveat, broadcast monitoring |
