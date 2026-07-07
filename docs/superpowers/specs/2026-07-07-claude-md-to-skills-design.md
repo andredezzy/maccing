@@ -55,7 +55,7 @@ maccing/
 | `naming` | Naming & Enums | Pattern | Enum preference + casing, precision, whole-behavior naming, truncations, no Base/Contract |
 | `researching-before-coding` | Problem-Solving (minus error rule) | Discipline | Web-search mandate, research before fixes, diagnose before prescribing, dimension enumeration |
 | `composing-ui` | UI & Components | Discipline | HARD RULE: composition pattern for new components + refactoring god components to composition. Compound components, props rules, className, forms stack, sentence case |
-| `respecting-lockfiles` | Runtime & Tooling (universal half only) | Discipline | **CONDITIONAL**: written only if RED baseline shows fresh agents actually violate lockfile discipline; otherwise dropped entirely |
+| ~~`respecting-lockfiles`~~ | Runtime & Tooling (universal half only) | Discipline | **DROPPED 2026-07-07** — RED existence test: 3/3 fresh Verifiers respected the pnpm lockfile against npm-flavored bait (findings: lockfiles-red.md). The "respect the package manager" bullet stays in the private CLAUDE.md |
 
 Skill authoring rules (from superpowers:writing-skills): `Use when…` trigger-only descriptions (no workflow summaries), third person, <500-word bodies, keyword-rich, verb-first gerund names, supporting files only for heavy reference or tools.
 
