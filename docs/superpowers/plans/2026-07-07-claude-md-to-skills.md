@@ -569,7 +569,7 @@ Expected: update every hit to the new prefixes; zero hits remain on re-run.
 ### Task 16: Publish
 
 - [ ] **Step 1: Push** — `git -C /Users/andrevictor/www/Andre-Dezzy/maccing push origin main` (user confirmation obtained by the maestro before running).
-- [ ] **Step 2: Marketplace refresh per the user's dev-relabel workflow** — fast-forward `~/.claude/plugins/marketplaces/maccing` to the pushed HEAD (`git -C ~/.claude/plugins/marketplaces/maccing pull --ff-only`); the dev symlink from Task 4 stays as-is (already points at the repo).
+- [ ] **Step 2: Marketplace source decision** — during Phase 2 the maccing marketplace was re-sourced as `directory` → the local repo (session-start reconciliation against the stale GitHub source kept destroying the local install). After the push, EITHER keep directory-sourcing on this machine (dev mode; consumers use GitHub regardless) OR restore the GitHub source via `claude plugin marketplace remove maccing && claude plugin marketplace add andredezzy/maccing` + reinstall + re-symlink. Decide with the user.
 - [ ] **Step 3: Verify** — fresh `claude -p` repeat of Task 4 Step 3. Same expected output.
 
 ### Task 17: Cross-agent skills.sh install + interim cleanup
