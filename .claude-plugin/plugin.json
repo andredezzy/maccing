@@ -24,7 +24,8 @@
     "./skills/notion/notion-api/",
     "./skills/google-workspace/google-workspace/",
     "./skills/engineering/dx/",
-    "./skills/engineering/modeling-domains/"
+    "./skills/engineering/modeling-domains/",
+    "./skills/engineering/organizing-code/"
   ],
   "commands": ["./commands/"]
 }
