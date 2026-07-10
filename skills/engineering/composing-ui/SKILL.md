@@ -1,6 +1,6 @@
 ---
 name: composing-ui
-description: 'Use when creating any UI component, adding a prop to an existing one, or touching a component that has grown large — React or any component framework — plus forms, styling, and labels. Triggers: a prop that controls layout or conditionally renders a section, a god component (prop explosion, many booleans/variants), dot-notation sub-components (Card.Header), raw inputs with hand-rolled validation, title-case labels, "just one more prop".'
+description: 'Use when creating any UI component, page, route, or layout, adding a prop to an existing one, wiring data fetching for a screen (prefetch, hydration, suspense, skeletons), or touching a component that has grown large — React or any component framework — plus forms, styling, and labels. Triggers: a prop toggling a section, a god component, dot-notation sub-components (Card.Header), raw inputs with hand-rolled validation, title-case labels, "just one more prop", a page marked "use client", a dataset passed as a prop to a client component, a route-level loading file, a page re-checking auth, a client-side re-parse of search params.'
 ---
 
 # Composing UI
@@ -32,6 +32,11 @@ Composition is a HARD RULE, not a preference: structure comes from composing nam
 | 9 | Sentence case for all labels — capitalize as a sentence, never Title Case |
 | 10 | Forms use the standard stack: schema-validated form library + resolver — never raw field state with hand-rolled validation |
 | 11 | Full component-library adoption: field, control, label, and message components together — no raw inputs with ad-hoc error display |
+| 12 | Pages are server components — `"use client"` lives at leaf parts (tables, forms), never at page level |
+| 13 | Data crosses the server/client seam through the hydrated query cache — props carry only serializable primitives, never datasets (standalone pages outside the app shell are the documented exception) |
+| 14 | HARD: prefetch args byte-match the client's query args — cache-key parity or hydration silently misses |
+| 15 | Guards live in layouts (auth, roles, inverse) — pages never re-check; request-scoped caching dedupes layout+page calls |
+| 16 | Loading is per-section Suspense + colocated mirror skeleton (values, never labels) — no route-level loading file, no whole-screen boundary; refetch keeps previous data |
 
 ## Rationalizations — all observed, all invalid
 
@@ -50,5 +55,11 @@ Composition is a HARD RULE, not a preference: structure comes from composing nam
 - The props interface has more booleans than domain values
 - You wrote "for later" about a smell you just named
 - A form with useState per field and a regex
+- A page file starting with `"use client"`
+- A fetched dataset in a prop crossing the seam
+- A `loading.tsx` or single whole-screen suspense boundary
+- Prefetch options that drifted from the client's queryOptions
+- A page re-checking auth or roles the layout already enforced
+- A second, hand-rolled search-params parse in the client
 
-References: compound-components.md (one-file compound, RSC rule, screen-level composition, worked example) · god-components.md (detection signals + the decompose-on-touch refactor, before/after) · forms.md (the schema stack, resolver, full library adoption).
+References: compound-components.md (one-file compound, RSC rule, screen-level composition, worked example) · god-components.md (detection signals + the decompose-on-touch refactor, before/after) · forms.md (the schema stack, resolver, full library adoption) · server-pages.md (page recipe, the seam, cache-key parity, loading granularity, layout guards).
