@@ -1,6 +1,4 @@
-# maccing-growth
-
-> v1.21.1
+# growth
 
 Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) and owned messaging (WhatsApp Business Platform / Cloud API) — strategy, metrics, and platform references.
 
@@ -12,7 +10,7 @@ Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) an
 
 ## Skills
 
-Each skill is a thin SKILL.md (routing table) over on-demand `reference/` files (progressive disclosure). Skills are grouped on disk into platform/provider folders (registered via the `skills` array in `plugin.json`); commands stay flat (`maccing-growth:<skill>`).
+Each skill is a thin SKILL.md (routing table) over on-demand `reference/` files (progressive disclosure). Skills are grouped on disk into platform/provider folders (registered via the `skills` array in `plugin.json`); skill names stay flat (`maccing:<skill>`).
 
 ```
 skills/

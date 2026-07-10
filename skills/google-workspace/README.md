@@ -1,4 +1,4 @@
-# google-workspace plugin · v0.1.2
+# google-workspace
 
 A self-hosted Google Workspace MCP server for Claude Code, built on [`taylorwilsdon/google_workspace_mcp`](https://github.com/taylorwilsdon/google_workspace_mcp) (PyPI package pinned to `workspace-mcp==1.21.2`). Runs as a per-session stdio process — no daemon, no daily re-authorization. An alternative to the official Claude Google connector that keeps you on your own OAuth client and Google account.
 
@@ -59,7 +59,7 @@ Create a stable per-user secrets file at `~/.config/maccing/google-workspace.env
 
 ```bash
 mkdir -p ~/.config/maccing
-cp mcp/.env ~/.config/maccing/google-workspace.env
+cp mcp/google-workspace/.env ~/.config/maccing/google-workspace.env
 chmod 600 ~/.config/maccing/google-workspace.env
 ```
 
@@ -71,13 +71,13 @@ export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
 export USER_GOOGLE_EMAIL=you@gmail.com
 ```
 
-The launcher (`mcp/start.sh`) loads that stable file first, then `mcp/.env.local` (gitignored dev override — wins because it's sourced last; `cp mcp/.env mcp/.env.local` for per-project switching), then any inherited env. Override the path with `MACCING_WORKSPACE_ENV`. `mcp/.env` is the committed template; real secrets are never committed.
+The launcher (`mcp/google-workspace/start.sh`) loads that stable file first, then `mcp/google-workspace/.env.local` (gitignored dev override — wins because it's sourced last; `cp mcp/google-workspace/.env mcp/google-workspace/.env.local` for per-project switching), then any inherited env. Override the path with `MACCING_WORKSPACE_ENV`. `mcp/google-workspace/.env` is the committed template; real secrets are never committed.
 
 ---
 
 ## Install
 
-This plugin ships as part of the [`maccing`](https://github.com/andredezzy/maccing) Claude Code plugin marketplace. Once the marketplace is configured in your Claude Code setup, enable the plugin. The MCP server starts automatically per session via `mcp/start.sh` (registered as the `workspace` stdio server in `.mcp.json`).
+This server ships as part of the [`maccing`](https://github.com/andredezzy/maccing) Claude Code plugin (`/plugin marketplace add andredezzy/maccing`, then `/plugin install maccing@maccing`). The MCP server starts automatically per session via `mcp/google-workspace/start.sh` (registered as the `workspace` stdio server in `.mcp.json`).
 
 Workspace tools are exposed to Claude under the namespace:
 
@@ -109,7 +109,7 @@ The first time Claude calls any Workspace tool in a new session, the MCP server 
 2. After you grant consent, Google redirects to `http://localhost:8000/oauth2callback`.
 3. The server exchanges the authorization code for tokens and saves the encrypted credentials to `~/.google_workspace_mcp/credentials/` (file permissions `0600`).
 
-The OAuth callback page is a minimalist, Midday-style design with full light/dark mode support (via `prefers-color-scheme`), WCAG AA contrast, and no external assets. It is rendered by `mcp/auth_pages.py` and patched into the upstream server at launch time by `mcp/launch.py` (a monkeypatch shim that runs before `workspace-mcp`'s server modules are imported). Preview renders live in `mcp/previews/`.
+The OAuth callback page is a minimalist, Midday-style design with full light/dark mode support (via `prefers-color-scheme`), WCAG AA contrast, and no external assets. It is rendered by `mcp/google-workspace/auth_pages.py` and patched into the upstream server at launch time by `mcp/google-workspace/launch.py` (a monkeypatch shim that runs before `workspace-mcp`'s server modules are imported). Preview renders live in `mcp/google-workspace/previews/`.
 
 Subsequent calls in the same session — and future sessions — reuse the cached tokens. Tokens are refreshed automatically against Google; you will not be prompted again unless you explicitly revoke access.
 
