@@ -1,6 +1,6 @@
 ---
 name: researching-before-coding
-description: 'Use when about to write code against any external library, API, framework, or tool; when hitting an error, incompatibility, or unfamiliar technology; before proposing a fix or presenting a design. Especially when confident from memory, under time pressure, or when the API "is well known".'
+description: 'Use when about to write code against any external library, API, framework, or tool; when hitting an error, incompatibility, or unfamiliar technology; when introducing or naming a mechanism that solves a recognized problem (a limiter, pool, queue, retry/isolation primitive) even when its code is pure internal logic; before proposing a fix or presenting a design. Especially when confident from memory, under time pressure, when the API "is well known", or when a mechanism "is just internal logic".'
 ---
 
 # Researching Before Coding
@@ -14,7 +14,7 @@ Training data is stale: APIs change, packages ship breaking updates, docs move. 
 - Any code touching an external library, API, framework, or CLI — before writing it
 - Any error, incompatibility, or unfamiliar technology — before attempting a fix
 - Any multi-dimension design — before presenting it
-- When NOT: pure internal logic with no external surface
+- When NOT: inline glue with no external API surface and no mechanism you're introducing and naming
 
 ## Quick reference
 
@@ -24,6 +24,7 @@ Training data is stale: APIs change, packages ship breaking updates, docs move. 
 | 2 | Research before fixing: understand WHY a working approach works; one researched fix beats ten blind attempts — no guess-test-fail loops |
 | 3 | Diagnose before prescribing: read the error, get the exact message, search it, find the root cause — a fix that misses the root cause produces the next failure |
 | 4 | Enumerate every dimension before presenting a design: each axis marked specified / not-applicable-with-reason / user-deferred; verify the build against the design dimension by dimension |
+| 5 | The trade's name for a mechanism you introduce is an external surface even when its code is pure internal logic — before inventing a name, research the established term (pattern catalogs, the ecosystem's libraries) and name the source |
 
 ## The verify-first recipe
 

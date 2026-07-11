@@ -1,6 +1,6 @@
 ---
 name: naming
-description: 'Use when naming anything — files, functions, types, variables, enum members — or choosing between a boolean, string union, and enum for a set of states. Triggers: a status/state field, vague or abbreviated names, single-letter values, Base-prefixed classes, Contract-suffixed interfaces, casing questions, PascalCase filenames, a name that covers only part of what the function does.'
+description: 'Use when naming anything — files, functions, types, variables, enum members — or choosing between a boolean, string union, and enum for a set of states. Triggers: a status/state field, vague or abbreviated names, single-letter values, Base-prefixed classes, Contract-suffixed interfaces, casing questions, PascalCase filenames, a name that covers only part of what the function does, a mechanism or pattern you invented a name for (a *Limiter/*Pool/*Gate) when the trade may already name it.'
 ---
 
 # Naming
@@ -21,7 +21,7 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 | 1 | Closed set of states → enum: 3+ states always, 2 when the names carry meaning; a plain boolean stays right for one unambiguous flag |
 | 2 | A value crossing a wire/serialization boundary keeps the external contract's exact casing as a string union instead of an enum |
 | 3 | Names are precise — never a vague gesture at the general area |
-| 4 | Name the whole behavior, not the salient sub-step; prefer the established domain term; avoid sibling collisions |
+| 4 | Name the whole behavior, not the salient sub-step; prefer the established domain term — and for a mechanism you introduce, retrieve that term first: ask whether the trade already names it, research when unsure (researching-before-coding); avoid sibling collisions |
 | 5 | Spell out truncations that cost decoding; no bare single letters; genuinely universal short forms (id, URL, dx) are exempt |
 | 6 | No manufactured verbosity — drop suffixes that add no meaning; if removing a word loses nothing, remove it |
 | 7 | Dot-suffixes in filenames only for framework kinds (service, controller, test…); every other file is the kebab-case of its main export — `user-not-found-error.ts`, never `UserNotFoundError.ts` |
@@ -41,6 +41,18 @@ enum SubscriptionStatus { PENDING = "PENDING", ACTIVE = "ACTIVE", SUSPENDED = "S
 
 // ✅ Wire-boundary exception — the API's casing is the contract
 type StripeSubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
+```
+
+## The mechanism-name judgment — the observed failure
+
+When isolating each dependency behind its own concurrency budget, the reflex is to name the mechanism for its parts — `ConcurrencyLimiter`, `Limiter`, a `gate` — each honest about the code and silent about the trade, which calls this a **bulkhead**. The tell is a mechanism you are about to name from scratch: retrieve the trade's term first (research when unsure), because you cannot prefer an established name you never went and got.
+
+```ts
+// ❌ Named from its parts — the trade term never retrieved (all three observed)
+class ConcurrencyLimiter { /* per-dependency slots */ }   // also seen: class Limiter, a `gate`
+
+// ✅ Named what the trade calls it
+class Bulkhead { /* per-dependency slots */ }
 ```
 
 ## Common mistakes
