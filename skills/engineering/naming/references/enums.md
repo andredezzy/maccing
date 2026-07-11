@@ -5,7 +5,7 @@ A boolean cannot express a trajectory of more than two states, and a string unio
 ## When each shape is right
 
 - **Plain boolean** — one unambiguous two-state flag (`isEnabled`). The moment a second flag about the same axis appears, you have states, not flags.
-- **Enum** — any internal closed set of 3+ states, or exactly 2 where the names themselves carry meaning. Keys AND values UPPERCASE.
+- **Enum** — any internal closed set of 3+ states, or exactly 2 where the names themselves carry meaning.
 - **String union in the wire's casing** — a value that crosses a serialization or API boundary where the literal must match the external contract exactly. The external casing wins; keep it a union and name the type after the contract it mirrors.
 
 ## The exhaustiveness payoff
