@@ -19,7 +19,7 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 | # | Rule |
 |---|---|
 | 1 | Closed set of states → enum: 3+ states always, 2 when the names carry meaning; a plain boolean stays right for one unambiguous flag |
-| 2 | Enum keys AND values UPPERCASE; a value crossing a wire/serialization boundary keeps the external contract's exact casing as a string union instead |
+| 2 | A value crossing a wire/serialization boundary keeps the external contract's exact casing as a string union instead of an enum |
 | 3 | Names are precise — never a vague gesture at the general area |
 | 4 | Name the whole behavior, not the salient sub-step; prefer the established domain term; avoid sibling collisions |
 | 5 | Spell out truncations that cost decoding; no bare single letters; genuinely universal short forms (id, URL, dx) are exempt |
@@ -30,10 +30,10 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 
 ## The state-field judgment — the observed failure
 
-Replacing `isActive`/`isPending` with a `status` field is the right move — but a lowercase string union is the halfway house. A closed set of 3+ states is an enum, UPPERCASE on both sides: autocomplete at the definition, exhaustive switches, one place to add a state. Reach for the union ONLY when the values cross a wire boundary that dictates their exact casing — then the external contract wins and you say so.
+Replacing `isActive`/`isPending` with a `status` field is the right move — but a bare string union is the halfway house. A closed set of 3+ states is an enum: autocomplete at the definition, exhaustive switches, one place to add a state. Reach for the union ONLY when the values cross a wire boundary that dictates their exact casing — then the external contract wins and you say so.
 
 ```ts
-// ❌ Halfway: no exhaustiveness anchor, casing drifts into string-land
+// ❌ Halfway: no exhaustiveness anchor
 type SubscriptionStatus = "pending" | "active" | "suspended" | "inactive";
 
 // ✅ Internal closed set
