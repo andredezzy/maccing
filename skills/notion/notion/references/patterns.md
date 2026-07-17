@@ -6,7 +6,7 @@ Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MAN
 
 ## Useful patterns
 
-**Query rows (reads):** `read_database(database_id, "table", filter={…}, sorts=[…])` — `filter`/`sorts` are the same Notion objects as below, passed verbatim. For counts/sums/grouped totals, use `exhaust_all=true, format="summary", group_by=<prop>` — server-side, no manual loop. For a single row/page, `read_page(page_id, "markdown")` returns its properties (relations resolved) + body; use `read_page(page_id, "outline")` when you need block ids for an edit. Drop to the raw `/query` endpoint when you need a row's **page id** (each result's `.id`, e.g. to write a relation) or other raw response fields the readers don't expose:
+**Query rows (reads):** `read_database(database_id, "table", filter={…}, sorts=[…])` — `filter`/`sorts` are the same Notion objects as below, passed verbatim. For counts/sums/grouped totals, use `exhaust_all=true, format="summary", group_by=<prop>` — server-side, no manual loop. For a row's **page id**, add `include_ids=true` (prepends an `_id` column). For a single row/page, `read_page(page_id, "markdown")` returns its properties (relations resolved) + body; use `read_page(page_id, "outline")` when you need block ids for an edit. Drop to the raw `/query` endpoint only for raw response fields the readers don't expose:
 ```json
 POST /v1/data_sources/{id}/query
 {
@@ -23,7 +23,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 # IDs may be URL-encoded — urllib.parse.unquote(id) to normalize
 ```
 
-**Read view config:** every row-format `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) appends every view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, `filter`, `quick_filters`) with property ids resolved to names — no flag, on every format. Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views.
+**Read view config:** every row-format `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) appends a `# Views` section — `views:'summary'` (default) is one line per view; **`views:'full'`** dumps each view's complete configuration (cover/preview, `cover_size`, `cover_aspect`, `card_layout`, `group_by`, chart axes, visible/hidden props, sorts, `filter`, `quick_filters`) with property ids resolved to names. Raw `GET /v1/views` is only for driving it by hand; `POST`/`PATCH /v1/views` for writing views — fetch `views:'full'` first to see the current config before a PATCH.
 
 **Extract data_source_id from a database URL:**
 ```python

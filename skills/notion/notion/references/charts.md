@@ -6,7 +6,7 @@ Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MAN
 
 - **Free plan = 1 chart/workspace** (hard billing wall, not configurable; exact slot reclaim behavior after deletion is ambiguous)
 - **Y-axis**: plain `number` properties and scalar formulas work; rollups, buttons, unique IDs, and files/media are not supported
-  - Workaround if plain number required: add a plain number property; get each row's `.id` and source value in one raw `POST /v1/data_sources/{id}/query` (the readers don't expose page ids), then `PATCH /v1/pages/{id}` for each, keeping it synced
+  - Workaround if plain number required: add a plain number property; get each row's `.id` and source value in one `read_database(…, include_ids=true)` call, then `PATCH /v1/pages/{id}` for each, keeping it synced
 - **X-axis** type `'formula'` → 400 on donut charts specifically (the donut x_axis allowed list excludes formula); `type: 'relation'` → 400 on donut
   - Workaround: mirror relation name into a `select` property via API, use `x_axis.type: 'select'`
 - Chart display limits: max 200 groups and 50 subgroups visible simultaneously
