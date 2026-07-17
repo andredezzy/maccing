@@ -1,6 +1,6 @@
 # Authoring AGENTS.md playbooks on Notion
 
-Part of the `notion-api` skill — loaded on demand. The SKILL.md MANDATORY rules still apply (sweep, pagination, match-conventions). The sweep rule covers **reading & obeying** AGENTS.md pages; **this file is the complement — how to WRITE and EDIT them well.**
+Part of the `notion` skill — loaded on demand. The SKILL.md MANDATORY rules still apply (sweep, pagination, match-conventions). The sweep rule covers **reading & obeying** AGENTS.md pages; **this file is the complement — how to WRITE and EDIT them well.**
 
 **Core principle:** an AGENTS.md page **is a skill for future agents.** So authoring one **is test-driven** — you do not know it works until a *fresh* agent, given only that page plus a task, actually obeys it. This mirrors `superpowers:writing-skills`, adapted to Notion playbook pages.
 

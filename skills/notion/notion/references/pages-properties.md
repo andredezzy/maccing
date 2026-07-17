@@ -1,6 +1,6 @@
 # Pages, properties, icons & covers
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** prefer `read_page` / `read_database` (SKILL.md "MCP tools — pick by job") — they resolve relations→titles and flatten rollups/formulas to scalars. The raw shapes here are for **writes** and for processing a `request` response (e.g. a write's returned object).
 

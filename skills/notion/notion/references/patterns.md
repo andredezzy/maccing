@@ -1,6 +1,6 @@
 # Useful patterns & production architecture
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** start with the mandatory `read_agents_md` sweep, then `search` to resolve a name→id, `read_database` for querying rows (or `read_page` for a single row), and `describe` for a data source's metadata header + column schema (+ column icons) or a page's metadata — see SKILL.md "MCP tools — pick by job". The row readers take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes and what the readers don't cover.
 

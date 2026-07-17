@@ -1,6 +1,6 @@
 # Visual design, taste & aesthetics — building beautiful Notion pages
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. This is the **taste layer**: *which* visual choice, *when*, and *why*. The **mechanics** (the exact API fields to set a cover/icon/gallery) live in `pages-properties.md` (page cover/icon), `gallery-view.md` (gallery config), `icon-names.md` (the named-icon catalog), and `blocks.md` (block layout/spacing) — this file is the judgment that drives them.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. This is the **taste layer**: *which* visual choice, *when*, and *why*. The **mechanics** (the exact API fields to set a cover/icon/gallery) live in `pages-properties.md` (page cover/icon), `gallery-view.md` (gallery config), `icon-names.md` (the named-icon catalog), and `blocks.md` (block layout/spacing) — this file is the judgment that drives them.
 
 **Always defer to the workspace's own house style first** — infer it from the root `AGENTS.md` or a bounded live sample (cross-ref SKILL.md "match the workspace's conventions"). These are house-agnostic *defaults* that fill the gaps the house style doesn't specify; they make a page look hand-crafted, not generated. Visual choices are part of the **pre-build self-check** (SKILL.md → *design the whole object before creating it*): decide theme/covers/sizes deliberately, then **act and report** — no approval gate; the verified `render_mockup` after the write is how the user reviews.
 

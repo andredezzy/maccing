@@ -1,6 +1,6 @@
 # Blocks, positioning & the Markdown content API
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** to read a page's content use `read_page(page_id, "markdown")`; to inspect its block tree (e.g. find a block id for `after_block`) use `read_page(page_id, "outline")` — both handle pagination and unfetchable-block recovery server-side. The raw block/markdown endpoints here are for **writes/edits** and for what the readers don't render.
 

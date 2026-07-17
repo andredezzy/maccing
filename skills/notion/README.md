@@ -12,12 +12,13 @@ Notion API engineering reference for coding agents — the low-level details for
 
 | Skill | Purpose |
 |-------|---------|
-| notion-api | Notion API/MCP reference: a **MANDATORY ancestral-`AGENTS.md` sweep** before any operation, `data_sources` model & versions, auth/MCP pattern, core endpoints, property-creation shapes, reading property values, pages, Notion-flavored Markdown, blocks & positioning, Views API (create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility), **view filtering — complete date-condition vocabulary + relative strings, the exact current-calendar-month recipe, rollup-filter wrapper**, **formula filterability forensics (UI-created vs API-created, type-ambiguous branches, the self-relation rollup-wrap workaround — all live-verified)**, charts, rollups, relations, pt-BR number formatting via arithmetic, and production architecture patterns. Triggers on building/editing databases, formulas, rollups, relations, views, charts, page blocks, or hitting Notion API errors. |
+| notion | Notion API/MCP reference: a **MANDATORY ancestral-`AGENTS.md` sweep** before any operation, `data_sources` model & versions, auth/MCP pattern, core endpoints, property-creation shapes, reading property values, pages, Notion-flavored Markdown, blocks & positioning, Views API (create/update/delete, linked views, board/calendar/timeline/list/map/form, column visibility), **view filtering — complete date-condition vocabulary + relative strings, the exact current-calendar-month recipe, rollup-filter wrapper**, **formula filterability forensics (UI-created vs API-created, type-ambiguous branches, the self-relation rollup-wrap workaround — all live-verified)**, charts, rollups, relations, pt-BR number formatting via arithmetic, and production architecture patterns. Triggers on building/editing databases, formulas, rollups, relations, views, charts, page blocks, or hitting Notion API errors. |
 
-### Reference files (`notion-api/references/`, loaded on demand)
+### Reference files (`notion/references/`, loaded on demand)
 
 | File | Covers |
 |------|--------|
+| `api.md` | The raw REST surface — API base/version, the `data_sources` model & 2026-03-11 breaking changes, auth/MCP pattern, core endpoint paths, payload limits |
 | `pages-properties.md` | Property shapes, reading values, page/DB icons & covers |
 | `icon-names.md` | Built-in icon name catalog (885 verified names) |
 | `blocks.md` | Blocks, positioning, the reorder workaround, Markdown content API |
@@ -33,7 +34,7 @@ Notion API engineering reference for coding agents — the low-level details for
 
 ## MCP server
 
-The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/notion/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: high-level **readers** — `read_agents_md`, `search` (name→id), `read_page`, `read_database`, `describe`; **writers** — `upsert_property` (a database column + its icon, or a page value) and `order_properties` (re-order properties across views and/or the canonical order); **`render_mockup`** — the canonical ASCII mockup renderer for any page/database/blocks; plus two escape hatches: **`request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); and **`private_request`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `notion-api/references/private-api.md`).
+The plugin bundles a [Bun](https://bun.sh) MCP server (`mcp/notion/src/server.ts`), built on the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and registered via `.mcp.json` as the `notion` server. Tools: high-level **readers** — `read_agents_md`, `search` (name→id), `read_page`, `read_database`, `describe`; **writers** — `upsert_property` (a database column + its icon, or a page value) and `order_properties` (re-order properties across views and/or the canonical order); **`render_mockup`** — the canonical ASCII mockup renderer for any page/database/blocks; plus two escape hatches: **`request`** — a full-control passthrough to `https://api.notion.com` that always sends `Notion-Version: 2026-03-11` (views, data sources, databases, pages, blocks, search, comments, file uploads); and **`private_request`** — the unofficial private app API for UI-only features the public API can't do (e.g. database property/column icons; see `notion/references/private-api.md`).
 
 **Setup — provide a token** (a Notion internal-integration Personal Access Token from notion.so/profile/integrations → Personal access tokens). Create `~/.config/maccing/notion.env` (chmod 600, outside the repo and cache — so it survives plugin version bumps):
 
@@ -49,4 +50,4 @@ The launcher (`mcp/notion/start.sh`) loads that stable file first, then `mcp/not
 
 ## Relationship to the official Notion plugin
 
-This skill is the **complementary low-level reference**. For high-level workflows in Claude Code, also install the official [`makenotion/claude-code-notion-plugin`](https://github.com/makenotion/claude-code-notion-plugin) and use it for Knowledge Capture, Meeting Intelligence, Research Documentation, and Spec-to-Implementation. Reach for `notion-api` when you're engineering databases/formulas/views directly against the API or debugging its errors.
+This skill is the **complementary low-level reference**. For high-level workflows in Claude Code, also install the official [`makenotion/claude-code-notion-plugin`](https://github.com/makenotion/claude-code-notion-plugin) and use it for Knowledge Capture, Meeting Intelligence, Research Documentation, and Spec-to-Implementation. Reach for `notion` when you're engineering databases/formulas/views directly against the API or debugging its errors.
