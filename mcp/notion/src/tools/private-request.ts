@@ -2,7 +2,9 @@
 // Open/closed: any UI-only capability works by passing the right operations — no new server code.
 
 import { z } from "zod";
+import type { CallToolResult } from "#sdk/types";
 import { privateCall, privateConfig, saveTransactions } from "../notion/private-client";
+import { pickPaths } from "../pick";
 import { err, errorMessage, type ToolModule } from "../tool";
 
 // api/v3 endpoints are camelCase identifiers (getSpaces, saveTransactions, …). The allowlist
@@ -20,6 +22,15 @@ function hasCommitOp(operations: Operation[]): boolean {
   return last?.command === "update" && last?.pointer?.table === "collection";
 }
 
+/** Serialize a { status, ok, body } response, projecting `body` through `pick` when given. */
+function toResult(response: { status: number; ok: boolean; body: unknown }, pick?: string[]): CallToolResult {
+  const body = pick && pick.length > 0 ? pickPaths(response.body, pick) : response.body;
+  return {
+    content: [{ type: "text", text: JSON.stringify({ status: response.status, ok: response.ok, body }, null, 2) }],
+    isError: !response.ok,
+  };
+}
+
 export const privateRequest: ToolModule = {
   name: "private_request",
   config: {
@@ -31,7 +42,9 @@ export const privateRequest: ToolModule = {
       "`request` genuinely can't, for the user's own workspace, with approval. For `saveTransactions` " +
       "pass `operations` (auto-wrapped in the transaction envelope; the active-user header is injected) — and " +
       "include a trailing collection `update` commit op or the change silently no-ops (enforced here). Discover " +
-      "operation formats via DevTools capture; full guide in the skill's references/private-api.md. Returns { status, ok, body }.",
+      "operation formats via DevTools capture; full guide in the skill's references/private-api.md. Returns " +
+      "{ status, ok, body }. Pass `pick` to shrink a large body (e.g. a getRecordValues recordMap) down to " +
+      "just the fields you need.",
     annotations: { title: "Notion private app API (unofficial)", openWorldHint: true, destructiveHint: true },
     inputSchema: {
       endpoint: z
@@ -47,6 +60,14 @@ export const privateRequest: ToolModule = {
         .record(z.string(), z.unknown())
         .optional()
         .describe("Raw request body for non-saveTransactions endpoints (e.g. getRecordValues { requests:[…] })."),
+      pick: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Dot/bracket paths to project from the response body, e.g. " +
+            "'recordMap.collection.<uuid>.value.value.schema' ('[]' maps over an array). When set, body " +
+            "becomes { '<path>': value | null } per path instead of the full body.",
+        ),
     },
   },
 
@@ -61,6 +82,8 @@ export const privateRequest: ToolModule = {
       return err(`Invalid endpoint "${endpoint}" — must be a camelCase api/v3 identifier (e.g. saveTransactions).`);
     }
 
+    const pick = Array.isArray(args.pick) ? (args.pick as string[]) : undefined;
+
     try {
       if (endpoint === "saveTransactions" && Array.isArray(args.operations)) {
         const operations = args.operations as Operation[];
@@ -71,11 +94,11 @@ export const privateRequest: ToolModule = {
           );
         }
         const response = await saveTransactions(operations);
-        return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }], isError: !response.ok };
+        return toResult(response, pick);
       }
 
       const response = await privateCall(endpoint, args.body ?? {});
-      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }], isError: !response.ok };
+      return toResult(response, pick);
     } catch (error) {
       return err(errorMessage(error));
     }

@@ -9,17 +9,18 @@ import { type FlattenedProperty, flattenProperty, type NotionPropertyValue } fro
 import { resolveRelations } from "../readers/resolve-relations";
 import { type FlatRow, formatRows, type RowFormat } from "../readers/rows";
 import { databaseToDataSourceId, formatSchema, type PropertiesMap } from "../readers/schema";
-import { buildIdToName, fetchViews, formatViews } from "../readers/views";
+import { buildIdToName, fetchViews, formatViews, type ViewsMode } from "../readers/views";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary"] as const;
+const VIEWS_MODES = ["summary", "full"] as const;
 
 interface DataSourceSchema {
   properties?: PropertiesMap;
 }
 
 interface QueryResponse {
-  results?: { properties?: Record<string, NotionPropertyValue> }[];
+  results?: { id?: string; properties?: Record<string, NotionPropertyValue> }[];
   has_more?: boolean;
   next_cursor?: string | null;
 }
@@ -55,10 +56,12 @@ export const readDatabase: ToolModule = {
       "totals, e.g. value-by-category — pass group_by. Optional filter/sorts (Notion objects, verbatim), fields " +
       "(project to these property names), page_size+cursor for paging, or exhaust_all=true to pull every row " +
       "(use for counts/sums per the pagination Iron Law). The output ALSO appends a # Schema section (every " +
-      "column as name · type · detail, formula bodies elided) and every view with its COMPLETE config — type, " +
-      "sorts, filter, quick_filters, and all visual props (covers/preview, card size, aspect, layout, group_by, " +
-      "chart axes, visible/hidden columns) — with property ids resolved to names. Schema + views always included. " +
-      "For column ICONS, or to describe a page/data source on its own, use the `describe` tool.",
+      "column as name · type · detail, formula bodies elided) and a # Views section — views (default " +
+      "summary): one line per view (name · type · container · filter/sorts digest); full: complete config " +
+      "(type, sorts, filter, quick_filters, all visual props) with property ids resolved to names — pass " +
+      'views:"full" before any view PATCH. Schema + views always included. include_ids=true prepends each ' +
+      "row's page id as an _id column (table/tsv/kv only). For column ICONS, or to describe a page/data " +
+      "source on its own, use the `describe` tool.",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       database_id: z.string().describe("The database id (or a data_source_id)."),
@@ -70,6 +73,14 @@ export const readDatabase: ToolModule = {
       cursor: z.string().optional().describe("Opaque next_cursor from a prior call."),
       exhaust_all: z.boolean().optional().describe("Loop to the end and return every row (for counts/sums)."),
       group_by: z.string().optional().describe("summary only: the property to group by."),
+      views: z
+        .enum(VIEWS_MODES)
+        .optional()
+        .describe("summary (default) = one digest line per view; full = complete config dump."),
+      include_ids: z
+        .boolean()
+        .optional()
+        .describe("Prepend each row's page id as an _id column (default false; table/tsv/kv only)."),
     },
   },
 
@@ -82,6 +93,8 @@ export const readDatabase: ToolModule = {
       return err("database_id must be a UUID.");
     }
     const format = args.format as (typeof FORMATS)[number];
+    const viewsMode: ViewsMode = args.views === "full" ? "full" : "summary";
+    const includeIds = args.include_ids === true;
 
     try {
       const dataSourceId = await resolveDataSourceId(databaseId);
@@ -107,7 +120,7 @@ export const readDatabase: ToolModule = {
 
       const pageSize = typeof args.page_size === "number" ? Math.min(Math.max(args.page_size, 1), 100) : 20;
       const exhaustAll = args.exhaust_all === true;
-      const rawRows: { properties?: Record<string, NotionPropertyValue> }[] = [];
+      const rawRows: { id?: string; properties?: Record<string, NotionPropertyValue> }[] = [];
       let cursor = typeof args.cursor === "string" ? args.cursor : undefined;
 
       do {
@@ -142,8 +155,16 @@ export const readDatabase: ToolModule = {
       const relationIds = collectRelationIds(flattenedRows);
       const titles = relationIds.length > 0 ? await resolveRelations(relationIds) : new Map<string, string>();
 
-      const rows: FlatRow[] = flattenedRows.map((flatRow) => {
+      // include_ids prepends the page id as its own column — only meaningful for the row-oriented
+      // formats; "summary" groups/sums rows and has no per-row line to prepend an id to.
+      const showIds = includeIds && rowFormat !== "summary";
+      const displayColumns = showIds ? ["_id", ...columns] : columns;
+
+      const rows: FlatRow[] = flattenedRows.map((flatRow, index) => {
         const row: FlatRow = {};
+        if (showIds) {
+          row._id = rawRows[index]?.id ?? null;
+        }
         for (const column of columns) {
           const flattenedProperty = flatRow[column];
           row[column] = flattenedProperty.relationIds
@@ -155,12 +176,12 @@ export const readDatabase: ToolModule = {
 
       const rendered = formatRows(
         rows,
-        columns,
+        displayColumns,
         rowFormat,
         typeof args.group_by === "string" ? args.group_by : undefined,
       );
       const paginationSuffix = cursor ? ` | next_cursor: ${cursor}` : exhaustAll ? "" : " | next_cursor: null";
-      const rowsSummary = `\n# ${rows.length} rows${paginationSuffix} | fields: [${columns.join(", ")}]`;
+      const rowsSummary = `\n# ${rows.length} rows${paginationSuffix} | fields: [${displayColumns.join(", ")}]`;
 
       // Schema + views are always appended — every read_database dumps the database's full structure
       // (column definitions, formula bodies elided) and view design. The schema is free here: this
@@ -169,7 +190,7 @@ export const readDatabase: ToolModule = {
       const schemaSection = `\n\n${formatSchema(schema)}`;
 
       const views = await fetchViews(dataSourceId);
-      const viewsSection = `\n\n${formatViews(views, buildIdToName(schema))}`;
+      const viewsSection = `\n\n${formatViews(views, buildIdToName(schema), viewsMode)}`;
 
       return ok(rendered + rowsSummary + schemaSection + viewsSection);
     } catch (error) {
