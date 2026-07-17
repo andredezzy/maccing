@@ -1,6 +1,6 @@
 # Relations & rollups
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **This is the single home for relations** — property shape, create/convert, dual-sync & the one-sided desync trap, the ~25-item read cap, reading a relation in a formula (list-ops + the latest-value flagship), auto-linking new rows, and rollups (which exist only *over* a relation). Two pointers out: the raw property-object catalog → `pages-properties.md`; authoring a relation-read `formula2` AST via the private API → `private-api.md` → "Relation-read encoding".
 

@@ -66,7 +66,7 @@ npx skills add andredezzy/maccing -g
 | growth | whatsapp | WhatsApp Business Platform / Cloud API reference |
 | growth | ycloud | YCloud BSP operations |
 | growth | ycloud-api | YCloud v2 REST API reference |
-| notion | notion-api | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
+| notion | notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
 | google-workspace | google-workspace | Google Workspace (Calendar/Gmail/Drive/…) via the bundled `workspace` MCP — setup, OAuth, account isolation, tool reference |
 
 Every engineering skill ships only after passing baseline testing against fresh agents (RED→GREEN, per `superpowers:writing-skills`).

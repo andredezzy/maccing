@@ -8,6 +8,7 @@ The public REST API (`api.notion.com/v1`) covers most things — **use it first,
 > - **Aggressively rate-limited / bot-protected** — rapid calls get an HTML bot page or silently no-op.
 > - Use only when the public API genuinely can't do it. Act directly and report the result (SKILL.md act-and-report, no approval gate). Prefer the public API; fall back to private api/v3 before ever suggesting a manual UI action — only if both API paths are genuinely impossible, explain why.
 > - The session cookie **rotates** (logging out invalidates it). Store it ONLY in a gitignored secrets file; never echo, log, or commit it.
+> - **When the cookie has EXPIRED (`getSpaces failed (status 401)` on a token that previously worked): STOP and ASK the user for a fresh `.app.notion.com` `token_v2`.** The credential is the user's to hand over — **NEVER fetch it yourself** from their browser (no browser automation, no DevTools scraping, no profile files, no side channel) without their explicit permission for that specific act. The "never punt to the user" rule governs *Notion operations*, not *credentials* — an expired token is not a blocker you clear, it's a request you make. After the user updates the env file, the MCP server must restart to read it (`/reload-plugins` or a new session) — tell them that, then wait.
 
 ## Access — through the bundled `notion` MCP ONLY (never a standalone script)
 The private API is reached exclusively via two tools on the self-hosted `notion` MCP server, so the session cookie stays inside one trusted process (`NOTION_TOKEN_V2` + `NOTION_SPACE_ID` in `~/.config/maccing/notion.env`, or the per-project `mcp/.env.local` dev override) and is never handled by agent shell:
@@ -187,7 +188,7 @@ This is how the property-icon and "This month" formats were found. To learn the 
 ## Gotchas (all live-verified)
 | Symptom | Cause / fix |
 |---|---|
-| `401 "Could not validate token"` | Wrong cookie — use the **`.app.notion.com`** (broad-domain) `token_v2`, not the exact-host one. |
+| `401 "Could not validate token"` / `getSpaces failed (status 401)` | Wrong cookie — use the **`.app.notion.com`** (broad-domain) `token_v2`, not the exact-host one. If the stored token previously worked, it has **EXPIRED/rotated** → ASK the user for a fresh one + an MCP restart (see the auth warning at the top); never harvest it from their browser. |
 | `400 "User does not have edit access"` | `x-notion-active-user-header` is the wrong account — pick the one whose `getSpaces.space` contains the target space. |
 | `200 {}` but change didn't persist | Missing the trailing `update` commit op, OR an invalid `/icons/<file>` name (silent no-op). |
 | `getRecordValues` returns HTML / reads flaky | Missing `x-notion-active-user-header`, or **rate-limited** — the client auto-paces + adaptively backs off (see Access), so just retry the tool; don't add your own sleeps. |

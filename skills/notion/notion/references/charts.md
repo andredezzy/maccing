@@ -1,6 +1,6 @@
 # Charts — limits & gotchas
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** use `read_database` (`exhaust_all=true`) to enumerate or sum rows for chart data; every `read_database(database_id, format)` call (`table`/`kv`/`tsv`/`summary`) also dumps each view's full config (axes, filters, sorts, group_by) in a trailing `# Views` section — no flag, every format. The raw patterns here are for **writes** (creating/patching chart views and properties).
 

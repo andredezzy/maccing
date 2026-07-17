@@ -1,7 +1,7 @@
 # maccing — repo maintenance
 # maccing-notion — agent rules
 
-Instructions for any agent editing this plugin — the `notion-api` skill (`SKILL.md` + `references/`) and the bundled MCP server. Applies to the whole `skills/notion/` subtree. (`AGENTS.md` here is a symlink to this file.)
+Instructions for any agent editing this plugin — the `notion` skill (`SKILL.md` + `references/`) and the bundled MCP server. Applies to the whole `skills/notion/` subtree. (`AGENTS.md` here is a symlink to this file.)
 
 ## Keep the skill WORKSPACE-AGNOSTIC — MANDATORY
 

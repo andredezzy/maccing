@@ -1,6 +1,6 @@
 # Views API — listing, creating, linked views, columns
 
-Part of the `notion-api` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
 
 ## Views API
 
@@ -136,7 +136,7 @@ private_request({ endpoint: "saveTransactions", operations: [
 ```
 - **Value is a STRING:** a Notion named-icon path `"/icons/<name>_<color>.svg"` (same catalog as page/column icons — `icon-names.md`), an emoji char, or an absolute image URL. House style → a **gray named icon** (`/icons/<name>_gray.svg`).
 - **One per VIEW** — each tab carries its own; without it the tab shows the generic view-TYPE glyph (the table/gallery icon). Read back via `getRecordValues` on the `collection_view` → `format.collection_view_icon`; the `200 {}` write doesn't prove it rendered — verify (read-back / UI).
-- **House style — EVERY view gets an icon** (a per-view design dimension, sibling to the column-icon rule): a nav-hub view = the hub's own icon (`navigation`); time-bucket / dashboard tabs get a semantic gray icon (Today `calendar-day`, Tomorrow `arrow-right`, Next 7 days `fast-forward`, Last 7 days `history`). Live-verified 2026-06-19 (field confirmed from yowynn/notion-api types + two captured recordMaps; confirmed rendering in-workspace).
+- **House style — EVERY view gets an icon** (a per-view design dimension, sibling to the column-icon rule): a nav-hub view = the hub's own icon (`navigation`); time-bucket / dashboard tabs get a semantic gray icon (Today `calendar-day`, Tomorrow `arrow-right`, Next 7 days `fast-forward`, Last 7 days `history`). Live-verified 2026-06-19 (field confirmed from yowynn/notion types + two captured recordMaps; confirmed rendering in-workspace).
 
 **View `type` is immutable.** You can't change a view's type via `PATCH` — `PATCH /v1/views/{id} {"configuration":{"type":"gallery",…}}` on a table view → `400 "Configuration type \"gallery\" does not match view type \"table\""`. To "convert" a table to a gallery (or any type change), **`POST` a NEW view** of the target type (`position:{type:"start"}` makes it the default tab) then DELETE /v1/views/{old view id} so the new type is the sole/default view — or, if you want both tabs to coexist, rename the old one instead. Live-verified 2026-06-14.
 

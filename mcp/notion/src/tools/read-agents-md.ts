@@ -1,4 +1,4 @@
-// One-shot ancestral AGENTS.md sweep — the notion-api skill's MANDATORY first step in a single call.
+// One-shot ancestral AGENTS.md sweep — the notion skill's MANDATORY first step in a single call.
 // Climbs root→target via .parent, finds the `AGENTS.md` child_page on each ancestor, reads each as
 // markdown, and returns them ordered root→closest with explicit precedence (closest wins on conflict).
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.

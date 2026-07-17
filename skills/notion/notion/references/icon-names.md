@@ -1,6 +1,6 @@
 # Notion built-in (named) icon names — live-verified
 
-Reference for the `notion-api` skill — the `name` values for Notion's **built-in icon** type:
+Reference for the `notion` skill — the `name` values for Notion's **built-in icon** type:
 
 ```json
 { "type": "icon", "icon": { "name": "chart-mixed", "color": "blue" } }
