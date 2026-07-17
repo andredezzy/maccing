@@ -191,6 +191,51 @@ test("always shows filter and quick_filters lines (— when none)", () => {
   expect(output).toContain("quick_filters: —");
 });
 
+test("views='summary' renders one line per view ending with the full-mode hint", () => {
+  const view: RawView = {
+    name: "Gallery",
+    type: "gallery",
+    parent: { database_id: "37c99f0d-0a4a-8183-8b2c-000c97b6d0d0" },
+    sorts: [{ property: "CtfH", direction: "descending" }],
+    filter: { property: "CtfH", number: { greater_than: 0 } },
+    configuration: { type: "gallery" },
+  };
+  const output = formatViews([view], idToName, "summary");
+  expect(output).toContain("# Views (1)");
+  expect(output).toContain("Gallery · gallery · container 37c99f0d · filter:");
+  expect(output).toContain("sorts: Net worth (last month) ↓ descending");
+  expect(output.trimEnd().endsWith('(full view configs — required before ANY view PATCH: pass views:"full")')).toBe(
+    true,
+  );
+});
+
+test("views='summary' omits configuration/quick_filters (kept out of the one-liner)", () => {
+  const view: RawView = {
+    name: "T",
+    type: "table",
+    quick_filters: { property: "x" },
+    configuration: { type: "table" },
+  };
+  const output = formatViews([view], {}, "summary");
+  expect(output).not.toContain("quick_filters");
+  expect(output).not.toContain('"type": "table"');
+});
+
+test("views='summary' falls back to '?' when a view has no parent database_id", () => {
+  const view: RawView = { name: "T", type: "table" };
+  expect(formatViews([view], {}, "summary")).toContain("T · table · container ? ·");
+});
+
+test("views='summary' with no views reports zero, without the full-mode hint", () => {
+  const output = formatViews([], {}, "summary");
+  expect(output).toContain("# Views (0)");
+  expect(output).not.toContain('views:"full"');
+});
+
+test("formatViews defaults to full mode when no mode is passed (back-compat)", () => {
+  expect(formatViews([gallery], idToName)).toContain("## Gallery · gallery");
+});
+
 test("a chart view's axes property ids resolve", () => {
   const chart: RawView = {
     name: "NW over time",

@@ -138,8 +138,39 @@ function renderSorts(sorts: SortEntry[] | null | undefined, idToName: IdToName):
     .join(", ");
 }
 
-/** Render every view with its complete, id-resolved configuration. */
-export function formatViews(views: RawView[], idToName: IdToName): string {
+/** One-line, id-resolved digest of a view's filter (or quick_filters); "—" when there is none. */
+function renderFilter(filter: unknown, idToName: IdToName): string {
+  return filter ? JSON.stringify(resolveDeep(filter, idToName)) : "—";
+}
+
+/** views="summary" render mode ONLY. First 8 hex chars (hyphens stripped) — a compact pointer back to
+ * the view's container, not a usable id. Every other surface in this server shows ids in full; this is
+ * the one deliberate exception, which is why the summary section always ends by pointing at views:"full". */
+function shortId(id: string): string {
+  return id.replace(/-/g, "").slice(0, 8);
+}
+
+const FULL_VIEWS_HINT = '(full view configs — required before ANY view PATCH: pass views:"full")';
+
+/** views="summary": one line per view — name, type, container, filter/sorts digests — token-cheap. */
+function formatViewsSummary(views: RawView[], idToName: IdToName): string {
+  if (views.length === 0) {
+    return "# Views (0)\n(none — or the integration can't read them)";
+  }
+
+  const lines = views.map((view) => {
+    const container = view.parent?.database_id ? shortId(view.parent.database_id) : "?";
+    return (
+      `${view.name ?? "(untitled)"} · ${view.type ?? "?"} · container ${container} · ` +
+      `filter: ${renderFilter(view.filter, idToName)} · sorts: ${renderSorts(view.sorts, idToName)}`
+    );
+  });
+
+  return `# Views (${views.length})\n\n${lines.join("\n")}\n\n${FULL_VIEWS_HINT}`;
+}
+
+/** views="full": every view with its complete, id-resolved configuration. */
+function formatViewsFull(views: RawView[], idToName: IdToName): string {
   if (views.length === 0) {
     return "# Views (0)\n(none — or the integration can't read them)";
   }
@@ -149,7 +180,7 @@ export function formatViews(views: RawView[], idToName: IdToName): string {
       `## ${view.name ?? "(untitled)"} · ${view.type ?? "?"}  (id: ${view.id ? view.id : "?"})`,
       view.url ? `url: ${view.url}` : null,
       `sorts: ${renderSorts(view.sorts, idToName)}`,
-      `filter: ${view.filter ? JSON.stringify(resolveDeep(view.filter, idToName)) : "—"}`,
+      `filter: ${renderFilter(view.filter, idToName)}`,
       `quick_filters: ${view.quick_filters ? JSON.stringify(resolveDeep(view.quick_filters, idToName)) : "—"}`,
     ].filter((line): line is string => line !== null);
 
@@ -162,4 +193,11 @@ export function formatViews(views: RawView[], idToName: IdToName): string {
   });
 
   return `# Views (${views.length})\n\n${blocks.join("\n\n")}`;
+}
+
+export type ViewsMode = "summary" | "full";
+
+/** Render every view, in either mode (default "full" — the pre-existing complete-dump behavior). */
+export function formatViews(views: RawView[], idToName: IdToName, mode: ViewsMode = "full"): string {
+  return mode === "summary" ? formatViewsSummary(views, idToName) : formatViewsFull(views, idToName);
 }
