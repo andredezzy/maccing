@@ -64,7 +64,7 @@ export const privateRequest: ToolModule = {
         .array(z.string())
         .optional()
         .describe(
-          "Dot/bracket paths to project from the response body, e.g. " +
+          "Dot/bracket paths to project from the response body, e.g. pick example (syncRecordValues): " +
             "'recordMap.collection.<uuid>.value.value.schema' ('[]' maps over an array). When set, body " +
             "becomes { '<path>': value | null } per path instead of the full body.",
         ),
