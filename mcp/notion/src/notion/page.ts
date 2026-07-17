@@ -31,5 +31,3 @@ export const page = z.object({
   url: z.string().optional(),
   public_url: z.string().nullable().optional(),
 });
-
-export type PageObject = z.infer<typeof page>;

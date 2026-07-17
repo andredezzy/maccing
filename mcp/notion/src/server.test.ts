@@ -33,7 +33,6 @@ test("tools/list exposes exactly the snake_case Notion tools", async () => {
     "read_agents_md",
     "read_database",
     "read_page",
-    "render_mockup",
     "request",
     "search",
     "upsert_property",
