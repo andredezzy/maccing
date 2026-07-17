@@ -17,16 +17,7 @@
         "url": "https://github.com/andredezzy"
       },
       "license": "MIT",
-      "keywords": [
-        "skills",
-        "dx",
-        "engineering",
-        "reasoning",
-        "growth",
-        "notion",
-        "google-workspace",
-        "mcp"
-      ]
+      "keywords": ["skills", "dx", "engineering", "reasoning", "growth", "notion", "google-workspace", "mcp"]
     }
   ]
 }
