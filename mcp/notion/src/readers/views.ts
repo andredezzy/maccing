@@ -1,73 +1,10 @@
 // View-layer utilities: fetch a data source's view ids then each view's full config (listViewIds +
-// fetchViews — the two network calls here), then PURE transforms over raw Notion view objects — order
-// them as Notion shows (orderViews), pick one
-// (selectViewIndex), derive a row-sampling filter (viewQueryFilter), and render every config field with
-// opaque property ids resolved to names (formatViews).
+// fetchViews — the two network calls here), invert a schema into a property-id → name map
+// (buildIdToName), and render every view's complete config with ids resolved to names (formatViews).
 
 import { decodePropertyId, idVariants } from "../notion/ids";
 import { publicRequest } from "../notion/public-client";
 import type { PropertiesMap } from "./schema";
-
-// View resolution (pure)
-
-/** A view with its property IDs already resolved to names by the caller. */
-export interface ResolvedView {
-  name: string;
-  type: string;
-  columns: string[]; // visible column NAMES (title first)
-  groupBy?: string; // board group-by column name
-  groupOptions?: string[]; // board: every group-by option name, in order (seeds empty columns too)
-  dateProperty?: string; // calendar/timeline date column name
-}
-
-interface ViewConfigProperty {
-  property_id?: string;
-  property_name?: string;
-  visible?: boolean;
-}
-interface ViewConfig {
-  properties?: ViewConfigProperty[];
-  group_by?: { property_id?: string };
-  date_property_id?: string;
-  date_property_name?: string;
-}
-
-/**
- * Resolve a raw Notion view's config (property ids → names) into a ResolvedView the mapper consumes.
- *
- * NOTE — two-step contract for board views: `groupOptions` is always `undefined` on return.
- * After calling this, assign `resolved.groupOptions = groupOptionsFor(resolved.groupBy, schema)`
- * to seed the board's option columns. Schema is not taken here to keep the function pure and
- * independently testable — see the `groupOptionsFor` export.
- */
-export function resolveView(view: RawView, idToName: IdToName): ResolvedView {
-  const config = (view.configuration ?? {}) as ViewConfig;
-  const resolve = (id: string | undefined): string | undefined =>
-    id ? (idToName[id] ?? idToName[decodePropertyId(id)]) : undefined;
-  const columns = (config.properties ?? [])
-    .filter((viewProperty) => viewProperty.visible !== false)
-    .map((viewProperty) => resolve(viewProperty.property_id) ?? viewProperty.property_name)
-    .filter((name): name is string => Boolean(name));
-  return {
-    name: view.name ?? "View",
-    type: view.type ?? "table",
-    columns,
-    groupBy: resolve(config.group_by?.property_id),
-    dateProperty: resolve(config.date_property_id) ?? config.date_property_name,
-  };
-}
-
-/** A board's columns are its group-by property's options — return them in schema order so the mockup
- * draws every status/select column (even empty ones), matching how Notion lays out the board. */
-export function groupOptionsFor(groupBy: string | undefined, schema: PropertiesMap): string[] | undefined {
-  if (!groupBy) {
-    return undefined;
-  }
-  const property = schema[groupBy];
-  const options = property?.status?.options ?? property?.select?.options ?? property?.multi_select?.options;
-  const names = (options ?? []).map((option) => option.name).filter((name): name is string => Boolean(name));
-  return names.length ? names : undefined;
-}
 
 /** Concurrent GET /v1/views/{id} per batch — conservative vs the general rate limit (cf. PAGE_FETCH_BATCH_SIZE). */
 const VIEW_FETCH_BATCH_SIZE = 10;
@@ -144,85 +81,6 @@ export async function fetchViews(dataSourceId: string): Promise<RawView[]> {
     }
   }
   return views;
-}
-
-/**
- * Order a data source's views the way Notion shows them, dropping views that belong to OTHER linked-DB
- * containers sharing this data source (a different `parent.database_id`). `viewIds` is the container
- * block's `view_ids` (private api/v3) — its order IS the tab order and `viewIds[0]` is the default view;
- * it also defines membership, so foreign views fall away. When `viewIds` is null (token_v2 absent / private
- * read failed), fall back to filtering by `parent.database_id`, then sort by a STABLE key (name, then id)
- * so the order is DETERMINISTIC across runs — the public `/v1/views` list order is not the tab order and is
- * not guaranteed stable. If the parent filter would empty the set, keep the unfiltered views.
- */
-export function orderViews(views: RawView[], viewIds: string[] | null, databaseId: string): RawView[] {
-  if (viewIds) {
-    const byId = new Map(views.map((view) => [view.id, view]));
-    const ordered = viewIds.map((id) => byId.get(id)).filter((view): view is RawView => Boolean(view));
-    if (ordered.length) {
-      return ordered;
-    }
-  }
-  const own = views.filter((view) => view.parent?.database_id === databaseId);
-  const fallback = own.length ? own : views;
-  return [...fallback].sort((a, b) => {
-    const aName = a.name ?? "";
-    const bName = b.name ?? "";
-    if (aName !== bName) {
-      return aName < bName ? -1 : 1; // code-point order — deterministic regardless of locale
-    }
-    const aId = a.id ?? "";
-    const bId = b.id ?? "";
-    return aId < bId ? -1 : aId > bId ? 1 : 0; // tiebreak by id (e.g. duplicate view names)
-  });
-}
-
-/**
- * The Notion `/query` filter that reproduces a view's rows, so a mockup samples what the VIEW shows.
- * A view's saved `filter` is already a valid (≤2-level) filter — pass it VERBATIM. Do NOT wrap it in an
- * extra `and` to fold in quick_filters: Notion caps filter nesting at 2 levels, so `and → (saved or/and)`
- * → 400. Quick_filters are therefore a FALLBACK used only when there's no saved filter (they're leaf
- * conditions — AND-ing several stays at 1 level). The caller falls back to an unfiltered sample if Notion
- * still rejects the shape. Returns undefined when the view has no filter at all.
- */
-export function viewQueryFilter(view: RawView): unknown {
-  if (view.filter) {
-    return view.filter;
-  }
-  const quick = Object.entries((view.quick_filters ?? {}) as Record<string, unknown>).map(
-    ([propertyId, condition]) => ({
-      property: propertyId,
-      ...(condition as Record<string, unknown>),
-    }),
-  );
-  if (quick.length === 0) {
-    return undefined;
-  }
-  return quick.length === 1 ? quick[0] : { and: quick };
-}
-
-/** The fields selectViewIndex matches a `view` selector against. */
-interface ViewSelector {
-  name?: string;
-  id?: string;
-}
-
-/** Resolve a `view` selector (numeric index | exact name | id | partial name, case-insensitive) to an
- * index into the ordered views. Anything unmatched (or undefined) falls back to 0 (the default view). */
-export function selectViewIndex(views: ViewSelector[], selector: string | number | undefined): number {
-  if (selector === undefined || views.length === 0) {
-    return 0;
-  }
-  if (typeof selector === "number") {
-    return selector >= 0 && selector < views.length ? selector : 0;
-  }
-  const needle = selector.toLowerCase();
-  const exact = views.findIndex((view) => view.name?.toLowerCase() === needle || view.id === selector);
-  if (exact >= 0) {
-    return exact;
-  }
-  const partial = views.findIndex((view) => view.name?.toLowerCase().includes(needle));
-  return partial >= 0 ? partial : 0;
 }
 
 interface SortEntry {
