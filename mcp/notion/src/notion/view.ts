@@ -54,5 +54,3 @@ export const view = z.object({
   quick_filters: z.unknown().optional(),
   configuration: viewConfiguration.nullable().optional(),
 });
-
-export type ViewObject = z.infer<typeof view>;

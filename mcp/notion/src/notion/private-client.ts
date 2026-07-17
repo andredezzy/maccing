@@ -274,35 +274,6 @@ async function getRecordValues(requests: RecordRequest[]): Promise<PrivateRespon
   return privateCall("getRecordValues", { requests });
 }
 
-interface GetRecordValuesBlockBody {
-  results?: { value?: { view_ids?: string[] } }[];
-}
-
-/**
- * Read a collection_view container's ordered `view_ids` (the real tab order; `view_ids[0]` is the default
- * view). The public API exposes no view order or default-view signal, so this is the only source of truth.
- * No creds / failure → null (graceful: the caller falls back to public order). Never throws.
- */
-export async function readViewOrder(blockId: string): Promise<string[] | null> {
-  if (!privateConfig().ok) {
-    return null;
-  }
-  try {
-    const response = await getRecordValues([{ id: blockId, table: "block" }]);
-    if (!response.ok) {
-      return null;
-    }
-    const body = response.body as GetRecordValuesBlockBody;
-    const viewIds = body.results?.[0]?.value?.view_ids;
-    return Array.isArray(viewIds) && viewIds.length > 0 ? viewIds : null;
-  } catch (error) {
-    // Non-fatal: callers treat null as "no private view order" and fall back to the public list.
-    // Log so a genuine failure is distinguishable from a legitimately-absent order (CLAUDE.md: never swallow).
-    console.error("readViewOrder failed:", error);
-    return null;
-  }
-}
-
 /** Outcome of a best-effort private read — distinguishes a real empty from a throttled/failed read. */
 export enum ReadStatus {
   OK = "OK",

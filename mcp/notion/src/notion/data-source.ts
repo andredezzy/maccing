@@ -38,5 +38,3 @@ export const dataSource = z.object({
   archived: z.boolean().optional(),
   in_trash: z.boolean().optional(),
 });
-
-export type DataSourceObject = z.infer<typeof dataSource>;
