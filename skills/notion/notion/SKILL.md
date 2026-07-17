@@ -150,7 +150,7 @@ while True:
 
 ## Operate directly — act and report (no approval gate), but do ONLY what was asked
 
-Writes do **not** require a propose-then-wait-for-approval cycle. When the user asks for a change, **make exactly that change and report it**, then verify with a live re-read (`read_page` / `read_database` / `describe`). This MCP exists to DO the work — not to narrate intentions and wait. **No approval gate, ever.** But act-and-report is licence to do the **requested** work directly — it is **NOT** licence to do *more*.
+Writes do **not** require a propose-then-wait-for-approval cycle. When the user asks for a change, **make exactly that change and report it**, then verify with the narrowest read that shows the change — a fields-limited `read_database`, a pick-projected `request`, a `read_page` of just the affected row/block — never a whole-object re-read for a one-field change. This MCP exists to DO the work — not to narrate intentions and wait. **No approval gate, ever.** But act-and-report is licence to do the **requested** work directly — it is **NOT** licence to do *more*.
 
 - **Default — act and report:** the create / update / rename / icon / cover / property / formula / view / move operations the request **entails** proceed directly; show the verified result (a live re-read after structural changes) afterward.
 - **Reads** (`GET`, `/query`, `/search`, `AGENTS.md`) are always free.
@@ -291,7 +291,7 @@ After writing, report the decisions made and confirm them via a live re-read (`r
 
 ### The Bottom Line
 
-Decide every dimension (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views) before writing, then act directly and report; verify with a live re-read (`read_database` / `describe`) after. Non-negotiable.
+Decide every dimension (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views) before writing, then act directly and report; verify with a live re-read (`read_database` / `describe`) after — the narrowest-read rule from act-and-report applies. Non-negotiable.
 
 ## MANDATORY — design the whole object before creating it (logical *and* aesthetic)
 
@@ -364,7 +364,7 @@ Once every dimension is decided, **build directly** — create each object and v
 | "It's a multi-database build, so I should get approval first" | Multi-object → do the self-check (decide every dimension), then build directly. No approval, ever. |
 | "I'll show the full plan and wait for the go-ahead" | That's the banned approval gate. Decide → act → report. A single specific question for genuine ambiguity is fine; a design-for-sign-off is not. |
 
-**Verify the build matched the design — the loop isn't closed until you check.** A dimension can be decided yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database`) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
+**Verify the build matched the design — the loop isn't closed until you check.** A dimension can be decided yet silently dropped at write-time, or no-op'd by the API (a column icon the public API can't set, a formula that didn't compile). So when the build's objects are written, **re-read every one** (`describe` + `read_database` — the narrowest-read rule from act-and-report applies) and emit a **dimension-by-dimension audit** (designed → live) across all of them; any mismatch triggers an immediate remediation write before the build is "complete". A designed-but-undelivered dimension is the same miss, one step later.
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -472,7 +472,7 @@ This skill drives the `notion` MCP, which exposes **nine tools**. Reads default 
 | Re-order a database's **properties** (order ONLY — visibility is a separate concern) | **`order_properties({ data_source_id, order:[names], targets? })`** — one `order` list applied to a composable set of `targets`: **`"all"`** = every view's column order — **all view types**, not just tables (gallery/board/list/chart card-property order too; public; incl. any linked-DB views of this data source embedded on other pages) · **`"page"`** = the canonical order (row-detail panel + new-view default — private app API) · a **view id** = one view. Default `["all"]`; `["all","page"]` = everywhere in one call. Title is kept first **only when unlisted** — to move it, list `title` (the Name property) in `order` at the desired spot; the title column **IS reorderable in table views** (live-verified 2026-06-14 — not pinned). Unlisted properties keep their relative order; each target's existing **visibility/width is PRESERVED**. **NB:** a "column" is a property rendered in a view — there's no per-property "order index"; order is a *list* (per-view `configuration.properties` and canonical `collection_page_properties`). For a property's default **visibility**, use `upsert_property.visible`; to redefine a property, `upsert_property` |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`). Same optional `pick` response projection as `request` |
 
-A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader; for a row's page id, `read_database(…, include_ids=true)`. `format` is required on **`read_page`** and **`read_database`** (the other readers take no `format`: `describe`/`read_agents_md` take only `id`; `search` takes `query`); reader output is plain text (the row/text formats end with a trailing `# …` summary).
+A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader; for a row's page id, `read_database(…, include_ids=true)`. A `request`/`private_request` call whose response won't be fully used — every write echo, a lookup needing only a few fields — passes `pick`: `pick:["id"]` on a row create, `pick:["results[].id"]` on an id query; taking the full echo unread is the **write-side smell**. `format` is required on **`read_page`** and **`read_database`** (the other readers take no `format`: `describe`/`read_agents_md` take only `id`; `search` takes `query`); reader output is plain text (the row/text formats end with a trailing `# …` summary).
 
 ## Reference files — load on demand
 
