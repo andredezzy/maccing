@@ -37,20 +37,30 @@ An AGENTS.md is re-read into context **on every task touching its subtree.** Eve
 - Push heavy detail (long schemas, formula source, ID lists) into **toggles or a child sub-page**, not the top level.
 - **Don't repeat the root** — reference it ("conform to root house style") and only state the *overrides/additions*.
 
-## 3. Bulletproof the rules (close loopholes)
+## 3. Keep it operational, not a chronicle
+
+An `AGENTS.md` is read **in full, on every task** touching its subtree — every non-binding line taxes all of them. Apply one test per line: **does an agent need this, as text, to act correctly here, right now?**
+
+- **Yes** → keep it. This is the binding core: house-style deltas, the current map + ids, current schema/conventions, the recurring-task procedure, current view config, red flags.
+- **No, it's dated narrative** (what changed, and when) → Notion page-history / git.
+  **Conditional exception — if the line (or a clause inside it) still states a rule that binds today, keep that rule, rewritten present-tense, not as a dated diff.** A line can be narrative *and* binding at once: *"Bodyweight logging moved off this page on 2026-06-19, now on the Body page"* carries a live fact (where it lives now) — keep that, drop only the date. Same for *"switched from a rolling 7-day window to calendar weeks"* or *"never schedule the same muscle group within 48h (Chest was double-booked Fri→Sun)"* — both read like changelog, but each states practice still in force. Keep them as: *"Track weekly volume by calendar week, not a rolling window."* / *"Never schedule the same muscle group within 48h."*
+- **No, it's general Notion-API mechanism** (a formula pattern, a rollup limitation, a formatter quirk) → one pointer line to the `notion` skill — already loaded whenever the sweep runs, so re-explaining it here adds no gate value.
+- **No, it's a domain-knowledge essay** (training doctrine, nutrition science — evaluative, not operational) → a linked, **non-`AGENTS.md`** reference, opened only when the task needs it.
+
+## 4. Bulletproof the rules (close loopholes)
 
 Agents rationalize under pressure. For each non-negotiable, don't just state it — forbid the workaround:
 
 - State the rule, then the specific escape it blocks: *"Never store a derived value as a static number — not 'just this once', not 'to cache it'. Only formulas/rollups."*
 - Add **`Violating the letter is violating the spirit.`** once, early — it kills a whole class of "I'm following the intent" excuses.
 - Iron-Law the few true non-negotiables; everything else is a normal bullet (don't inflate).
-- Build a small **Red-Flags / rationalization table** from the mistakes agents actually make in *this* subtree (you'll harvest these from the test in §5).
+- Build a small **Red-Flags / rationalization table** from the mistakes agents actually make in *this* subtree (you'll harvest these from the test in §6).
 
-## 4. One concern per section; match the skeleton
+## 5. One concern per section; match the skeleton
 
 Mirror the workspace's existing AGENTS.md shape so any agent reads every playbook the same way: scope callout → numbered H2 sections (map · schema · conventions · working agreement). One excellent, concrete, house-style-matching example beats a generic one.
 
-## 5. TEST it — RED → GREEN → REFACTOR (the Iron Law in practice)
+## 6. TEST it — RED → GREEN → REFACTOR (the Iron Law in practice)
 
 Before you finalize a new AGENTS.md or land an edit:
 
@@ -68,6 +78,7 @@ This whole loop is a *read-only* dry run (the subagent proposes; you don't execu
 | "The rule is obvious, no need to test" | Obvious to you ≠ obeyed by a fresh agent. Run the RED dry-run. |
 | "I'll just add this rule, it's one line" | One-line edits are edits. Same Iron Law — test it. |
 | "I'll restate the root's house style here too" | Duplication rots. Reference the root; write only the overrides. |
+| "It's got a date on it, so it's changelog" | A dated line can still carry a live rule — extract the rule, drop only the date. |
 | "More rules = safer" | Token bloat buries the non-negotiables. Iron-Law the few that matter; trim the rest. |
 | "It reads well to me" | Reading ≠ obeying. The test is a fresh agent under pressure, not your proofread. |
 
