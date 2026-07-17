@@ -14,6 +14,8 @@ import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const FORMATS = ["table", "kv", "tsv", "summary"] as const;
 const VIEWS_MODES = ["summary", "full"] as const;
+const SCHEMA_MODES = ["full", "none"] as const;
+type SchemaMode = (typeof SCHEMA_MODES)[number];
 
 interface DataSourceSchema {
   properties?: PropertiesMap;
@@ -59,7 +61,8 @@ export const readDatabase: ToolModule = {
       "column as name · type · detail, formula bodies elided) and a # Views section — views (default " +
       "summary): one line per view (name · type · container · filter/sorts digest); full: complete config " +
       "(type, sorts, filter, quick_filters, all visual props) with property ids resolved to names — pass " +
-      'views:"full" before any view PATCH. Schema + views always included. include_ids=true prepends each ' +
+      'views:"full" before any view PATCH. schema (default "full") controls the # Schema section — "none" omits ' +
+      "it entirely (# Views is unaffected). include_ids=true prepends each " +
       "row's page id as an _id column (table/tsv/kv only). For column ICONS, or to describe a page/data " +
       "source on its own, use the `describe` tool.",
     annotations: { title: "Read a Notion database", readOnlyHint: true, openWorldHint: true },
@@ -77,6 +80,10 @@ export const readDatabase: ToolModule = {
         .enum(VIEWS_MODES)
         .optional()
         .describe("summary (default) = one digest line per view; full = complete config dump."),
+      schema: z
+        .enum(SCHEMA_MODES)
+        .optional()
+        .describe("full (default) = include the # Schema section; none = omit it."),
       include_ids: z
         .boolean()
         .optional()
@@ -94,6 +101,7 @@ export const readDatabase: ToolModule = {
     }
     const format = args.format as (typeof FORMATS)[number];
     const viewsMode: ViewsMode = args.views === "full" ? "full" : "summary";
+    const schemaMode: SchemaMode = args.schema === "none" ? "none" : "full";
     const includeIds = args.include_ids === true;
 
     try {
@@ -183,11 +191,12 @@ export const readDatabase: ToolModule = {
       const paginationSuffix = cursor ? ` | next_cursor: ${cursor}` : exhaustAll ? "" : " | next_cursor: null";
       const rowsSummary = `\n# ${rows.length} rows${paginationSuffix} | fields: [${displayColumns.join(", ")}]`;
 
-      // Schema + views are always appended — every read_database dumps the database's full structure
+      // Schema + views are appended by default — read_database dumps the database's full structure
       // (column definitions, formula bodies elided) and view design. The schema is free here: this
       // tool already fetched it above. Column ICONS are deliberately NOT fetched on this hot path
       // (they need a ToS-risk private call) — that lives in the dedicated `describe` tool.
-      const schemaSection = `\n\n${formatSchema(schema)}`;
+      // schema:"none" drops the section entirely (# Views is a separate, unaffected concern).
+      const schemaSection = schemaMode === "none" ? "" : `\n\n${formatSchema(schema)}`;
 
       const views = await fetchViews(dataSourceId);
       const viewsSection = `\n\n${formatViews(views, buildIdToName(schema), viewsMode)}`;
