@@ -1,6 +1,6 @@
 # The raw REST API surface — versions, data model, auth, core endpoints, payload limits
 
-Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), a live re-read after structural changes, match-conventions) still apply to everything here.
 
 ## Data model & versions
 

@@ -1,6 +1,6 @@
 # Useful patterns & production architecture
 
-Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), a live re-read after structural changes, match-conventions) still apply to everything here.
 
 **Reads:** start with the mandatory `read_agents_md` sweep, then `search` to resolve a name→id, `read_database` for querying rows (or `read_page` for a single row), and `describe` for a data source's metadata header + column schema (+ column icons) or a page's metadata — see SKILL.md "MCP tools — pick by job". The row readers take the same `filter`/`sorts`, resolve relations→titles, and `exhaust_all=true` satisfies the pagination law. The raw `request` patterns here are for writes and what the readers don't cover.
 
@@ -42,7 +42,7 @@ prop_ids = {name: meta["id"] for name, meta in schema["properties"].items()}
 1. **Create** a dated backup page under the area (`POST /v1/pages`, save its id).
 2. **Re-parent** every top-level database (`PATCH /v1/databases/{id}` `{"parent":{"type":"page_id","page_id":"<new_parent_id>"}}`) and page (`POST /v1/pages/{id}/move`) into it — rows, values, relations, dual-relations all survive (only the parent pointer changes; a move, not a copy, so relation ids stay valid). `POST /v1/pages/{id}/move` also appends at the end (no position control) — move back-to-front or reorder via the private `listAfter` op afterward.
 3. **Layout fidelity** (two `blocks.md` constraints): loose blocks can't be moved via the **public** API (recreate + trash — OR, with private access, move them in place via the private `listAfter` op, `private-api.md`), and databases can't enter columns via the API (UI-only). So: `read_page(area,"outline")` to record the original order FIRST → recreate the loose blocks at the backup + sequence the DB/page moves to match the recorded order → accept that side-by-side columns degrade to stacked (finish columns in the UI).
-4. **Verify** — `read_page(backup,"outline")` + `read_page(area,"outline")`, emit both outlines in your report (post-structural `render_mockup`). The backup is now a safe, readable source for a later read-and-migrate pass.
+4. **Verify** — `read_page(backup,"outline")` + `read_page(area,"outline")`, emit both outlines in your report (the post-structural live re-read). The backup is now a safe, readable source for a later read-and-migrate pass.
 
 **Bulk row migration between data sources** — moving hundreds–thousands of rows from an old DB into a new model. The public API has **no bulk create** (one `POST /v1/pages` per row), so:
 - **For more than ~100 rows, write a SCRIPT, not MCP calls.** A small Bun/Node program using the **public integration token** (read from the gitignored env — never echoed/committed) is the right tool; thousands of sequential MCP `request` calls is impractical. Pace to ~3 req/s; retry `429`/`5xx` with backoff. (The private `token_v2` stays MCP-only — `private-api.md` — but the public token in a one-off ETL script is fine.)

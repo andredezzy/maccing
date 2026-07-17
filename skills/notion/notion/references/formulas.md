@@ -1,6 +1,6 @@
 # Formulas & number formatting
 
-Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), render_mockup after structural changes, match-conventions) still apply to everything here.
+Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MANDATORY rules (AGENTS.md sweep, full pagination, act-and-report (no approval gate), a live re-read after structural changes, match-conventions) still apply to everything here.
 
 **Reading formula/rollup values:** use `read_database` (a set of rows) or `read_page(page_id, "markdown")` (a single row) — both flatten them to computed scalars server-side, sidestepping the raw API's "unknown type" complications. For aggregates (sum/count/grouped totals) across formula/rollup columns, use `read_database(..., format="summary", exhaust_all=true)`. The gotchas below concern *authoring* and *filtering* formulas (writes).
 

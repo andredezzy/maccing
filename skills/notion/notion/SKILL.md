@@ -14,7 +14,7 @@ description: 'Use BEFORE the first Notion read or write on ANY task touching Not
 >
 > THIS skill is the complementary **low-level engineering reference** — the Notion API/formula/rollup/relation/view/chart/block details for building & editing databases programmatically (and debugging Notion API errors).
 
-**Tooling in one line:** reads → `read_agents_md` / `search` (name→id) / `read_page` / `read_database` / `describe` (schema + column icons, or page/object metadata); writes and endpoints the readers don't cover → `request`; create/update a **property** (a database column + its icon, or a page value) → `upsert_property`; re-order a database's **properties** (view columns and/or the canonical order) → `order_properties`; show a live page/database as the canonical ASCII mockup (`render_mockup({ page_id })` / `render_mockup({ database_id, view? })`), or preview how a proposed page/blocks/database WILL look (pass an official shape as `mockup`) — the mandatory way to show how something looks in chat → `render_mockup`; other UI-only writes (relative-date filters) → `private_request`. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
+**Tooling in one line:** reads → `read_agents_md` / `search` (name→id) / `read_page` / `read_database` / `describe` (schema + column icons, or page/object metadata); writes and endpoints the readers don't cover → `request`; create/update a **property** (a database column + its icon, or a page value) → `upsert_property`; re-order a database's **properties** (view columns and/or the canonical order) → `order_properties`; other UI-only writes (relative-date filters) → `private_request`. Verify any write by re-reading the live object — `read_page` / `read_database` / `describe` — never assume it landed. Full table: "[MCP tools — pick by job](#mcp-tools--pick-by-job)" below.
 
 ## MANDATORY FIRST STEP — read every ancestral `AGENTS.md`
 
@@ -148,55 +148,13 @@ while True:
 
 `has_more: true` means you do not yet have the data. Loop on `next_cursor` until it is `false` — for queries, block children, search, views, **and** relation values — *before* any count, sum, filter, or conclusion. Non-negotiable.
 
-## MANDATORY — paste every mockup into the chat, verbatim (the MCP tool result is INVISIBLE to the user)
-
-**The user never sees your MCP tool results.** In the Claude Code chat, every tool call's output — including the ASCII a mockup tool returns — is collapsed/hidden; the user reads ONLY the text of your visible reply. So a mockup that lives only in a tool result is a mockup **the user never saw**. Therefore: **every time you produce a mockup, copy its full output verbatim into your visible message** — a one-line caption around it is welcome; replacing it with a prose summary ("all 9 cards render ✓") is a violation, because to the user you showed *nothing*.
-
-This fires for **`render_mockup`** — the ONE mockup tool (a live page/database by id, or any authored block / page / database shape) — in EVERY context that produced one: a **proposal** ("how it will become"), a **post-write verification** ("how it became"), a **bug-fix / render verification** ("confirm it renders"), or simply because the user asked to **see / show / check / confirm** something. Reading "confirm the fix" or "show me" as license to summarize is the exact failure this rule exists to stop.
-
-NEVER hand-draw the visual instead (Unicode `├──` tree or box-art): a hand-typed mockup drifts — emoji are double-width, borders miscount, chat fonts substitute box-drawing glyphs — and the user sees broken, unclosed boxes. The renderer OWNS all alignment; you supply only structure. The rendered mockup is the DEFAULT and ONLY visual — it **replaces** the bare Unicode tree.
-
-**Violating the letter of this rule is violating the spirit of this rule.**
-
-### The Iron Law
-
-```
-EVERY MOCKUP YOU PRODUCE IS PASTED VERBATIM INTO YOUR VISIBLE REPLY — A MOCKUP LEFT ONLY IN A TOOL RESULT WAS NEVER SHOWN
-```
-
-### The Gate (every time a mockup is produced)
-
-1. **Produce the mockup with `render_mockup`** — the sole mockup renderer. For an EXISTING object, ONE call, no model: **`render_mockup({ page_id })`** or **`render_mockup({ database_id, view? })`** — it fetches + renders the live item (a database shows its real view tabs in Notion's order + the rows that view actually shows, filter+sorts applied). For a **proposal** or synthetic target, build the official shape and pass it as `mockup` (step 2). For a **post-write verification**, `render_mockup({ page_id })` re-fetches the live state, so the mockup reflects VERIFIED reality, never intention.
-2. **Build the official shape ONLY for a proposal** (a live object needs just its id — step 1). `mockup` is an EXACT official Notion API shape: a **PageRender** `{ page: PageObject, blocks: BlockObject[] }` (a page + its body blocks); a single **BlockObject** or an **array of BlockObjects**; or a **DatabaseRender** `{ database, dataSource, views, rows }`. Every node is the official object keyed by `type` — e.g. a paragraph is `{ type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: "…" } }] } }`, a page title is a `title` property value. In a **proposal**, model the RESULTING object and mark each change in its own text (`← NEW`, or a note like `moved here` / `trashed`).
-3. **Paste the tool's output verbatim into your visible reply.** Never edit it by hand — that re-introduces drift; fix the input and re-render.
-
-(A bare `read_page outline` tree stays fine for your OWN block-id lookups — it is just never what you SHOW the user.)
-
-### Red Flags — STOP, you're rationalizing
-
-| Thought | Reality |
-|---|---|
-| "The user's in a hurry — a one-line confirm is enough" | The tool output is invisible; your one-liner is ALL they get. Paste the mockup. |
-| "Re-printing it adds no value — they already saw it" | They did NOT see it — tool results are hidden in chat. Unpasted = never delivered. |
-| "It's a fix/verification, not a page proposal" | Every produced mockup is pasted — proposal, post-write, AND fix/render verification alike. |
-| "It's a database/blocks mockup, not a page" | One `render_mockup` covers all of it — a live page/database by id, or an authored page / database / bare blocks. |
-| "I'll sketch the boxes by hand, it's faster" | Hand-drawn ASCII drifts (emoji width + miscounts). Use the renderer. |
-| "A quick Unicode `├──` tree is enough" | The mockup is the DEFAULT; the tree is for your own id lookups, not the user. |
-| "It's only a proposal, not the real page yet" | Proposals MUST show how it will become — render the target model. |
-| "I'll paste the render but fix one label by hand" | Editing the output re-introduces drift. Fix the model, re-render, paste verbatim. |
-| "`render_mockup` isn't loaded" | It ships with this skill's MCP server — load it; never fall back to hand-drawing. |
-| "I changed structure; I'll just describe it in prose" | Every structure change ends with a re-read, rendered, verified mockup. |
-
-### The Bottom Line
-
-Produce a mockup (`render_mockup({ page_id | database_id })` for a live object, or build an official shape → `render_mockup({ mockup })`) → **paste its output verbatim into your visible reply.** The tool result is invisible to the user; an unpasted mockup was never shown. Proposals show how it will become; verifications (post-write OR fix) show the live result. Never hand-draw, never edit the output, never swap it for a summary. Non-negotiable.
-
 ## Operate directly — act and report (no approval gate), but do ONLY what was asked
 
-Writes do **not** require a propose-then-wait-for-approval cycle. When the user asks for a change, **make exactly that change and report it**, then verify with a live `render_mockup` / read. This MCP exists to DO the work — not to narrate intentions and wait. **No approval gate, ever.** But act-and-report is licence to do the **requested** work directly — it is **NOT** licence to do *more*.
+Writes do **not** require a propose-then-wait-for-approval cycle. When the user asks for a change, **make exactly that change and report it**, then verify with a live re-read (`read_page` / `read_database` / `describe`). This MCP exists to DO the work — not to narrate intentions and wait. **No approval gate, ever.** But act-and-report is licence to do the **requested** work directly — it is **NOT** licence to do *more*.
 
-- **Default — act and report:** the create / update / rename / icon / cover / property / formula / view / move operations the request **entails** proceed directly; show the verified result (a `render_mockup` after structural changes) afterward.
+- **Default — act and report:** the create / update / rename / icon / cover / property / formula / view / move operations the request **entails** proceed directly; show the verified result (a live re-read after structural changes) afterward.
 - **Reads** (`GET`, `/query`, `/search`, `AGENTS.md`) are always free.
+- **Report in prose, backed by live-read evidence — NEVER hand-draw an ASCII box-art or tree rendering of Notion content as a substitute.** Describe the result in words, citing the fields you actually read back; a hand-typed rendering drifts from reality (misaligned glyphs, invented detail) and proves nothing a live read didn't already show.
 - **One carve-out — irreversible data loss:** before a **permanent delete, or a trash/archive that removes data and can't be cleanly undone**, give a one-line heads-up. Basic prudence before destruction, not an approval gate — it never applies to routine creates/edits.
 - **The user's instructions / governing `AGENTS.md` win.** If the user (in chat or a playbook) sets a different write protocol, follow it over this default.
 
@@ -216,7 +174,7 @@ Writes do **not** require a propose-then-wait-for-approval cycle. When the user 
 | "Acting directly means I can do whatever helps" | Acting directly = do the REQUEST directly, no approval gate. It does not enlarge the scope. |
 
 ### The bottom line
-Act directly, **no approval gate**, on **exactly what was asked** — no more, no less. Extra ideas are *suggestions in your report*, never silent writes. The verified mockup after a structural change is how the user reviews. Non-negotiable.
+Act directly, **no approval gate**, on **exactly what was asked** — no more, no less. Extra ideas are *suggestions in your report*, never silent writes. A live re-read after a structural change, reported in prose, is how the user reviews. Non-negotiable.
 
 ## MANDATORY — match the workspace's conventions
 
@@ -317,7 +275,7 @@ Not for "obvious" covers, not for "it's just a table", not when defaults look fi
 
 Before writing, mentally verify every applicable dimension — **one decision per applicable line**: type · filter · sort · grouping · visible properties · name; plus cover · size + aspect · card layout for visual types. **State EVERY applicable dimension explicitly — especially `sort` and `visible properties`, the two most often silently dropped.** "No sort / Notion default order" and "all properties, default order" are valid decisions — but they must be *decided*, never silently skipped: **if your internal check has no `sort:` decision, you skipped it.** Never bury a sort/filter/group inside the payload without deciding it.
 
-After writing, report the decisions made and paste the verified `render_mockup`.
+After writing, report the decisions made and confirm them via a live re-read (`read_database` / `describe`).
 
 ### Red Flags — STOP, you're rationalizing
 
@@ -333,7 +291,7 @@ After writing, report the decisions made and paste the verified `render_mockup`.
 
 ### The Bottom Line
 
-Decide every dimension (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views) before writing, then act directly and report; verify with `render_mockup` after. Non-negotiable.
+Decide every dimension (type, filter, sort, grouping, visible props, name — plus cover/size/aspect/layout for visual views) before writing, then act directly and report; verify with a live re-read (`read_database` / `describe`) after. Non-negotiable.
 
 ## MANDATORY — design the whole object before creating it (logical *and* aesthetic)
 
@@ -396,7 +354,7 @@ One section per object. **Decide, per object, every applicable line from the two
 
 **Stated, not skipped:** `none` / `no filter` / `no sort` / `all default order` are valid stated answers. `TBD`/`OR`/`somehow`/`optional`/`must-confirm` are gaps — resolve now (a location is a *specific proposed* value via `search`, never a question handed back) or mark **out of scope**. When the **user explicitly defers** a dimension ("no icons yet", "views later"), record it as **`deferred by user — out of scope`** (a stated answer) and don't re-propose it until they re-open it.
 
-Once every dimension is decided, **build directly** — create each object and verify with a `render_mockup` / read **after**; do not pause between objects.
+Once every dimension is decided, **build directly** — create each object and verify with a live re-read (`describe` / `read_database`) **after**; do not pause between objects.
 
 **This is a SELF-check, not an approval gate — and a dimension the user didn't specify is YOUR call, never a reason to wait.** When the user hasn't stated a dimension, **you decide a sensible default that conforms to the nearest `AGENTS.md` / house style, and build.** "The user gave no property names / icons / colours / view sorts" is NOT a reason to present a design and wait for sign-off — decide them and act. The only thing that ever pauses you is a *genuinely consequential, genuinely ambiguous* choice with no sensible default — then ask **one specific question** (a question, not a design-for-approval). **Never present the full design and wait for a go.**
 
@@ -427,19 +385,19 @@ Once every dimension is decided, **build directly** — create each object and v
 
 Any build with more than one dimension to decide requires a complete internal self-check before the first write — every object's icon, cover (verified URL), colours, formats, descriptions, visibility, and every view's full design decided as a whole. Once the self-check is complete, build directly and report. Skeleton-now-aesthetics-later is the failure this stops. Non-negotiable.
 
-## MANDATORY — the FINISHING PASS: before "done", verify what `render_mockup` CANNOT show
+## MANDATORY — the FINISHING PASS: before "done", confirm every dimension from the LIVE config
 
-The pre-build self-check above designs every dimension; this fires at the **other end** — **before you tell the user a page / hub / view is complete.** The recurring failure: the functional build is finished, `render_mockup` is run, the ASCII "looks fine," and it's declared done — but the ASCII **cannot render the very things that are usually wrong**, so "the render looked fine" becomes false confidence and the user is left to catch each gap one by one. Every rule below ALREADY lives in the references; the miss is never *knowing* them — it's never *running the pass*. This is the forcing function.
+The pre-build self-check above designs every dimension; this fires at the **other end** — **before you tell the user a page / hub / view is complete.** The recurring failure: the functional build is finished, a quick glance at the result "looks fine," and it's declared done — but the dimensions that are usually wrong don't surface on a casual look, only in specific fields of the live config, so "it looked fine" becomes false confidence and the user is left to catch each gap one by one. Every rule below ALREADY lives in the references; the miss is never *knowing* them — it's never *running the pass*. This is the forcing function.
 
 **Violating the letter of this rule is violating the spirit of this rule.**
 
 ### The Iron Law
 ```
-"render_mockup LOOKS FINE" IS NOT "DONE" — RUN THE FINISHING PASS AGAINST THE LIVE CONFIG BEFORE REPORTING ANY PAGE / HUB / VIEW COMPLETE
+"IT LOOKS FINE" IS NOT "DONE" — RUN THE FINISHING PASS AGAINST THE LIVE CONFIG BEFORE REPORTING ANY PAGE / HUB / VIEW COMPLETE
 ```
 
-### What `render_mockup` CANNOT show — confirm each against the LIVE config, not the mockup
-| Invisible in the ASCII | Confirm via | Rule |
+### What a casual glance misses — confirm each against the LIVE config directly
+| Easy to miss | Confirm via | Rule |
 |---|---|---|
 | Gallery **card covers** (coverless vs shown) | `read_database` → Views: `configuration.cover == {type:"page_cover"}` (+ `cover_size`/`cover_aspect`) | a gallery is **coverless by default** — rows HAVING covers is not enough (gallery-view.md) |
 | A **leftover default view** / gallery-vs-table tabs | `read_database` → Views list | a nav hub is the **gallery ONLY** — DELETE the auto `Table` / `Default view` (gallery-view.md) |
@@ -455,12 +413,12 @@ The pre-build self-check above designs every dimension; this fires at the **othe
 2. **Galleries** — covers ON (`page_cover` + size + aspect); the hub is the gallery ONLY (leftover default view deleted); collection name hidden + Full-page peek (nav hubs).
 3. **Multi-bucket views** — ONE tabbed linked block per domain, never N stacked blocks.
 4. **Columns** — table widths fit their headers.
-5. **THEN** `render_mockup` + paste it (the paste gate) — but every item above is confirmed from the live config, because the mockup can't show them.
+5. **THEN** report the result in prose, citing the live-config evidence for each item confirmed above.
 
 ### Red Flags — STOP, you're rationalizing
 | Thought | Reality |
 |---|---|
-| "`render_mockup` looks fine, so it's done" | The ASCII can't show covers, spacing, tabs, inline-vs-link, or widths — the usual breakages. Confirm them against the live config. |
+| "It looks fine, so it's done" | Covers, spacing, tabs, inline-vs-link, and widths — the usual breakages — don't show up on a casual glance. Confirm them against the live config. |
 | "The cards have covers — the rows have page covers" | The **view** must enable `cover:{type:"page_cover"}`; a default gallery is coverless even when every row has a cover. |
 | "I spaced the main sections" | EVERY boundary gets a spacer — including callout↔first block and last-DB↔page-link, not just the obvious ones. |
 | "The gallery works; the extra Table tab is harmless" | A nav hub is gallery-ONLY — delete the leftover default view. |
@@ -468,7 +426,7 @@ The pre-build self-check above designs every dimension; this fires at the **othe
 | "I'll let the user catch what's off" | Each thing the user points out is one this pass would have caught. Run it before reporting, every time. |
 
 ### The Bottom Line
-A page/hub/view is "done" only after the finishing pass — spacers at every boundary, galleries covered + gallery-only + name-hidden, multi-bucket as tabs, columns fitting — each confirmed from the LIVE config, because `render_mockup` shows none of it. "The render looked fine" is the exact failure this stops. Non-negotiable.
+A page/hub/view is "done" only after the finishing pass — spacers at every boundary, galleries covered + gallery-only + name-hidden, multi-bucket as tabs, columns fitting — each confirmed from the LIVE config, not from a casual glance. "It looked fine" is the exact failure this stops. Non-negotiable.
 
 ## MANDATORY — every operation runs through the agent; NEVER hand a step to the user's UI
 
@@ -499,20 +457,19 @@ Exhaust public → private `api/v3` before ever suggesting a manual UI action. I
 
 ## MCP tools — pick by job
 
-This skill drives the `notion` MCP, which exposes **ten tools**. Reads default to the five readers; `request` is for writes and the endpoints readers don't cover.
+This skill drives the `notion` MCP, which exposes **nine tools**. Reads default to the five readers; `request` is for writes and the endpoints readers don't cover.
 
 | Job | Tool |
 |---|---|
 | The ancestral `AGENTS.md` sweep (mandatory first step) | **`read_agents_md(id)`** — one call does the whole climb + precedence; the `id` is any target (page/row/block/database/data_source) |
 | Find a page or data source **by name → id** | **`search(query, object_type?)`** — compact ranked hits (`object · "title" · full id · parent`) over `POST /v1/search`; the name→id resolver (ids are FULL — copy straight into read_page/read_database/describe/read_agents_md), so you don't pay the raw endpoint's tens-of-KB page objects. `object_type` = `page` \| `data_source` (never `database`). Ranked, NOT exhaustive; `exhaust_all=true` pages to the end |
-| Read a page or DB row — properties **and** body | **`read_page(page_id, format)`** — `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree with optional `depth`, default 2, for planning edits) · `text` (markdown with markup stripped — also gets the YAML property frontmatter by default). Relations→titles, rollups/formulas→scalars, blocks recovered, ~22× smaller than raw JSON. Optional `include_properties=false` suppresses the YAML property frontmatter on **markdown + text** (default `true`). To SHOW the page as a mockup → `render_mockup({ page_id })` |
-| Query DB rows — list / count / sum / grouped total | **`read_database(database_id, format, …)`** (`database_id` = the DB UUID **or** a `data_source_id`; auto-resolved) — `table` · `kv` · `tsv` · `summary` (overall or grouped totals; add `group_by` to group by a column). Optional `fields` to limit columns; `filter`/`sorts` are Notion objects passed verbatim; `exhaust_all=true` returns every row and **satisfies the pagination law** (row pagination only). Its output ALWAYS appends a `# Schema` section (every column `name · type · detail` — rollup function+relation, relation dual/single, select option count; **same granularity as `describe`** minus column icons; formula bodies elided) and a `# Views` section. To SHOW the database as a mockup → `render_mockup({ database_id })` (its default view, or pass `view`). (`describe` adds, on top of this, a **metadata header** — title · id · icon · parent — **and** column icons. ⚠️ A data source's own `icon` field is always `none` (even when `describe` is given a `database_id` — it resolves to the data source); the **DB icon lives on the database wrapper** — read it via `request('GET','/v1/databases/{id}')` → `icon`, not `describe`.) Row **page ids are NOT in the output** — use raw `POST /v1/data_sources/{id}/query` (`.id` per result) when you need an id (e.g. to write a relation) |
+| Read a page or DB row — properties **and** body | **`read_page(page_id, format)`** — `markdown` (properties as YAML frontmatter + body) · `outline` (block-id tree with optional `depth`, default 2, for planning edits) · `text` (markdown with markup stripped — also gets the YAML property frontmatter by default). Relations→titles, rollups/formulas→scalars, blocks recovered, ~22× smaller than raw JSON. Optional `include_properties=false` suppresses the YAML property frontmatter on **markdown + text** (default `true`) |
+| Query DB rows — list / count / sum / grouped total | **`read_database(database_id, format, …)`** (`database_id` = the DB UUID **or** a `data_source_id`; auto-resolved) — `table` · `kv` · `tsv` · `summary` (overall or grouped totals; add `group_by` to group by a column). Optional `fields` to limit columns; `filter`/`sorts` are Notion objects passed verbatim; `exhaust_all=true` returns every row and **satisfies the pagination law** (row pagination only). Its output ALWAYS appends a `# Schema` section (every column `name · type · detail` — rollup function+relation, relation dual/single, select option count; **same granularity as `describe`** minus column icons; formula bodies elided) and a `# Views` section. (`describe` adds, on top of this, a **metadata header** — title · id · icon · parent — **and** column icons. ⚠️ A data source's own `icon` field is always `none` (even when `describe` is given a `database_id` — it resolves to the data source); the **DB icon lives on the database wrapper** — read it via `request('GET','/v1/databases/{id}')` → `icon`, not `describe`.) Row **page ids are NOT in the output** — use raw `POST /v1/data_sources/{id}/query` (`.id` per result) when you need an id (e.g. to write a relation) |
 | Inspect a database's **views** (view design) | **Already in every `read_database` output** — the trailing `# Views` section dumps each view's complete config (covers/preview, card size, aspect, layout, visible/hidden props, sorts, **filters, quick_filters**, chart axes; property ids resolved to names). **NB — it lists EVERY view sharing this `data_source_id`, including views on OTHER linked-DB containers (a different `database_id` — e.g. a linked view embedded on another page), not just tabs of the queried DB. Check a view's parent `database_id` (`GET /v1/views/{id}`) before assuming it's a tab on this DB or PATCHing it.** No flag needed — the reader path for view design (raw `GET /v1/views` not needed) |
 | Describe an object's **structure** — a data source's column schema **+ column icons**, or a page's icon/cover + property types | **`describe(id)`** — any id (page/row/database/data_source). Data source → **title · id · icon · parent** (metadata header; its own `icon` is always `none` — the DB icon is on the database wrapper, `GET /v1/databases/{id}`) + `name · type · detail` per column (formula bodies elided) **+ each column's icon** (best-effort private when `NOTION_TOKEN_V2` set; silently omitted otherwise — the public API can't read column icons). Page → its **public** icon, cover, title, parent + property types. Complements `read_page` (values) and `read_database` (rows). Standalone schema read; `read_database` already inlines the **types** |
 | Any **write** (incl. creating/editing views via `POST`/`PATCH /v1/views`); `.parent` inspection; block-children subtrees not covered by `read_page` | **`request(method, path, body?, query?)`** — the full REST surface |
 | Create/update a **property** — a database **column** (name, type, format, options+colors, description, **+ its icon, + default visibility**) or a **page property value** | **`upsert_property({ properties:[{target_id, property, value?, icon?, color?, visible?, remove?, remove_icon?}] })`** — the write-dual of `describe`, **batched** across any mix of data sources + pages. `value` = a verbatim Notion property object (a schema def for a data_source, a value for a page); `icon` sets the **column** icon and `visible` sets the property's **new-view / card DEFAULT** visibility (the `collection_page_properties` flag) — both data_source-only private per-property attributes. ⚠️ `visible` does NOT hide a property from the **row-detail panel** (what you see when you OPEN a row) — that is a SEPARATE private collection field, `format.property_visibility` (`{property, visibility:"hide"}`); see `references/views.md`. To READ current column icons, use `describe`; for per-VIEW column order, `order_properties` |
 | Re-order a database's **properties** (order ONLY — visibility is a separate concern) | **`order_properties({ data_source_id, order:[names], targets? })`** — one `order` list applied to a composable set of `targets`: **`"all"`** = every view's column order — **all view types**, not just tables (gallery/board/list/chart card-property order too; public; incl. any linked-DB views of this data source embedded on other pages) · **`"page"`** = the canonical order (row-detail panel + new-view default — private app API) · a **view id** = one view. Default `["all"]`; `["all","page"]` = everywhere in one call. Title is kept first **only when unlisted** — to move it, list `title` (the Name property) in `order` at the desired spot; the title column **IS reorderable in table views** (live-verified 2026-06-14 — not pinned). Unlisted properties keep their relative order; each target's existing **visibility/width is PRESERVED**. **NB:** a "column" is a property rendered in a view — there's no per-property "order index"; order is a *list* (per-view `configuration.properties` and canonical `collection_page_properties`). For a property's default **visibility**, use `upsert_property.visible`; to redefine a property, `upsert_property` |
-| Show a page / database / blocks in chat — a **live** item, a **proposal** ("how it will become"), or a **post-write verification** | **`render_mockup({ page_id \| database_id \| mockup })`** — the ONE mockup renderer. **Live:** pass `page_id` or `database_id` (+ optional `view`, `width`, `depth`) — it fetches + renders (a database shows its real view tabs + the rows that view shows, filter+sorts applied). **Proposal:** pass `mockup` = an EXACT official Notion shape — a `PageRender` `{ page: PageObject, blocks: BlockObject[] }`, a single `BlockObject`, a `BlockObject[]`, or a `DatabaseRender` `{ database, dataSource, views, rows }`. The renderer OWNS alignment (display-width / emoji-safe) — you supply only structure; it returns flawless box-art (cover · icon · title · callouts · child-page/database refs). **Every mockup is self-fencing** — the renderer already wraps the box-art in a code fence (backtick-safe, so an embedded code block can't break out), so paste it verbatim and NEVER wrap it in your own fence. A **database** additionally renders a bold markdown header (`◷ **Title**` then a `Views:` line with the SELECTED view in real **bold**) as PROSE *above* that fenced grid — bold shows only OUTSIDE a fence — so that header is part of the verbatim output too. **MANDATORY** default visual (see "paste every mockup into the chat, verbatim"); paste its output verbatim into your visible reply — the tool result is invisible to the user — never hand-draw. ⚠️ **It CANNOT distinguish an inline database from a LINK/reference to one** (it fetches and renders a linked DB's content as if inline) — to verify a view is genuinely inline (not a `↗` link), check the block's `.parent` + `is_inline`, not the mockup (`references/blocks.md`) |
 | Any **other** UI-only feature the public API can't do (UI relative-date filters, private view state) | **`private_request`** — the general private app API (api/v3) escape hatch; ToS-risk, own workspace only (`references/private-api.md`) |
 
 A manual `GET /v1/blocks/{id}/children` loop, a `GET /v1/pages/{id}` to read properties, or a `POST /query` count/sum/property-read is a **smell in a read context** — reach for a reader. (Exception: `POST /v1/data_sources/{id}/query` is still correct when you need a row's `.id` — the readers don't expose page ids.) `format` is required on **`read_page`** and **`read_database`** (the other readers take no `format`: `describe`/`read_agents_md` take only `id`; `search` takes `query`); reader output is plain text (the row/text formats end with a trailing `# …` summary).
