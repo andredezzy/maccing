@@ -4,7 +4,7 @@ Part of the `notion` skill — loaded on demand from `SKILL.md`. The skill's MAN
 
 **This is the single home for relations** — property shape, create/convert, dual-sync & the one-sided desync trap, the ~25-item read cap, reading a relation in a formula (list-ops + the latest-value flagship), auto-linking new rows, and rollups (which exist only *over* a relation). Two pointers out: the raw property-object catalog → `pages-properties.md`; authoring a relation-read `formula2` AST via the private API → `private-api.md` → "Relation-read encoding".
 
-**Reads:** use `read_database` (`exhaust_all=true`) for reading row **values** — not a manual `/query` loop; it resolves relation values to **titles** (no raw `[{id}]` parsing). For a single row, `read_page(page_id, "markdown")` resolves its relations/rollups too. ⚠️ The readers do **not** expose a row's **page id** — to get the id for a relation write, use raw `request` `POST /v1/data_sources/{id}/query` (each result has `.id`). ⚠️ The readers also do **not** expand a relation past ~25 entries — see "[The ~25-item read cap](#the-25-item-read-cap-the-sneaky-one)".
+**Reads:** use `read_database` (`exhaust_all=true`) for reading row **values** — not a manual `/query` loop; it resolves relation values to **titles** (no raw `[{id}]` parsing). For a single row, `read_page(page_id, "markdown")` resolves its relations/rollups too. For the id needed to WRITE a relation, `read_database(…, include_ids=true)` adds each row's page id as an `_id` column. ⚠️ The readers also do **not** expand a relation past ~25 entries — see "[The ~25-item read cap](#the-25-item-read-cap-the-sneaky-one)".
 
 ## Relation property shape
 
@@ -34,14 +34,13 @@ A relation is created/edited via a schema `PATCH /v1/data_sources/{id}`. Two fla
   ```
   ⚠️ **Conversion does NOT backfill** existing rows onto the reverse side — new rows auto-mirror, but pre-existing rows need explicit PATCH **from the target/reverse side** (patching from the source/forward side is a silent no-op):
   ```
-  # Query BOTH data sources via raw POST /v1/data_sources/{id}/query (each result carries .id + the relation prop) —
-  # read_database returns titles/values, not the page ids the PATCH needs. Build source_page_id → [target_page_ids],
-  # then patch from the TARGET side:
+  # Read BOTH data sources via read_database(…, include_ids=true) — the _id column carries each row's page id
+  # alongside the relation prop (titles). Build source_page_id → [target_page_ids], then patch from the TARGET side:
   PATCH /v1/pages/{source_page_id}
   { "properties": { "<BackRelProp>": { "relation": [{"id": t_id} for t_id in target_page_ids] } } }
   ```
   Batch ≤100 relation entries per PATCH.
-- **Set a relation value on a row** (get the target row's page id from raw `POST /v1/data_sources/{id}/query` — `.id` per result; the readers don't expose page ids):
+- **Set a relation value on a row** (get the target row's page id via `read_database(…, include_ids=true)`):
   ```json
   PATCH /v1/pages/{page_id}
   { "properties": { "Month": { "relation": [{ "id": "<target_page_id>" }] } } }
