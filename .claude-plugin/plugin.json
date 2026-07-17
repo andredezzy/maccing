@@ -42,7 +42,5 @@
     "./skills/engineering/researching-before-coding/",
     "./skills/engineering/composing-ui/"
   ],
-  "commands": [
-    "./commands/"
-  ]
+  "commands": ["./commands/"]
 }

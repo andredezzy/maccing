@@ -27,36 +27,6 @@ interface AgentsMdEntry {
   title: string;
   agentsId: string;
   markdown: string;
-  lastEditedTime?: string;
-  unchanged: boolean;
-}
-
-interface AgentsMdBlockRef {
-  id: string;
-  lastEditedTime?: string;
-}
-
-interface PlaybookCacheEntry {
-  text: string;
-}
-
-// SESSION CACHE — this server process is one long-lived session (server.ts instantiates each tool's
-// module once), so this Map survives across every read_agents_md call in that session. Keyed by content
-// hash rather than the page's last_edited_time: the public API docs never confirm that editing a child
-// block bumps a page's last_edited_time (verified 2026-07-17 against /reference/page and
-// /reference/patch-block-children — neither states it), so hash comparison is the only self-evidently
-// correct signal. Exported so tests can reset it between cases.
-export const playbookCache = new Map<string, PlaybookCacheEntry>();
-
-/** True when `text` matches the prior sweep's cached text for `agentsId` this session; false on first
- * sight or any change. Side effect: refreshes the cache to `text` whenever it returns false. */
-function unchangedSinceEarlierSweep(agentsId: string, text: string): boolean {
-  const cached = playbookCache.get(agentsId);
-  const unchanged = cached !== undefined && Bun.hash(cached.text) === Bun.hash(text);
-  if (!unchanged) {
-    playbookCache.set(agentsId, { text });
-  }
-  return unchanged;
 }
 
 /**
@@ -140,8 +110,8 @@ async function pageIdForDatabase(databaseId: string): Promise<string | undefined
   return (response.body as PageLike).parent?.page_id;
 }
 
-/** Find the `AGENTS.md` child_page block on a page (fully paginated), or null. */
-async function findAgentsMdBlock(pageId: string): Promise<AgentsMdBlockRef | null> {
+/** Find the `AGENTS.md` child_page id on a page (fully paginated), or null. */
+async function findAgentsMdPageId(pageId: string): Promise<string | null> {
   let cursor: string | undefined;
 
   do {
@@ -156,7 +126,7 @@ async function findAgentsMdBlock(pageId: string): Promise<AgentsMdBlockRef | nul
     const body = response.body as NotionChildrenResponse;
     for (const block of body.results ?? []) {
       if (block.type === "child_page" && (block.child_page?.title ?? "").trim() === "AGENTS.md") {
-        return { id: block.id, lastEditedTime: block.last_edited_time as string | undefined };
+        return block.id;
       }
     }
     cursor = body.has_more ? (body.next_cursor ?? undefined) : undefined;
@@ -182,8 +152,7 @@ export const readAgentsMd: ToolModule = {
       "database, or data_source; this walks root→target, finds every AGENTS.md playbook on the path, reads each as " +
       "markdown, and returns them ordered root→closest with explicit precedence (the closest one wins on " +
       "conflict). One call replaces the multi-step manual sweep. AGENTS.md pages are matched by exact title " +
-      "'AGENTS.md' (the 🤖 convention). Within one session, a playbook unchanged since an earlier sweep this " +
-      "session collapses to a one-line marker instead of its full text — the earlier sweep's text still governs.",
+      "'AGENTS.md' (the 🤖 convention).",
     annotations: { title: "Read ancestral AGENTS.md chain", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       id: z.string().describe("The target id to sweep from — any page, database row, block, database, or data_source."),
@@ -207,16 +176,9 @@ export const readAgentsMd: ToolModule = {
 
       const found: AgentsMdEntry[] = [];
       for (const ancestor of ancestors) {
-        const block = await findAgentsMdBlock(ancestor.pageId);
-        if (block) {
-          const markdown = await readPageMarkdown(block.id);
-          found.push({
-            title: ancestor.title,
-            agentsId: block.id,
-            markdown,
-            lastEditedTime: block.lastEditedTime,
-            unchanged: unchangedSinceEarlierSweep(block.id, markdown),
-          });
+        const agentsId = await findAgentsMdPageId(ancestor.pageId);
+        if (agentsId) {
+          found.push({ title: ancestor.title, agentsId, markdown: await readPageMarkdown(agentsId) });
         }
       }
 
@@ -244,9 +206,6 @@ export const readAgentsMd: ToolModule = {
       const sections = found
         .map((entry, index) => {
           const rank = index + 1;
-          if (entry.unchanged) {
-            return `[unchanged since this session's earlier sweep · last_edited ${entry.lastEditedTime ?? "unknown"}] rank ${rank}/${playbookCount} · ${entry.title} · ${entry.agentsId}`;
-          }
           const role = rank === 1 ? "root" : rank === playbookCount ? "closest" : "intermediate";
           const weight =
             rank === playbookCount
@@ -258,14 +217,10 @@ export const readAgentsMd: ToolModule = {
         })
         .join("\n\n");
 
-      const unchangedNote = found.some((entry) => entry.unchanged)
-        ? "\nunchanged playbooks: the text from this session's earlier sweep still governs."
-        : "";
-
       const preamble =
         `read_agents_md · target: ${target.title} (${targetId})\n` +
         `${playbookCount} playbook${playbookCount > 1 ? "s" : ""} govern this target, ordered root→closest. OBEY ALL; on any conflict the CLOSEST (higher rank) wins.\n` +
-        `ancestry: ${ancestryBreadcrumb}\n${indexLines}${unchangedNote}`;
+        `ancestry: ${ancestryBreadcrumb}\n${indexLines}`;
 
       return ok(`${preamble}\n\n${sections}`);
     } catch (error) {
