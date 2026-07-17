@@ -145,7 +145,8 @@ function renderFilter(filter: unknown, idToName: IdToName): string {
 
 /** views="summary" render mode ONLY. First 8 hex chars (hyphens stripped) — a compact pointer back to
  * the view's container, not a usable id. Every other surface in this server shows ids in full; this is
- * the one deliberate exception, which is why the summary section always ends by pointing at views:"full". */
+ * the one deliberate exception, which is why the summary section — whenever it has at least one view to
+ * show — ends by pointing at views:"full". */
 function shortId(id: string): string {
   return id.replace(/-/g, "").slice(0, 8);
 }
