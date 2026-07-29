@@ -10,7 +10,7 @@ Parent skill for the Meta platform; meta-ads and whatsapp depend on this.
 ```
 MANDATORY — read context AND report the full BM roster BEFORE any action
 (including before clarifying questions):
-1. READ `.maccing/growth/README.md` (the vendor/account index), if it exists.
+1. READ `.maccing/growth/README.md` (the platform/account index), if it exists.
 2. ENUMERATE every BM — never assume one. The path is `meta/<profile>/<bm>/`, so
    list `.maccing/growth/meta/*/` (profiles) and `.maccing/growth/meta/*/*/` (BMs),
    then READ the root README, EVERY profile README, and EVERY BM README found.
