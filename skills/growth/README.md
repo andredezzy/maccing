@@ -37,4 +37,14 @@ skills/
 
 ## Project state convention
 
-When used in a project repo, growth state lives in a git-tracked `.maccing/growth/<vendor>/.../<account>/` tree (the `growth` skill enforces this).
+When used in a project repo, growth state lives in a git-tracked `.maccing/growth/` tree (the `growth` skill enforces this). The top level groups by **platform** — `google-ads/`, `tiktok-ads/`, `meta/`. Under `meta/`, the next level is **ownership**:
+
+```
+.maccing/growth/
+  google-ads/<account>/ · tiktok-ads/<account>/     platform → account
+  meta/
+    profiles/<profile>/<bm>/                        assets WE own (antidetect profile → BM → channel)
+    vendors/<vendor>/<channel>/<YYYY-MM-DD>-<slug>/ third parties who dispatch FOR us
+```
+
+"Vendor" means an outsourced dispatcher, not an ad platform.
