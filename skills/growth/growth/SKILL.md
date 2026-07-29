@@ -132,7 +132,7 @@ Cost discipline (ledger-in-place, present-before-spend, always optimize): see `r
 |---|---|---|
 | Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `references/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
 | Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `references/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
-| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, per-template referral attribution, blast benchmark, vendor checklist | `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor |
+| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, blast benchmark, vendor checklist | `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor |
 
 ## Core Metrics
 
