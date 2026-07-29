@@ -13,11 +13,13 @@ Platform-agnostic knowledge base for paid advertising. Covers strategy, metrics,
 
 If you are operating inside a project repo, BEFORE any action (including before clarifying questions):
 
-1. READ `.maccing/growth/README.md` — the index of which vendors/accounts are live vs disposed.
-2. ENUMERATE every account — never assume one. Glob the relevant vendor tree and read EVERY README found, not just the one the task names:
-   - Meta uses `meta/<profile>/<bm>/...`: read EVERY `meta/*/README.md` (profiles), EVERY `meta/*/*/README.md` (BMs), and the channel READMEs under them (`meta/*/*/whatsapp/*/README.md`, `meta/*/*/ads/*/README.md`).
-   - Other vendors: read EVERY `google-ads/*/README.md`, `tiktok-ads/*/README.md`, etc.
-3. TELL the operator a roster of ALL accounts/BMs up front — one line each (vendor/profile · account/BM · status · tier/quality) — INCLUDING ones unrelated to the current task. Never silently narrow to a single BM/account.
+1. READ `.maccing/growth/README.md` — the index of which platforms/accounts are live vs disposed.
+2. ENUMERATE every account — never assume one. Glob the relevant platform tree and read EVERY README found, not just the one the task names:
+   - Meta splits by ownership under `meta/`. Read BOTH halves:
+     - OURS — `meta/profiles/<profile>/<bm>/...`: EVERY `meta/profiles/*/README.md` (profiles), EVERY `meta/profiles/*/*/README.md` (BMs), and the channel READMEs under them (`meta/profiles/*/*/whatsapp/*/README.md`, `meta/profiles/*/*/ads/*/README.md`).
+     - OUTSOURCED — `meta/vendors/<vendor>/<channel>/<campaign>/`: `meta/vendors/README.md` (roster), EVERY `meta/vendors/*/README.md` (vendor facts), and EVERY campaign README `meta/vendors/*/*/*/README.md`.
+   - Other platforms: read EVERY `google-ads/*/README.md`, `tiktok-ads/*/README.md`, etc.
+3. TELL the operator a roster of ALL accounts/BMs up front — one line each (platform/profile · account/BM · status · tier/quality) — INCLUDING ones unrelated to the current task. Never silently narrow to a single BM/account.
 
 These hold current state: account IDs, budgets, campaign history, template/quality status, pending actions. Skipping this means operating on stale assumptions and hiding live assets from the operator.
 
@@ -25,7 +27,7 @@ These hold current state: account IDs, budgets, campaign history, template/quali
 
 When operating inside a project repo, you MUST:
 
-1. Keep all project growth state under `.maccing/growth/<vendor>/.../<account>/`.
+1. Keep all project growth state under `.maccing/growth/<platform>/.../<account>/`.
 2. Verify it is tracked: run `git check-ignore .maccing/`. If ignored, STOP and fix `.gitignore` — project growth memory must be versioned.
 3. Commit new/changed `.maccing/growth/` files; never leave them as untracked scratch.
 4. Keep ONLY secrets out of git — API keys/tokens via env vars referenced from a gitignored `.env*.local`. Everything else is tracked.
@@ -45,14 +47,15 @@ Execution happens in platform-specific skills.
 - WhatsApp message dispatch → `whatsapp` skill (Cloud API, templates, bulk sending)
 - Meta platform substrate (BM, verification, account quality, classifier, asset isolation, disposable-BM, ban/appeal) → `meta` skill — **shared**, loaded first by both `meta-ads` and `whatsapp`
 - YCloud BSP (dispatch console, campaigns, opt-out automation) → `ycloud` skill; YCloud v2 REST API → `ycloud-api` skill
+- Outsourced dispatch (a third party sends for us, on their numbers) → `references/outsourced-dispatch.md`
 - Other platforms → research + manual guidance
 
-**Project data:** `.maccing/growth/<vendor>/<account>/` — each project has its own README + platform subdirectories (git-tracked per Iron Law 0b).
+**Project data:** `.maccing/growth/<platform>/<account>/` — each project has its own README + platform subdirectories (git-tracked per Iron Law 0b).
 
 **Structure:**
 ```
 .maccing/growth/
-├── README.md                   # Which vendors/accounts are live vs disposed
+├── README.md                   # Which platforms/accounts are live vs disposed
 ├── google-ads/
 │   └── <account>/
 │       ├── README.md           # Account IDs, campaigns, history
@@ -60,16 +63,28 @@ Execution happens in platform-specific skills.
 ├── tiktok-ads/
 │   └── <account>/
 │       └── README.md           # Pixel, account data, history
-├── meta/
-│   └── <profile>/              # antidetect profile (owns one or more BMs)
-│       ├── README.md           # Profile-level: identity, proxy, account status
-│       └── <bm>/
-│           ├── README.md       # BM-level: identity, verification, ad accounts
-│           ├── site/           # Brand site (BM-level asset)
-│           └── whatsapp/
-│               └── <number>/
-│                   └── README.md   # WABA, BSP, templates, quality, metrics
+└── meta/
+    ├── profiles/               # assets WE own
+    │   └── <profile>/          # antidetect profile (owns one or more BMs)
+    │       ├── README.md       # Profile-level: identity, proxy, account status
+    │       └── <bm>/
+    │           ├── README.md   # BM-level: identity, verification, ad accounts
+    │           ├── site/       # Brand site (BM-level asset)
+    │           └── whatsapp/
+    │               └── <number>/
+    │                   └── README.md   # WABA, BSP, templates, quality, metrics
+    └── vendors/                # third parties who dispatch FOR us
+        ├── README.md           # Roster + the ownership split
+        └── <vendor>/
+            ├── README.md       # Vendor facts: contact, price, channel, history
+            └── <channel>/
+                └── <YYYY-MM-DD>-<slug>/
+                    ├── README.md      # Scope, segments, tracking, results
+                    ├── templates.md   # The exact copy sent
+                    └── lists/         # PII → gitignored
 ```
+
+`meta/` groups by **platform** (same level as `google-ads/`, `tiktok-ads/`). Ownership is the level below it.
 
 ### 2. Self-Improving Skill
 
@@ -117,6 +132,7 @@ Cost discipline (ledger-in-place, present-before-spend, always optimize): see `r
 |---|---|---|
 | Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `references/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
 | Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `references/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
+| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, blast benchmark, vendor checklist | `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor |
 
 ## Core Metrics
 
@@ -402,7 +418,7 @@ Google removed First Click, Linear, Time Decay, Position-Based in Oct 2023. Choi
 
 **Critical warning:** Platform-native attribution is biased. Every platform over-credits itself. Always compare platform ROAS vs blended MER (total revenue / total ad spend).
 
-TikTok is undervalued by last-click by up to 10.7x due to halo effect on Google search volume (vendor-claimed, not independently verified).
+TikTok is undervalued by last-click by up to 10.7x due to halo effect on Google search volume (platform-claimed, not independently verified).
 
 ## Quality Score / Relevance
 
