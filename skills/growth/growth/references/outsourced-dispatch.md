@@ -117,11 +117,11 @@ When a campaign's ROAS leans on a handful of large tickets, publish the deposito
 
 ## 5. Designing the Split Test
 
-A vendor blast is an experiment. Most of its value is lost to bad design, not to bad creative.
+A vendor blast is an experiment. Most of its value is lost to bad design, not to a bad template.
 
 **One variable per cell, all read against a single control.** An interaction cell (copy × photo) measures a second-order effect. It needs the most statistical power, and this kind of campaign has the least, so it returns noise that reads as signal. Spend that cell on another single-variable contrast instead.
 
-**Identical audience mix in every cell.** Sort the pool by quality tier and deal round-robin, so every cell lands within one lead of the same composition. Observed target: five cells of 2.000 whose tier counts differed by at most 1, and whose two source bases split 33/67 in every cell. Without this, a difference between cells may be the list rather than the creative — which is the entire experiment. Have the build script **assert** the balance and refuse to emit unbalanced files.
+**Identical audience mix in every cell.** Sort the pool by quality tier and deal round-robin, so every cell lands within one lead of the same composition. Observed target: five cells of 2.000 whose tier counts differed by at most 1, and whose two source bases split 33/67 in every cell. Without this, a difference between cells may be the list rather than the template — which is the entire experiment. Have the build script **assert** the balance and refuse to emit unbalanced files.
 
 **Hold the confounders still.** Same opener, same structure, same button, same opt-out line, same dispatch hour across all cells. If a variant changes both facts and framing, it measures neither.
 
@@ -144,7 +144,7 @@ At a 0,70% signup rate, five cells of 2.000 sends yield ~14 signups each. That i
 Two consequences, stated plainly:
 
 1. **Demand per-segment click counts in the vendor contract.** Moving the primary metric from signups to clicks roughly triples sensitivity for zero extra spend. Signups stay the **decision** metric; clicks become the **reading** metric.
-2. **Do not kill a variant on a small difference.** "B beat A by 20%" at n=2.000 is noise. Only large effects are legible at this scale — which is fine, because creative-level effects usually are.
+2. **Do not kill a variant on a small difference.** "B beat A by 20%" at n=2.000 is noise. Only large effects are legible at this scale — which is fine, because template-level effects usually are.
 
 Redo the numbers for your own rates:
 
