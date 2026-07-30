@@ -1,15 +1,15 @@
 ---
 name: google-workspace
-description: Use when working with André's self-hosted Google Workspace MCP (the `google-workspace` plugin) — driving Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, or Contacts via the `mcp__plugin_maccing_workspace__*` tools, OR setting up / troubleshooting its OAuth (first-run consent, 7-day test-mode re-auth, credential storage). Covers the account-isolation rule (never use the `mcp__claude_ai_*` Google connectors — different account).
+description: Use when working with the bundled self-hosted Google Workspace MCP server — driving Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, or Contacts through it, OR setting up / troubleshooting its OAuth (first-run consent, 7-day test-mode re-auth, credential storage). Covers the account-isolation rule (never the Google connectors your host ships — they authenticate a different account).
 ---
 
 # Google Workspace
 
-Self-hosted Google Workspace MCP server for Claude Code, built on `workspace-mcp==1.21.2` (PyPI package, `taylorwilsdon/google_workspace_mcp`). Runs as a per-session stdio process — no daemon, no daily re-authorization. Supports Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, and Contacts.
+Self-hosted Google Workspace MCP server, built on `workspace-mcp==1.21.2` (PyPI package, `taylorwilsdon/google_workspace_mcp`). Runs as a per-session stdio process — no daemon, no daily re-authorization. Supports Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, and Contacts.
 
 ## Account-isolation rule — the single most important rule
 
-**Always use `mcp__plugin_maccing_workspace__*`; NEVER the `mcp__claude_ai_Google_Calendar__*` / `mcp__claude_ai_Gmail__*` / `mcp__claude_ai_Google_Drive__*` connectors — they are wired to a different, unrelated Google account (`nicolas1120201@gmail.com`). The user's Workspace account is `andrevcv1@gmail.com`.**
+**Always use this plugin's `workspace` server; NEVER a Google connector shipped by your host (`mcp__claude_ai_Google_Calendar__*`, `mcp__claude_ai_Gmail__*`, `mcp__claude_ai_Google_Drive__*` and the like) — those authenticate a different account. Tool-name prefixes differ per host, so match the server, not a fixed prefix. The account this server acts as is whatever `USER_GOOGLE_EMAIL` is set to.**
 
 ## References — load on demand
 

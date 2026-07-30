@@ -8,8 +8,8 @@ All tools share the prefix `mcp__plugin_maccing_workspace__`.
 
 | Setting | Value |
 |---|---|
-| Account | `andrevcv1@gmail.com` |
-| `user_google_email` default | `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `~/.config/maccing/google-workspace.env` or `.env.local`) |
+| Account | the account in `USER_GOOGLE_EMAIL` |
+| `user_google_email` default | the account in `USER_GOOGLE_EMAIL` (set via `USER_GOOGLE_EMAIL` in `~/.config/maccing/google-workspace.env` or `.env.local`) |
 | Timezone | `America/Sao_Paulo` (IANA name — always use IANA names, never offsets like `UTC-3`) |
 | Locale | `pt-BR` |
 
@@ -34,11 +34,11 @@ manage_event(
   start_time="2026-06-12T09:00:00",
   end_time="2026-06-12T09:30:00",
   time_zone="America/Sao_Paulo",
-  user_google_email="andrevcv1@gmail.com"
+  user_google_email="your-account@example.com"
 )
 ```
 
-**ALWAYS match the existing color pattern.** André color-codes his calendar (e.g. `Work` blocks are Peacock, `color_id="7"`). Before you `create` — or recolor — an event, find the color used for that *kind* of event and reuse it; never leave a new event on the calendar's default color when same-type events are colored.
+**ALWAYS match the existing color pattern.** Users often color-code their calendars (e.g. `Work` blocks are Peacock, `color_id="7"`). Before you `create` — or recolor — an event, find the color used for that *kind* of event and reuse it; never leave a new event on the calendar's default color when same-type events are colored.
 
 1. **Read colors by event ID.** The *list* form of `get_events` omits color — fetch events individually (`get_events` with a single `event_id` + `detailed=true`) to see `Color ID`.
 2. **Check more than one.** Same-type events can be inconsistent — some colored, some left on the default. **If _any_ same-type event carries a `Color ID`, that color is the pattern: reuse it.** Never conclude "no color" from one sample showing `Color ID: None` — `None` means *uncolored*, not the intended pattern. If several different colors appear, use the most common.
@@ -217,8 +217,8 @@ modify_gmail_message_labels(message_id="...", add_labels=["Label_123"])
 
 ## Parameter gotchas
 
-- **Timezones:** always use IANA names (`America/Sao_Paulo`, `UTC`, `America/New_York`) — never raw offsets (`-03:00`). André's timezone is `America/Sao_Paulo`.
-- **`user_google_email`:** defaults to `andrevcv1@gmail.com` (set via `USER_GOOGLE_EMAIL` in `~/.config/maccing/google-workspace.env` or `.env.local`). Omit it or pass `andrevcv1@gmail.com` explicitly. Never use `nicolas1120201@gmail.com`.
+- **Timezones:** always use IANA names (`America/Sao_Paulo`, `UTC`, `America/New_York`) — never raw offsets (`-03:00`). use the account's own IANA timezone.
+- **`user_google_email`:** defaults to the account in `USER_GOOGLE_EMAIL` (set via `USER_GOOGLE_EMAIL` in `~/.config/maccing/google-workspace.env` or `.env.local`). Omit it or pass the account in `USER_GOOGLE_EMAIL` explicitly. Never use the host-shipped connector accounts.com`.
 - Never use the `mcp__claude_ai_*` Google connectors — see the account-isolation rule in SKILL.md.
 - **Calendar IDs:** `primary` refers to the user's primary calendar — preferred over the explicit calendar ID for most operations.
 - **Event colors — ALWAYS reuse the existing pattern.** The user color-codes events; a created event must not fall to the default color when same-type events are colored. Read colors via `get_events(event_id=..., detailed=true)` (the list view hides them), sample several, treat any colored same-type event as the pattern (`None` ≠ the pattern), then set `color_id` on `manage_event`. Full rule in the Calendar section above.
