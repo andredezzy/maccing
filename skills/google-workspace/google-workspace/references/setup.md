@@ -45,7 +45,7 @@ chmod 600 ~/.config/maccing/google-workspace.env
 # then edit and fill in:
 export GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
 export GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-<your-secret>
-export USER_GOOGLE_EMAIL=andrevcv1@gmail.com
+export USER_GOOGLE_EMAIL=your-account@example.com
 ```
 
 The stable file survives plugin version bumps (the cache install path is versioned); override its path with `MACCING_WORKSPACE_ENV`. `mcp/.env` is the committed template (`**/.env.local` is gitignored).

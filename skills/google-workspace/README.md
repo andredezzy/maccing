@@ -126,7 +126,7 @@ The plugin ships a companion skill named **`google-workspace`** (at `skills/goog
 - Full tool inventory by service with common workflows and parameter gotchas (`references/tools.md`).
 - Google Cloud setup, tool tiers, and secrets (`references/setup.md`).
 
-One key rule the skill enforces: **always reuse the existing calendar color pattern.** André color-codes his calendar events; any event created by Claude must match the color used for same-type events rather than falling back to the calendar default. Fetch individual events via `get_events` with `detailed=true` to read their `Color ID`, sample more than one, treat any colored same-type event as the pattern, then pass `color_id` to `manage_event`.
+One key rule the skill enforces: **always reuse the existing calendar color pattern.** Users often color-code their calendar events; any event the agent creates must match the color used for same-type events rather than falling back to the calendar default. Fetch individual events via `get_events` with `detailed=true` to read their `Color ID`, sample more than one, treat any colored same-type event as the pattern, then pass `color_id` to `manage_event`.
 
 ---
 

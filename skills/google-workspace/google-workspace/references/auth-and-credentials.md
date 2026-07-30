@@ -10,7 +10,7 @@ The first time Claude calls any Workspace tool in a new session, the MCP server:
 2. After you grant consent, Google redirects to `http://localhost:8000/oauth2callback`.
 3. The server exchanges the authorization code for tokens and saves encrypted credentials to `~/.google_workspace_mcp/credentials/` (file permissions `0600`).
 
-If the tool call times out before you complete the browser flow, **retry the same tool call with `user_google_email` set to `andrevcv1@gmail.com`** — this re-triggers the auth prompt.
+If the tool call times out before you complete the browser flow, **retry the same tool call with `user_google_email` set to the account in `USER_GOOGLE_EMAIL`** — this re-triggers the auth prompt.
 
 **Port 8000 conflict:** If something is already listening on port 8000 (common if a legacy `workspace-mcp` daemon is running), stop it first:
 
@@ -45,4 +45,4 @@ The next tool call will trigger the browser consent flow again.
 
 7-day re-auth cycle? The OAuth consent screen is still in "Testing" mode — see setup.md → "Publish the OAuth consent screen".
 
-**Account isolation:** act only as `andrevcv1@gmail.com` through the `workspace` tools — never the `mcp__claude_ai_*` Google connectors (different account). Full rule: see SKILL.md.
+**Account isolation:** act only as the account in `USER_GOOGLE_EMAIL` through the `workspace` tools — never the `mcp__claude_ai_*` Google connectors (different account). Full rule: see SKILL.md.
