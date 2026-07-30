@@ -39,6 +39,33 @@ Before appending a branch, case, or flag to something that already dispatches:
 3. A registry or handler map earns its place when it makes the next case cheaper AND the current code simpler to read. Two or three short branches usually stay a conditional; five cases with real bodies usually don't.
 4. Whichever you choose, state the judgment. Extending by pattern-matching — "matching the existing pattern" without evaluating the seam — is the failure, not the branch itself.
 
+## The fallback judgment — run it before any `??`, `||`, cast, or stub
+
+Before writing any default, coalesce, cast, or stub that makes a failure go away, ask one
+question: **if this value were actually used, would it work, or would it lie?**
+
+- **Works** → a real default. `port ?? 3000` serves traffic.
+- **Lies** → a mask. `databaseUrl ?? "postgresql://placeholder"` connects to nothing. It
+  relocates the failure somewhere harder to diagnose, and the honest error it hid was the
+  better outcome. A fabricated value is strictly worse than the error it suppresses.
+
+When something fails for lack of a value, fix WHY the value is demanded. Demand an input
+where it is USED, not where the module is LOADED — eager validation of an input that a given
+operation never touches manufactures failures unrelated to that operation.
+
+| Excuse | Reality |
+|---|---|
+| "CI just needs something to boot" | CI passing on a fabricated value proves nothing about the path that needs the real one. |
+| "It's only a dev/test default" | The value ships with the code. The next reader cannot tell a test-only stand-in from a real one. |
+| "The real value is always set in production" | Then failing loudly when it is not costs nothing and catches the one case that matters. |
+| "I'll remove it once CI is green" | The pressure that produced it will not return to remove it. |
+
+**Red flags — stop and remove the value:**
+
+- Inventing a URL, key, id, path, or connection string to satisfy a check
+- Writing a default you would not want anything to actually use
+- "Just to unblock" anything
+
 ## Common mistakes
 
 - Extending a dispatch block because "that's the existing pattern", with no seam evaluation

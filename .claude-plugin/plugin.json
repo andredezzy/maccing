@@ -1,7 +1,7 @@
 {
   "name": "maccing",
   "version": "3.2.1",
-  "description": "Maxxing skills for coding agents: an engineering doctrine (dx, naming, organizing-code, modeling-domains, researching-before-coding, composing-ui), the reasoning operating manual, growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
+  "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, engineering for naming/modeling/organizing/UI/research), the reasoning operating manual, growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
   "author": {
     "name": "André \"Dezzy\" Victor",
     "email": "contact@andredezzy.com",
@@ -24,23 +24,21 @@
     "bun"
   ],
   "skills": [
-    "./skills/reasoning/",
-    "./skills/growth/growth/",
-    "./skills/growth/google-ads/",
-    "./skills/growth/tiktok-ads/",
-    "./skills/growth/meta/meta/",
-    "./skills/growth/meta/meta-ads/",
-    "./skills/growth/meta/whatsapp/",
-    "./skills/growth/platforms/ycloud/ycloud/",
-    "./skills/growth/platforms/ycloud/ycloud-api/",
-    "./skills/notion/notion/",
-    "./skills/google-workspace/google-workspace/",
     "./skills/engineering/dx/",
-    "./skills/engineering/modeling-domains/",
-    "./skills/engineering/organizing-code/",
-    "./skills/engineering/naming/",
-    "./skills/engineering/researching-before-coding/",
-    "./skills/engineering/composing-ui/"
+    "./skills/engineering/engineering/",
+    "./skills/google-workspace/google-workspace/",
+    "./skills/growth/google-ads/",
+    "./skills/growth/growth/",
+    "./skills/growth/meta/meta-ads/",
+    "./skills/growth/meta/meta/",
+    "./skills/growth/meta/whatsapp/",
+    "./skills/growth/platforms/ycloud/ycloud-api/",
+    "./skills/growth/platforms/ycloud/ycloud/",
+    "./skills/growth/tiktok-ads/",
+    "./skills/notion/notion/",
+    "./skills/reasoning/"
   ],
-  "commands": ["./commands/"]
+  "commands": [
+    "./commands/"
+  ]
 }
