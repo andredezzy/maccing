@@ -53,11 +53,7 @@ npx skills add andredezzy/maccing -g
 |--------|-------|---------|
 | — | reasoning | Operating manual for hard problems: read the real ask, verify by re-deriving, label known vs guessed, attack your own conclusion, answer → reasoning → risk |
 | engineering | dx | DX is the top design priority — every structure judged by the cognitive load on the next person who reads, debugs, tests, or extends it |
-| engineering | naming | A name says exactly what the thing is; a closed set of states gets an enum, not booleans or a lowercase union |
-| engineering | organizing-code | The file tree is the documentation — one concern per file, every function earning its existence; errors as a cross-cutting contract |
-| engineering | modeling-domains | The shape of the data mirrors the shape of reality — every nesting level a real, nameable boundary |
-| engineering | researching-before-coding | Claims about external surfaces are verified against a named current source or labeled a guess — never asserted from memory |
-| engineering | composing-ui | Composition as a hard rule — compound components, god-component decomposition on touch, server-page composition, forms, labels |
+| engineering | writing-code | The whole code touch in one skill — a name that says exactly what the thing is, data shaped like the reality it mirrors, one concern per file with errors as a cross-cutting contract, composition as a hard rule for UI, and external surfaces verified against a named source instead of memory |
 | growth | growth | Cross-channel paid-acquisition + messaging orchestrator |
 | growth | google-ads | Google Ads production reference + scripts |
 | growth | tiktok-ads | TikTok Ads production reference |
