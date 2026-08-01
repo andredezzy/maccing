@@ -1,7 +1,7 @@
 {
   "name": "maccing",
   "version": "3.2.1",
-  "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, engineering for naming/modeling/organizing/UI/research), the reasoning operating manual, growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
+  "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, writing-code for naming/modeling/organizing/UI/research), the reasoning operating manual, growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
   "author": {
     "name": "André \"Dezzy\" Victor",
     "email": "contact@andredezzy.com",
@@ -14,6 +14,7 @@
     "skills",
     "dx",
     "engineering",
+    "writing-code",
     "reasoning",
     "growth",
     "ads",
@@ -25,7 +26,7 @@
   ],
   "skills": [
     "./skills/engineering/dx/",
-    "./skills/engineering/engineering/",
+    "./skills/engineering/writing-code/",
     "./skills/google-workspace/google-workspace/",
     "./skills/growth/google-ads/",
     "./skills/growth/growth/",

@@ -1,9 +1,9 @@
 ---
-name: engineering
+name: writing-code
 description: 'Use when writing, shaping, or placing any code — every edit names something, so this loads with the code touch. Triggers: naming an identifier, file, type, or enum member; choosing between a boolean, string union, and enum for a set of states; defining a domain type, database or validation schema, config shape, or wire payload; data that is flat, joined by ID references, or duplicated across fields; creating, splitting, or moving files; error classes, catch blocks, helpers, wrappers, utils, test files; barrel files, circular imports, a function that only forwards its arguments, an empty catch; any UI component, page, route, layout, form, or prop; a god component, dot-notation sub-components, a page marked "use client"; and before writing code against any external library, API, framework, or tool, or proposing a fix after an error.'
 ---
 
-# Engineering
+# Writing Code
 
 ## Overview
 
