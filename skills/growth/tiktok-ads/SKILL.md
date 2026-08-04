@@ -32,7 +32,7 @@ BROWSER GUIDANCE IS THE FALLBACK, NOT THE DEFAULT.
 1. **TikTok Ads MCP** (`amekala/ads-mcp` or `AdsMCP/tiktok-ads-mcp-server`) — campaign CRUD, reports, analytics
 2. **TikTok Marketing API** (via official SDK `tiktok-business-api-sdk-official`) — full lifecycle management
 3. **TikTok Events API** — server-side conversion tracking (like GA4 MP)
-4. **UI automation** — follow the global AdsPower discipline in `references/automation.md`; do NOT use Playwriter for antidetect-sensitive surfaces.
+4. **UI automation** — follow the global AdsPower discipline in `references/automation.md`. TikTok Ads is fingerprint-sensitive, so it runs inside an AdsPower profile.
 
 ### 2. Self-Improving Skill
 
@@ -466,7 +466,6 @@ At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Yo
 | **"Vendas" has sub-destinations** | Must select "Site" for website conversions (default is TikTok Shop) |
 | **URL field is TEXTAREA, not INPUT** | `input[placeholder*="URL"]` won't find it |
 | **"Tailored ad variations" popup blocks everything** | Cannot be dismissed. Work around with JS focus |
-| **File upload limit in Playwriter** | 50MB limit in remote CDP. Compress with ffmpeg first |
 
 ### Events API
 
@@ -479,13 +478,15 @@ At $20/day in SEA/South Asia markets, CPMs are $0.20-$2.00 (vs $8-$15 in US). Yo
 | **`PlaceAnOrder` deprecated** | Use `Purchase` |
 | **email/externalId: SHA-256 hashed** | Lowercase + trim BEFORE hashing. ttclid: raw, NOT hashed |
 
-### Browser Automation (Playwriter)
+### Browser automation
 
-For UI automation use the global AdsPower fallback ladder (`references/automation.md`). The Playwriter notes below are retained as reference only; not the recommended path.
+Drive the UI through the AdsPower ladder in `references/automation.md` — TikTok Ads is
+fingerprint-sensitive, so the session belongs in an antidetect profile.
+
+What the page does to any driver:
 
 | Gotcha | Detail |
 |--------|--------|
-| **Extension mode FAILS on TikTok Ads** | Page redirects invalidate CDP sessions. Use `--direct` mode. |
-| **Direct mode requires `chrome://inspect/#remote-debugging`** | User must enable manually |
-| **`snapshot()` often returns empty** | Use `screenshot()` as fallback |
-| **TikTok uses Vue/React** | `evaluate()` to set values doesn't trigger reactivity. Use click + type. |
+| **TikTok renders with Vue/React** | Setting a value through `evaluate()` skips the framework's reactivity, and the form submits empty. Click the field and type into it. |
+| **Accessibility snapshots often come back empty** | Fall back to a screenshot and locate the control visually. |
+| **Uploads are capped around 50MB** | Compress with ffmpeg before uploading. |

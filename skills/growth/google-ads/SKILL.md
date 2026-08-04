@@ -5,7 +5,7 @@ description: Use when managing Google Ads campaigns, creating ads, optimizing ca
 
 # Google Ads Management
 
-Scripts-first approach to Google Ads. Google Ads Scripts run inside the Google Ads UI with zero setup — no developer token, no OAuth, no approval. Use Scripts for everything. Browser automation (Playwriter) is only needed to apply Google's built-in recommendations.
+Scripts-first approach to Google Ads. Google Ads Scripts run inside the Google Ads UI with zero setup — no developer token, no OAuth, no approval. Use Scripts for everything. Browser automation is only needed to apply Google's built-in recommendations.
 
 **Project data lives in `.maccing/growth/google-ads/<account>/README.md`.** This file contains only generic, reusable platform knowledge.
 
@@ -24,13 +24,13 @@ Without reading it, you WILL operate on stale data.
 
 ```
 ALWAYS USE GOOGLE ADS SCRIPTS FOR WRITE AND READ OPERATIONS.
-PLAYWRITER IS ONLY FOR APPLYING GOOGLE RECOMMENDATIONS.
+THE BROWSER IS ONLY FOR APPLYING GOOGLE RECOMMENDATIONS.
 ```
 
 **Priority order:**
 1. **Google Ads Scripts** (`AdsApp.mutate` / `AdsApp.search`) — create ads, add keywords, read metrics, manage campaigns. Reliable, requires zero approval, works immediately.
 2. **Google Ads MCP** (`google-ads` MCP server) — secondary option when developer token is approved. Same power as Scripts but callable directly from Claude.
-3. **Playwriter** — only for applying Google's built-in recommendations (the Recommendations page cards). There is no API for this.
+3. **The operator's own browser** — only for applying Google's built-in recommendations (the Recommendations page cards). There is no API for this. Drive it with `aside-browser`: the Recommendations page runs inside the operator's authenticated Google session, so the traffic has to carry their identity.
 
 **NEVER guide the user through manual Google Ads UI steps when Scripts can do it.**
 
@@ -154,9 +154,9 @@ When the business model has a free tier → paid conversion funnel:
 6. For read scripts: user copies the `Logger` output back to Claude
 7. For write scripts: script logs success/failure per operation
 
-### When to use Scripts vs MCP vs Playwriter
+### When to use Scripts vs MCP vs the browser
 
-| Task | Scripts | MCP (when approved) | Playwriter |
+| Task | Scripts | MCP (when approved) | Browser |
 |---|---|---|---|
 | Create RSA ads | ✅ `AdsApp.mutate` | ✅ | ❌ Angular overlay |
 | Add keywords | ✅ `AdsApp.mutateAll` | ✅ | ⚠️ FAB works but fragile |
@@ -424,14 +424,17 @@ Frontend (GA4 tag) ──cross-domain linker──▶ App (GA4 tag)
 2. Google Cloud OAuth client ID + secret (Desktop Application type, Google Ads API enabled)
 3. OAuth refresh token via browser auth flow
 
-## Playwriter Patterns (for Recommendations only)
+## Browser patterns (for Recommendations only)
+
+Driven with `aside-browser`. Its REPL exposes `page` directly and holds no state between
+invocations, so each run attaches its own tab and finishes its work in one call.
 
 ### Apply a recommendation card
 ```js
-await state.page.goto("https://ads.google.com/aw/recommendations?ocid=<ACCOUNT_ID>");
-await state.page.waitForLoadState("networkidle");
+await page.goto("https://ads.google.com/aw/recommendations?ocid=<ACCOUNT_ID>");
+await page.waitForLoadState("networkidle");
 
-await state.page.evaluate(() => {
+await page.evaluate(() => {
   const options = document.querySelectorAll("[role=option]");
   for (const opt of options) {
     if (opt.textContent?.includes("TARGET_RECOMMENDATION_TEXT")) {
@@ -446,7 +449,7 @@ await state.page.evaluate(() => {
     }
   }
 });
-await state.page.locator('role=button[name="Aplicar"] >> nth=1').click({ force: true });
+await page.locator('role=button[name="Aplicar"] >> nth=1').click({ force: true });
 ```
 
 ### Key rule: never use native click()

@@ -57,7 +57,7 @@ The **Recommendations page** (Google Ads → Recommendations) is the only confir
 
 For this carve-out:
 
-- Use **Playwriter** (the host browser, via `mcp__plugin_playwright_playwright__*` tools) — NOT AdsPower.
+- Use **`aside-browser`** (the operator's own browser) — NOT AdsPower.
 - The Recommendations page is not a fingerprint-sensitive surface. It does not require an antidetect profile — it is accessed from the operator's own authenticated browser session, no different from the operator reviewing it manually.
 - No AdsPower profile is warranted here. Do not create one for this purpose.
 
@@ -76,7 +76,7 @@ Following the global Axis 2 definition:
 | Pull campaign performance metrics | Google Ads Scripts (`AdsApp`) or Ads API | Agent |
 | Generate keyword report | Google Ads Scripts (`AdsApp.keywords()`) | Agent |
 | Create / modify campaigns in bulk | Google Ads API | Operator confirms; agent prepares payload |
-| Accept a Recommendation | Recommendations page via Playwriter | Operator confirms click |
+| Accept a Recommendation | Recommendations page via `aside-browser` | Operator confirms click |
 | Pause / enable a campaign | Google Ads API | Operator confirms |
 | Change bidding strategy | Google Ads API | Operator confirms |
 
