@@ -213,6 +213,71 @@ describe("two_proportion", () => {
     expect(readings).toBeGreaterThan(500);
   });
 
+  test("does not report a standard error that overflowed as a measurement of no difference", () => {
+    // A denominator below about 1e-308 has `1 / n === Infinity`, so the pooled standard error
+    // is Infinity while the two rates genuinely differ by half. Dividing a real difference by
+    // Infinity gives z = 0 and p = 1, and that pair reads as "tested, and the two groups came
+    // out identical" — the most misleading thing this function can return, and finite, so no
+    // check on the arguments and no NaN sweep catches it.
+    expect(two_proportion(0, 1e-320, 50, 100)).toBeNull();
+  });
+
+  test("returns null rather than NaN where the arithmetic leaves the domain its arguments were in", () => {
+    // Every quadruple here is finite, non-negative, and has each count inside its own
+    // denominator, so an implementation that validates only its arguments accepts all of them
+    // and then computes NaN. The first overflows `a + b` and `na + nb` to Infinity and divides
+    // one by the other; the rest overflow `1 / n` to Infinity and multiply it by a variance
+    // term of exactly zero.
+    const huge = Number.MAX_VALUE;
+    for (const [a, na, b, nb] of [
+      [huge, huge, huge, huge],
+      [0, 1e-320, 0, 100],
+      [1e-320, 1e-320, 100, 100],
+      [0, Number.MIN_VALUE, 0, 10],
+      [Number.MIN_VALUE, Number.MIN_VALUE, 20, 20],
+    ] as const) {
+      const result = two_proportion(a, na, b, nb);
+      // Named in the assertion rather than asserted as null, so a future implementation that
+      // finds a defensible finite answer here fails on the answer and not on the shape.
+      expect(`${a}/${na} vs ${b}/${nb}: ${result === null ? "null" : `z ${result.z}, p ${result.p}`}`).toBe(
+        `${a}/${na} vs ${b}/${nb}: null`,
+      );
+    }
+  });
+
+  test("never hands back a non-finite reading across a sweep of hostile denominators", () => {
+    // The sweep above uses the sizes a real cell has. This one uses the sizes that break the
+    // arithmetic: subnormal, fractional, and at the top of the range, crossed with all-miss,
+    // half, and all-hit. Whatever comes back must be either null or a reading a caller can
+    // publish without testing it for NaN first.
+    const denominators = [Number.MIN_VALUE, 1e-320, 1e-300, 0.5, 1, 7, 1e6, 1e300, Number.MAX_VALUE];
+    const fractions = [0, 0.5, 1];
+    const broken: string[] = [];
+    let readings = 0;
+    for (const na of denominators) {
+      for (const nb of denominators) {
+        for (const fa of fractions) {
+          for (const fb of fractions) {
+            const a = fa * na;
+            const b = fb * nb;
+            const result = two_proportion(a, na, b, nb);
+            if (result === null) {
+              continue;
+            }
+            readings += 1;
+            if (!Number.isFinite(result.z) || !(result.p >= 0 && result.p <= 1)) {
+              broken.push(`${a}/${na} vs ${b}/${nb}: z ${result.z}, p ${result.p}`);
+            }
+          }
+        }
+      }
+    }
+    expect(broken).toEqual([]);
+    // Guards the sweep against becoming vacuous: these denominators are hostile enough that an
+    // over-eager implementation could refuse every one of them and pass having checked nothing.
+    expect(readings).toBeGreaterThan(50);
+  });
+
   test("moves p towards zero as the same split is measured on more people", () => {
     // A rate difference that is noise at ten apiece is a result at a thousand apiece, and
     // the p-value has to be the thing that notices.

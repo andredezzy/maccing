@@ -8,10 +8,21 @@
 # not, nothing about the skills changes. No SKILL.md refers to this file.
 #
 # Two jobs, both driven by the tool invocation that arrives on stdin as JSON:
-#   1. Observe. Invoking a skill, or reading a file inside a skill's own
+#   1. Observe. Invoking a skill, or touching a file inside a skill's own
 #      directory, marks that skill loaded for the rest of the session.
 #   2. Gate. An edit or write under a governed tree whose skill is not marked
-#      loaded is denied once, with a reason that names the skill.
+#      loaded is denied, and stays denied until that skill is marked loaded.
+#
+# The gate does not step aside after one reminder. A hook cannot verify that an
+# agent read anything, but it does not need to: the observe path is the way
+# through, and it is deliberately generous about what counts as reaching for
+# the skill. An agent that engages with the skill is never denied twice. An
+# agent that ignores the reminder and retries is the case the gate exists for.
+#
+# The escape is MACCING_SKILL_GATE=off, for a host that gives an agent no
+# observable way to load a skill at all. It is one environment variable a human
+# sets on purpose, which is a different thing from the hook quietly giving up
+# on its own the second time it is asked.
 #
 # Every unexpected path exits 0 with no output: unreadable input, no jq, a tool
 # shape this script does not know, a temp directory it cannot create. A hook
@@ -22,10 +33,16 @@ set -euo pipefail
 STDIN_TIMEOUT_SECONDS=5
 STATE_ROOT="${TMPDIR:-/tmp}/maccing-hooks"
 
-# Only these tools are gated. Every other tool is observed and never blocked.
+# Only these tools are gated, spelled exactly as the hosts that offer them
+# spell them. The observe side matches tool names case-insensitively and over a
+# wider list, because the two directions have different costs: observing too
+# much skips a reminder, gating too much blocks work.
 EDIT_TOOLS='^(Edit|MultiEdit|Write|NotebookEdit)$'
-READ_TOOLS='^(Read|NotebookRead)$'
-SKILL_TOOLS='^(Skill|SlashCommand)$'
+# Tools whose whole purpose is to load a skill, so a bare skill name in their
+# arguments is signal rather than coincidence.
+SKILL_TOOLS='^(skill|skills|slashcommand|loadskill|useskill)$'
+# Tools that write. A path one of these carries is not evidence of reading.
+WRITE_TOOLS='^(edit|multiedit|write|notebookedit|patch|apply_patch|update)$'
 
 KNOWN_SKILLS=(growth database-mapping database-ops)
 
@@ -47,6 +64,19 @@ skill_home() {
     database-mapping) printf 'skills/database/mapping/' ;;
     database-ops) printf 'skills/database/ops/' ;;
   esac
+}
+
+# Does this text point at a skill's own files? Three shapes count: a path
+# inside the skill's directory, a path that is the directory itself, and the
+# skill:// URI some hosts use to address a skill that has no path on disk.
+points_at_skill() {
+  local home
+  home="$(skill_home "$1")"
+  [ -n "$home" ] || return 1
+  case "$2" in
+    *"$home"* | *"${home%/}" | *"skill://$1"*) return 0 ;;
+  esac
+  return 1
 }
 
 # One sentence: which skill to load, and why this tree needs it.
@@ -106,6 +136,7 @@ tool_name="${tool_name:-}"
 file_path="${file_path:-}"
 skill_arg="${skill_arg:-}"
 [ -n "$tool_name" ] || exit 0
+tool_lc="$(printf '%s' "$tool_name" | tr 'A-Z' 'a-z')"
 
 # A hook process cannot see the agent's context, so "loaded" is a file keyed by
 # the session id. No session id means no reliable key, and no reminder.
@@ -115,8 +146,9 @@ session_key="${session_key:0:64}"
 STATE_DIR="$STATE_ROOT/$session_key"
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 
-# 1. Observe.
-if [[ "$tool_name" =~ $SKILL_TOOLS ]] && [ -n "$skill_arg" ]; then
+# 1. Observe. Anything that looks like reaching for a skill marks it loaded,
+# because this is the only way past the gate.
+if [[ "$tool_lc" =~ $SKILL_TOOLS ]] && [ -n "$skill_arg" ]; then
   for skill in "${KNOWN_SKILLS[@]}"; do
     case "$skill_arg" in
       *"$skill"*) mark loaded "$skill" ;;
@@ -124,17 +156,29 @@ if [[ "$tool_name" =~ $SKILL_TOOLS ]] && [ -n "$skill_arg" ]; then
   done
 fi
 
-if [[ "$tool_name" =~ $READ_TOOLS ]] && [ -n "$file_path" ]; then
+# A path or URI into a skill's own tree counts from any tool that is not a
+# write: reading it, listing it, grepping it, or naming it in a shell command
+# are the same gesture, and which tool carried the path says little. The skill
+# argument is checked alongside the path, because that is where a shell
+# command lands.
+if ! [[ "$tool_lc" =~ $WRITE_TOOLS ]]; then
   for skill in "${KNOWN_SKILLS[@]}"; do
-    home="$(skill_home "$skill")"
-    [ -n "$home" ] || continue
-    case "$file_path" in
-      *"$home"*) mark loaded "$skill" ;;
-    esac
+    if points_at_skill "$skill" "$file_path" || points_at_skill "$skill" "$skill_arg"; then
+      mark loaded "$skill"
+    fi
   done
 fi
 
 # 2. Gate.
+
+# The deliberate escape. Without it, a host that gives an agent no observable
+# way to load a skill would deny every governed edit for the whole session.
+# The way out is a human setting this variable knowingly, once, with the gate's
+# own name on it — not the hook deciding to stand down by itself.
+if [ "${MACCING_SKILL_GATE:-}" = "off" ]; then
+  exit 0
+fi
+
 [[ "$tool_name" =~ $EDIT_TOOLS ]] || exit 0
 [ -n "$file_path" ] || exit 0
 
@@ -145,14 +189,14 @@ if is_marked loaded "$skill"; then
   exit 0
 fi
 
-# Remind once per skill per session. A second denial would only wedge the work,
-# because a hook cannot verify that the agent actually read anything.
-if is_marked reminded "$skill"; then
-  exit 0
-fi
-
 reason="$(deny_reason "$skill")"
 [ -n "$reason" ] || exit 0
-mark reminded "$skill"
+
+# Name the way through. It is the only way through, so leaving the agent to
+# work it out would be the wedge arriving by a quieter route.
+home="$(skill_home "$skill")"
+if [ -n "$home" ]; then
+  reason="$reason Load it — invoke the $skill skill, or read ${home}SKILL.md — and the edit goes through."
+fi
 
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$reason"

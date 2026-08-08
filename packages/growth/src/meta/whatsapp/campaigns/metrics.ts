@@ -211,6 +211,30 @@ export class ExportColumnError extends Error {
   }
 }
 
+/** A bound timestamp column that is in the header and empty, or unreadable, on every row. */
+export class ExportBlankColumnError extends Error {
+  readonly path: string;
+  readonly role: string;
+  readonly columns: readonly string[];
+
+  constructor(path: string, role: string, columns: readonly string[], rows: number) {
+    const named = columns.map((name) => JSON.stringify(name)).join(" or ");
+    super(
+      `the ${role} role binds ${named} for its timestamp, and not one of the ${rows} rows in ${path} ` +
+        "carries a readable one. The column is in the header, so the binding passes and every event " +
+        "then falls out of the accumulator silently: a full file of real events reports as none. A " +
+        "column renamed at the source often leaves the old one behind, present and blank on every row, " +
+        "which is exactly this. Re-export with the column populated, or bind the one that now holds the " +
+        "timestamp. A file with no rows at all is a fact and passes here — this is a file with rows and " +
+        "no times in them, which is a fault.",
+    );
+    this.name = "ExportBlankColumnError";
+    this.path = path;
+    this.role = role;
+    this.columns = columns;
+  }
+}
+
 /** A cell whose declaration cannot be measured as written. */
 export class CellDeclarationError extends Error {
   readonly cell: string;
@@ -253,17 +277,22 @@ export class ControlError extends Error {
   }
 }
 
-/** Arrivals counted against a cut the declaration itself calls a placeholder. */
+/** Outcomes counted against a cut the declaration itself calls a placeholder. */
 export class ProvisionalCutError extends Error {
-  readonly cells: readonly { cell: string; accounts: number }[];
+  readonly cells: readonly { cell: string; counted: readonly { outcome: string; count: number }[] }[];
 
-  constructor(cells: readonly { cell: string; accounts: number }[]) {
+  constructor(cells: readonly { cell: string; counted: readonly { outcome: string; count: number }[] }[]) {
+    const named = cells
+      .map(
+        (entry) =>
+          `${JSON.stringify(entry.cell)} (${entry.counted.map((one) => `${one.outcome} ${one.count}`).join(", ")})`,
+      )
+      .join("; ");
     super(
-      "arrivals counted against a cut that is declared provisional: " +
-        `${cells.map((entry) => `${JSON.stringify(entry.cell)} (${entry.accounts} arrived)`).join(", ")}. A ` +
-        "provisional cut stands in for a send whose real moment is not known yet, so each of those " +
-        "arrivals is dated against a guess and none of them can be attributed to anything. Put the " +
-        "confirmed send time in `cut` and drop `cut_provisional`, or leave the cell out of this reading.",
+      `outcomes counted against a cut that is declared provisional: ${named}. A provisional cut stands ` +
+        "in for a send whose real moment is not known yet, so every count above is dated against a guess " +
+        "and none of them can be attributed to anything. Put the confirmed send time in `cut` and drop " +
+        "`cut_provisional`, or leave the cell out of this reading.",
     );
     this.name = "ProvisionalCutError";
     this.cells = cells;
@@ -320,7 +349,16 @@ async function read_export(path: string, role: string, bound: readonly string[])
   return records;
 }
 
-/** Group a money-carrying role's rows under the person they reference. */
+/**
+ * Group a money-carrying role's rows under the person they reference.
+ *
+ * The header check in `read_export` proves the bound timestamp column exists; the count below
+ * proves it holds something. A column that is present and blank on every row is what a rename at
+ * the source usually leaves behind, and it produces the same silent nothing an absent column
+ * would: every event parses to a null instant, the accumulator skips all of them, and a file of
+ * real money reports as none. The bound amount needs no such count, because `amount_of` already
+ * refuses a blank on the first row it meets.
+ */
 async function money_index(directory: string, binding: RoleBinding, role: string): Promise<Map<string, MoneyEvent[]>> {
   const path = `${directory}/${binding.export}`;
   const person = column_of(binding, "person", role);
@@ -329,15 +367,24 @@ async function money_index(directory: string, binding: RoleBinding, role: string
   const rows = await read_export(path, role, [person, at, amount]);
 
   const index = new Map<string, MoneyEvent[]>();
+  let dated = 0;
   for (const row of rows) {
     const id = row[person] ?? "";
     const event: MoneyEvent = { at: parse_ts(row[at]), amount: amount_of(row[amount], path, amount) };
+    if (event.at !== null) {
+      dated += 1;
+    }
     const bucket = index.get(id);
     if (bucket === undefined) {
       index.set(id, [event]);
     } else {
       bucket.push(event);
     }
+  }
+  // An export with no rows is a fact — a role that saw no activity in the window someone queried.
+  // An export with rows and no times in any of them is a fault, and the two must not be confused.
+  if (rows.length > 0 && dated === 0) {
+    throw new ExportBlankColumnError(path, role, [at], rows.length);
   }
   return index;
 }
@@ -363,6 +410,7 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
   const rows = await read_export(path, "conversion", bound);
 
   const index = new Map<string, ConversionEvent[]>();
+  let dated = 0;
   for (const row of rows) {
     // The primary timestamp is nullable on this role, so the map may name a second column to
     // stand in. Empty, not absent, is what an unset timestamp looks like in an export.
@@ -373,6 +421,9 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
       amount: amount_of(row[amount], path, amount),
       status: row[status] ?? "",
     };
+    if (event.at !== null) {
+      dated += 1;
+    }
     // Absent where the map declares no split, so a product with no recycled balance carries no
     // half-read field that later reads as "not recycled".
     if (split !== undefined) {
@@ -385,6 +436,17 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
     } else {
       bucket.push(event);
     }
+  }
+  // Both timestamp columns are named, because where a fallback is bound the pair is the binding:
+  // reporting only the primary would send the reader to correct a column the map was already
+  // prepared to do without.
+  if (rows.length > 0 && dated === 0) {
+    throw new ExportBlankColumnError(
+      path,
+      "conversion",
+      at_fallback === undefined ? [at] : [at, at_fallback],
+      rows.length,
+    );
   }
   return index;
 }
@@ -468,32 +530,69 @@ function resolve_outcome(record: CellRecord, path: string): number | undefined {
 }
 
 /**
- * Which outcome an audience can be read on.
+ * Which outcomes a control pair may be read on, by the audience it was read against.
  *
- * A cold list has no counterfactual: nobody who has never heard of the brand arrives unprompted,
- * so arrival is the effect. A list of people who already hold accounts cannot arrive at all, so
- * arrival there measures nothing and commitment is the effect. Reading a pair on the wrong one
- * gives zero against zero, which is not a null result — it is a question that was never asked.
+ * Two rules used to live here as two lists, and they contradicted each other. One admitted seven
+ * paths; the other confined a `cold` cell to `acquired.*` and an `own_base` cell to
+ * `conversions.*`, which made the three `pre_existing.*` paths unreachable for every audience —
+ * admitted by the allowlist and then refused by the audience check, two errors for one mistake
+ * and the second contradicting the first. They were dropped rather than admitted, because there
+ * is no reading they enable: `pre_existing` counts people who were already there before the cut,
+ * so it is the same population in both arms of any pair and a difference in it is a difference in
+ * how the two lists were drawn, not an effect of anything that was sent. This table is now the
+ * only statement of the rule, and the flat allowlist below is its union, so the two checks in
+ * `measure` cannot disagree about a path again.
+ *
+ * Why the shape of each entry. A cold list has no counterfactual: nobody who has never heard of
+ * the brand arrives unprompted, so arrival is the effect. A list of people who already hold
+ * accounts cannot arrive at all, so arrival there measures nothing and commitment is the effect.
+ * Reading a pair on the wrong one gives zero against zero, which is not a null result — it is a
+ * question that was never asked.
+ *
+ * Why every entry is a count. The two-proportion test behind `publishable` compares successes
+ * against a denominator of listed identifiers. Hand it a sum of money and it still returns a
+ * number: a p-value on "currency per person listed", which is not a proportion of anything and
+ * cannot be below or above a significance threshold in any meaningful way. The reading would
+ * carry `publishable: true` and mean nothing.
  */
-const OUTCOME_PREFIX: Record<Cell["audience"], string> = { cold: "acquired.", own_base: "conversions." };
+const COUNTABLE_BY_AUDIENCE: Record<Cell["audience"], readonly string[]> = {
+  cold: ["acquired.accounts", "acquired.revenue.people", "acquired.churn.people"],
+  own_base: ["conversions.count"],
+};
+
+/** Every path some audience can be read on. Derived, so it can never admit an unreachable one. */
+export const COUNTABLE_OUTCOMES: readonly string[] = [...new Set(Object.values(COUNTABLE_BY_AUDIENCE).flat())];
 
 /**
- * The fields a control pair may be read on.
+ * The counts a provisional cut makes meaningless.
  *
- * Every one of them is a count of people or of events, because the two-proportion test behind
- * `publishable` compares successes against a denominator of listed identifiers. Hand it a sum of
- * money and it still returns a number: a p-value on "currency per person listed", which is not a
- * proportion of anything and cannot be below or above a significance threshold in any meaningful
- * way. The reading would carry `publishable: true` and mean nothing. The prefix rule below says
- * which branch of the record an audience may be read on; this says which leaves inside it are
- * countable at all.
+ * Every one of them is accumulated forward from the cut, so a cut that is a guess dates all of
+ * them against a guess. `acquired.accounts` is the obvious one and was for a while the only one
+ * checked, which left the guard blind to exactly the case that matters: an `own_base` cell is by
+ * construction one whose matched accounts all predate the cut, so its arrivals are always zero
+ * and the guard could never fire on it — while `conversions.count`, the one outcome such a cell
+ * is ever read on, was accumulated from the same guess and published.
+ *
+ * The revenue and churn counts are here for the same reason and not merely for symmetry. The two
+ * on the `acquired` branch are subsets of `acquired.accounts` and so can only add detail to the
+ * message, but the two on the `pre_existing` branch are not: they count people who were already
+ * there and then paid or left *after* the cut, which is a number a guessed cut moves and nothing
+ * else here would catch.
+ *
+ * `pre_existing.accounts` is deliberately absent. It is a partition of the audience rather than
+ * an outcome — nothing was attributed to it — and it is non-zero for essentially every `own_base`
+ * cell, so including it would refuse every provisional cut ever declared on one and destroy the
+ * quiet case the flag exists to allow. Money sums are absent too, because a non-zero sum always
+ * carries a non-zero count and the counts already detect it.
+ *
+ * Not derived from `COUNTABLE_OUTCOMES`: that list answers which paths a proportion test can
+ * read, this one answers which paths the cut dates, and the two questions only look alike.
  */
-export const COUNTABLE_OUTCOMES: readonly string[] = [
+const ACCUMULATED_FROM_CUT: readonly string[] = [
   "acquired.accounts",
-  "conversions.count",
   "acquired.revenue.people",
   "acquired.churn.people",
-  "pre_existing.accounts",
+  "conversions.count",
   "pre_existing.revenue.people",
   "pre_existing.churn.people",
 ];
@@ -548,13 +647,20 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
 
   const by_key = new Map<string, Account[]>();
   let unreadable = 0;
+  let dated = 0;
   for (const row of person_rows) {
+    // Parsed before the phone is looked at, so the count below describes the file rather than the
+    // subset of it this market's dialling plan happened to understand.
+    const created = parse_ts(row[person_created]);
+    if (created !== null) {
+      dated += 1;
+    }
     const key = key_of(row[person_phone]);
     if (key === null) {
       unreadable++;
       continue;
     }
-    const account: Account = { id: row[person_id] ?? "", created: parse_ts(row[person_created]) };
+    const account: Account = { id: row[person_id] ?? "", created };
     const bucket = by_key.get(key);
     if (bucket === undefined) {
       by_key.set(key, [account]);
@@ -566,6 +672,14 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     const rate = unreadable / person_rows.length;
     if (rate > map.phone.max_unparseable_rate) {
       throw new UnparseablePhonesError(unreadable, person_rows.length, rate, map.phone.max_unparseable_rate);
+    }
+    // Checked after the phone rate, because an export whose numbers are unreadable is the larger
+    // fault and the one whose message the reader wants first. An account with no creation time is
+    // legal on its own — it falls in neither group rather than the flattering one — but a file
+    // where every account is undated places nobody, and the run then reports an audience that
+    // arrived at nothing and was already there for nothing.
+    if (dated === 0) {
+      throw new ExportBlankColumnError(person_path, "person", [person_created], person_rows.length);
     }
   }
 
@@ -747,15 +861,24 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     measured.push({ cell, record });
   }
 
-  // A provisional cut is a date somebody wrote down while waiting for the real one. Arrivals
-  // measured from it are dated against a guess, so the run refuses rather than emitting them. It
-  // refuses instead of printing a warning because the reader who is misled is not the one watching
-  // this run: it is whoever opens the JSON weeks later, and nothing printed to a terminal reaches
-  // them. The record carries `cut_provisional` for the same reason, and that flag is what the
-  // no-arrivals case is left with.
+  // A provisional cut is a date somebody wrote down while waiting for the real one. Everything
+  // counted forward from it is dated against a guess, so the run refuses rather than emitting it.
+  // It refuses instead of printing a warning because the reader who is misled is not the one
+  // watching this run: it is whoever opens the JSON weeks later, and nothing printed to a terminal
+  // reaches them. The record carries `cut_provisional` for the same reason, and that flag is what
+  // the case with nothing counted is left with.
   const against_a_guess = measured
-    .filter((entry) => entry.cell.cut_provisional === true && entry.record.acquired.accounts > 0)
-    .map((entry) => ({ cell: entry.cell.name, accounts: entry.record.acquired.accounts }));
+    .filter((entry) => entry.cell.cut_provisional === true)
+    .map((entry) => ({
+      cell: entry.cell.name,
+      counted: ACCUMULATED_FROM_CUT.map((outcome) => ({
+        outcome,
+        // Zero where the map left the role unbound, which is the same "nothing to attribute" as a
+        // bound role that counted none.
+        count: resolve_outcome(entry.record, outcome) ?? 0,
+      })).filter((reading) => reading.count > 0),
+    }))
+    .filter((entry) => entry.counted.length > 0);
   if (against_a_guess.length > 0) {
     throw new ProvisionalCutError(against_a_guess);
   }
@@ -776,17 +899,9 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
 
-    const wanted = OUTCOME_PREFIX[treated.cell.audience];
-    if (!control.outcome.startsWith(wanted) || !control.outcome.startsWith(OUTCOME_PREFIX[untouched.cell.audience])) {
-      throw new ControlError(
-        `the pair ${JSON.stringify(control.treated)} (${treated.cell.audience}) against ` +
-          `${JSON.stringify(control.control)} (${untouched.cell.audience}) reads outcome ` +
-          `${JSON.stringify(control.outcome)}, which contradicts the audience. A cold cell is read on an ` +
-          "`acquired.*` outcome and one already holding accounts on a `conversions.*` outcome; the other " +
-          "way round is zero against zero, which is not a null result but a question never asked.",
-      );
-    }
-
+    // Countable first, then the audience. Both read the same table, so a path either belongs to
+    // some audience or to none, and the two can no longer refuse the same outcome for reasons
+    // that contradict each other.
     if (!COUNTABLE_OUTCOMES.includes(control.outcome)) {
       throw new ControlError(
         `the pair ${JSON.stringify(control.treated)} against ${JSON.stringify(control.control)} reads ` +
@@ -795,6 +910,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
           `people or events: ${COUNTABLE_OUTCOMES.join(", ")}. A sum of money divided by a headcount is ` +
           "not a proportion, and the test would answer with a p-value that means nothing while reading as " +
           "publishable. Compare the counts here and report the money beside them.",
+      );
+    }
+
+    const treated_allows = COUNTABLE_BY_AUDIENCE[treated.cell.audience];
+    const control_allows = COUNTABLE_BY_AUDIENCE[untouched.cell.audience];
+    if (!treated_allows.includes(control.outcome) || !control_allows.includes(control.outcome)) {
+      throw new ControlError(
+        `the pair ${JSON.stringify(control.treated)} (${treated.cell.audience}) against ` +
+          `${JSON.stringify(control.control)} (${untouched.cell.audience}) reads outcome ` +
+          `${JSON.stringify(control.outcome)}, which contradicts the audience. A ` +
+          `${treated.cell.audience} cell is read on ${treated_allows.join(", ")} and a ` +
+          `${untouched.cell.audience} cell on ${control_allows.join(", ")}; the other way round is zero ` +
+          "against zero, which is not a null result but a question never asked.",
       );
     }
 

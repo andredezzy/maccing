@@ -293,7 +293,7 @@ Key distinction: pacing drops queued messages silently within the first 30 minut
 - Use **dynamic variable** in header — swap image per send without resubmitting template
 - Specs: **800x418 px (1.91:1)**, JPG/PNG, under 200 KB
 - Style: clean branded graphic (logo + community name), dark/brand-color background
-- Do NOT use: trading charts, financial return claims, text-heavy overlays, generic stock photos
+- Do NOT use: charts implying performance or outcomes, income/result claims, text-heavy overlays, generic stock photos
 - Load time: irrelevant in Brazil (WhatsApp CDN precompresses)
 - Approval: image does not meaningfully increase rejection risk vs text-only. Marketing category is the slow factor (24-48h) regardless.
 
@@ -301,15 +301,15 @@ Key distinction: pacing drops queued messages silently within the first 30 minut
 - Structure: **Hook → Value → CTA** (compressed AIDA, not PAS)
 - Length: under 300 characters body. 3-4 short lines max. No padding, no "esperamos que esteja bem"
 - Tone: informal, direct, conversational (como amigo mandando mensagem). NEVER "prezado cliente"
-- Emojis: 2-4 max, functional not decorative. Use 📈 📊 🎯 💡 for finance/education. Avoid 🔥🔥🔥
-- Urgency: social proof > pressure words. "Mais de 2.400 membros já participam" > "NÃO PERCA"
+- Emojis: 2-4 max, functional not decorative. Use 📈 📊 🎯 💡 for educational or progress-tracking content. Avoid 🔥🔥🔥
+- Urgency: social proof > pressure words. "Mais de [N] membros já participam" > "NÃO PERCA"
 - Voice: second person ("você"), brand as guide, user as protagonist
 - CTA button: verb + specific outcome ("Entrar no grupo" > "Saiba mais")
-- **Shorten by cutting filler words, never by removing letters or using weird spacing.** Character-level obfuscation (e.g., "gr@tis", "i-n-v-e-s-t-a", dots between letters) is read by Meta classifiers as filter-evasion and increases rejection probability. Cut entire sentences or phrases instead.
+- **Shorten by cutting filler words, never by removing letters or using weird spacing.** Character-level obfuscation (e.g., "gr@tis", "o-f-e-r-t-a", dots between letters) is read by Meta classifiers as filter-evasion and increases rejection probability. Cut entire sentences or phrases instead.
 
-**Forbidden words/phrases (Portuguese, financial niche):**
+**Forbidden words/phrases (Portuguese):** documented template-review rejection triggers, not style preferences.
 - Hard reject: grátis, imperdível, compre agora, ganhe dinheiro, renda extra, duplique seus ganhos, invista agora, lucro garantido, retorno garantido, clique aqui agora, oferta por tempo limitado, não perca, PIX grátis, bônus
-- Safe alternatives: conteúdo exclusivo, aula, encontro ao vivo, desafio, missão da semana, comunidade, grupo, membros, novidade, acesse, confira, saiba mais, disponível para você, sua jornada, conteúdo liberado, ao vivo hoje
+- Safe alternatives (same intent, no trigger): conteúdo exclusivo, aula, encontro ao vivo, desafio, missão da semana, comunidade, grupo, membros, novidade, acesse, confira, saiba mais, disponível para você, sua jornada, conteúdo liberado, ao vivo hoje
 
 **Opt-out: use Quick Reply button, NOT footer text.**
 - Button: "Parar mensagens" (more visible, LGPD-defensible, reduces blocks)
@@ -327,7 +327,7 @@ Key distinction: pacing drops queued messages silently within the first 30 minut
 
 **Approval process:**
 - Automated ML classifier first (minutes), human review for borderline cases (up to 24h)
-- New WABA + Marketing + financial content = 48-72h (no quality history → manual review path)
+- New WABA + Marketing + restricted-category content = 48-72h (no quality history → manual review path)
 - Status "Active-Quality pending" = APPROVED, can send now; quality rating computed after sends
 - Rejection gives brief reason code (INVALID_FORMAT, TAG_CONTENT_MISMATCH, ABUSIVE_CONTENT, PROMOTIONAL)
 - Rejected templates can be edited and resubmitted with a NEW name

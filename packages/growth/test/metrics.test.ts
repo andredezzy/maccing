@@ -9,6 +9,7 @@ import {
   COUNTABLE_OUTCOMES,
   ControlError,
   EmptyCellError,
+  ExportBlankColumnError,
   ExportColumnError,
   ExportValueError,
   MAX_P,
@@ -289,6 +290,11 @@ async function build(name: string, parts: Parts = {}): Promise<Fixture> {
 /** A cold cell on this fixture's cut, which is what most cases want. */
 function cold(name: string, list: string, extra: Partial<Cell> = {}): Cell {
   return { name, cut: CUT, lists: [list], audience: "cold", ...extra };
+}
+
+/** The same, for a list of people who already hold accounts. */
+function base(name: string, list: string, extra: Partial<Cell> = {}): Cell {
+  return { name, cut: CUT, lists: [list], audience: "own_base", ...extra };
 }
 
 /** Returns the error a rejection produced, and fails if there was no rejection at all. */
@@ -677,12 +683,9 @@ describe("the emitted record", () => {
 
     expect([...COUNTABLE_OUTCOMES]).toEqual([
       "acquired.accounts",
-      "conversions.count",
       "acquired.revenue.people",
       "acquired.churn.people",
-      "pre_existing.accounts",
-      "pre_existing.revenue.people",
-      "pre_existing.churn.people",
+      "conversions.count",
     ]);
 
     for (const path of COUNTABLE_OUTCOMES) {
@@ -692,6 +695,51 @@ describe("the emitted record", () => {
       }
       expect(typeof node).toBe("number");
     }
+  });
+
+  test("every outcome the allowlist admits is readable by at least one audience", async () => {
+    // The allowlist and the audience rule were two lists once, and they disagreed: three of the
+    // seven paths were admitted here and refused there, so no pair could ever be read on them
+    // and the second error contradicted the first. This asks the engine rather than the table.
+    // A path no audience will read is not permitted, whatever the allowlist says about it.
+    const fixture = await build("outcome-reachable", {
+      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5], ["existing", from_cut(3 * HOUR), 8]),
+      churn: churn(["fresh", from_cut(DAY), 3], ["existing", from_cut(DAY), 3]),
+      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "LIVE", "WIRE"]),
+      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+    });
+
+    // The audience is a declaration, not something derived from the data, so the same two cells
+    // can be offered under either label and the answer is the rule's alone.
+    const readable_by = async (outcome: string, audience: Cell["audience"]): Promise<boolean> => {
+      try {
+        await measure({
+          map: fixture.map,
+          exports: fixture.exports,
+          cells: [
+            { name: "treated", cut: CUT, lists: [fixture.list("treated.txt")], audience },
+            { name: "untouched", cut: CUT, lists: [fixture.list("untouched.txt")], audience },
+          ],
+          controls: [{ treated: "treated", control: "untouched", outcome }],
+          now: NOW,
+        });
+        return true;
+      } catch (error) {
+        if (error instanceof ControlError) {
+          return false;
+        }
+        throw error;
+      }
+    };
+
+    const unreachable: string[] = [];
+    for (const outcome of COUNTABLE_OUTCOMES) {
+      if (!(await readable_by(outcome, "cold")) && !(await readable_by(outcome, "own_base"))) {
+        unreachable.push(outcome);
+      }
+    }
+    expect(unreachable).toEqual([]);
   });
 
   test("reads several cells in one pass and keeps them apart", async () => {
@@ -779,6 +827,37 @@ describe("the conversion split", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("a provisional cut", () => {
+  /**
+   * Two lists of forty people who all held accounts long before the cut, thirty of one and
+   * twelve of the other committing after it. Nobody can arrive, which is the point: `acquired
+   * .accounts` is zero on both sides by construction, and the sizes are what make the resulting
+   * comparison significant with a control past the minimum events — so the reading these cells
+   * produce is one somebody would publish.
+   */
+  async function own_base_pair(name: string): Promise<Fixture> {
+    const person_rows: Row[] = [];
+    const conversion_rows: Row[] = [];
+    const treated_list: string[] = [];
+    const control_list: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      treated_list.push(phone(100 + i));
+      control_list.push(phone(200 + i));
+      person_rows.push([`t${i}`, phone(100 + i), from_cut(-DAY)]);
+      person_rows.push([`c${i}`, phone(200 + i), from_cut(-DAY)]);
+      if (i < 30) {
+        conversion_rows.push([`t${i}`, from_cut(HOUR), 10, "LIVE", "WIRE"]);
+      }
+      if (i < 12) {
+        conversion_rows.push([`c${i}`, from_cut(HOUR), 10, "LIVE", "WIRE"]);
+      }
+    }
+    return build(name, {
+      person: people(...person_rows),
+      conversion: conversions(...conversion_rows),
+      lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
+    });
+  }
+
   test("measures normally while nobody has arrived, and says so on the record", async () => {
     const fixture = await build("provisional-quiet", {
       person: people(["old", phone(1), from_cut(-DAY)]),
@@ -814,8 +893,10 @@ describe("a provisional cut", () => {
 
     expect(error).toBeInstanceOf(ProvisionalCutError);
     expect(error.message).toContain("guessed");
-    expect(error.message).toContain("2");
-    expect((error as ProvisionalCutError).cells).toEqual([{ cell: "guessed", accounts: 2 }]);
+    expect(error.message).toContain("acquired.accounts 2");
+    expect((error as ProvisionalCutError).cells).toEqual([
+      { cell: "guessed", counted: [{ outcome: "acquired.accounts", count: 2 }] },
+    ]);
   });
 
   test("refuses before any control is read", async () => {
@@ -840,6 +921,92 @@ describe("a provisional cut", () => {
     );
 
     expect(error).toBeInstanceOf(ProvisionalCutError);
+  });
+
+  test("refuses an own_base cell whose commitments were counted from a guessed cut", async () => {
+    // The case the guard was blind to for a release, and the one that matters most. An own_base
+    // cell is by construction one whose matched accounts all predate the cut, so `acquired
+    // .accounts` on it is always zero and a guard reading only arrivals can never fire on it —
+    // while `conversions.count`, the single outcome such a cell is ever read on, is accumulated
+    // forward from the same guessed cut. The companion case below is what that used to publish.
+    const fixture = await own_base_pair("provisional-own-base");
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [
+          base("guessed", fixture.list("treated.txt"), { cut_provisional: true }),
+          base("untouched", fixture.list("untouched.txt")),
+        ],
+        controls: [{ treated: "guessed", control: "untouched", outcome: "conversions.count" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ProvisionalCutError);
+    expect(error.message).toContain("guessed");
+    // Naming the outcome, not merely the cell: a reader told only that "guessed" was refused has
+    // to go and work out which of its numbers came from the placeholder.
+    expect(error.message).toContain("conversions.count 30");
+    expect((error as ProvisionalCutError).cells).toEqual([
+      { cell: "guessed", counted: [{ outcome: "conversions.count", count: 30 }] },
+    ]);
+  });
+
+  test("would otherwise publish that comparison, which is what the refusal is worth", async () => {
+    // The same run with the placeholder flag dropped. Every gate is open — significant, a control
+    // well past the minimum events, a window well past the floor — so the reading comes back
+    // `publishable: true`. That is the number the case above was emitting beside a record that
+    // also carried `cut_provisional: true`: a publishable figure computed from a date somebody
+    // wrote down while waiting for the real one.
+    const fixture = await own_base_pair("provisional-own-base-stake");
+
+    const [treated] = await measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      cells: [base("confirmed", fixture.list("treated.txt")), base("untouched", fixture.list("untouched.txt"))],
+      controls: [{ treated: "confirmed", control: "untouched", outcome: "conversions.count" }],
+      now: NOW,
+    });
+
+    expect(treated?.control?.control_events).toBe(12);
+    expect(treated?.control?.publishable).toBe(true);
+  });
+
+  test("refuses on money counted forward from the guess even where nobody committed", async () => {
+    // `pre_existing.revenue.people` counts people who were already there and then paid after the
+    // cut. Nothing arrived and nothing was committed, so neither of the two obvious counts is
+    // non-zero, and the payment is still dated against a guess. A guard that stopped at arrivals
+    // and commitments would let this one through.
+    const fixture = await build("provisional-money", {
+      person: people(["old", phone(1), from_cut(-DAY)]),
+      revenue: revenue(["old", from_cut(2 * HOUR), 40]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("guessed", fixture.list("reached.txt"), { cut_provisional: true })));
+
+    expect(error).toBeInstanceOf(ProvisionalCutError);
+    expect(error.message).toContain("pre_existing.revenue.people 1");
+  });
+
+  test("still measures an own_base cell with a guessed cut and nothing counted against it", async () => {
+    // The widened guard must not swallow the case the flag exists to allow. `pre_existing
+    // .accounts` is non-zero on every own_base cell by construction — it is the audience, not an
+    // outcome — so reading it as something to attribute would refuse every provisional cut ever
+    // declared on a base and leave the flag with no legal use at all.
+    const fixture = await build("provisional-own-base-quiet", {
+      person: people(["old", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["old", from_cut(-HOUR), 50, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, base("quiet-base", fixture.list("reached.txt"), { cut_provisional: true }));
+
+    expect(record.pre_existing.accounts).toBe(1);
+    expect(record.conversions.count).toBe(0);
+    expect(record.cut_provisional).toBe(true);
   });
 
   test("leaves the key off a cell whose cut is confirmed", async () => {
@@ -1070,6 +1237,76 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(ExportColumnError);
     expect((error as ExportColumnError).role).toBe("revenue");
     expect((error as ExportColumnError).column).toBe("amount");
+  });
+
+  test("a bound timestamp column that is in the header and blank on every row", async () => {
+    // The header check catches a column that was renamed away. It does not catch the empty one a
+    // rename usually leaves behind, and that reads identically downstream: every account parses
+    // to no instant, falls in neither group, and the cell reports an audience that arrived at
+    // nothing and was already there for nothing.
+    const fixture = await build("refuse-blank-person", {
+      person: people(["one", phone(1), ""], ["two", phone(2), ""]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-blank-person", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportBlankColumnError);
+    expect((error as ExportBlankColumnError).role).toBe("person");
+    expect((error as ExportBlankColumnError).columns).toEqual(["enrolled_at"]);
+    expect(error.message).toContain("2 rows");
+  });
+
+  test("a bound timestamp column blank on every row of a money role too", async () => {
+    // Here the silence is total: the amounts are real and readable, so nothing else objects, and
+    // every event is dropped for want of a time to place it against the cut.
+    const fixture = await build("refuse-blank-revenue", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(["one", "", 10], ["one", "", 20]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-blank-revenue", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportBlankColumnError);
+    expect((error as ExportBlankColumnError).role).toBe("revenue");
+    expect((error as ExportBlankColumnError).columns).toEqual(["arrived_at"]);
+  });
+
+  test("names both timestamp columns where the map bound a fallback, since either would do", async () => {
+    const fixture = await build("refuse-blank-conversion", {
+      map: { conversion: { at_fallback: "opened_at" } },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: csv(
+        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
+        [["one", "", "", 30, "LIVE", "WIRE"]],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-blank-conversion", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportBlankColumnError);
+    expect((error as ExportBlankColumnError).columns).toEqual(["signed_at", "opened_at"]);
+  });
+
+  test("but not a role whose export has no rows at all, because that is a fact", async () => {
+    // The distinction the check turns on. An empty export is a role that saw no activity in the
+    // window somebody queried, and refusing it would make every quiet month unmeasurable. A full
+    // file of blanks is a fault. Both produce zeros, and only one of them is a result.
+    const fixture = await build("blank-empty-is-legal", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(),
+      churn: churn(),
+      conversion: conversions(),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("blank-empty-is-legal", fixture.list("reached.txt")));
+
+    expect(record.acquired.accounts).toBe(1);
+    expect(record.acquired.revenue).toEqual({ people: 0, value: 0, top2_share: null, median_lag_days: null });
+    expect(record.conversions.count).toBe(0);
   });
 
   test("an amount column holding something that is not a number", async () => {

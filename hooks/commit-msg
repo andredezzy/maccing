@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Git commit-msg hook: refuses a commit whose message carries vocabulary belonging to private work.
+#
+# `pre-commit` cannot do this. It runs before the message exists and is never handed one, so until
+# this hook was added a message was checked by nothing at all — and a message is published exactly
+# as widely as the diff beside it, with the added property that rewriting it rewrites every commit
+# after it.
+#
+# Git passes the path of the message file as $1. The checker strips it the way git does — comment
+# lines out, everything below a scissors line out, so `commit.verbose` does not feed the whole
+# staged diff back through the matcher — and then runs the same terms against what is left.
+#
+# Install it alongside pre-commit with `git config core.hooksPath hooks`, which points git at this
+# tracked directory so both hooks travel with the repository. Setting core.hooksPath installs every
+# hook in the directory at once; there is nothing to do per hook.
+#
+# The vocabulary is not in this repository. Export LEAK_TERMS in your shell profile so every
+# `git commit` inherits it:
+#
+#   export LEAK_TERMS="$HOME/path/to/private/leak-terms.json"
+#
+# --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
+# would match nothing, exit 0, and let every message through while looking exactly like a clean
+# gate. With it, an unset LEAK_TERMS fails the commit and says what is missing.
+
+set -eu
+
+repository=$(git rev-parse --show-toplevel)
+exec bun "$repository/scripts/leak-check.ts" --message "$1" --require-overlay

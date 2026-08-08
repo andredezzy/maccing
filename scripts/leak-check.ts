@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Leak check — refuses to let a private engagement's vocabulary reach this public repository.
  *
@@ -10,19 +11,29 @@
  * exemptions too, for the same reason: an exemption has to quote the term it exempts, so a public
  * allowlist would republish a subset of the very vocabulary being withheld.
  *
- * Because the mechanism on its own finds nothing, `--require-overlay` fails a run that merged no
- * overlay. Every hook and every CI step passes it: a gate that passed on an empty dictionary is
- * otherwise indistinguishable from a gate that passed on a clean tree, and only the header says
- * which — while every caller reads the exit code.
+ * Because the mechanism on its own finds nothing, `--require-overlay` fails a run that loaded no
+ * terms — not merely a run that merged no file, because an overlay of `{}` merges fine and matches
+ * exactly as much as no overlay at all. Every hook and every CI step passes it: a gate that passed
+ * on an empty dictionary is otherwise indistinguishable from a gate that passed on a clean tree,
+ * and only the header says which while every caller reads the exit code.
+ *
+ * Four scopes, and each one names what it does not cover. `--staged` reads content out of the
+ * index, never the working tree, because the commit is made of the index. `--message` runs a
+ * commit message through the same matcher. `--history` is the clearance: it walks every blob
+ * reachable from every ref, every historical path, and every commit message. A run without
+ * `--history` has not looked at the history at all — which is why it is not the default and why
+ * the name says so.
  *
  * Dictionaries are scanned like any other file. Only the exact term strings a dictionary declares
  * are suppressed inside it, never the whole file, so a client name typed into a `why` is still
- * found. A deliberate suppression is reported apart from an unreadable file, because a blind spot
- * counted as coverage is worse than no coverage report at all.
+ * found. A deliberate suppression is reported apart from a file that could not be read, because a
+ * blind spot counted as coverage is worse than no coverage report at all.
  *
- * Matching runs on a normalised copy of each file — percent-escapes decoded, invisible formatting
- * characters dropped, the rest composed to NFC — and a phrase may cross one line break. Every
- * reported position maps back to the bytes as written.
+ * Matching runs on a normalised copy of each text — percent-escapes decoded, invisible formatting
+ * characters dropped, the rest folded to NFKC and a short table of Cyrillic and Greek Latin
+ * lookalikes folded to Latin — and a phrase may cross one line break. Paths are matched as well as
+ * contents: a filename can be the whole disclosure. Every reported position maps back to the
+ * characters as written.
  *
  * The gate matters most before a publish. A public registry blocks unpublishing after 72 hours and
  * already-resolved versions stay resolvable afterwards, so a leak that ships cannot be taken back
@@ -32,7 +43,20 @@
  * run was clean, 2 when the run could not be performed as asked.
  */
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import type { Stats } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -52,6 +76,7 @@ type Exemption = {
   path: string;
   category: string;
   term: string;
+  /** The line the entry was written for; 0 names the path itself rather than any line in it. */
   line: number;
   why: string;
   source: string;
@@ -68,10 +93,18 @@ type Matcher = {
   category: string;
   why: string;
   pattern: RegExp;
+  /**
+   * A lowercase ASCII run the pattern cannot match without, or `""` when the term has none long
+   * enough to be worth screening on. `String.includes` over a lowercased copy is a native search;
+   * the pattern is a forty-way alternation of character classes and lookarounds, and running one
+   * of those over every historical blob costs seconds where the screen costs milliseconds.
+   */
+  literal: string;
 };
 
 type Hit = {
   source: string;
+  /** 1-based, or 0 when the term is in the path itself rather than in any content. */
   line: number;
   column: number;
   span: number;
@@ -84,9 +117,32 @@ type Hit = {
 type ScanResult = {
   hits: Hit[];
   scanned: number;
-  unreadable: number;
+  /** Every distinct path component matched, so the history scan can skip the ones done here. */
+  nodes: string[];
+  /** Read, but not text: reported by name, never counted as covered. */
+  binary: string[];
+  /** Listed but absent, or not a readable file at all. */
+  missing: number;
   excluded: number;
   self_quoted: number;
+};
+
+/**
+ * What the file scan already looked at, by blob and by path component, so the history scan does
+ * not report it a second time under a source no exemption can name. Empty when the file scan
+ * covered something narrower than the whole index, because then nothing can be assumed covered.
+ */
+type Covered = { blobs: Set<string>; names: Set<string> };
+
+type HistoryResult = {
+  hits: Hit[];
+  commits: number;
+  objects: number;
+  blobs: number;
+  current: number;
+  skipped: number;
+  names: number;
+  note: string;
 };
 
 type Dictionary = {
@@ -108,10 +164,11 @@ type Loaded = {
 };
 
 type Options = {
-  mode: "tracked" | "staged" | "path" | "self_test" | "audit";
-  commits: boolean;
-  commit_range: string | null;
+  mode: "tracked" | "staged" | "path" | "self_test" | "audit" | "message";
+  history: boolean;
+  history_range: string | null;
   path: string | null;
+  message: string | null;
   terms: string[];
   require_overlay: boolean;
   quiet: boolean;
@@ -121,20 +178,40 @@ type Options = {
 /** Schema documentation and an empty category list. The vocabulary lives in a project's overlay. */
 const BUILT_IN_TERMS = join(import.meta.dir, "leak-terms.json");
 
-/** A NUL inside this window means the file is not text worth reading line by line. */
+/** A NUL inside this window sends the bytes to the encoding sniffer rather than straight to UTF-8. */
 const BINARY_SNIFF_BYTES = 8192;
 
 /** Long minified lines would drown the report; the reported position stays exact regardless. */
 const MAX_ECHOED_LINE = 200;
+
+/** One historical blob larger than this is reported as skipped rather than read into memory. */
+const MAX_BLOB_BYTES = 8 * 1024 * 1024;
+
+/** How many blobs `git cat-file --batch` is asked for at once, to bound peak memory. */
+const BLOB_BATCH = 256;
+
+/**
+ * How far an exemption may sit from the occurrence it names and still suppress it. An exemption
+ * that expired the moment a paragraph was added above it is an exemption people learn to delete
+ * rather than read; one that suppresses its term anywhere in the file forever is not an exemption
+ * at all. Three lines absorbs an ordinary edit around the occurrence and nothing more.
+ */
+const EXEMPTION_LINE_TOLERANCE = 3;
 
 const SKIPPED_DIRECTORIES: Record<string, true> = { ".git": true, node_modules: true };
 
 /** `git log --format=%B%n%H` terminates each message with its own SHA on a line of its own. */
 const SHA_LINE = /^[0-9a-f]{40}$/;
 
+/** Everything from git's scissors line down is stripped from the message before it is recorded. */
+const SCISSORS = /^.\s*-{2,}\s*>8\s*-{2,}/;
+
 /** Only the characters that mean something to the regex engine. Escaping more is a syntax error
  *  under the `u` flag, which rejects identity escapes of ordinary characters. */
 const REGEX_SYNTAX = /[.*+?^${}()|[\]\\]/g;
+
+/** Inside a character class the syntax is different and much shorter. */
+const CLASS_SYNTAX = /[\\\]^-]/g;
 
 /**
  * Characters with no glyph of their own: zero-width spaces and joiners, the word joiner and the
@@ -149,17 +226,118 @@ const INVISIBLE =
   // biome-ignore lint/suspicious/noMisleadingCharacterClass: stripping the marks is the intent
   /[\u00ad\u034f\u061c\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u206a-\u206f\ufe00-\ufe0f\ufeff]/u;
 
-/** A combining mark belongs to the character before it, and NFC has to see them together. */
+/** A combining mark belongs to the character before it, and composition has to see them together. */
 const COMBINING = /\p{M}/u;
 
-/** The cheap test for whether a file needs the mapped copy at all. Almost none of them do, and a
- *  bare `%` in a percentage is not enough — only an actual escape, an invisible character or a
- *  combining mark can change what a term looks like. */
-const NEEDS_NORMALISING =
-  // Same reason as INVISIBLE above: this detects the marks that hide a term, so it has to see
-  // each one on its own rather than as part of the character it attaches to.
-  // biome-ignore lint/suspicious/noMisleadingCharacterClass: detecting the marks is the intent
-  /%[0-9a-fA-F]{2}|[\u00ad\u034f\u061c\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u206a-\u206f\ufe00-\ufe0f\ufeff]|\p{M}/u;
+/**
+ * Letters from another script drawn to look like Latin ones. A full Unicode confusables table is
+ * thousands of entries and most of them are unreachable in a repository of English and Portuguese
+ * prose; the Cyrillic and Greek letters below are the ones an evasion would actually reach for,
+ * and folding them costs one lookup per character.
+ *
+ * The fold is one-way and deliberately lossy: genuine Cyrillic or Greek text is folded too, so a
+ * repository written in either would see false positives. That trade is documented in
+ * `scripts/README.md` rather than hidden, and it is the right way round for a gate.
+ */
+const CONFUSABLE: Record<string, string> = {
+  // Cyrillic, uppercase
+  "\u0410": "A", // А
+  "\u0412": "B", // В
+  "\u0415": "E", // Е
+  "\u041a": "K", // К
+  "\u041c": "M", // М
+  "\u041d": "H", // Н
+  "\u041e": "O", // О
+  "\u0420": "P", // Р
+  "\u0421": "C", // С
+  "\u0422": "T", // Т
+  "\u0423": "Y", // У
+  "\u0425": "X", // Х
+  "\u0405": "S", // Ѕ
+  "\u0406": "I", // І
+  "\u0408": "J", // Ј
+  "\u04c0": "I", // Ӏ
+  "\u0501": "D", // ԁ's capital pair
+  "\u051a": "Q", // Ԛ
+  "\u051c": "W", // Ԝ
+  "\u0474": "V", // Ѵ
+  // Cyrillic, lowercase
+  "\u0430": "a", // а
+  "\u0432": "b", // в
+  "\u0435": "e", // е
+  "\u043a": "k", // к
+  "\u043c": "m", // м
+  "\u043d": "h", // н
+  "\u043e": "o", // о
+  "\u0440": "p", // р
+  "\u0441": "c", // с
+  "\u0442": "t", // т
+  "\u0443": "y", // у
+  "\u0445": "x", // х
+  "\u0455": "s", // ѕ
+  "\u0456": "i", // і
+  "\u0458": "j", // ј
+  "\u04cf": "l", // ӏ
+  "\u0500": "d", // Ԁ's small pair
+  "\u051b": "q", // ԛ
+  "\u051d": "w", // ԝ
+  "\u0475": "v", // ѵ
+  "\u04bb": "h", // һ
+  "\u0261": "g", // ɡ, Latin script but drawn as the single-storey g
+  // Greek, uppercase
+  "\u0391": "A", // Α
+  "\u0392": "B", // Β
+  "\u0395": "E", // Ε
+  "\u0396": "Z", // Ζ
+  "\u0397": "H", // Η
+  "\u0399": "I", // Ι
+  "\u039a": "K", // Κ
+  "\u039c": "M", // Μ
+  "\u039d": "N", // Ν
+  "\u039f": "O", // Ο
+  "\u03a1": "P", // Ρ
+  "\u03a4": "T", // Τ
+  "\u03a5": "Y", // Υ
+  "\u03a7": "X", // Χ
+  "\u03f9": "C", // Ϲ
+  "\u037f": "J", // Ϳ
+  // Greek, lowercase
+  "\u03b1": "a", // α
+  "\u03b2": "b", // β
+  "\u03b5": "e", // ε
+  "\u03b9": "i", // ι
+  "\u03ba": "k", // κ
+  "\u03bd": "v", // ν
+  "\u03bf": "o", // ο
+  "\u03c1": "p", // ρ
+  "\u03c4": "t", // τ
+  "\u03c5": "u", // υ
+  "\u03c7": "x", // χ
+  "\u03f2": "c", // ϲ
+};
+
+/** The blocks the table above draws from, so a text with none of them skips the lookup entirely. */
+const CONFUSABLE_BLOCKS = /[\u0261\u037f-\u03ff\u0400-\u052f]/u;
+
+/**
+ * The blocks whose characters NFKC rewrites into Latin letters: fullwidth and halfwidth forms,
+ * mathematical alphanumerics, the `ﬁ`-style ligatures, letterlike symbols, enclosed and
+ * parenthesised alphanumerics, superscripts and subscripts, and the squared Latin abbreviations.
+ * This is the cheap first test; the whole-text comparison below it is the one that cannot be
+ * fooled, and both run because a missed block here would be a silent hole.
+ */
+const COMPATIBILITY_BLOCKS =
+  /[\u00a0\u02b0-\u02ff\u2070-\u209f\u2100-\u214f\u2150-\u218f\u2460-\u24ff\u3200-\u33ff\ufb00-\ufb4f\ufe30-\ufe6f\uff00-\uffef]|[\u{1d400}-\u{1d7ff}]|[\u{1f100}-\u{1f1ff}]/u;
+
+/** The cheap test for whether a text needs the mapped copy at all. Almost none of them do. */
+const NEEDS_MAPPING = new RegExp(
+  // Same reason as INVISIBLE above: this detects the marks that hide a term, so it has to see each
+  // one on its own rather than as part of the character it attaches to. Built from a string rather
+  // than a literal, so the misleading-character-class rule does not apply and needs no suppression.
+  "%[0-9a-fA-F]{2}|[\\u00ad\\u034f\\u061c\\u180b-\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2064" +
+    `\\u206a-\\u206f\\ufe00-\\ufe0f\\ufeff]|\\p{M}|${CONFUSABLE_BLOCKS.source}|${COMPATIBILITY_BLOCKS.source}`,
+  "u",
+);
 
 /** Any whitespace except a line break, so the phrase rule can treat a break as its own case. */
 const GAP = "(?:[^\\S\\r\\n]|[_-])";
@@ -168,15 +346,36 @@ const GAP = "(?:[^\\S\\r\\n]|[_-])";
  * What may sit between the words of a multi-word term: spaces, underscores or hyphens, and at
  * most one line break. A phrase typed across a wrap is the same disclosure as a phrase on one
  * line; a phrase separated by a blank line is two unrelated words and must not be reported.
+ *
+ * Every quantifier here is unambiguous with the one beside it — a gap character is never `\r` or
+ * `\n`, and the trailing `GAP*` sits behind a mandatory line break — so a long run of spaces,
+ * underscores, hyphens or tabs that leads nowhere costs one pass, not one pass per split of the
+ * run. The earlier `GAP+\r?\n?GAP*` had two quantifiers over the same class in sequence and took
+ * quadratic time to fail; `--self-test` now plants the input that used to hang.
  */
-const PHRASE_JOIN = `(?:${GAP}+\\r?\\n?${GAP}*|\\r?\\n${GAP}*)`;
+const PHRASE_JOIN = `(?:${GAP}+(?:\\r?\\n${GAP}*)?|\\r?\\n${GAP}*)`;
 
-const DECODER = new TextDecoder("utf-8");
+/**
+ * A bounded term also accepts a plural or a possessive. `s` and `es` cover the regular plural in
+ * the languages these dictionaries reach, and a plural discloses exactly as much as its singular.
+ * A plural that rewrites the stem — `-y` to `-ies`, an irregular — is not reachable from a suffix
+ * and is documented as residue rather than half-handled.
+ */
+const PLURAL = "(?:[eE]?[sS]|['\u2019][sS])?";
+
+const UTF8 = new TextDecoder("utf-8");
+/** `utf-16` is the encoding standard's own label for the little-endian form; big-endian bytes are
+ *  swapped into it rather than decoded by a second, less portable label. */
+const UTF16 = new TextDecoder("utf-16");
+/** Only ever asked to read a `git cat-file` header, which is ASCII; the label is the one that maps
+ *  every byte to a character without failing. */
+const ASCII = new TextDecoder("windows-1252");
 
 /**
  * Invented vocabulary that exists only inside `--self-test`. It names nobody, so the self-test
- * proves the checker with no dictionary present at all, and it covers the shapes that the four
- * closed bypasses need: an accented term, a multi-word phrase, and a whole-word short term.
+ * proves the checker with no dictionary present at all, and it covers the shapes the closed
+ * bypasses need: an accented term, a term carrying an `fi` for the ligature fixture, a multi-word
+ * phrase, and a whole-word short term.
  */
 const SELF_TEST_CATEGORIES: TermCategory[] = [
   {
@@ -186,7 +385,7 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
       {
         term: "zarquilon",
         word_boundary: false,
-        why: "An invented word with no collisions, matched anywhere, used for the zero-width and percent-encoding fixtures.",
+        why: "An invented word with no collisions, matched anywhere, used for the zero-width, percent-encoding, compatibility-form, confusable, filename and encoding fixtures.",
       },
       {
         term: "cr\u00ebnalix",
@@ -194,14 +393,19 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
         why: "An invented word carrying an accent, used for the decomposed-spelling fixture.",
       },
       {
+        term: "nuvfilax",
+        word_boundary: false,
+        why: "An invented word carrying an `fi`, used for the ligature fixture that NFC alone walks past.",
+      },
+      {
         term: "vondrel mikashe",
         word_boundary: false,
-        why: "An invented two-word phrase, used for the line-break fixture and for the blank-line control.",
+        why: "An invented two-word phrase, used for the line-break fixture, the blank-line control, the directory-name fixture and the backtracking fixture.",
       },
       {
         term: "brulq",
         word_boundary: true,
-        why: "An invented short word matched as a whole word only, used for the boundary control.",
+        why: "An invented short word matched as a whole word only, used for the boundary control and the CamelCase, snake_case and plural fixtures.",
       },
     ],
   },
@@ -215,6 +419,10 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
  *
  * Exemptions travel with the dictionary that needs them, because an exemption quotes the term it
  * exempts and a public list of those republishes the vocabulary the split exists to withhold.
+ *
+ * A file that does not parse, or that parses into something that is not a dictionary, fails the
+ * run. Treating either as an absent overlay is how a rotated secret containing `{}` passes a gate
+ * that was asked to require one.
  */
 function load_dictionaries(paths: string[]): Loaded {
   const categories: TermCategory[] = [];
@@ -226,13 +434,13 @@ function load_dictionaries(paths: string[]): Loaded {
     if (!existsSync(path)) {
       throw new Error(`Dictionary not found: ${path}`);
     }
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as TermFile;
+    const parsed = parse_dictionary(path);
     const quotes = new Set<string>();
     quoted.set(path, quotes);
     const merged: string[] = [];
     let added = 0;
     let duplicates = 0;
-    for (const category of parsed.categories ?? []) {
+    for (const category of parsed.categories) {
       for (const entry of category.terms) {
         quotes.add(entry.term.toLowerCase());
       }
@@ -261,7 +469,7 @@ function load_dictionaries(paths: string[]): Loaded {
     dictionaries.push({
       path,
       terms: added,
-      categories: (parsed.categories ?? []).length,
+      categories: parsed.categories.length,
       merged,
       duplicates,
       exemptions: parsed_exemptions.exemptions.length,
@@ -271,13 +479,74 @@ function load_dictionaries(paths: string[]): Loaded {
 }
 
 /**
+ * A dictionary that does not parse is louder than a dictionary that is missing, because a caller
+ * who passed `--terms` believes a dictionary was loaded. Every shape check below names the file
+ * and what was expected, so a malformed overlay is a two-second fix rather than a hunt.
+ */
+function parse_dictionary(path: string): TermFile {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (failure) {
+    throw new Error(
+      `Dictionary is not valid JSON: ${shorten(path)}\n${failure instanceof Error ? failure.message : String(failure)}`,
+    );
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `Dictionary is not a JSON object: ${shorten(path)}\n` +
+        "A dictionary is an object with a `categories` array. Anything else would load as an empty " +
+        "dictionary and pass a gate that checked nothing.",
+    );
+  }
+  const file = parsed as { categories?: unknown; exemptions?: unknown };
+  if (file.categories !== undefined && !Array.isArray(file.categories)) {
+    throw new Error(`Dictionary \`categories\` is not an array: ${shorten(path)}`);
+  }
+  if (file.exemptions !== undefined && !Array.isArray(file.exemptions)) {
+    throw new Error(`Dictionary \`exemptions\` is not an array: ${shorten(path)}`);
+  }
+  const categories: TermCategory[] = [];
+  for (const [index, raw] of ((file.categories ?? []) as unknown[]).entries()) {
+    const candidate = raw as Partial<TermCategory>;
+    if (typeof candidate?.name !== "string" || candidate.name.trim() === "") {
+      throw new Error(`Dictionary category ${index + 1} has no \`name\`: ${shorten(path)}`);
+    }
+    if (!Array.isArray(candidate.terms)) {
+      throw new Error(`Dictionary category \`${candidate.name}\` has no \`terms\` array: ${shorten(path)}`);
+    }
+    const terms: TermEntry[] = [];
+    for (const [position, entry] of candidate.terms.entries()) {
+      const term = typeof entry?.term === "string" ? entry.term.trim() : "";
+      if (term === "") {
+        throw new Error(
+          `Dictionary category \`${candidate.name}\` term ${position + 1} has no \`term\`: ${shorten(path)}`,
+        );
+      }
+      terms.push({
+        term,
+        word_boundary: entry.word_boundary === true,
+        why: typeof entry.why === "string" ? entry.why : "no reason recorded",
+      });
+    }
+    categories.push({ name: candidate.name, why: typeof candidate.why === "string" ? candidate.why : "", terms });
+  }
+  return {
+    note: "",
+    categories,
+    exemptions: (file.exemptions ?? []) as Array<Partial<Exemption>>,
+  };
+}
+
+/**
  * An entry without a reason is rejected, never honoured: an unexplained suppression is the exact
  * shape a real leak would take, and the run fails so nobody discovers it by reading the file.
  *
  * `category` is required as well as `term`, or an exemption written against one category silently
  * absorbs the same spelling under another — including a category its author never saw. `line`
- * records the occurrence the exemption was actually written for, so `--audit` can say when the
- * entry has drifted off it.
+ * names the occurrence the exemption covers, and is what keeps it from covering every other
+ * occurrence of the same term in the same file forever. A `line` of 0 names the path itself,
+ * which is the only occurrence a filename hit can have.
  */
 function read_exemptions(
   source: string,
@@ -293,7 +562,7 @@ function read_exemptions(
     const category = typeof entry.category === "string" ? entry.category.trim() : "";
     const term = typeof entry.term === "string" ? entry.term.trim() : "";
     const why = typeof entry.why === "string" ? entry.why.trim() : "";
-    const line = typeof entry.line === "number" && Number.isInteger(entry.line) && entry.line > 0 ? entry.line : 0;
+    const line = typeof entry.line === "number" && Number.isInteger(entry.line) && entry.line >= 0 ? entry.line : -1;
     const named = path === "" ? "" : ` (${path}${term === "" ? "" : ` — ${term}`})`;
     const label = `${shorten(source)} entry ${index + 1}${named}`;
     if (path === "" || term === "" || category === "") {
@@ -304,10 +573,11 @@ function read_exemptions(
       rejected.push(`${label}: \`why\` is missing or empty, so the exemption is not applied.`);
       continue;
     }
-    if (line === 0) {
+    if (line < 0) {
       rejected.push(
-        `${label}: \`line\` is missing or not a positive integer. An exemption records the occurrence it was ` +
-          "written for so --audit can tell when it has drifted; without it the exemption is not applied.",
+        `${label}: \`line\` is missing or not a whole number that is zero or more. An exemption covers the ` +
+          `occurrence it names, within ${EXEMPTION_LINE_TOLERANCE} lines, and 0 names the path itself; ` +
+          "without it the exemption is not applied.",
       );
       continue;
     }
@@ -317,30 +587,89 @@ function read_exemptions(
 }
 
 /**
+ * A case-insensitive literal built out of character classes rather than the `i` flag.
+ *
+ * The flag would be shorter, but it applies to the whole pattern, lookarounds included, and the
+ * CamelCase boundary below has to be able to say "an uppercase letter here, a lowercase one
+ * there". Building the case-insensitivity into the body is what buys that.
+ *
+ * A letter whose other case is more than one code point — `ß` against `SS` — keeps its own
+ * spelling. That residue is documented rather than approximated.
+ */
+function literal_characters(word: string): string[] {
+  const parts: string[] = [];
+  for (const character of word) {
+    const lower = character.toLowerCase();
+    const upper = character.toUpperCase();
+    if (lower !== upper && [...lower].length === 1 && [...upper].length === 1) {
+      parts.push(`[${lower.replace(CLASS_SYNTAX, "\\$&")}${upper.replace(CLASS_SYNTAX, "\\$&")}]`);
+      continue;
+    }
+    parts.push(character.replace(REGEX_SYNTAX, "\\$&"));
+  }
+  return parts;
+}
+
+/** The pattern body for a term: each word case-insensitive, the words joined by the phrase rule. */
+function term_body(term: string, capitalised: boolean): string | null {
+  const words = term
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .map((word) => literal_characters(fold(word)));
+  if (words.length === 0) {
+    return null;
+  }
+  if (capitalised) {
+    const first = words[0] as string[];
+    const head = [...fold(term.trim())][0] ?? "";
+    const upper = head.toUpperCase();
+    if (upper === head.toLowerCase() || [...upper].length !== 1) {
+      return null;
+    }
+    first[0] = upper.replace(REGEX_SYNTAX, "\\$&");
+  }
+  return words.map((word) => word.join("")).join(PHRASE_JOIN);
+}
+
+/**
  * One regex per term.
  *
- * `\b` is the wrong tool here: JavaScript defines it over ASCII word characters, so an accented
- * letter counts as a boundary and a term ending in one would match inside a longer word. Explicit
- * lookarounds over `\p{L}` and `\p{N}` behave the same in every alphabet these dictionaries touch.
+ * `\b` is the wrong tool for the bounded rule: JavaScript defines it over ASCII word characters,
+ * so an accented letter counts as a boundary and a term ending in one would match inside a longer
+ * word. Explicit lookarounds over `\p{L}` and `\p{N}` behave the same in every alphabet these
+ * dictionaries touch.
  *
- * A bounded term also accepts a trailing `s`, because the common plural is formed that way in the
- * languages these dictionaries reach and a plural discloses exactly as much as the singular.
+ * A bounded term is caught in three places a plain boundary misses: `foo_brulq_bar`, because an
+ * underscore separates tokens rather than joining them; `getBrulqValue`, because a lowercase
+ * letter followed by an uppercase one is a word boundary in every identifier convention that
+ * exists; and `brulqes`, because the regular plural discloses what the singular does. The
+ * CamelCase junction is deliberately narrow — it needs a real lowercase-to-uppercase transition on
+ * both sides, so `XBRULQX` still does not match.
  */
 function build_matchers(categories: TermCategory[]): Matcher[] {
   const matchers: Matcher[] = [];
   for (const category of categories) {
     for (const entry of category.terms) {
-      const body = entry.term
-        .trim()
-        .split(/\s+/)
-        .map((word) => word.replace(REGEX_SYNTAX, "\\$&"))
-        .join(PHRASE_JOIN);
-      const source = entry.word_boundary ? `(?<![\\p{L}\\p{N}_])${body}s?(?![\\p{L}\\p{N}_])` : body;
+      const plain = term_body(entry.term, false);
+      if (plain === null) {
+        continue;
+      }
+      let source = plain;
+      if (entry.word_boundary) {
+        const camel = term_body(entry.term, true);
+        const head =
+          camel === null
+            ? `(?<![\\p{L}\\p{N}])${plain}`
+            : `(?:(?<![\\p{L}\\p{N}])${plain}|(?<=[\\p{Ll}\\p{N}])${camel})`;
+        source = `${head}${PLURAL}(?:(?![\\p{L}\\p{N}])|(?<=[\\p{Ll}\\p{N}])(?=\\p{Lu}))`;
+      }
       matchers.push({
         term: entry.term,
         category: category.name,
         why: entry.why,
-        pattern: new RegExp(source, "giu"),
+        pattern: new RegExp(source, "gu"),
+        literal: screening_literal(entry.term),
       });
     }
   }
@@ -348,10 +677,29 @@ function build_matchers(categories: TermCategory[]): Matcher[] {
 }
 
 /**
- * A copy of a file's text with every evasion undone, plus a map from each character of the copy
- * back to its index in the text as written, so a reported position still points at the bytes on
- * disk. `origin` is `null` when the copy is the original, which is the overwhelmingly common case
- * and worth not allocating for.
+ * The longest run of ASCII letters and digits inside one word of the term, lowercased.
+ *
+ * It has to be something the pattern cannot match without. A run inside a word is contiguous in
+ * every match, because only the gaps *between* words are variable. It has to be ASCII, because
+ * `toLowerCase` on the haystack applies Unicode's contextual rules — a final `Σ` lowercases to
+ * `ς`, not `σ` — and ASCII has no such rule, so lowercasing can never move a match out of reach.
+ * Below three characters the screen stops narrowing anything and the term simply goes unscreened.
+ */
+function screening_literal(term: string): string {
+  let best = "";
+  for (const run of fold(term).match(/[A-Za-z0-9]+/g) ?? []) {
+    if (run.length > best.length) {
+      best = run;
+    }
+  }
+  return best.length >= 3 ? best.toLowerCase() : "";
+}
+
+/**
+ * A copy of a text with every evasion undone, plus a map from each character of the copy back to
+ * its index in the text as written, so a reported position still points at the characters on
+ * disk. `origin` is `null` when the copy is the original, which is the common case and worth not
+ * allocating for.
  */
 type Normalised = { text: string; origin: number[] | null };
 
@@ -370,12 +718,28 @@ function hex_value(character: string): number {
 }
 
 /** Appends one chunk to the copy, mapping every UTF-16 unit of it back to one index in the
- *  original. A decomposed cluster and a decoded escape both produce a different number of
- *  characters than they consumed, and this is where that difference is absorbed. */
+ *  original. A decomposed cluster, a decoded escape and a compatibility form all produce a
+ *  different number of characters than they consumed, and this is where that difference is
+ *  absorbed. */
 function push_chunk(piece: string, where: number, characters: string[], origin: number[]): void {
   characters.push(piece);
   for (let unit = 0; unit < piece.length; unit += 1) {
     origin.push(where);
+  }
+}
+
+/** Appends a run of characters that map one to one, each unit back to its own index. */
+function push_run(
+  source: string,
+  from: number,
+  to: number,
+  input: number[] | null,
+  characters: string[],
+  origin: number[],
+): void {
+  characters.push(source.slice(from, to));
+  for (let unit = from; unit < to; unit += 1) {
+    origin.push(input === null ? unit : (input[unit] ?? unit));
   }
 }
 
@@ -388,6 +752,9 @@ function push_chunk(piece: string, where: number, characters: string[], origin: 
  * run times three — which is what keeps the reported column pointing at the escape a reader sees.
  */
 function decode_percent(text: string): Normalised {
+  if (!text.includes("%")) {
+    return { text, origin: null };
+  }
   const characters: string[] = [];
   const origin: number[] = [];
   let index = 0;
@@ -410,7 +777,7 @@ function decode_percent(text: string): Normalised {
       index += 3;
     }
     let byte = 0;
-    for (const character of DECODER.decode(Uint8Array.from(bytes))) {
+    for (const character of UTF8.decode(Uint8Array.from(bytes))) {
       const point = character.codePointAt(0) ?? 0;
       push_chunk(character, begin + 3 * byte, characters, origin);
       byte += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
@@ -420,10 +787,31 @@ function decode_percent(text: string): Normalised {
 }
 
 /**
- * Drops the invisible formatting characters and composes what is left to NFC, one base character
- * and its marks at a time. Composing per cluster is what keeps the map back to the original
- * honest: every character the cluster produces points at the base character it came from, so a
- * term written decomposed reports the position a reader will actually find.
+ * The one place a string is turned into what matching compares.
+ *
+ * NFKC rather than NFC, because NFC leaves every compatibility form alone: a fullwidth `ａ`, a
+ * mathematical `𝖺` and the `ﬁ` ligature all read as ordinary letters and all walk past an NFC
+ * match, including one fullwidth letter dropped into an otherwise plain word. Then the confusable
+ * table above folds the Cyrillic and Greek Latin-lookalikes, which no normalisation form touches
+ * because they are genuinely different letters.
+ */
+function fold(text: string): string {
+  const composed = text.normalize("NFKC");
+  if (!CONFUSABLE_BLOCKS.test(composed)) {
+    return composed;
+  }
+  let folded = "";
+  for (const character of composed) {
+    folded += CONFUSABLE[character] ?? character;
+  }
+  return folded;
+}
+
+/**
+ * Drops the invisible formatting characters and folds what is left, one base character and its
+ * marks at a time. Folding per cluster is what keeps the map back to the original honest: every
+ * character the cluster produces points at the base character it came from, so a term written
+ * decomposed, fullwidth or in Cyrillic reports the position a reader will actually find.
  */
 function compose(input: Normalised): Normalised {
   const source = input.text;
@@ -433,6 +821,24 @@ function compose(input: Normalised): Normalised {
   // would corrupt the copy that matching runs against.
   let index = 0;
   while (index < source.length) {
+    // ASCII is nearly all of every text here, and no ASCII character is invisible, is a combining
+    // mark, or is rewritten by NFKC or the confusable table — so a run of it is copied whole
+    // rather than sliced, tested and folded one character at a time. The run stops one character
+    // short of anything non-ASCII, because that character may be a mark belonging to the last one.
+    if (source.charCodeAt(index) < 0x80) {
+      let run = index + 1;
+      while (run < source.length && source.charCodeAt(run) < 0x80) {
+        run += 1;
+      }
+      if (run < source.length) {
+        run -= 1;
+      }
+      if (run > index) {
+        push_run(source, index, run, input.origin, characters, origin);
+        index = run;
+        continue;
+      }
+    }
     const width = (source.codePointAt(index) ?? 0) > 0xffff ? 2 : 1;
     const head = source.slice(index, index + width);
     if (INVISIBLE.test(head)) {
@@ -456,13 +862,25 @@ function compose(input: Normalised): Normalised {
       index += next_width;
     }
     const where = input.origin === null ? start : (input.origin[start] ?? start);
-    push_chunk(cluster.normalize("NFC"), where, characters, origin);
+    // A single ASCII character only reaches here when a mark follows it, and the cluster then
+    // needs the full fold like any other.
+    const plain = cluster.length === 1 && cluster.charCodeAt(0) < 0x80;
+    push_chunk(plain ? cluster : fold(cluster), where, characters, origin);
   }
   return { text: characters.join(""), origin };
 }
 
+/**
+ * The block test catches the compatibility forms cheaply; the whole-text comparison catches
+ * anything the block list does not know about. Both run, because a block missing from the list
+ * above would otherwise be a silent hole rather than a slow path.
+ */
+function needs_mapping(text: string): boolean {
+  return NEEDS_MAPPING.test(text) || text.normalize("NFKC") !== text;
+}
+
 function normalise(text: string): Normalised {
-  if (!NEEDS_NORMALISING.test(text)) {
+  if (!needs_mapping(text)) {
     return { text, origin: null };
   }
   return compose(decode_percent(text));
@@ -511,11 +929,23 @@ function scan_text(
   matchers: Matcher[],
   quoted: Set<string> | null,
 ): { hits: Hit[]; suppressed: number } {
+  if (matchers.length === 0) {
+    return { hits: [], suppressed: 0 };
+  }
   const { text: haystack, origin } = normalise(text);
+  // Built once and only when a matcher asks for it, because most runs load at least one term with
+  // no ASCII run long enough to screen on and every run pays for the copy exactly once.
+  let lowered: string | null = null;
   const starts = line_starts(text);
   const hits: Hit[] = [];
   let suppressed = 0;
   for (const matcher of matchers) {
+    if (matcher.literal !== "") {
+      lowered ??= haystack.toLowerCase();
+      if (!lowered.includes(matcher.literal)) {
+        continue;
+      }
+    }
     const muted = quoted?.has(matcher.term.toLowerCase());
     for (const match of haystack.matchAll(matcher.pattern)) {
       if (muted) {
@@ -543,11 +973,102 @@ function scan_text(
   return { hits, suppressed };
 }
 
-/** `quoted` maps a dictionary's absolute path to the term strings it necessarily quotes. */
-function scan_files(paths: string[], matchers: Matcher[], root: string, quoted: Map<string, Set<string>>): ScanResult {
+/**
+ * A filename can be the whole disclosure — a directory named after the client says everything the
+ * files inside it were scrubbed of. Path components are matched like any other text and reported
+ * with line 0, which is the only position a name has and the value an exemption uses to name one.
+ */
+function scan_name(node: string, matchers: Matcher[]): Hit[] {
+  const name = node.split(/[\\/]/).pop() ?? node;
+  return scan_text(node, name, matchers, null).hits.map((hit) => ({ ...hit, line: 0, span: 1, text: node }));
+}
+
+/** Every distinct path and every distinct directory above it, each one matched exactly once. */
+function path_nodes(relatives: string[]): string[] {
+  const seen = new Set<string>();
+  for (const entry of relatives) {
+    let prefix = "";
+    for (const part of entry.split(/[\\/]/)) {
+      if (part === "" || part === ".") {
+        continue;
+      }
+      prefix = prefix === "" ? part : `${prefix}/${part}`;
+      seen.add(prefix);
+    }
+  }
+  return [...seen];
+}
+
+/**
+ * Turns bytes into the text to match, or says they are not text.
+ *
+ * A NUL in the first few kilobytes used to end the story, which quietly removed every UTF-16 file
+ * from the scan: half of a UTF-16 file's bytes are NUL. A byte-order mark settles it outright, and
+ * without one the parity of the NULs does — every second byte of UTF-16 ASCII is zero, and which
+ * half tells the endianness apart. Anything else really is binary, and is counted and named rather
+ * than dropped.
+ */
+function decode_bytes(bytes: Uint8Array): { text: string; encoding: string } | null {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return { text: UTF16.decode(bytes.subarray(2)), encoding: "utf-16le" };
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return { text: UTF16.decode(swap_bytes(bytes.subarray(2))), encoding: "utf-16be" };
+  }
+  const window = bytes.subarray(0, BINARY_SNIFF_BYTES);
+  if (window.indexOf(0) === -1) {
+    return { text: UTF8.decode(bytes), encoding: "utf-8" };
+  }
+  let even = 0;
+  let odd = 0;
+  for (let index = 0; index < window.length; index += 1) {
+    if (window[index] === 0) {
+      if (index % 2 === 0) {
+        even += 1;
+      } else {
+        odd += 1;
+      }
+    }
+  }
+  const expected = Math.max(1, Math.floor(window.length / 8));
+  if (even === 0 && odd >= expected) {
+    return { text: UTF16.decode(bytes), encoding: "utf-16le" };
+  }
+  if (odd === 0 && even >= expected) {
+    return { text: UTF16.decode(swap_bytes(bytes)), encoding: "utf-16be" };
+  }
+  return null;
+}
+
+function swap_bytes(bytes: Uint8Array): Uint8Array {
+  const swapped = new Uint8Array(bytes.length - (bytes.length % 2));
+  for (let index = 0; index + 1 < bytes.length; index += 2) {
+    swapped[index] = bytes[index + 1] as number;
+    swapped[index + 1] = bytes[index] as number;
+  }
+  return swapped;
+}
+
+/**
+ * `quoted` maps a dictionary's absolute path to the term strings it necessarily quotes.
+ *
+ * `contents` is supplied in `--staged` mode, where the bytes that matter are the ones in the index
+ * rather than the ones in the working tree. A symlink is read as the path it points at, which is
+ * exactly what the repository stores for it and what a scan of the target's own contents would
+ * miss when the target is outside the tree.
+ */
+function scan_files(
+  paths: string[],
+  matchers: Matcher[],
+  root: string,
+  quoted: Map<string, Set<string>>,
+  contents: Map<string, Uint8Array> | null,
+): ScanResult {
   const hits: Hit[] = [];
+  const binary: string[] = [];
+  const relatives: string[] = [];
   let scanned = 0;
-  let unreadable = 0;
+  let missing = 0;
   let excluded = 0;
   let self_quoted = 0;
   for (const path of paths) {
@@ -556,36 +1077,74 @@ function scan_files(paths: string[], matchers: Matcher[], root: string, quoted: 
       excluded += 1;
       continue;
     }
-    // A staged deletion, a stale index entry and a submodule directory all reach this list too.
-    if (!existsSync(absolute) || !statSync(absolute).isFile()) {
-      unreadable += 1;
+    const here = relative(root, absolute);
+    const label = here === "" || here.startsWith("..") || isAbsolute(here) ? absolute : here.split(sep).join("/");
+    relatives.push(label);
+    let text: string | null = null;
+    const staged = contents?.get(label);
+    if (staged !== undefined) {
+      const decoded = decode_bytes(staged);
+      if (decoded === null) {
+        binary.push(label);
+        continue;
+      }
+      text = decoded.text;
+    } else if (contents !== null) {
+      // Listed in the index but unreadable from it: a stale entry, or a submodule's gitlink.
+      missing += 1;
       continue;
-    }
-    const bytes = readFileSync(absolute);
-    if (bytes.subarray(0, BINARY_SNIFF_BYTES).indexOf(0) !== -1) {
-      unreadable += 1;
-      continue;
+    } else {
+      let stats: Stats;
+      try {
+        stats = lstatSync(absolute);
+      } catch {
+        missing += 1;
+        continue;
+      }
+      if (stats.isSymbolicLink()) {
+        text = readlinkSync(absolute);
+      } else if (!stats.isFile()) {
+        // A staged deletion, a stale index entry and a submodule directory all reach this list.
+        missing += 1;
+        continue;
+      } else {
+        const decoded = decode_bytes(readFileSync(absolute));
+        if (decoded === null) {
+          binary.push(label);
+          continue;
+        }
+        text = decoded.text;
+      }
     }
     scanned += 1;
-    const found = scan_text(
-      relative(root, absolute) || absolute,
-      bytes.toString("utf8"),
-      matchers,
-      quoted.get(absolute) ?? null,
-    );
+    const found = scan_text(label, text, matchers, quoted.get(absolute) ?? null);
     hits.push(...found.hits);
     self_quoted += found.suppressed;
   }
-  return { hits, scanned, unreadable, excluded, self_quoted };
+  const nodes = path_nodes(relatives);
+  for (const node of nodes) {
+    hits.push(...scan_name(node, matchers));
+  }
+  return { hits, scanned, nodes, binary, missing, excluded, self_quoted };
 }
 
-function run_git(args: string[], cwd: string): { ok: boolean; stdout: string; stderr: string } {
-  const run = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  return { ok: run.exitCode === 0, stdout: run.stdout.toString(), stderr: run.stderr.toString() };
+function run_git(args: string[], cwd: string, input?: Uint8Array): { ok: boolean; stdout: Buffer; stderr: string } {
+  const run = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdin: input ?? "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return { ok: run.exitCode === 0, stdout: run.stdout, stderr: run.stderr.toString() };
+}
+
+function git_text(args: string[], cwd: string): { ok: boolean; stdout: string; stderr: string } {
+  const run = run_git(args, cwd);
+  return { ok: run.ok, stdout: run.stdout.toString("utf8"), stderr: run.stderr };
 }
 
 function repo_root(cwd: string): string {
-  const found = run_git(["rev-parse", "--show-toplevel"], cwd);
+  const found = git_text(["rev-parse", "--show-toplevel"], cwd);
   if (!found.ok) {
     throw new Error(`Not inside a git repository: ${cwd}\n${found.stderr.trim()}`);
   }
@@ -595,7 +1154,7 @@ function repo_root(cwd: string): string {
 /** Tracked files only, so build output, caches and anything ignored never reach the scanner. */
 function list_repository_files(root: string, staged: boolean): string[] {
   const args = staged ? ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"] : ["ls-files", "-z"];
-  const listed = run_git(args, root);
+  const listed = git_text(args, root);
   if (!listed.ok) {
     throw new Error(`Could not list ${staged ? "staged" : "tracked"} files.\n${listed.stderr.trim()}`);
   }
@@ -605,21 +1164,77 @@ function list_repository_files(root: string, staged: boolean): string[] {
     .map((entry) => join(root, entry));
 }
 
-function walk_path(target: string): string[] {
-  if (!statSync(target).isDirectory()) {
-    return [target];
+/** The object id of every file in the index, which is the version the tracked scan just read. */
+function index_blobs(root: string): Set<string> {
+  const listed = git_text(["ls-files", "-s", "-z"], root);
+  const oids = new Set<string>();
+  if (!listed.ok) {
+    return oids;
   }
-  const found: string[] = [];
-  for (const entry of readdirSync(target, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (SKIPPED_DIRECTORIES[entry.name] === undefined) {
-        found.push(...walk_path(join(target, entry.name)));
-      }
-    } else if (entry.isFile()) {
-      found.push(join(target, entry.name));
+  // `<mode> <object> <stage>\t<path>`, NUL-terminated so a path may contain anything but NUL.
+  for (const entry of listed.stdout.split("\0")) {
+    const object = entry.split(" ")[1];
+    if (object !== undefined && object.length > 0) {
+      oids.add(object);
     }
   }
-  return found;
+  return oids;
+}
+
+/**
+ * `git cat-file --batch` answers in input order, one record per request, and a record it could not
+ * resolve still occupies its place — so the answers are matched to the requests by position rather
+ * than by the object id in the header, which for a `:path` request is the resolved id and not the
+ * request. Reading a thousand objects this way costs one process instead of a thousand.
+ */
+function read_objects(root: string, specs: string[]): Array<Uint8Array | null> {
+  const answers: Array<Uint8Array | null> = [];
+  for (let start = 0; start < specs.length; start += BLOB_BATCH) {
+    const chunk = specs.slice(start, start + BLOB_BATCH);
+    const run = run_git(["cat-file", "--batch"], root, new TextEncoder().encode(`${chunk.join("\n")}\n`));
+    const stdout = run.stdout;
+    let position = 0;
+    for (let index = 0; index < chunk.length; index += 1) {
+      if (position >= stdout.length) {
+        answers.push(null);
+        continue;
+      }
+      let end = position;
+      while (end < stdout.length && stdout[end] !== 10) {
+        end += 1;
+      }
+      const header = ASCII.decode(stdout.subarray(position, end));
+      position = end + 1;
+      const fields = header.split(" ");
+      const size = fields.length >= 3 ? Number(fields[2]) : Number.NaN;
+      if (!Number.isFinite(size) || size < 0) {
+        // `<request> missing`, `<request> ambiguous`: no payload follows, and the next record
+        // starts immediately.
+        answers.push(null);
+        continue;
+      }
+      answers.push(stdout.subarray(position, position + size));
+      position += size + 1;
+    }
+  }
+  return answers;
+}
+
+/** Types and sizes for every object at once, so only blobs — and only readable ones — are fetched. */
+function describe_objects(root: string, oids: string[]): Map<string, { type: string; size: number }> {
+  const described = new Map<string, { type: string; size: number }>();
+  for (let start = 0; start < oids.length; start += 4096) {
+    const chunk = oids.slice(start, start + 4096);
+    const run = run_git(["cat-file", "--batch-check"], root, new TextEncoder().encode(`${chunk.join("\n")}\n`));
+    for (const line of run.stdout.toString("utf8").split("\n")) {
+      const fields = line.split(" ");
+      if (fields.length < 3) {
+        continue;
+      }
+      described.set(fields[0] as string, { type: fields[1] as string, size: Number(fields[2]) });
+    }
+  }
+  return described;
 }
 
 /**
@@ -643,42 +1258,213 @@ function parse_commit_messages(log: string): Array<{ sha: string; message: strin
   return commits;
 }
 
+/** At least one commit a blob is reachable from, so a hit in the history is something to act on. */
+function containing_commit(root: string, oid: string, path: string): string {
+  const introduced = git_text(["log", "--all", "--format=%H", "-1", `--find-object=${oid}`], root);
+  const first = introduced.ok ? (introduced.stdout.trim().split("\n")[0] ?? "") : "";
+  if (first !== "") {
+    return first;
+  }
+  if (path === "") {
+    return "";
+  }
+  const touched = git_text(["log", "--all", "--format=%H", "-1", "--", path], root);
+  return touched.ok ? (touched.stdout.trim().split("\n")[0] ?? "") : "";
+}
+
 /**
- * The whole history by default. The reason to scan commit messages at all is a post-rewrite
- * clearance, where a pass reads as "the history is clean" — so a window that quietly covers the
- * most recent slice of it is the one default that cannot be right.
+ * The clearance. Everything reachable from every ref: the content of every blob, every path any
+ * object was ever stored under, and every commit message.
+ *
+ * Blob content is the whole point. A force-push clearance that read only commit messages would
+ * report a rewritten history clean while every superseded version of every file still sat in the
+ * object database, reachable and cloneable. Blobs are deduplicated by object id, so a file
+ * unchanged across five hundred commits is one object, read once and reported once.
+ *
+ * `covered` is what the file scan just read. Reporting the current version of a file a second
+ * time, under a `history:` source no exemption can name, would make an exempted policy line fail
+ * the clearance forever with no remedy short of deleting the word — a gate nobody can ever get
+ * green is a gate people stop running. Skipping it leaves exactly the question a clearance asks:
+ * what is in the object graph that is not in the tree.
  *
  * A shallow clone holds only what was fetched, and an explicit range may not resolve in one. Both
  * still run, and both say so in the scope, because a partial history that prints PASSED is the
  * same failure as a partial dictionary that prints PASSED.
  */
-function scan_commits(
-  root: string,
-  requested: string | null,
-  matchers: Matcher[],
-): { hits: Hit[]; count: number; note: string } {
-  const base = ["log", "--format=%B%n%H"];
-  let logged = run_git(requested === null ? base : [...base, requested], root);
+function scan_history(root: string, requested: string | null, matchers: Matcher[], covered: Covered): HistoryResult {
   const notes: string[] = [];
-  if (!logged.ok && requested !== null) {
-    logged = run_git(base, root);
-    notes.push(`${requested} does not resolve here, so the whole available history was scanned instead`);
+  let range = requested;
+  let listed = git_text(["rev-list", "--objects", range ?? "--all"], root);
+  if (!listed.ok && range !== null) {
+    range = null;
+    listed = git_text(["rev-list", "--objects", "--all"], root);
+    notes.push(`${requested} does not resolve here, so everything reachable was scanned instead`);
   }
-  if (!logged.ok) {
-    throw new Error(
-      `Could not read commit messages${requested === null ? "" : ` for ${requested}`}.\n${logged.stderr.trim()}`,
-    );
+  if (!listed.ok) {
+    throw new Error(`Could not walk the object graph.\n${listed.stderr.trim()}`);
   }
-  const shallow = run_git(["rev-parse", "--is-shallow-repository"], root);
+  const shallow = git_text(["rev-parse", "--is-shallow-repository"], root);
   if (shallow.ok && shallow.stdout.trim() === "true") {
     notes.push("shallow clone, so only the fetched history was available");
   }
-  const commits = parse_commit_messages(logged.stdout);
+
+  const oids: string[] = [];
+  const paths = new Map<string, string>();
+  for (const line of listed.stdout.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+    const space = line.indexOf(" ");
+    const oid = space === -1 ? line : line.slice(0, space);
+    if (paths.has(oid)) {
+      continue;
+    }
+    paths.set(oid, space === -1 ? "" : line.slice(space + 1));
+    oids.push(oid);
+  }
+
   const hits: Hit[] = [];
+  const nodes = path_nodes([...paths.values()].filter((entry) => entry !== "")).filter(
+    (node) => !covered.names.has(node),
+  );
+  for (const node of nodes) {
+    hits.push(...scan_name(`history:${node}`, matchers).map((hit) => ({ ...hit, text: node })));
+  }
+
+  const described = describe_objects(root, oids);
+  const wanted: string[] = [];
+  let skipped = 0;
+  let current = 0;
+  for (const oid of oids) {
+    const info = described.get(oid);
+    if (info === undefined || info.type !== "blob") {
+      continue;
+    }
+    if (covered.blobs.has(oid)) {
+      current += 1;
+      continue;
+    }
+    if (info.size > MAX_BLOB_BYTES) {
+      skipped += 1;
+      continue;
+    }
+    wanted.push(oid);
+  }
+
+  // One chunk of bodies is held at a time: the whole object graph of a repository with any
+  // history in it is far larger than the tree, and there is no reason for all of it to be resident.
+  let blobs = 0;
+  for (let start = 0; start < wanted.length; start += BLOB_BATCH) {
+    const chunk = wanted.slice(start, start + BLOB_BATCH);
+    const bodies = read_objects(root, chunk);
+    for (const [index, body] of bodies.entries()) {
+      const oid = chunk[index] as string;
+      if (body === null) {
+        skipped += 1;
+        continue;
+      }
+      const decoded = decode_bytes(body);
+      if (decoded === null) {
+        skipped += 1;
+        continue;
+      }
+      blobs += 1;
+      const path = paths.get(oid) ?? "";
+      const found = scan_text(`history:${path === "" ? oid.slice(0, 12) : path}`, decoded.text, matchers, null);
+      if (found.hits.length === 0) {
+        continue;
+      }
+      const commit = containing_commit(root, oid, path);
+      const label = `history:${path === "" ? "(no path)" : path}@${commit === "" ? "unknown" : commit.slice(0, 12)}`;
+      hits.push(...found.hits.map((hit) => ({ ...hit, source: label })));
+    }
+  }
+
+  const logged = git_text(["log", "--format=%B%n%H", range ?? "--all"], root);
+  if (!logged.ok) {
+    throw new Error(`Could not read commit messages.\n${logged.stderr.trim()}`);
+  }
+  const commits = parse_commit_messages(logged.stdout);
   for (const commit of commits) {
     hits.push(...scan_text(`commit ${commit.sha.slice(0, 12)}`, commit.message, matchers, null).hits);
   }
-  return { hits, count: commits.length, note: notes.join("; ") };
+
+  return {
+    hits,
+    commits: commits.length,
+    objects: oids.length,
+    blobs,
+    current,
+    skipped,
+    names: nodes.length,
+    note: notes.join("; "),
+  };
+}
+
+/**
+ * Git hands the hook the file it is about to strip, not the message it will record: the comment
+ * lines are still there, and with `commit.verbose` the whole staged diff is below a scissors line.
+ * Scanning either would report the staged content twice and the template's own file list once, so
+ * the message is stripped the way git strips it before it is matched.
+ */
+function strip_commit_message(text: string, comment: string): string {
+  const kept: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.startsWith(comment) && SCISSORS.test(line)) {
+      break;
+    }
+    if (line.startsWith(comment)) {
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join("\n");
+}
+
+function comment_character(root: string): string {
+  const configured = git_text(["config", "--get", "core.commentChar"], root);
+  const value = configured.ok ? configured.stdout.trim() : "";
+  return value === "" || value === "auto" || [...value].length !== 1 ? "#" : value;
+}
+
+/**
+ * An exemption covers the occurrence it names, not the term. Keying on path, category and term
+ * alone let one entry suppress every occurrence of that spelling in that file, for as long as the
+ * entry survived — including occurrences written years later by somebody who never read it.
+ *
+ * A `line` of 0 names the path itself, and matches nothing inside the file; a positive `line`
+ * matches content and never the path. The tolerance absorbs an edit around the occurrence, and
+ * `--audit` fails once the term has moved further than that.
+ */
+function covers(entry: Exemption, hit: Hit): boolean {
+  if (historical_path(hit.source) !== null) {
+    return true;
+  }
+  if (entry.line === 0 || hit.line === 0) {
+    return entry.line === hit.line;
+  }
+  return Math.abs(entry.line - hit.line) <= EXEMPTION_LINE_TOLERANCE;
+}
+
+/**
+ * The path inside a `history:<path>@<commit>` label, or null for an ordinary source.
+ *
+ * A line number is the right key in the tree, where a human can open the file and see the
+ * occurrence. It is meaningless against a blob from four months ago: the same exempted sentence
+ * sits on a different line in every version that ever held it, so line-keying would report every
+ * historical copy of an occurrence already judged neutral, with no entry able to name them. That
+ * is a clearance nobody can get green, and a clearance nobody can get green stops being run.
+ *
+ * So a history hit is matched on path, category and term, and the line is ignored. The exemption
+ * still has to exist and still has to carry its reason; what it stops asserting is which line.
+ */
+function historical_path(source: string): string | null {
+  if (!source.startsWith("history:")) {
+    return null;
+  }
+  const rest = source.slice("history:".length);
+  const at = rest.lastIndexOf("@");
+  return at === -1 ? rest : rest.slice(0, at);
 }
 
 function exemption_key(path: string, category: string, term: string): string {
@@ -686,11 +1472,17 @@ function exemption_key(path: string, category: string, term: string): string {
 }
 
 function partition_hits(hits: Hit[], exemptions: Exemption[]): { reported: Hit[]; exempt: Hit[] } {
-  const allowed = new Set(exemptions.map((entry) => exemption_key(entry.path, entry.category, entry.term)));
+  const allowed = new Map<string, Exemption[]>();
+  for (const entry of exemptions) {
+    const key = exemption_key(entry.path, entry.category, entry.term);
+    allowed.set(key, [...(allowed.get(key) ?? []), entry]);
+  }
   const reported: Hit[] = [];
   const exempt: Hit[] = [];
   for (const hit of hits) {
-    if (allowed.has(exemption_key(hit.source, hit.category, hit.term))) {
+    const path = historical_path(hit.source) ?? hit.source;
+    const candidates = allowed.get(exemption_key(path, hit.category, hit.term)) ?? [];
+    if (candidates.some((entry) => covers(entry, hit))) {
       exempt.push(hit);
     } else {
       reported.push(hit);
@@ -716,6 +1508,34 @@ function describe_dictionaries(loaded: Dictionary[]): string {
   return `${count} (${total} ${total === 1 ? "term" : "terms"}${total === 0 ? " — nothing to match" : ""})`;
 }
 
+/**
+ * What `--require-overlay` actually has to test.
+ *
+ * The old test was whether a second file had been merged, which an overlay of `{}`, `[]`,
+ * `{"categories":[]}` or a category with no terms all satisfy — every one of them printing
+ * `0 terms`, silencing the missing-overlay advisory and exiting 0, which is precisely the state
+ * the flag exists to refuse, moved up one level. A secret rotated to `{}` reaches CI as a
+ * non-empty value and passes the only check the workflow can make, so the check that matters has
+ * to be here: terms loaded, not files merged.
+ */
+function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): string | null {
+  if (matchers.length > 0) {
+    return null;
+  }
+  const overlays = dictionaries.filter((entry) => entry.path !== BUILT_IN_TERMS);
+  const opening =
+    overlays.length === 0
+      ? "--require-overlay was given and no overlay dictionary was merged."
+      : `--require-overlay was given and the ${overlays.length} merged ${overlays.length === 1 ? "overlay" : "overlays"} ` +
+        `(${overlays.map((entry) => shorten(entry.path)).join(", ")}) declared no terms at all.`;
+  return (
+    `${opening}\n` +
+    "The dictionary shipped here declares no vocabulary, so this run would have checked no name, no " +
+    "figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete run. " +
+    "Merge an overlay that declares terms with --terms <path> or LEAK_TERMS."
+  );
+}
+
 /** Printed on every run, quiet included: a narrower dictionary must never look like a full pass. */
 function report_dictionaries(loaded: Dictionary[]): void {
   console.log(`Dictionaries: ${describe_dictionaries(loaded)}.`);
@@ -734,9 +1554,9 @@ function report_dictionaries(loaded: Dictionary[]): void {
       );
     }
   }
-  if (!loaded.some((entry) => entry.path !== BUILT_IN_TERMS)) {
+  if (loaded.reduce((sum, entry) => sum + entry.terms, 0) === 0) {
     console.log(
-      "  No overlay loaded (--terms <path>, LEAK_TERMS). The dictionary shipped here declares no vocabulary of " +
+      "  No vocabulary loaded (--terms <path>, LEAK_TERMS). The dictionary shipped here declares none of " +
         "its own, so this run can find nothing. Pass --require-overlay wherever this runs as a gate.",
     );
   }
@@ -748,15 +1568,17 @@ type Verdict = {
   exemptions: number;
   rejected: string[];
   scope: string;
+  unread: string[];
   quiet: boolean;
   dictionaries: Dictionary[];
 };
 
 /**
  * The header scrolls away on a long run and CI keeps the last line, so the verdict repeats how
- * much vocabulary backed it. A pass earned by half a dictionary has to say so where it is read.
+ * much vocabulary backed it. A pass earned by half a dictionary has to say so where it is read,
+ * and so does a pass earned over files nothing could read.
  */
-function report({ reported, exempt, exemptions, rejected, scope, quiet, dictionaries }: Verdict): void {
+function report({ reported, exempt, exemptions, rejected, scope, unread, quiet, dictionaries }: Verdict): void {
   if (!quiet) {
     const ordered = [...reported].sort(
       (left, right) => left.source.localeCompare(right.source) || left.line - right.line || left.column - right.column,
@@ -764,7 +1586,8 @@ function report({ reported, exempt, exemptions, rejected, scope, quiet, dictiona
     for (const hit of ordered) {
       const text = hit.text.trimEnd();
       const spans = hit.span > 1 ? ` [spans ${hit.span} lines]` : "";
-      console.log(`${hit.source}:${hit.line}:${hit.column}: ${hit.term} (${hit.category})${spans} — ${hit.why}`);
+      const at = hit.line === 0 ? "name" : `${hit.line}`;
+      console.log(`${hit.source}:${at}:${hit.column}: ${hit.term} (${hit.category})${spans} — ${hit.why}`);
       console.log(`    ${text.length > MAX_ECHOED_LINE ? `${text.slice(0, MAX_ECHOED_LINE)}\u2026` : text}`);
     }
   }
@@ -780,6 +1603,17 @@ function report({ reported, exempt, exemptions, rejected, scope, quiet, dictiona
     console.log("Hits by category:");
     for (const [category, count] of [...by_category].sort((left, right) => right[1] - left[1])) {
       console.log(`  ${category.padEnd(width)}  ${count} ${count === 1 ? "hit" : "hits"}`);
+    }
+  }
+
+  if (unread.length > 0) {
+    console.log("");
+    console.log(
+      `Not read — ${unread.length} ${unread.length === 1 ? "file is" : "files are"} binary in every encoding ` +
+        "this checker knows, so nothing in them was matched:",
+    );
+    for (const path of unread) {
+      console.log(`  ${path}`);
     }
   }
 
@@ -814,17 +1648,19 @@ function report({ reported, exempt, exemptions, rejected, scope, quiet, dictiona
 
 /**
  * Reads every exemption aloud and checks it still describes reality. A suppression nobody re-reads
- * is where a real leak eventually hides, so a stale one fails the audit rather than sitting
- * quietly. Drift — the term still there, at a different line — is reported with the corrected
- * line but does not fail: an exemption that cries wolf every time a paragraph is added above it
- * is an exemption people learn to stop reading.
+ * is where a real leak eventually hides, so an entry that no longer covers anything fails the
+ * audit rather than sitting quietly.
+ *
+ * Now that an exemption covers the occurrence it names, drift is not cosmetic: past the tolerance
+ * the entry has stopped suppressing anything and the hit is back, so the audit fails and prints
+ * the corrected line. Inside the tolerance it still works, and is reported as a shift to tidy up.
  */
 function audit_allowlist(root: string, exemptions: Exemption[], rejected: string[], matchers: Matcher[]): number {
   const by_key = new Map(
     matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
   );
   let stale = 0;
-  let drifted = 0;
+  let shifted = 0;
   const sources = [...new Set(exemptions.map((entry) => shorten(entry.source)))];
   console.log("");
   console.log(
@@ -840,21 +1676,39 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
       status = "STALE — the file no longer exists";
     } else if (matcher === undefined) {
       status = `STALE — no loaded dictionary defines ${entry.term} in category ${entry.category}`;
+    } else if (entry.line === 0) {
+      if (scan_name(entry.path, [matcher]).length === 0) {
+        status = "STALE — the path no longer contains this term";
+      }
+    } else if (!statSync(absolute).isFile()) {
+      status = "STALE — the path is a directory, so it has no line to cover";
     } else {
-      const lines = scan_text(entry.path, readFileSync(absolute, "utf8"), [matcher], null).hits.map((hit) => hit.line);
-      if (lines.length === 0) {
+      const decoded = decode_bytes(readFileSync(absolute));
+      const lines =
+        decoded === null ? [] : scan_text(entry.path, decoded.text, [matcher], null).hits.map((hit) => hit.line);
+      if (decoded === null) {
+        status = "STALE — the file is binary and nothing in it can be matched or suppressed";
+      } else if (lines.length === 0) {
         status = "STALE — the file no longer contains this term";
       } else if (!lines.includes(entry.line)) {
-        status = `DRIFTED — written for line ${entry.line}, now found at ${lines.join(", ")}`;
+        const nearest = lines.reduce((best, line) =>
+          Math.abs(line - entry.line) < Math.abs(best - entry.line) ? line : best,
+        );
+        status =
+          Math.abs(nearest - entry.line) <= EXEMPTION_LINE_TOLERANCE
+            ? `SHIFTED — written for line ${entry.line}, now at ${lines.join(", ")}; still covered, update the entry`
+            : `STALE — written for line ${entry.line}, now at ${lines.join(", ")}, more than ` +
+              `${EXEMPTION_LINE_TOLERANCE} lines away, so it suppresses nothing and the hit is back`;
       }
     }
     if (status.startsWith("STALE")) {
       stale += 1;
-    } else if (status.startsWith("DRIFTED")) {
-      drifted += 1;
+    } else if (status.startsWith("SHIFTED")) {
+      shifted += 1;
     }
-    const flag = status === "ok" ? "  ok     " : status.startsWith("STALE") ? "  STALE  " : "  DRIFTED";
-    console.log(`${flag}  ${entry.path}:${entry.line} — ${entry.term} (${entry.category})`);
+    const flag = status === "ok" ? "  ok     " : status.startsWith("STALE") ? "  STALE  " : "  SHIFTED";
+    const at = entry.line === 0 ? "name" : `${entry.line}`;
+    console.log(`${flag}  ${entry.path}:${at} — ${entry.term} (${entry.category})`);
     console.log(`           ${entry.why}`);
     if (status !== "ok") {
       console.log(`           ${status}`);
@@ -864,19 +1718,54 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
     console.log(`  REJECTED  ${failure}`);
   }
   console.log("");
-  const drift = drifted === 0 ? "" : ` ${drifted} drifted — still real, at a different line; update the entry.`;
+  const drift = shifted === 0 ? "" : ` ${shifted} shifted — still covered, at a different line; update the entry.`;
   if (stale === 0 && rejected.length === 0) {
-    console.log(`Audit PASSED — every exemption still describes a real, explained occurrence.${drift}`);
+    console.log(`Audit PASSED — every exemption still covers a real, explained occurrence.${drift}`);
     return 0;
   }
   console.log(
     `Audit FAILED — ${stale} stale and ${rejected.length} rejected.${drift} ` +
-      "Delete what no longer applies and give every remaining entry a reason.",
+      "Delete what no longer applies, move what has drifted, and give every remaining entry a reason.",
   );
   return 1;
 }
 
-type Fixture = { file: string; body: string; expect: string[] };
+type Fixture = { file: string; body: string | Uint8Array; expect: string[] };
+
+/** A throwaway repository with one file committed and then deleted, for the history fixture. */
+function plant_history(directory: string): string {
+  const repository = join(directory, "history-fixture");
+  mkdirSync(repository, { recursive: true });
+  const commit = (message: string): void => {
+    const run = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.email=self-test@example.invalid",
+        "-c",
+        "user.name=self test",
+        "commit",
+        "--no-verify",
+        "--quiet",
+        "-m",
+        message,
+      ],
+      { cwd: repository, stdout: "pipe", stderr: "pipe" },
+    );
+    if (run.exitCode !== 0) {
+      throw new Error(`self-test could not commit: ${run.stderr.toString()}`);
+    }
+  };
+  Bun.spawnSync(["git", "init", "--quiet", "-b", "main", repository], { stdout: "pipe", stderr: "pipe" });
+  writeFileSync(join(repository, "was-here.txt"), "a term that was later deleted: zarquilon\n");
+  Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+  commit("plant the term");
+  rmSync(join(repository, "was-here.txt"));
+  writeFileSync(join(repository, "clean.txt"), "nothing to see here\n");
+  Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+  commit("remove it again, the way a scrub would");
+  return repository;
+}
 
 /**
  * Proves the checker against fixtures it writes itself, so the result never depends on what the
@@ -886,9 +1775,8 @@ type Fixture = { file: string; body: string; expect: string[] };
  * Every term of every loaded category is planted, not a sample of one per category, because a
  * pattern that fails to match its own term fails in exactly one term at a time.
  *
- * The four evasions that used to work each get a fixture, and each has a control beside it: the
- * gate must catch the term written to slip past, and must still not fire on the shape it is
- * deliberately not supposed to match.
+ * Every evasion that used to work gets a fixture, and the ones with a shape the gate must *not*
+ * fire on get a control beside them.
  */
 function self_test(categories: TermCategory[]): number {
   const all = [...SELF_TEST_CATEGORIES, ...categories];
@@ -936,7 +1824,65 @@ function self_test(categories: TermCategory[]): number {
         body: "An encoded accent, decomposed as well: cre%CC%88nalix\n",
         expect: ["cr\u00ebnalix"],
       },
+      {
+        file: "bypass-fullwidth.txt",
+        body: "Every letter fullwidth: \uff5a\uff41\uff52\uff51\uff55\uff49\uff4c\uff4f\uff4e\n",
+        expect: ["zarquilon"],
+      },
+      {
+        file: "bypass-one-fullwidth-letter.txt",
+        body: "One fullwidth letter inside a plain word: zarq\uff55ilon\n",
+        expect: ["zarquilon"],
+      },
+      {
+        file: "bypass-mathematical.txt",
+        body: "Mathematical sans-serif letters: \u{1d5d3}\u{1d5ba}\u{1d5cb}\u{1d5ca}\u{1d5ce}\u{1d5c2}\u{1d5c5}\u{1d5c8}\u{1d5c7}\n",
+        expect: ["zarquilon"],
+      },
+      {
+        file: "bypass-ligature.txt",
+        body: "The fi ligature inside a word: nuv\ufb01lax\n",
+        expect: ["nuvfilax"],
+      },
+      {
+        file: "bypass-cyrillic.txt",
+        body: "A Cyrillic a and o standing in for Latin: z\u0430rquil\u043en\n",
+        expect: ["zarquilon"],
+      },
+      {
+        file: "bypass-greek.txt",
+        body: "A Greek omicron and alpha standing in for Latin: z\u03b1rquil\u03bfn\n",
+        expect: ["zarquilon"],
+      },
+      {
+        file: "boundary-snake-case.txt",
+        body: "An underscore separates tokens: foo_brulq_bar\n",
+        expect: ["brulq"],
+      },
+      {
+        file: "boundary-camel-case.txt",
+        body: "An identifier: const value = getBrulqValue(input);\n",
+        expect: ["brulq"],
+      },
+      {
+        file: "boundary-plural.txt",
+        body: "A regular plural and a possessive: brulqs, brulqes, brulq's\n",
+        expect: ["brulq"],
+      },
+      {
+        file: "zarquilon-in-the-filename.txt",
+        body: "This body is deliberately clean. The disclosure is the name of the file.\n",
+        expect: [],
+      },
+      {
+        file: "utf-16le.txt",
+        body: new Uint8Array(Buffer.from("\ufeffA term in UTF-16: zarquilon\n", "utf16le")),
+        expect: ["zarquilon"],
+      },
     );
+
+    // A file whose body is clean and whose name is the whole disclosure.
+    const named_file = "zarquilon-in-the-filename.txt";
 
     // Terms matched as whole words only, buried inside longer tokens. None may be reported.
     const bounded = all
@@ -950,6 +1896,11 @@ function self_test(categories: TermCategory[]): number {
         forbid: bounded,
       },
       {
+        file: "control-all-caps.txt",
+        body: `${bounded.map((term) => `X${term.toUpperCase()}X`).join(" ")}\n`,
+        forbid: bounded,
+      },
+      {
         file: "control-blank-line.txt",
         body: "vondrel\n\nmikashe\n",
         forbid: ["vondrel mikashe"],
@@ -957,32 +1908,71 @@ function self_test(categories: TermCategory[]): number {
     ];
 
     for (const fixture of planted) {
-      writeFileSync(join(directory, fixture.file), fixture.body);
+      writeFileSync(join(directory, fixture.file), fixture.body as string);
     }
     for (const fixture of controls) {
       writeFileSync(join(directory, fixture.file), fixture.body);
     }
 
-    const result = scan_files(walk_path(directory), matchers, directory, new Map());
+    // A directory whose name is the disclosure, and a symlink whose target is.
+    mkdirSync(join(directory, "vondrel-mikashe"), { recursive: true });
+    writeFileSync(join(directory, "vondrel-mikashe", "inner.txt"), "a clean file under a dirty directory\n");
+    symlinkSync("../elsewhere/zarquilon-notes.md", join(directory, "link-to-elsewhere"));
+
+    // Binary in every encoding this checker knows: NULs at both parities, so it is not UTF-16.
+    writeFileSync(
+      join(directory, "really-binary.bin"),
+      new Uint8Array([0x89, 0x50, 0x00, 0x00, 0x4e, 0x47, 0x00, 0x01, 0x00, 0x02, ...Buffer.from("zarquilon")]),
+    );
+
+    const result = scan_files(walk_path(directory), matchers, directory, new Map(), null);
     const found = new Map<string, Set<string>>();
     for (const hit of result.hits) {
       const seen = found.get(hit.source) ?? new Set<string>();
-      seen.add(hit.term);
+      seen.add(`${hit.line === 0 ? "name:" : ""}${hit.term}`);
       found.set(hit.source, seen);
     }
+    const caught = (source: string, term: string): boolean => found.get(source)?.has(term) ?? false;
+
     for (const fixture of planted) {
       for (const term of fixture.expect) {
-        if (!(found.get(fixture.file)?.has(term) ?? false)) {
+        if (!caught(fixture.file, term)) {
           failures.push(`${fixture.file}: planted term not found: ${term}`);
         }
       }
     }
     for (const fixture of controls) {
       for (const term of fixture.forbid) {
-        if (found.get(fixture.file)?.has(term) ?? false) {
+        if (caught(fixture.file, term)) {
           failures.push(`${fixture.file}: control matched a term it must not: ${term}`);
         }
       }
+    }
+    if (!caught(named_file, "name:zarquilon")) {
+      failures.push("a term in a filename was not reported");
+    }
+    if (caught(named_file, "zarquilon")) {
+      failures.push("a clean file was reported as if its body carried the term");
+    }
+    if (!caught("vondrel-mikashe", "name:vondrel mikashe")) {
+      failures.push("a term in a directory name was not reported");
+    }
+    if (!caught("link-to-elsewhere", "zarquilon")) {
+      failures.push("a symlink whose target names a term was not scanned");
+    }
+    if (!result.binary.includes("really-binary.bin")) {
+      failures.push("a genuinely binary file was not counted and named as unread");
+    }
+    if (result.binary.includes("utf-16le.txt")) {
+      failures.push("a UTF-16 file was dropped as binary instead of decoded");
+    }
+
+    // A phrase followed by a long run of separators used to take quadratic time to fail.
+    const started = Date.now();
+    scan_text("backtracking", `vondrel${" \t_-".repeat(8000)}!`, matchers, null);
+    const elapsed = Date.now() - started;
+    if (elapsed > 2000) {
+      failures.push(`a long run of phrase separators took ${elapsed}ms, which is the old quadratic failure`);
     }
 
     // A dictionary is scanned like any other file: only the terms it necessarily quotes are muted.
@@ -1002,7 +1992,7 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a dictionary's own term was reported inside it");
     }
 
-    // An exemption covers one category, not every category that happens to spell a term the same.
+    // An exemption covers one category and one occurrence, not every occurrence of one spelling.
     const shared: Hit = {
       source: "fixture.md",
       line: 1,
@@ -1014,23 +2004,108 @@ function self_test(categories: TermCategory[]): number {
       text: "",
     };
     const elsewhere: Hit = { ...shared, category: "self_test_other_category" };
-    const split = partition_hits(
-      [shared, elsewhere],
-      [
-        {
-          path: "fixture.md",
-          category: "self_test_fixture",
-          term: "brulq",
-          line: 1,
-          why: "fixture",
-          source: "self-test",
-        },
-      ],
+    const far_below: Hit = { ...shared, line: 400 };
+    const in_the_name: Hit = { ...shared, line: 0 };
+    const entry: Exemption = {
+      path: "fixture.md",
+      category: "self_test_fixture",
+      term: "brulq",
+      line: 1,
+      why: "fixture",
+      source: "self-test",
+    };
+    const split = partition_hits([shared, elsewhere, far_below, in_the_name], [entry]);
+    if (!split.exempt.some((hit) => hit === shared) || split.exempt.length !== 1) {
+      failures.push("an exemption did not suppress exactly the occurrence it names");
+    }
+    if (!split.reported.some((hit) => hit.category === "self_test_other_category")) {
+      failures.push("an exemption suppressed a category it does not name");
+    }
+    if (!split.reported.some((hit) => hit.line === 400)) {
+      failures.push("an exemption written for line 1 suppressed an occurrence 399 lines away");
+    }
+    if (!split.reported.some((hit) => hit.line === 0)) {
+      failures.push("an exemption written for a line suppressed a hit in the path");
+    }
+    const nearby = partition_hits([{ ...shared, line: 1 + EXEMPTION_LINE_TOLERANCE }], [entry]);
+    if (nearby.exempt.length !== 1) {
+      failures.push("an exemption did not tolerate an occurrence inside its documented window");
+    }
+
+    // --require-overlay tests loaded vocabulary, not a merged file.
+    const empty_overlay: Dictionary[] = [
+      { path: BUILT_IN_TERMS, terms: 0, categories: 0, merged: [], duplicates: 0, exemptions: 0 },
+      { path: "/outside/leak-terms.json", terms: 0, categories: 0, merged: [], duplicates: 0, exemptions: 0 },
+    ];
+    if (overlay_shortfall(empty_overlay, []) === null) {
+      failures.push("--require-overlay accepted an overlay that declared no terms");
+    }
+    if (overlay_shortfall([], []) === null) {
+      failures.push("--require-overlay accepted a run with no dictionary at all");
+    }
+    if (overlay_shortfall(empty_overlay, matchers) !== null) {
+      failures.push("--require-overlay rejected a run that did load vocabulary");
+    }
+
+    // A malformed overlay fails the run rather than loading as an empty one.
+    for (const [name, body] of [
+      ["broken.json", "{ not json"],
+      ["array.json", "[]"],
+      ["scalar.json", "42"],
+      ["bad-categories.json", '{"categories": {}}'],
+    ] as Array<[string, string]>) {
+      const path = join(directory, name);
+      writeFileSync(path, body);
+      let refused = false;
+      try {
+        parse_dictionary(path);
+      } catch {
+        refused = true;
+      }
+      if (!refused) {
+        failures.push(`a malformed overlay (${name}) loaded as an empty dictionary instead of failing the run`);
+      }
+    }
+
+    // The clearance finds a blob that no ref's tree still points at.
+    const nothing_covered: Covered = { blobs: new Set(), names: new Set() };
+    const repository = plant_history(directory);
+    const history = scan_history(repository, null, matchers, nothing_covered);
+    if (!history.hits.some((hit) => hit.term === "zarquilon" && hit.source.startsWith("history:was-here.txt@"))) {
+      failures.push("the history scan did not find a deleted file's blob, which is the whole clearance");
+    }
+    if (!history.hits.some((hit) => /@[0-9a-f]{12}$/.test(hit.source))) {
+      failures.push("a history hit did not name a commit that contains it");
+    }
+    if (history.blobs < 2) {
+      failures.push(`the history scan read ${history.blobs} blobs, so it is not walking the object graph`);
+    }
+    // Skipping what the tracked scan already read must not skip anything it did not.
+    const superseded = scan_history(repository, null, matchers, {
+      blobs: index_blobs(repository),
+      names: new Set(),
+    });
+    if (superseded.current === 0) {
+      failures.push("the history scan re-read the version the tracked scan had already covered");
+    }
+    if (!superseded.hits.some((hit) => hit.source.startsWith("history:was-here.txt@"))) {
+      failures.push("skipping the current version also hid a superseded blob, which is the clearance itself");
+    }
+    const staged_only = scan_history(repository, null, build_matchers([]), nothing_covered);
+    if (staged_only.hits.length !== 0) {
+      failures.push("the history scan reported hits with no vocabulary loaded");
+    }
+
+    // A commit message is stripped the way git strips it before it is matched.
+    const message = strip_commit_message(
+      "a subject line\n\n# a comment naming zarquilon\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x containing zarquilon\n",
+      "#",
     );
-    if (split.exempt.length !== 1 || split.reported.length !== 1) {
-      failures.push("an exemption did not suppress exactly the category it names");
-    } else if (split.reported[0]?.category !== "self_test_other_category") {
-      failures.push("an exemption suppressed the wrong category");
+    if (message.includes("zarquilon")) {
+      failures.push("a commit message was matched with its comments and its verbose diff still attached");
+    }
+    if (!strip_commit_message("keep zarquilon\n# drop this\n", "#").includes("zarquilon")) {
+      failures.push("stripping a commit message also removed the message");
     }
 
     if (exit_code_for(result.hits, 0) !== 1) {
@@ -1047,8 +2122,11 @@ function self_test(categories: TermCategory[]): number {
     console.log(
       `Self-test: ${terms} ${terms === 1 ? "term" : "terms"} planted one file each across ${all.length} ` +
         `${all.length === 1 ? "category" : "categories"}, ${planted.length - terms} evasion fixtures, ` +
-        `${bounded.length} whole-word ${bounded.length === 1 ? "term" : "terms"} buried in the boundary ` +
-        `control, ${result.scanned} files scanned.`,
+        `${controls.length} controls, ${bounded.length} whole-word ${bounded.length === 1 ? "term" : "terms"} ` +
+        `buried in the boundary control, ${result.scanned} files and ${result.nodes.length} path components ` +
+        `scanned, ${result.binary.length} unread, ${history.blobs} historical blobs across ` +
+        `${history.commits} commits, ` +
+        `phrase separators cleared in ${elapsed}ms.`,
     );
     if (failures.length > 0) {
       for (const failure of failures) {
@@ -1058,13 +2136,60 @@ function self_test(categories: TermCategory[]): number {
       return 1;
     }
     console.log(
-      "Self-test PASSED — every term is found where it was planted, a decomposed, wrapped, " +
-        "zero-width-broken or percent-encoded spelling is caught, no control fires, and a hit exits 1.",
+      "Self-test PASSED — every term is found where it was planted; a decomposed, wrapped, zero-width-broken, " +
+        "percent-encoded, fullwidth, mathematical, ligatured, Cyrillic or Greek spelling is caught; a term in a " +
+        "filename, a directory name, a symlink target, a UTF-16 file and a deleted file's historical blob are all " +
+        "caught; no control fires; an exemption covers one occurrence; an empty or malformed overlay fails " +
+        "--require-overlay; and a hit exits 1.",
     );
     return 0;
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+/**
+ * Everything that is not a real directory is handed to the scanner, symlinks included, and the
+ * scanner decides what each one is. Recursing only into real directories is what keeps a symlink
+ * loop from turning the walk into an infinite one, and listing the symlink itself is what keeps it
+ * from being dropped from the scan and from the count at the same time.
+ */
+function walk_path(target: string): string[] {
+  if (!lstatSync(target).isDirectory()) {
+    return [target];
+  }
+  const found: string[] = [];
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (SKIPPED_DIRECTORIES[entry.name] === undefined) {
+        found.push(...walk_path(join(target, entry.name)));
+      }
+      continue;
+    }
+    found.push(join(target, entry.name));
+  }
+  return found;
+}
+
+/**
+ * The bytes a commit will actually contain. Reading the working tree instead let a clean staged
+ * version pass while the dirty file on disk was the one read, and the reverse: `git add` a clean
+ * file, edit it, and the gate reported on text that was never going to be committed.
+ */
+function staged_contents(root: string, files: string[]): Map<string, Uint8Array> {
+  const relatives = files.map((path) => relative(root, path).split(sep).join("/"));
+  const readable = relatives.filter((path) => !path.includes("\n"));
+  const bodies = read_objects(
+    root,
+    readable.map((path) => `:${path}`),
+  );
+  const contents = new Map<string, Uint8Array>();
+  for (const [index, body] of bodies.entries()) {
+    if (body !== null) {
+      contents.set(readable[index] as string, body);
+    }
+  }
+  return contents;
 }
 
 function print_usage(): void {
@@ -1075,18 +2200,22 @@ function print_usage(): void {
       "Scans this repository for vocabulary that belongs to private work. Exits 1 on any hit.",
       "The vocabulary itself is not in this repository: merge a project's overlay to load one.",
       "",
-      "  (no options)          scan every tracked file",
-      "  --staged              scan only staged files, for a pre-commit gate",
+      "  (no options)          scan every tracked file, and every tracked path, as it is on disk",
+      "  --staged              scan the staged content and paths only, for a pre-commit gate",
       "  --path <p>            scan one file or directory instead of the repository",
-      "  --commits [<range>]   also scan commit messages (default: the whole history)",
+      "  --message <file>      scan a commit message file, for a commit-msg gate",
+      "  --history [<range>]   also clear the history: every blob, path and message reachable",
+      "                        from every ref (default), or from <range>",
       "  --terms <path>        merge an overlay dictionary; repeatable",
-      "  --require-overlay     fail unless an overlay was merged; use it wherever this is a gate",
+      "  --require-overlay     fail unless vocabulary was loaded; use it wherever this is a gate",
       "  --audit               list every exemption with its reason and flag the stale ones",
       "  --self-test           prove the checker against planted fixtures and exit",
       "  --quiet               print only the summaries, not each hit",
       "  --help                print this text",
       "",
       "  LEAK_TERMS            colon-separated overlay dictionaries, merged before --terms",
+      "",
+      "A run without --history has not looked at the history. Only --history clears a force-push.",
     ].join("\n"),
   );
 }
@@ -1094,9 +2223,10 @@ function print_usage(): void {
 function parse_arguments(argv: string[]): Options {
   const options: Options = {
     mode: "tracked",
-    commits: false,
-    commit_range: null,
+    history: false,
+    history_range: null,
     path: null,
+    message: null,
     terms: (process.env.LEAK_TERMS ?? "").split(":").filter((entry) => entry.length > 0),
     require_overlay: false,
     quiet: false,
@@ -1116,25 +2246,34 @@ function parse_arguments(argv: string[]): Options {
       options.quiet = true;
     } else if (argument === "--help" || argument === "-h") {
       options.help = true;
-    } else if (argument === "--path" || argument === "--terms") {
+    } else if (argument === "--path" || argument === "--terms" || argument === "--message") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("-")) {
         throw new Error(`${argument} needs a path.`);
       }
       if (argument === "--terms") {
         options.terms.push(value);
+      } else if (argument === "--message") {
+        options.mode = "message";
+        options.message = value;
       } else {
         options.mode = "path";
         options.path = value;
       }
       index += 1;
-    } else if (argument === "--commits") {
-      options.commits = true;
+    } else if (argument === "--history") {
+      options.history = true;
       const value = argv[index + 1];
       if (value !== undefined && !value.startsWith("-")) {
-        options.commit_range = value;
+        options.history_range = value;
         index += 1;
       }
+    } else if (argument === "--commits") {
+      throw new Error(
+        "--commits is gone. It read commit messages and nothing else, so it cleared a force-push by " +
+          "checking the one part of the history a scrub never touches. --history walks every blob, every " +
+          "path and every message reachable from every ref.",
+      );
     } else {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -1163,13 +2302,11 @@ function main(): number {
     const matchers = build_matchers(categories);
     report_dictionaries(dictionaries);
 
-    if (options.require_overlay && !dictionaries.some((entry) => entry.path !== BUILT_IN_TERMS)) {
-      throw new Error(
-        "--require-overlay was given and no overlay dictionary was merged.\n" +
-          "The dictionary shipped here declares no vocabulary, so this run would have checked no name, " +
-          "no figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete " +
-          "run. Merge the project's overlay with --terms <path> or LEAK_TERMS.",
-      );
+    if (options.require_overlay) {
+      const shortfall = overlay_shortfall(dictionaries, matchers);
+      if (shortfall !== null) {
+        throw new Error(shortfall);
+      }
     }
 
     if (options.mode === "self_test") {
@@ -1178,6 +2315,23 @@ function main(): number {
 
     if (options.mode === "audit") {
       return audit_allowlist(repo_root(import.meta.dir), exemptions, rejected, matchers);
+    }
+
+    if (options.message !== null) {
+      const root = repo_root(import.meta.dir);
+      const text = strip_commit_message(readFileSync(options.message, "utf8"), comment_character(root));
+      const { reported, exempt } = partition_hits(scan_text("commit message", text, matchers, null).hits, exemptions);
+      report({
+        reported,
+        exempt,
+        exemptions: exemptions.length,
+        rejected,
+        scope: "the commit message, with its comments and any verbose diff stripped as git strips them",
+        unread: [],
+        quiet: options.quiet,
+        dictionaries,
+      });
+      return exit_code_for(reported, rejected.length);
     }
 
     let root: string;
@@ -1189,7 +2343,7 @@ function main(): number {
       const base = statSync(target).isDirectory() ? target : dirname(target);
       // Report paths relative to the repository, not to the scanned subtree, so an exemption
       // written once matches whether the run covered one directory or every tracked file.
-      const found = run_git(["rev-parse", "--show-toplevel"], base);
+      const found = git_text(["rev-parse", "--show-toplevel"], base);
       root = found.ok ? found.stdout.trim() : base;
       files = walk_path(target);
     } else {
@@ -1212,12 +2366,20 @@ function main(): number {
       }
     }
 
-    const result = scan_files(files, matchers, root, quoted);
+    const result = scan_files(
+      files,
+      matchers,
+      root,
+      quoted,
+      options.mode === "staged" ? staged_contents(root, files) : null,
+    );
     const hits = [...result.hits];
     // Coverage is part of the verdict, and a deliberate suppression is not the same fact as a file
     // that could not be read: one is a measured blind spot, the other is a gap nobody chose.
     const coverage =
-      `${result.unreadable} unreadable (binary, absent or not a file), ` +
+      `${result.nodes.length} path components, ` +
+      `${result.binary.length} binary and named below, ` +
+      `${result.missing} absent or not a readable file, ` +
       `${result.excluded} excluded by path, ` +
       `${result.self_quoted} ${result.self_quoted === 1 ? "occurrence" : "occurrences"} suppressed inside the ` +
       "dictionary that declares them";
@@ -1228,11 +2390,22 @@ function main(): number {
         : `${options.mode === "staged" ? "staged" : "tracked"} ${files_noun}`;
     scopes.push(`${result.scanned} ${where} (${coverage})`);
 
-    if (options.commits) {
-      const scanned = scan_commits(repo_root(root), options.commit_range, matchers);
+    if (options.history) {
+      // Only a full tracked scan can promise that the current version of every file was already
+      // read with its exemptions applied. Anything narrower assumes nothing and re-reads it all.
+      const covered: Covered =
+        options.mode === "tracked" && options.path === null
+          ? { blobs: index_blobs(root), names: new Set(result.nodes) }
+          : { blobs: new Set(), names: new Set() };
+      const scanned = scan_history(repo_root(root), options.history_range, matchers, covered);
       hits.push(...scanned.hits);
-      const note = scanned.note === "" ? "" : ` (${scanned.note})`;
-      scopes.push(`${scanned.count} commit ${scanned.count === 1 ? "message" : "messages"}${note}`);
+      const note = scanned.note === "" ? "" : `, ${scanned.note}`;
+      scopes.push(
+        `${scanned.blobs} superseded ${scanned.blobs === 1 ? "blob" : "blobs"} of ${scanned.objects} reachable ` +
+          `objects, ${scanned.names} historical path components and ${scanned.commits} commit ` +
+          `${scanned.commits === 1 ? "message" : "messages"} (${scanned.current} blobs already read above as ` +
+          `the current version, ${scanned.skipped} skipped as binary or oversized${note})`,
+      );
     }
 
     const { reported, exempt } = partition_hits(hits, exemptions);
@@ -1242,6 +2415,7 @@ function main(): number {
       exemptions: exemptions.length,
       rejected,
       scope: scopes.join(" and "),
+      unread: result.binary,
       quiet: options.quiet,
       dictionaries,
     });

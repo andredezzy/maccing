@@ -1,8 +1,8 @@
 # Hooks
 
-Three files live here, of two different kinds.
+Four files live here, of two different kinds.
 
-Two are agent-runtime hooks — `session-start.sh` and `pre-tool-use.sh` — registered in `hooks.json` and fired by a host that offers lifecycle hooks. The third, `pre-commit`, is a git hook: git fires it, it is registered nowhere, and it does nothing at all until somebody installs it. What it runs and how to install it are in [`scripts/README.md`](../scripts/README.md), beside the checker it gates.
+Two are agent-runtime hooks — `session-start.sh` and `pre-tool-use.sh` — registered in `hooks.json` and fired by a host that offers lifecycle hooks. The other two, `pre-commit` and `commit-msg`, are git hooks: git fires them, they are registered nowhere, and they do nothing at all until somebody installs them. `git config core.hooksPath hooks` installs both at once. They come as a pair because a pre-commit hook is never handed the commit message, so without the second one a message could carry what the files no longer do. What they run is in [`scripts/README.md`](../scripts/README.md), beside the checker they gate.
 
 Neither runtime hook is part of any skill. Nothing inside any `SKILL.md` names a file in this directory, and nothing in a skill's instructions depends on one having run. That separation is deliberate and is explained under [Adapters, not enforcement](#adapters-not-enforcement).
 
@@ -18,9 +18,9 @@ The database skills get one line each rather than a shared line, because each gu
 
 Runs before a tool call, receives the invocation as JSON on stdin, and has two jobs.
 
-**Observe.** Invoking a skill, or reading a file inside a skill's own directory, records that skill as loaded for the rest of the session.
+**Observe.** Reaching for a skill — invoking it, or reading a file inside the skill's own directory — records that skill as loaded for the rest of the session.
 
-**Gate.** An edit or write under a tree governed by one of those skills, where the skill has not been recorded as loaded, is denied once with a reason naming the skill and why that tree needs it.
+**Gate.** An edit or write under a tree governed by one of those skills, where the skill has not been recorded as loaded, is denied with a reason naming the skill, why that tree needs it, and what clears it. The denial repeats. A second attempt at the same tree is denied, and so is a third, until the skill is recorded as loaded.
 
 | Path being written | Skill named in the denial |
 |---|---|
@@ -30,7 +30,29 @@ Runs before a tool call, receives the invocation as JSON on stdin, and has two j
 
 The map is checked before the tree around it, because it is the mapping skill's subject even though it sits inside the ops skill's directory.
 
-A read counts as a load when the path falls inside the skill's own tree — `skills/database/mapping/` and `skills/database/ops/` for the two database skills, and the whole `skills/growth/` family for `growth`, since any platform skill under it routes back through the orchestrator. Matching the family rather than the single directory is deliberately generous: the cost of a missed reminder is one skipped nudge, and the cost of a spurious one is an agent being told to load a skill it already has open.
+### What counts as loading a skill
+
+The observe path is the only way past the gate, so it is deliberately broad. Any of these records a skill as loaded:
+
+- invoking it by name through a skill or slash-command tool, whatever case the host spells the tool name in;
+- a path inside the skill's own directory — `skills/database/mapping/` and `skills/database/ops/` for the two database skills, and the whole `skills/growth/` family for `growth`, since any platform skill under it routes back through the orchestrator;
+- a path that is the directory itself, so listing it counts;
+- the skill's `skill://` URI, which is how some hosts address a skill that has no path on disk;
+- either of those last two shapes appearing inside a shell command, which is how an agent reads a skill on a host with no read tool of its own.
+
+A path counts whatever tool carried it — read, grep, glob, shell — provided that tool is not a write. Writing a skill's own file is not reading it, and does not count.
+
+Matching this widely is deliberate, and the asymmetry with the gate is too: the gate matches a short list of edit tools exactly, while observation matches loosely and case-insensitively. Observing too much costs one skipped reminder. Observing too little now costs an agent being denied for engaging with the skill correctly, which is the expensive direction.
+
+How much of that breadth is reachable depends on the host. `hooks.json` registers the hook for the edit tools plus `Read`, `NotebookRead`, `Skill` and `SlashCommand`, so on that host the grep, glob and shell forms never arrive and reading the skill's file is the route through. The wider matching is there for hosts that call the hook on every tool, and costs nothing where they do not.
+
+### The escape hatch
+
+`MACCING_SKILL_GATE=off` turns the gate off for the process that has it set. Observation still runs; nothing is ever denied.
+
+It exists for one case. The gate assumes there is *some* observable gesture that means "I have the skill". On a host that offers none — no skill tool, no read event this hook can see, skills injected by a mechanism invisible to it — every governed edit would be denied for the whole session with no way out. That is a wedge, and a wedge needs a door.
+
+The door is an environment variable a person sets on purpose, having read this paragraph. It is deliberately not something the hook decides for itself. The hook used to make exactly that decision: it denied once per skill and then stood aside permanently, so the wedge could never happen — and neither could the gate, since ignoring one reminder was enough to get through. An escape a human opens knowingly is a different object from one that opens by itself on the second attempt.
 
 ### The no-op is silence, not an allow decision
 
@@ -53,11 +75,10 @@ A hook runs in its own process. It cannot see the agent's context, so it cannot 
 State that plainly: **this is a reminder mechanism with a real bypass, not a security boundary.** The gaps are known and are not defects to be closed.
 
 - Opening a skill's file marks it loaded. Nothing verifies the contents were read, and nothing verifies they were followed.
-- Loading the skill by a route the hook never sees — a host feature that injects it, a tool this script does not match — leaves the marker unwritten, and the reminder fires against an agent that has already done the right thing.
-- The denial fires **once per skill per session**. A second attempt at the same tree passes. This is intentional: the hook cannot confirm the agent complied, so a hook that kept denying would eventually be denying correct work with no way out, which is the wedge described above wearing a different hat.
-- Markers live in a temp directory. Clearing it re-arms every reminder, and nothing stops anything else from writing there.
+- Loading the skill by a route the hook never sees — a host feature that injects it, a tool this script does not match — leaves the marker unwritten, and the denial fires against an agent that has already done the right thing. When a host makes that the permanent state rather than an occasional miss, `MACCING_SKILL_GATE=off` is the way out.
+- Markers are files in a temp directory keyed by the session id. Clearing that directory re-arms every gate, and anything able to write there can forge a marker the gate will believe.
 
-The upside is that the reminder arrives at the moment of the edit, attached to the file being edited, which is when it is most likely to be acted on. That is the whole of what this layer buys, and it is worth having on hosts that offer it.
+The upside is that the denial arrives at the moment of the edit, attached to the file being edited, which is when it is most likely to be acted on. That is the whole of what this layer buys, and it is worth having on hosts that offer it.
 
 ## Adapters, not enforcement
 
@@ -69,7 +90,7 @@ The requirement is that a skill gets reached for whenever the work touches its s
 | Skill body | yes | The mandatory first-step block at the top of the `SKILL.md` |
 | Cross-skill reach | yes | A substrate skill named as required by each skill that depends on it |
 | `session-start.sh` | no | Names the standing rules once per session |
-| `pre-tool-use.sh` | no | Reminds at the moment of the edit |
+| `pre-tool-use.sh` | no | Denies the edit until the skill is loaded |
 
 The first three are the enforcement, and they carry it on their own. The description is the layer that actually fires, because every host that loads skills reads descriptions; the body holds once loaded; the cross-skill reference pulls a substrate in without either host hook existing.
 

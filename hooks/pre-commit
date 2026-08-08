@@ -2,7 +2,13 @@
 # Git pre-commit hook: refuses a commit that stages vocabulary belonging to private work.
 #
 # Install it with `git config core.hooksPath hooks`, which points git at this tracked directory so
-# the hook travels with the repository instead of living unversioned under `.git/hooks`.
+# the hook travels with the repository instead of living unversioned under `.git/hooks`. That one
+# setting also installs `commit-msg` beside it, which is the half of the gate this hook cannot do:
+# a pre-commit hook is never handed the message.
+#
+# `--staged` reads the content out of the index, not off disk, so what is checked is what the
+# commit will actually contain. A file staged clean and then dirtied passes; a file staged dirty
+# and then cleaned fails.
 #
 # The vocabulary is not in this repository. Export LEAK_TERMS in your shell profile so every
 # `git commit` inherits it:
@@ -11,7 +17,8 @@
 #
 # --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
 # would match nothing, exit 0, and let every commit through while looking exactly like a clean
-# gate. With it, an unset LEAK_TERMS fails the commit and says what is missing.
+# gate. With it, an unset LEAK_TERMS fails the commit and says what is missing. It refuses an
+# overlay that loaded no terms too, so a truncated or emptied dictionary is not a silent pass.
 
 set -eu
 

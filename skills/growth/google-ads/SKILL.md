@@ -70,9 +70,9 @@ Every manual instruction MUST include:
 | Entity | Format | Example |
 |---|---|---|
 | Campaign | `Brand - Product - Channel - Geo` | `Acme Brand - Search - PH/PK/BD` |
-| Ad Group | `[Theme] - [Match Type]` | `Earning Keywords - Broad` |
+| Ad Group | `[Theme] - [Match Type]` | `Pricing Keywords - Broad` |
 | Script file | `NN-kebab-description.js` | `33-campaign-optimize.js` |
-| Negative keyword | Lowercase, broad match default | `without investment` |
+| Negative keyword | Lowercase, broad match default | `without paying` |
 
 ### Ad Group Organization
 
@@ -131,7 +131,7 @@ Broad match negatives can silently block positive keywords. Example: negative "j
 ### Funnel-Aware Negative Keywords
 
 When the business model has a free tier → paid conversion funnel:
-- Negative "without investment", "no investment", "free money" — these users explicitly won't pay
+- Negative the zero-spend phrases — "without paying", "no cost", "free money", "no money needed" — these users state up front that they will not pay. Do NOT negate bare "free": the free tier is the top of your own funnel.
 - High CTR ≠ high value. Evaluate keywords by downstream conversion (purchase), not clicks
 - Search terms with high downstream CVR → promote to exact match
 
@@ -306,7 +306,7 @@ campaignOperation: {
 | Trigger | Policy | Example |
 |---|---|---|
 | "win", "winning" in descriptions | Declarações não confiáveis | "Play and win daily" |
-| Financial terms in landing page | MISLEADING_CONTENT | /invest with "profit sharing" |
+| Money-outcome terms on landing page | MISLEADING_CONTENT | page copy promising "profit sharing" |
 | "profit", "returns", "guaranteed" | Unreliable claims | "Daily profit sharing" |
 
 **Fix pattern:** sitelink assets are immutable — create a new compliant asset, unlink old from campaigns, link new. Old asset stays in account (cannot be deleted).
@@ -378,7 +378,7 @@ Frontend (GA4 tag) ──cross-domain linker──▶ App (GA4 tag)
 - session_id goes in event params, NOT top-level body
 - Max 72 hours backdating for events
 
-## Financial Services Policy Learnings
+## Restricted-Category Policy Learnings
 
 > Note: the enforcement patterns below are practitioner-observed, not official Google policy. Verify against ads.google.com policy before acting.
 
@@ -394,9 +394,9 @@ Frontend (GA4 tag) ──cross-domain linker──▶ App (GA4 tag)
 
 ### MISLEADING_CONTENT Triggers (Confirmed)
 
-**Dangerous terms on landing page:** "trading", "investment", "deposit", "portfolio", "returns", "profit", "earnings", "withdrawal"
+**Landing-page terms that trigger it:** "trading", "investment", "deposit", "portfolio", "returns", "profit", "earnings", "withdrawal"
 
-**Safe terms:** "community", "membership", "operations", "progress tracking", "participants"
+**Terms the classifier treats as neutral:** "community", "membership", "operations", "progress tracking", "participants"
 
 **Ad copy triggers:** "earn", "income", "get paid", "profit sharing", "daily returns", "trusted", "proven track record", "no hidden fees", "grow your money", "secure your future"
 

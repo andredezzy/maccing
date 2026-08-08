@@ -12,6 +12,10 @@ This package computes that. It knows four roles — a **person**, **revenue** ar
 bun add @maccing/growth
 ```
 
+Nothing is published to a registry yet. A consumer in the same checkout therefore depends on it by path — `"@maccing/growth": "file:../relative/path/to/packages/growth"` — and every caller resolving through that one manifest gets the same working copy. That is one shared version for a whole tree of callers, not a pin per caller: editing `src/` changes what a script written months ago measures the next time it runs.
+
+Publishing is what makes the pin real, and it is most of why the measurement lives in a package at all. Once a version is on a registry, a folder with its own manifest can name an exact one and hold it — the arithmetic behind an old reading stops moving, so re-running that reading reproduces it instead of re-deriving it under today's code. Until then the honest statement is that every caller shares one version, and any claim that a caller pins its own describes the mechanism rather than the current state.
+
 ## The one import
 
 ```ts
@@ -121,6 +125,8 @@ The `cut` is the real moment of contact — not midnight, not the date the campa
 
 Three optional fields on a cell cover the shapes a list actually arrives in. `column` names which column of a `.csv` holds the phone, when it is not the first. `filter` cuts one cell out of a file holding several — better than splitting it into derived files, which are free to drift from the single frozen source the attribution depends on. `exclude` subtracts identifiers before measuring: planted probes and internal numbers, each of which would otherwise inflate the rate of whichever cell it landed in.
 
+Two things about those worth knowing before you rely on them. `column` and `filter` read a `.csv`; a `.txt` list is one identifier per line, and a `column` or `filter` declared beside one is ignored rather than refused. And `column` is checked against the file's header while `filter.column` is not — a misspelt filter column matches no row, and the cell then fails as `EmptyCellError` naming the file and the phone column rather than the filter. That second one is a known gap: spell a filter column off the header in front of you, not from memory.
+
 ## The record
 
 One `CellRecord` per cell, in declaration order. This is the first of the two the call above returns, taken ten days after the cut:
@@ -166,7 +172,7 @@ Reading it:
 - **`measured_utc` and `window_hours`** make every reading self-dating. An undated number misleads somebody two weeks later, and the window is what makes the publishability floor mechanical instead of a habit.
 - **`publishable`** is `true` only when all four hold: the test returned a p-value, that p-value is below `MAX_P`, the control carried at least `MIN_CONTROL_EVENTS`, and the window has cleared `WINDOW_FLOOR_HOURS` — seven days. An early reading that clears significance is the most confidently wrong number this engine can produce, so the floor outranks the p-value rather than qualifying it.
 
-A control outcome must be a path to something countable. The comparison is a two-proportion test over the identifiers each cell listed, so a sum of money is not a candidate: divided by a headcount it is not a proportion, and the test would answer with a p-value that means nothing while reading as publishable. The permitted paths are exported as `COUNTABLE_OUTCOMES`, and anything else is refused by name.
+A control outcome must be a path to something countable. The comparison is a two-proportion test over the identifiers each cell listed, so a sum of money is not a candidate: divided by a headcount it is not a proportion, and the test would answer with a p-value that means nothing while reading as publishable. Which paths are countable also depends on the audience, and both rules read one table — a `cold` cell is read on `acquired.accounts`, `acquired.revenue.people` or `acquired.churn.people`, an `own_base` cell on `conversions.count`. `COUNTABLE_OUTCOMES` is the union of the two, so every path it exports is reachable by some audience; anything outside it, and anything inside it that belongs to the other audience, is refused by name. Both cells of the pair are checked, not just the treated one, so a `cold` cell paired against an `own_base` one is refused whichever outcome it names — which is the right answer, because the two are not measuring the same thing. A path naming a role the map left unbound is refused too, on its own error, because that branch is absent from the record rather than zero.
 
 ## The failure philosophy
 
@@ -179,29 +185,34 @@ So the pass refuses at every point where the two are indistinguishable, and each
 | Error | Raised when |
 |---|---|
 | `MapMissingError` | No map at that path, or its fingerprint points at a schema file that is not there |
-| `MapSectionError` | A required section is absent, or a block the fingerprint lists is not in the schema |
-| `MapFieldError` | A key is missing, unreadable, or not one the section defines |
+| `MapSectionError` | A required section is absent, or a block the fingerprint lists is not in the schema, or that block never closes and there is nothing definite to hash |
+| `MapFieldError` | A key is missing, unreadable, or not one the section defines; a `models` or `valid_statuses` list with nothing in it; half of the `split`/`recycled_when` pair |
 | `MapStaleError` | The schema has changed since the map recorded its hash |
 | `PhoneFormatError` | A declared numbering plan this engine cannot honour |
 | `UnparseablePhonesError` | More of the person export is unreadable than the map permits |
 | `MissingExportError` | A bound export, or a file a cell lists, is not where it was said to be |
 | `ExportColumnError` | A column the map binds is absent from that export's header |
-| `MissingColumnError` | A column a cell names is absent from its list file's header |
+| `MissingColumnError` | The column a cell names as its phone column is absent from its list file's header |
 | `UnsupportedListFormatError` | A list in a format the reader will not guess at |
-| `ExportValueError` | A bound amount column holds something that is not a number |
+| `ExportValueError` | A bound amount column is absent from the file, empty on a row, or holding something that is not a number — the message says which of the three |
+| `ExportBlankColumnError` | A bound timestamp column is in the header but empty or unreadable on every row of an export that has rows. An export with no rows at all is a fact and passes |
 | `TimestampError` | A timestamp reached the parser and could not be read as a moment |
 | `CellDeclarationError` | A cell cannot be measured as written — blank cut, sub-millisecond cut, duplicate name |
 | `EmptyCellError` | A cell's lists yielded no usable identifier, before or after its exclusions |
-| `ProvisionalCutError` | People arrived after a cut the declaration itself calls a placeholder |
-| `ControlError` | A pair naming an undeclared cell, contradicting its audience, reading an outcome that is not countable, or a second control on one treated cell |
+| `ProvisionalCutError` | Something counted forward from the cut is non-zero on a cell whose own declaration calls that cut a placeholder |
+| `ControlError` | A pair naming an undeclared cell, reading an outcome that is not countable or not one its audience is read on, reading a path the record does not carry, or a second control on one treated cell |
 
-The last two are worth dwelling on. A provisional cut is a guess, so arrivals dated against it cannot be attributed to anything; the run reports zero arrivals happily and refuses the moment there is something to attribute. And two controls on one treated cell would let the last one silently win, which is a difference nobody would ever see in the output.
+The last two are worth dwelling on. A provisional cut is a guess, so nothing dated from it can be attributed to anything: the run reports a cell with nothing counted happily — the record carries `cut_provisional` beside the numbers to say why — and refuses the moment there is something, whether that is an arrival, a commitment, or somebody already registered paying or leaving after the cut. `pre_existing.accounts` is the one count deliberately outside that test, because it partitions the audience instead of measuring an outcome: it is non-zero for practically every own-base cell, and testing it would refuse every provisional cut ever declared on one, which is the quiet case the flag exists to allow. And two controls on one treated cell would let the last one silently win, which is a difference nobody would ever see in the output.
 
 ## Two limits worth knowing before you bind a map
 
 **The instant resolves to the millisecond.** Event timestamps finer than that are truncated, in silence and on purpose: truncation only ever moves an instant down, towards the start of its own millisecond and never past it, so no event can change which side of the cut it falls on — provided the cut itself sits on a whole millisecond. That premise is the cut's, not the event's, which is why a cut declared finer than a millisecond is refused where cells are declared while events arriving in bulk from an export nobody controls are truncated without comment.
 
-**The join key is built from two fixed lengths.** A number is reduced to its area code plus its trailing subscriber digits, which is what makes the same person's number collapse onto one key whether a source kept the international prefix, kept a leading trunk zero, or predates a numbering reform that inserted a digit. It also means a market whose area codes vary in length cannot be expressed this way at all — no pair of numbers describes it. That case needs a second key strategy, not different values in the table, and `make_key` refuses it by name rather than producing keys that quietly match nothing.
+**The join key is built from two fixed lengths, and length is what reads it.** A value is stripped to digits and its leading zeros dropped, and then the length decides: a string of exactly the national length — `area_digits + subscriber_digits`, or one longer where a reform inserted a digit — is read as a bare national number whatever it begins with, the declared country code included, because in a market whose area codes are as long as its dialling code those are the same digits. Anything longer must carry the declared country code; a longer string with some other prefix belongs to another market and gets no key at all, counting against `max_unparseable_rate` instead. The key itself is the area code plus the trailing subscriber digits, which is what collapses one person's number onto one key whether a source kept the international prefix, kept a leading trunk zero, or predates the reform.
+
+**Discarding the middle collapses two different subscribers as willingly as one subscriber's two writings.** Two numbers agreeing on the area code and on the trailing digits and differing only in between — a national-length number and a reformed one in the same area whose tails coincide — come out as one key, and nothing in the data distinguishes that from one person written two ways. The failure is a false match rather than a missed one: a listed identifier picks up an account that was never on the list, and that account's arrivals, money and commitments are credited to the campaign. `shared_account_ceiling` only bounds it, since a collided pair sits far below any sane ceiling, and `area_codes` cannot help, because both numbers carry a real code. Count the keys holding more than one account on your own export before accepting the trade.
+
+**A market whose area codes vary in length cannot be expressed this way at all** — no pair of numbers describes it — and that case needs a second key strategy rather than different values in the table. Nothing detects it for you. `make_key` validates the format only for being structurally usable: both lengths at least 1, the country code digits only, `max_unparseable_rate` inside 0..1, `shared_account_ceiling` at least 2. A plausible fixed length is accepted and mints silently wrong keys for every code of another length. The one refusal available is the one the author reaches for: `area_digits` declared as `0` says no number fits, and `PhoneFormatError` then names the reason and says a second strategy is needed rather than different numbers here.
 
 ## Licence
 

@@ -15,6 +15,11 @@
 # A missing overlay fails the job. It is never skipped and never downgraded to a warning: a pull
 # request from a fork gets no secrets, so it gets no clearance either, and the honest way to say
 # so is a red job rather than a green one that checked nothing.
+#
+# The only thing this file can check about the secret is that it is not empty, which a secret
+# rotated to `{}` passes. `--require-overlay` is what closes that: it fails a run that loaded no
+# terms, not merely a run that merged no file, so an overlay that is empty, malformed or truncated
+# is a red job rather than a `0 terms` header nobody reads.
 
 name: leak-check
 
@@ -32,8 +37,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The commit scan is a post-rewrite clearance, and a pass on a shallow clone would read
-          # as "the history is clean" while covering only the slice that was fetched.
+          # `--history` reads every blob reachable from every ref. A pass on a shallow clone would
+          # read as "the history is clean" while covering only the slice that was fetched, so the
+          # whole object graph has to be here.
           fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
@@ -54,12 +60,14 @@ jobs:
           printf '%s' "$LEAK_OVERLAY" > "$RUNNER_TEMP/leak-terms.json"
 
       # Proves the checker itself before trusting its verdict. It plants its own invented fixtures
-      # and needs no dictionary, so it deliberately does not ask for the overlay.
+      # and needs no dictionary, but it also plants every term of every loaded category — so the
+      # overlay makes it a stronger test, and --require-overlay here is what turns a secret rotated
+      # to `{}` into a red job at the first step rather than a green one at the last.
       - name: Self-test
-        run: bun scripts/leak-check.ts --self-test
+        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --self-test
 
       - name: Audit the exemptions
         run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit
 
-      - name: Scan every tracked file and the whole history
-        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --commits
+      - name: Scan every tracked file and clear the whole history
+        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history
