@@ -3,7 +3,7 @@ import { make_key } from "../../../internal/phone.ts";
 import { round_half_even, round_or_null } from "../../../internal/round.ts";
 import { median, two_proportion } from "../../../internal/stats.ts";
 import { read_identifiers, read_table } from "../../../internal/table.ts";
-import { parse_ts } from "../../../internal/timestamp.ts";
+import { parse_ts, parse_ts_with_precision } from "../../../internal/timestamp.ts";
 
 export type { DatabaseMap, RoleBinding } from "../../../internal/map.ts";
 export {
@@ -441,9 +441,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   const measured: { cell: Cell; record: CellRecord }[] = [];
 
   for (const cell of opts.cells) {
-    const cut = parse_ts(cell.cut);
+    // The cut is the one instant the truncation in `parse_ts` is not provably harmless for: every
+    // event is compared against it, and the argument that no event can change side holds only
+    // while the cut itself sits on a whole millisecond. A cut is typed by a person, once, so
+    // refusing an unhonourable one costs nothing and closes the only case that could disagree.
+    const { at: cut, sub_millisecond } = parse_ts_with_precision(cell.cut);
     if (cut === null) {
       throw new CellDeclarationError(cell.name, "its cut is blank, so there is no moment to measure from");
+    }
+    if (sub_millisecond) {
+      throw new CellDeclarationError(
+        cell.name,
+        `its cut ${JSON.stringify(cell.cut)} is declared finer than a millisecond, and this engine's instant resolves to the millisecond, so that cut cannot be honoured exactly — declare it to the millisecond or coarser`,
+      );
     }
     const cut_ms = cut.getTime();
 
