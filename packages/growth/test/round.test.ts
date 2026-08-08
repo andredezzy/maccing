@@ -168,7 +168,10 @@ describe("round_half_even", () => {
   test("treats a negative the same way as its magnitude", () => {
     expect(round_half_even(-4.25, 1)).toBe(-4.2);
     expect(round_half_even(-0.125, 2)).toBe(-0.12);
-    expect(round_half_even(-Math.PI, 3)).toBe(-Math.PI);
+    // -3.142 is this call's rounded output, not an attempt to spell pi. The autofix rewrote it to
+    // -Math.PI once, turning a correct assertion into one that asserts rounding does nothing.
+    // biome-ignore lint/suspicious/noApproximativeNumericConstant: it is an output, not a constant
+    expect(round_half_even(-Math.PI, 3)).toBe(-3.142);
   });
 
   test("leaves zero and already-rounded values alone", () => {

@@ -25,7 +25,7 @@ export type RoleBinding = {
   export: string;
   columns: Record<string, string>;
   /** Only on the conversion role: statuses that count as committed. */
-  valid_statuses?: string[];
+  valid_statuses?: readonly string[];
   /** Only on the conversion role: the value of the split column meaning recycled, not new. */
   recycled_when?: string;
 };
@@ -38,7 +38,7 @@ export type DatabaseMap = {
    *  reporting it as zero, because unbound and empty are different facts. */
   revenue?: RoleBinding;
   churn?: RoleBinding;
-  fingerprint: { schema: string; models: string[]; sha256: string };
+  fingerprint: { schema: string; models: readonly string[]; sha256: string };
 };
 
 const SECTION_PHONE = "## Phone format";

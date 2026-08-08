@@ -48,7 +48,7 @@ export type Cell = {
    *  documented way this kind of report once claimed arrivals that never happened. */
   cut_provisional?: boolean;
   /** Files holding the reached identifiers. Unioned, then de-duplicated by derived key. */
-  lists: string[];
+  lists: readonly string[];
   /** Column holding the phone. Defaults to the first column. */
   column?: string;
   /** Row filter, for one file holding several cells. Splitting it into derived files would
@@ -60,7 +60,7 @@ export type Cell = {
   audience: "cold" | "own_base";
   /** Identifiers to subtract before measuring: planted probes, internal numbers. Counting one
    *  as a member inflates the rate of whichever cell it landed in. */
-  exclude?: string[];
+  exclude?: readonly string[];
 };
 
 /** A treated cell measured against an untouched one. */
@@ -121,8 +121,8 @@ export type MeasureOptions = {
   map: string;
   /** Directory holding one exported file per bound role. */
   exports: string;
-  cells: Cell[];
-  controls?: Control[];
+  cells: readonly Cell[];
+  controls?: readonly Control[];
   /** Overrides the reading time. Only a test has a reason to set this. */
   now?: Date;
 };
@@ -188,7 +188,7 @@ export class CellDeclarationError extends Error {
 export class EmptyCellError extends Error {
   readonly cell: string;
 
-  constructor(cell: string, lists: string[], column: string | undefined) {
+  constructor(cell: string, lists: readonly string[], column: string | undefined) {
     super(
       `cell ${JSON.stringify(cell)} yielded no usable identifier from ${lists.join(", ")}` +
         `${column === undefined ? "" : ` (column ${JSON.stringify(column)})`}. ` +

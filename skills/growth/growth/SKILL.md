@@ -47,7 +47,7 @@ Execution happens in platform-specific skills.
 - WhatsApp message dispatch → `whatsapp` skill (Cloud API, templates, bulk sending)
 - Meta platform substrate (BM, verification, account quality, classifier, asset isolation, disposable-BM, ban/appeal) → `meta` skill — **shared**, loaded first by both `meta-ads` and `whatsapp`
 - YCloud BSP (dispatch console, campaigns, opt-out automation) → `ycloud` skill; YCloud v2 REST API → `ycloud-api` skill
-- Outsourced dispatch (a third party sends for us, on their numbers) → `references/outsourced-dispatch.md`
+- Outsourced dispatch (a third party sends for us, on their numbers) + the campaign measurement contract → `whatsapp` skill, `references/outsourced-dispatch.md`
 - Other platforms → research + manual guidance
 
 **Project data:** `.maccing/growth/<platform>/<account>/` — each project has its own README + platform subdirectories (git-tracked per Iron Law 0b).
@@ -132,7 +132,7 @@ Cost discipline (ledger-in-place, present-before-spend, always optimize): see `r
 |---|---|---|
 | Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `references/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
 | Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `references/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
-| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, blast benchmark, vendor checklist | `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor |
+| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, worked blast example, vendor checklist, campaign measurement contract | `whatsapp` skill, `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor; measuring a campaign |
 
 ## Core Metrics
 

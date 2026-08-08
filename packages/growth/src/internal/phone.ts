@@ -17,7 +17,7 @@ export type PhoneFormat = {
    *  from the index — otherwise every list containing it inherits all of them. */
   shared_account_ceiling: number;
   /** Optional allowlist of valid area codes. Length alone accepts codes that do not exist. */
-  area_codes?: string[];
+  area_codes?: readonly string[];
 };
 
 /** A declared number format this engine cannot honour. Thrown once, when the format is read,
