@@ -20,14 +20,15 @@
  * Four scopes, and each one names what it does not cover. `--staged` reads content out of the
  * index, never the working tree, because the commit is made of the index. `--message` runs a
  * commit message through the same matcher. `--history` is the clearance: it walks every blob
- * reachable from every ref, every historical path, and every commit message. A run without
- * `--history` has not looked at the history at all — which is why it is not the default and why
- * the name says so.
+ * reachable from every ref, every historical path, every annotated tag's own message, and every
+ * commit message. A run without `--history` has not looked at the history at all — which is why it
+ * is not the default and why the name says so.
  *
  * Dictionaries are scanned like any other file. Only the exact term strings a dictionary declares
  * are suppressed inside it, never the whole file, so a client name typed into a `why` is still
- * found. A deliberate suppression is reported apart from a file that could not be read, because a
- * blind spot counted as coverage is worse than no coverage report at all.
+ * found. What could not be read is named rather than counted, and a clean run over content nothing
+ * could decode says `PASSED WITH GAPS` rather than `PASSED`, because a blind spot counted as
+ * coverage is worse than no coverage report at all.
  *
  * Matching runs on a normalised copy of each text — percent-escapes decoded, invisible formatting
  * characters dropped, the rest folded to NFKC and a short table of Cyrillic and Greek Latin
@@ -80,6 +81,11 @@ type Exemption = {
   line: number;
   why: string;
   source: string;
+  /**
+   * Resolved from the tree at run time, never declared: every sentence this entry covers, for
+   * matching a hit in the history, where a line number means nothing. See `covers`.
+   */
+  contexts: string[];
 };
 
 type TermFile = {
@@ -108,6 +114,8 @@ type Hit = {
   line: number;
   column: number;
   span: number;
+  /** Characters matched, in the text as written: what the occurrence covers, not merely where. */
+  chars: number;
   term: string;
   category: string;
   why: string;
@@ -119,8 +127,10 @@ type ScanResult = {
   scanned: number;
   /** Every distinct path component matched, so the history scan can skip the ones done here. */
   nodes: string[];
-  /** Read, but not text: reported by name, never counted as covered. */
+  /** Not text, and holding no run of text either: named in the report, never counted as covered. */
   binary: string[];
+  /** Not text, but holding runs that are: those runs were matched and the other bytes were not. */
+  salvaged: string[];
   /** Listed but absent, or not a readable file at all. */
   missing: number;
   excluded: number;
@@ -140,7 +150,12 @@ type HistoryResult = {
   objects: number;
   blobs: number;
   current: number;
-  skipped: number;
+  /** Annotated tag messages read. A tag is an object of its own, and tags are pushed. */
+  tags: number;
+  /** Named, never merely counted: what the clearance could not read at all, and why. */
+  unread: string[];
+  /** Named: what the clearance read only the readable runs of. */
+  salvaged: string[];
   names: number;
   note: string;
 };
@@ -197,6 +212,36 @@ const BLOB_BATCH = 256;
  * at all. Three lines absorbs an ordinary edit around the occurrence and nothing more.
  */
 const EXEMPTION_LINE_TOLERANCE = 3;
+
+/**
+ * How much text either side of an occurrence identifies it.
+ *
+ * An exemption is written for a line in the tree, and a line number means nothing against a blob
+ * from four months ago — but the sentence around the occurrence does, and it is the only thing that
+ * tells the policy line an entry was written for apart from a different disclosure that once stood
+ * at the same path. Forty-eight characters is a clause either side: enough to tell two sentences
+ * apart, short enough to survive an edit elsewhere on the same line.
+ */
+const EXEMPTION_CONTEXT_RADIUS = 48;
+
+/**
+ * How long a run of decodable characters has to be before it is read out of a file that is not text.
+ *
+ * The length is the whole defence. Compressed bytes land in the printable range about three times
+ * in eight, so a run of sixty-four of them is a one-in-10^27 event, while any real sentence clears
+ * it without noticing. Scanning entropy is not harmless: a three-letter term matches random bytes
+ * roughly once every few megabytes, and a gate that reports a JPEG's Huffman table as a disclosure
+ * is a gate people switch off.
+ */
+const SALVAGE_RUN_CHARACTERS = 64;
+
+/** What separates one run of readable text from the next inside a file that is not text: NUL, the
+ *  other C0 controls, DEL, and the replacement character an undecodable byte becomes. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: finding control characters is the job
+const NOT_TEXT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\ufffd]+/u;
+
+/** The `tag <name>` header of an annotated tag object, which is also the name that gets pushed. */
+const TAG_NAME = /^tag (.+)$/m;
 
 const SKIPPED_DIRECTORIES: Record<string, true> = { ".git": true, node_modules: true };
 
@@ -547,6 +592,9 @@ function parse_dictionary(path: string): TermFile {
  * names the occurrence the exemption covers, and is what keeps it from covering every other
  * occurrence of the same term in the same file forever. A `line` of 0 names the path itself,
  * which is the only occurrence a filename hit can have.
+ *
+ * No entry declares the sentence it covers. That is read from the tree, so an entry stays a note
+ * about a line and never becomes a second, hand-written copy of the file it names.
  */
 function read_exemptions(
   source: string,
@@ -581,7 +629,7 @@ function read_exemptions(
       );
       continue;
     }
-    exemptions.push({ path, category, term, line, why, source });
+    exemptions.push({ path, category, term, line, why, source, contexts: [] });
   }
   return { exemptions, rejected };
 }
@@ -963,6 +1011,7 @@ function scan_text(
         line: first + 1,
         column: begin - (starts[first] ?? 0) + 1,
         span: last - first + 1,
+        chars: finish - begin + 1,
         term: matcher.term,
         category: matcher.category,
         why: matcher.why,
@@ -981,6 +1030,36 @@ function scan_text(
 function scan_name(node: string, matchers: Matcher[]): Hit[] {
   const name = node.split(/[\\/]/).pop() ?? node;
   return scan_text(node, name, matchers, null).hits.map((hit) => ({ ...hit, line: 0, span: 1, text: node }));
+}
+
+/**
+ * A phrase whose words fall either side of a directory separator.
+ *
+ * `vondrel/mikashe-notes.md` discloses exactly what `vondrel mikashe` discloses, and matching one
+ * component at a time can never see it, because neither component contains the phrase. So the
+ * whole path is matched once more with its separators read as the space they stand in for.
+ *
+ * Only matches that actually cross a separator are kept. Everything inside a single component was
+ * already reported by `scan_name`, and a report that says the same thing twice is a report that
+ * gets skimmed.
+ */
+function scan_path(path: string, matchers: Matcher[]): Hit[] {
+  const separators: number[] = [];
+  for (let index = 0; index < path.length; index += 1) {
+    const character = path[index];
+    if (character === "/" || character === "\\") {
+      separators.push(index);
+    }
+  }
+  // A path may contain a line break, and a hit's column is then relative to its own line rather
+  // than to the path, which is what the crossing test below measures against.
+  if (separators.length === 0 || path.includes("\n")) {
+    return [];
+  }
+  const joined = path.replace(/[\\/]/g, " ");
+  return scan_text(path, joined, matchers, null)
+    .hits.filter((hit) => separators.some((at) => at > hit.column - 1 && at < hit.column - 1 + hit.chars))
+    .map((hit) => ({ ...hit, line: 0, span: 1, text: path }));
 }
 
 /** Every distinct path and every distinct directory above it, each one matched exactly once. */
@@ -1005,8 +1084,8 @@ function path_nodes(relatives: string[]): string[] {
  * A NUL in the first few kilobytes used to end the story, which quietly removed every UTF-16 file
  * from the scan: half of a UTF-16 file's bytes are NUL. A byte-order mark settles it outright, and
  * without one the parity of the NULs does — every second byte of UTF-16 ASCII is zero, and which
- * half tells the endianness apart. Anything else really is binary, and is counted and named rather
- * than dropped.
+ * half tells the endianness apart. Anything else is not text in any encoding this knows, and what
+ * is still readable inside it is `extract_text`'s problem rather than being dropped.
  */
 function decode_bytes(bytes: Uint8Array): { text: string; encoding: string } | null {
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
@@ -1050,6 +1129,40 @@ function swap_bytes(bytes: Uint8Array): Uint8Array {
 }
 
 /**
+ * The text inside something that is not text.
+ *
+ * One NUL used to remove a whole file from the scan, and the run still printed PASSED: a plaintext
+ * disclosure parked in such a file was invisible, which is a hole rather than a limit. The
+ * realistic case is a mostly-text file with one damaged byte, so what is readable is read.
+ *
+ * Only runs of at least SALVAGE_RUN_CHARACTERS characters survive, and that threshold is what keeps
+ * compressed bytes out of the matcher; see the constant. The kept runs are joined by a blank line,
+ * which no phrase can be matched across, so nothing is ever matched over the bytes that were
+ * dropped. A position inside the result is therefore a line of the extracted text and not of the
+ * file, which is why every file read this way is named in the report.
+ */
+function extract_text(bytes: Uint8Array): string | null {
+  const runs = UTF8.decode(bytes)
+    .split(NOT_TEXT)
+    .filter((run) => run.length >= SALVAGE_RUN_CHARACTERS);
+  return runs.length === 0 ? null : runs.join("\n\n");
+}
+
+/**
+ * Bytes as the text to match: decoded outright, or the readable runs of something that is not text,
+ * or nothing at all. `salvaged` is what the report has to say out loud, because a file read this way
+ * was read in part and a verdict over it is a verdict over less than the file.
+ */
+function read_text(bytes: Uint8Array): { text: string; encoding: string; salvaged: boolean } | null {
+  const decoded = decode_bytes(bytes);
+  if (decoded !== null) {
+    return { text: decoded.text, encoding: decoded.encoding, salvaged: false };
+  }
+  const extracted = extract_text(bytes);
+  return extracted === null ? null : { text: extracted, encoding: "extracted text", salvaged: true };
+}
+
+/**
  * `quoted` maps a dictionary's absolute path to the term strings it necessarily quotes.
  *
  * `contents` is supplied in `--staged` mode, where the bytes that matter are the ones in the index
@@ -1066,6 +1179,7 @@ function scan_files(
 ): ScanResult {
   const hits: Hit[] = [];
   const binary: string[] = [];
+  const salvaged: string[] = [];
   const relatives: string[] = [];
   let scanned = 0;
   let missing = 0;
@@ -1083,12 +1197,15 @@ function scan_files(
     let text: string | null = null;
     const staged = contents?.get(label);
     if (staged !== undefined) {
-      const decoded = decode_bytes(staged);
-      if (decoded === null) {
+      const read = read_text(staged);
+      if (read === null) {
         binary.push(label);
         continue;
       }
-      text = decoded.text;
+      if (read.salvaged) {
+        salvaged.push(label);
+      }
+      text = read.text;
     } else if (contents !== null) {
       // Listed in the index but unreadable from it: a stale entry, or a submodule's gitlink.
       missing += 1;
@@ -1108,12 +1225,15 @@ function scan_files(
         missing += 1;
         continue;
       } else {
-        const decoded = decode_bytes(readFileSync(absolute));
-        if (decoded === null) {
+        const read = read_text(readFileSync(absolute));
+        if (read === null) {
           binary.push(label);
           continue;
         }
-        text = decoded.text;
+        if (read.salvaged) {
+          salvaged.push(label);
+        }
+        text = read.text;
       }
     }
     scanned += 1;
@@ -1125,7 +1245,11 @@ function scan_files(
   for (const node of nodes) {
     hits.push(...scan_name(node, matchers));
   }
-  return { hits, scanned, nodes, binary, missing, excluded, self_quoted };
+  // Once per path, not once per component: a phrase across a separator belongs to the whole path.
+  for (const leaf of new Set(relatives)) {
+    hits.push(...scan_path(leaf, matchers));
+  }
+  return { hits, scanned, nodes, binary, salvaged, missing, excluded, self_quoted };
 }
 
 function run_git(args: string[], cwd: string, input?: Uint8Array): { ok: boolean; stdout: Buffer; stderr: string } {
@@ -1274,18 +1398,25 @@ function containing_commit(root: string, oid: string, path: string): string {
 
 /**
  * The clearance. Everything reachable from every ref: the content of every blob, every path any
- * object was ever stored under, and every commit message.
+ * object was ever stored under, every annotated tag's own message, and every commit message.
  *
  * Blob content is the whole point. A force-push clearance that read only commit messages would
  * report a rewritten history clean while every superseded version of every file still sat in the
  * object database, reachable and cloneable. Blobs are deduplicated by object id, so a file
  * unchanged across five hundred commits is one object, read once and reported once.
  *
+ * An annotated tag is an object with a message of its own, and `git push --follow-tags` publishes
+ * it beside the commits. Reading commit messages and stopping there left a release note — the one
+ * text nobody rewrites — unread.
+ *
+ * What is skipped is named rather than counted. A blob over the size limit, or one holding no
+ * readable text, used to raise a number in the scope line and nothing else, so a disclosure sitting
+ * in one left no trace in the report at all.
+ *
  * `covered` is what the file scan just read. Reporting the current version of a file a second
- * time, under a `history:` source no exemption can name, would make an exempted policy line fail
- * the clearance forever with no remedy short of deleting the word — a gate nobody can ever get
- * green is a gate people stop running. Skipping it leaves exactly the question a clearance asks:
- * what is in the object graph that is not in the tree.
+ * time, under a `history:` source keyed by line, would make an exempted policy line fail the
+ * clearance forever — a gate nobody can ever get green is a gate people stop running. Skipping it
+ * leaves exactly the question a clearance asks: what is in the object graph that is not in the tree.
  *
  * A shallow clone holds only what was fetched, and an explicit range may not resolve in one. Both
  * still run, and both say so in the scope, because a partial history that prints PASSED is the
@@ -1324,20 +1455,40 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
   }
 
   const hits: Hit[] = [];
-  const nodes = path_nodes([...paths.values()].filter((entry) => entry !== "")).filter(
-    (node) => !covered.names.has(node),
-  );
+  const historical = [...new Set([...paths.values()].filter((entry) => entry !== ""))];
+  const nodes = path_nodes(historical).filter((node) => !covered.names.has(node));
   for (const node of nodes) {
     hits.push(...scan_name(`history:${node}`, matchers).map((hit) => ({ ...hit, text: node })));
+  }
+  for (const leaf of historical) {
+    if (covered.names.has(leaf)) {
+      continue;
+    }
+    hits.push(...scan_path(leaf, matchers).map((hit) => ({ ...hit, source: `history:${leaf}`, text: leaf })));
   }
 
   const described = describe_objects(root, oids);
   const wanted: string[] = [];
-  let skipped = 0;
+  const tag_oids: string[] = [];
+  const unread: string[] = [];
+  const salvaged: string[] = [];
   let current = 0;
+  // A blob's path is how a reader finds it; the object id is how they fetch it when there is none.
+  const name_of = (oid: string): string => {
+    const path = paths.get(oid) ?? "";
+    return `history:${path === "" ? "(no path)" : path} (object ${oid.slice(0, 12)})`;
+  };
   for (const oid of oids) {
     const info = described.get(oid);
-    if (info === undefined || info.type !== "blob") {
+    if (info === undefined) {
+      unread.push(`${name_of(oid)} — git could not say what this object is`);
+      continue;
+    }
+    if (info.type === "tag") {
+      tag_oids.push(oid);
+      continue;
+    }
+    if (info.type !== "blob") {
       continue;
     }
     if (covered.blobs.has(oid)) {
@@ -1345,7 +1496,10 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
       continue;
     }
     if (info.size > MAX_BLOB_BYTES) {
-      skipped += 1;
+      unread.push(
+        `${name_of(oid)} — ${(info.size / 1024 / 1024).toFixed(1)} MB, over the ` +
+          `${MAX_BLOB_BYTES / 1024 / 1024} MB limit, so it was not read at all`,
+      );
       continue;
     }
     wanted.push(oid);
@@ -1360,17 +1514,20 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
     for (const [index, body] of bodies.entries()) {
       const oid = chunk[index] as string;
       if (body === null) {
-        skipped += 1;
+        unread.push(`${name_of(oid)} — git could not read the object`);
         continue;
       }
-      const decoded = decode_bytes(body);
-      if (decoded === null) {
-        skipped += 1;
+      const read = read_text(body);
+      if (read === null) {
+        unread.push(`${name_of(oid)} — not text in any encoding this checker knows, and holding no readable run`);
         continue;
+      }
+      if (read.salvaged) {
+        salvaged.push(`${name_of(oid)} — not text, so only its runs of readable text were matched`);
       }
       blobs += 1;
       const path = paths.get(oid) ?? "";
-      const found = scan_text(`history:${path === "" ? oid.slice(0, 12) : path}`, decoded.text, matchers, null);
+      const found = scan_text(`history:${path === "" ? oid.slice(0, 12) : path}`, read.text, matchers, null);
       if (found.hits.length === 0) {
         continue;
       }
@@ -1378,6 +1535,23 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
       const label = `history:${path === "" ? "(no path)" : path}@${commit === "" ? "unknown" : commit.slice(0, 12)}`;
       hits.push(...found.hits.map((hit) => ({ ...hit, source: label })));
     }
+  }
+
+  let tags = 0;
+  for (const [index, body] of read_objects(root, tag_oids).entries()) {
+    const oid = tag_oids[index] as string;
+    if (body === null) {
+      unread.push(`history:(tag object ${oid.slice(0, 12)}) — git could not read it`);
+      continue;
+    }
+    tags += 1;
+    const text = UTF8.decode(body);
+    // The whole object, headers included: the tagger's name and the tag's own name are as published
+    // as the message under them. The name is read from the header block only, because a message
+    // line may begin with `tag ` as well.
+    const headers = text.slice(0, text.indexOf("\n\n") === -1 ? text.length : text.indexOf("\n\n"));
+    const name = TAG_NAME.exec(headers)?.[1]?.trim() ?? oid.slice(0, 12);
+    hits.push(...scan_text(`tag ${name}`, text, matchers, null).hits);
   }
 
   const logged = git_text(["log", "--format=%B%n%H", range ?? "--all"], root);
@@ -1395,7 +1569,9 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
     objects: oids.length,
     blobs,
     current,
-    skipped,
+    tags,
+    unread,
+    salvaged,
     names: nodes.length,
     note: notes.join("; "),
   };
@@ -1432,13 +1608,20 @@ function comment_character(root: string): string {
  * alone let one entry suppress every occurrence of that spelling in that file, for as long as the
  * entry survived — including occurrences written years later by somebody who never read it.
  *
- * A `line` of 0 names the path itself, and matches nothing inside the file; a positive `line`
- * matches content and never the path. The tolerance absorbs an edit around the occurrence, and
- * `--audit` fails once the term has moved further than that.
+ * In the tree the occurrence is a line. A `line` of 0 names the path itself, and matches nothing
+ * inside the file; a positive `line` matches content and never the path. The tolerance absorbs an
+ * edit around the occurrence, and `--audit` fails once the term has moved further than that.
+ *
+ * In the history the occurrence is a sentence, because a line number is meaningless against a blob
+ * from four months ago and ignoring the line laundered everything else at that path. A historical
+ * path is still matched by identity: the same path with the same term in it is the same disclosure.
  */
 function covers(entry: Exemption, hit: Hit): boolean {
   if (historical_path(hit.source) !== null) {
-    return true;
+    if (entry.line === 0 || hit.line === 0) {
+      return entry.line === hit.line;
+    }
+    return entry.contexts.includes(occurrence_context(hit));
   }
   if (entry.line === 0 || hit.line === 0) {
     return entry.line === hit.line;
@@ -1447,17 +1630,69 @@ function covers(entry: Exemption, hit: Hit): boolean {
 }
 
 /**
- * The path inside a `history:<path>@<commit>` label, or null for an ordinary source.
+ * The sentence around an occurrence, normalised the way matching normalises it and with its
+ * whitespace collapsed, so the same sentence reads the same in every version of a file that held it
+ * and a different sentence does not.
  *
- * A line number is the right key in the tree, where a human can open the file and see the
- * occurrence. It is meaningless against a blob from four months ago: the same exempted sentence
- * sits on a different line in every version that ever held it, so line-keying would report every
- * historical copy of an occurrence already judged neutral, with no entry able to name them. That
- * is a clearance nobody can get green, and a clearance nobody can get green stops being run.
- *
- * So a history hit is matched on path, category and term, and the line is ignored. The exemption
- * still has to exist and still has to carry its reason; what it stops asserting is which line.
+ * This is what an exemption keys on in the history. Ignoring the line there was the cure that became
+ * the disease: an entry written for a benign policy line covered *any* historical occurrence of that
+ * term at that path, including one that was a real disclosure before somebody cleaned it up. The line
+ * cannot be the key and the term alone is not enough, so what is left is the text.
  */
+function occurrence_context(hit: Hit): string {
+  const from = Math.max(0, hit.column - 1 - EXEMPTION_CONTEXT_RADIUS);
+  const to = hit.column - 1 + Math.max(hit.chars, 1) + EXEMPTION_CONTEXT_RADIUS;
+  return normalise(hit.text.slice(from, to)).text.toLowerCase().replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * Reads each exemption's own sentence out of the tree, so an entry keeps working across the history
+ * of its file without covering anything else that was ever there.
+ *
+ * The sentences are the ones the entry covers *today*: every occurrence the tolerance window reaches
+ * in the file as it now stands. Nothing is declared by hand, so an exemption stays a note about a
+ * line rather than becoming a second copy of the text it points at.
+ *
+ * The trade-off, plainly. Reword the clause an exemption names and its older copies stop being
+ * covered; delete the file and every copy stops being covered. The clearance then reports them and
+ * the remedy is the one the clearance always asks for — rewrite the history — or a fresh judgement
+ * recorded in a fresh entry. That is the direction to fail in: the alternative laundered a real
+ * disclosure through a note somebody wrote about a different one.
+ */
+function resolve_exemption_contexts(root: string, exemptions: Exemption[], matchers: Matcher[]): Exemption[] {
+  const by_term = new Map(
+    matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
+  );
+  const scanned = new Map<string, Hit[]>();
+  return exemptions.map((entry) => {
+    const key = exemption_key(entry.path, entry.category, entry.term);
+    const matcher = by_term.get(`${entry.category}\u0000${entry.term.toLowerCase()}`);
+    if (entry.line === 0 || matcher === undefined) {
+      return entry;
+    }
+    let hits = scanned.get(key);
+    if (hits === undefined) {
+      hits = [];
+      try {
+        const read = read_text(readFileSync(join(root, entry.path)));
+        hits = read === null ? [] : scan_text(entry.path, read.text, [matcher], null).hits;
+      } catch {
+        // Gone from the tree, or not a file at all: nothing to read a sentence out of, and `--audit`
+        // already calls such an entry stale.
+      }
+      scanned.set(key, hits);
+    }
+    const contexts = new Set<string>();
+    for (const hit of hits) {
+      if (Math.abs(hit.line - entry.line) <= EXEMPTION_LINE_TOLERANCE) {
+        contexts.add(occurrence_context(hit));
+      }
+    }
+    return { ...entry, contexts: [...contexts] };
+  });
+}
+
+/** The path inside a `history:<path>@<commit>` label, or null for an ordinary source. */
 function historical_path(source: string): string | null {
   if (!source.startsWith("history:")) {
     return null;
@@ -1494,6 +1729,19 @@ function partition_hits(hits: Hit[], exemptions: Exemption[]): { reported: Hit[]
 /** The single definition of the verdict, so the self-test asserts the rule main actually uses. */
 function exit_code_for(hits: Hit[], errors: number): number {
   return hits.length > 0 || errors > 0 ? 1 : 0;
+}
+
+/**
+ * The verdict word, which has to keep apart two facts one PASSED used to blur: nothing was found in
+ * everything the run read, and nothing was found in what it could read while some of it could not be
+ * read at all. The exit code stays 0 for the second — bytes nothing can decode are a limit, not a
+ * failure — so the wording is the only place the gap can be stated, and it is the line CI keeps.
+ */
+function verdict_for(hits: Hit[], errors: number, gaps: number): string {
+  if (hits.length > 0 || errors > 0) {
+    return "FAILED";
+  }
+  return gaps > 0 ? "PASSED WITH GAPS" : "PASSED";
 }
 
 function shorten(path: string): string {
@@ -1568,17 +1816,31 @@ type Verdict = {
   exemptions: number;
   rejected: string[];
   scope: string;
+  /** Read, and not text at all: named here because a verdict over them is a verdict over nothing. */
   unread: string[];
+  /** Not text, but holding runs that are: matched in part, so named as covered in part. */
+  partial: string[];
   quiet: boolean;
   dictionaries: Dictionary[];
 };
 
 /**
- * The header scrolls away on a long run and CI keeps the last line, so the verdict repeats how
- * much vocabulary backed it. A pass earned by half a dictionary has to say so where it is read,
- * and so does a pass earned over files nothing could read.
+ * The header scrolls away on a long run and CI keeps the last line, so the verdict repeats how much
+ * vocabulary backed it. A pass earned by half a dictionary has to say so where it is read, and so
+ * does a pass earned over content nothing could read: everything unread or read in part is named
+ * here, and the verdict word says which of the two kinds of clean run this was.
  */
-function report({ reported, exempt, exemptions, rejected, scope, unread, quiet, dictionaries }: Verdict): void {
+function report({
+  reported,
+  exempt,
+  exemptions,
+  rejected,
+  scope,
+  unread,
+  partial,
+  quiet,
+  dictionaries,
+}: Verdict): void {
   if (!quiet) {
     const ordered = [...reported].sort(
       (left, right) => left.source.localeCompare(right.source) || left.line - right.line || left.column - right.column,
@@ -1609,10 +1871,23 @@ function report({ reported, exempt, exemptions, rejected, scope, unread, quiet, 
   if (unread.length > 0) {
     console.log("");
     console.log(
-      `Not read — ${unread.length} ${unread.length === 1 ? "file is" : "files are"} binary in every encoding ` +
-        "this checker knows, so nothing in them was matched:",
+      `Not read — nothing was matched in ${unread.length} ` +
+        `${unread.length === 1 ? "file or blob" : "files and blobs"}: not text in any encoding this checker ` +
+        "knows, and holding no run of readable text either:",
     );
     for (const path of unread) {
+      console.log(`  ${path}`);
+    }
+  }
+
+  if (partial.length > 0) {
+    console.log("");
+    console.log(
+      `Read in part — ${partial.length} ${partial.length === 1 ? "file or blob" : "files and blobs"} not text, but ` +
+        "holding runs that are; those runs were matched and the bytes between them were not. A line reported in one " +
+        "of these is a line of the extracted text, not of the file:",
+    );
+    for (const path of partial) {
       console.log(`  ${path}`);
     }
   }
@@ -1631,8 +1906,19 @@ function report({ reported, exempt, exemptions, rejected, scope, unread, quiet, 
 
   console.log("");
   const backing = `Checked with ${describe_dictionaries(dictionaries)} and ${exemptions} active ${exemptions === 1 ? "exemption" : "exemptions"}.`;
-  if (reported.length === 0 && rejected.length === 0) {
+  const gaps = unread.length + partial.length;
+  const verdict = verdict_for(reported, rejected.length, gaps);
+  if (verdict === "PASSED") {
     console.log(`PASSED — no unexempted term found across ${scope}. ${backing}`);
+    return;
+  }
+  if (verdict === "PASSED WITH GAPS") {
+    console.log(
+      `PASSED WITH GAPS — no unexempted term found in what could be read across ${scope}, and ` +
+        `${gaps} ${gaps === 1 ? "file or blob" : "files and blobs"} could not be read in full: ` +
+        `${unread.length} not at all, ${partial.length} in part, each one named above. ${backing} ` +
+        "A term inside the bytes nothing could decode would not have been found.",
+    );
     return;
   }
   const counts =
@@ -1654,6 +1940,11 @@ function report({ reported, exempt, exemptions, rejected, scope, unread, quiet, 
  * Now that an exemption covers the occurrence it names, drift is not cosmetic: past the tolerance
  * the entry has stopped suppressing anything and the hit is back, so the audit fails and prints
  * the corrected line. Inside the tolerance it still works, and is reported as a shift to tidy up.
+ *
+ * The audit is also where the history side of an entry is kept honest. An entry whose file is gone,
+ * or whose term has left it, no longer covers anything in the history either, because the sentence a
+ * history hit is matched against is read from the tree — so the state this reports is the state the
+ * clearance will act on.
  */
 function audit_allowlist(root: string, exemptions: Exemption[], rejected: string[], matchers: Matcher[]): number {
   const by_key = new Map(
@@ -1683,11 +1974,10 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
     } else if (!statSync(absolute).isFile()) {
       status = "STALE — the path is a directory, so it has no line to cover";
     } else {
-      const decoded = decode_bytes(readFileSync(absolute));
-      const lines =
-        decoded === null ? [] : scan_text(entry.path, decoded.text, [matcher], null).hits.map((hit) => hit.line);
-      if (decoded === null) {
-        status = "STALE — the file is binary and nothing in it can be matched or suppressed";
+      const read = read_text(readFileSync(absolute));
+      const lines = read === null ? [] : scan_text(entry.path, read.text, [matcher], null).hits.map((hit) => hit.line);
+      if (read === null) {
+        status = "STALE — the file is not text and holds no readable run, so nothing in it can be matched";
       } else if (lines.length === 0) {
         status = "STALE — the file no longer contains this term";
       } else if (!lines.includes(entry.line)) {
@@ -1732,7 +2022,15 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
 
 type Fixture = { file: string; body: string | Uint8Array; expect: string[] };
 
-/** A throwaway repository with one file committed and then deleted, for the history fixture. */
+/**
+ * A throwaway repository for the history fixtures. It carries, deliberately:
+ *
+ * - a file committed and then deleted, which is the clearance itself;
+ * - one path holding two occurrences of one term, a disclosure and a policy line, where the policy
+ *   line survives into the tree at a different line number and the disclosure does not;
+ * - a blob over the size limit, committed and then deleted, so the skip has something to name;
+ * - an annotated tag whose message carries a term, because a tag is pushed with the branch.
+ */
 function plant_history(directory: string): string {
   const repository = join(directory, "history-fixture");
   mkdirSync(repository, { recursive: true });
@@ -1758,12 +2056,46 @@ function plant_history(directory: string): string {
   };
   Bun.spawnSync(["git", "init", "--quiet", "-b", "main", repository], { stdout: "pipe", stderr: "pipe" });
   writeFileSync(join(repository, "was-here.txt"), "a term that was later deleted: zarquilon\n");
+  // Two occurrences of one term at one path: a disclosure on line 1, a policy line on line 3.
+  writeFileSync(
+    join(repository, "policy.md"),
+    "the private engagement's own brulq belongs to nobody else\nan ordinary line\nthe policy list names brulq as prohibited\n",
+  );
+  // Over MAX_BLOB_BYTES, so the clearance has to name what it did not read.
+  writeFileSync(
+    join(repository, "oversized.txt"),
+    `a term nothing will read: zarquilon\n${"filler text that compresses well\n".repeat(300000)}`,
+  );
   Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
   commit("plant the term");
   rmSync(join(repository, "was-here.txt"));
+  rmSync(join(repository, "oversized.txt"));
+  // The policy line moves well past the exemption's line tolerance, and the disclosure above it goes.
+  writeFileSync(
+    join(repository, "policy.md"),
+    "a heading\n\nsome prose\nmore prose\nanother line\nand one more\nthe policy list names brulq as prohibited\n",
+  );
   writeFileSync(join(repository, "clean.txt"), "nothing to see here\n");
   Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
   commit("remove it again, the way a scrub would");
+  const tagged = Bun.spawnSync(
+    [
+      "git",
+      "-c",
+      "user.email=self-test@example.invalid",
+      "-c",
+      "user.name=self test",
+      "tag",
+      "-a",
+      "-m",
+      "a release note naming zarquilon",
+      "fixture-1.0",
+    ],
+    { cwd: repository, stdout: "pipe", stderr: "pipe" },
+  );
+  if (tagged.exitCode !== 0) {
+    throw new Error(`self-test could not tag: ${tagged.stderr.toString()}`);
+  }
   return repository;
 }
 
@@ -1919,10 +2251,30 @@ function self_test(categories: TermCategory[]): number {
     writeFileSync(join(directory, "vondrel-mikashe", "inner.txt"), "a clean file under a dirty directory\n");
     symlinkSync("../elsewhere/zarquilon-notes.md", join(directory, "link-to-elsewhere"));
 
-    // Binary in every encoding this checker knows: NULs at both parities, so it is not UTF-16.
+    // A phrase split by a directory separator: it is in neither component on its own.
+    mkdirSync(join(directory, "vondrel"), { recursive: true });
+    writeFileSync(
+      join(directory, "vondrel", "mikashe-notes.md"),
+      "a body with nothing in it; the path is the finding\n",
+    );
+
+    // Binary in every encoding this checker knows: NULs at both parities, so it is not UTF-16, and
+    // no run of readable text long enough to be extracted. The term in it must NOT be reported: a
+    // short run inside entropy is where a three-letter term starts matching random bytes.
     writeFileSync(
       join(directory, "really-binary.bin"),
       new Uint8Array([0x89, 0x50, 0x00, 0x00, 0x4e, 0x47, 0x00, 0x01, 0x00, 0x02, ...Buffer.from("zarquilon")]),
+    );
+
+    // The realistic case behind the binary skip: text with one stray NUL in it. Every readable run
+    // is extracted and matched, so a plaintext disclosure parked here is not invisible.
+    writeFileSync(
+      join(directory, "one-stray-nul.md"),
+      new Uint8Array([
+        ...Buffer.from(`${"a paragraph of ordinary prose, long enough to be worth keeping. ".repeat(2)}\n`),
+        0x00,
+        ...Buffer.from(`a line below the damage naming zarquilon, ${"padded so this run is kept too. ".repeat(2)}\n`),
+      ]),
     );
 
     const result = scan_files(walk_path(directory), matchers, directory, new Map(), null);
@@ -1967,6 +2319,37 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a UTF-16 file was dropped as binary instead of decoded");
     }
 
+    // A plaintext disclosure inside a file that sniffs as binary, and a verdict that says so.
+    if (!caught("one-stray-nul.md", "zarquilon")) {
+      failures.push("a plaintext term in a file with one stray NUL was not matched, which is the binary hole");
+    }
+    if (!result.salvaged.includes("one-stray-nul.md")) {
+      failures.push("a file read only for its runs of text was not named as read in part");
+    }
+    if (result.binary.includes("one-stray-nul.md")) {
+      failures.push("a mostly-text file with one stray NUL was dropped from the scan as binary");
+    }
+    if (caught("really-binary.bin", "zarquilon")) {
+      failures.push("a term inside a run too short to be text was matched, which is how a gate starts crying wolf");
+    }
+    if (verdict_for([], 0, 0) !== "PASSED") {
+      failures.push("a clean run over everything it read did not print a plain PASSED");
+    }
+    if (verdict_for([], 0, result.binary.length) !== "PASSED WITH GAPS") {
+      failures.push("a run that could not read a file still printed the same verdict as a complete one");
+    }
+    if (verdict_for(result.hits, 0, 0) !== "FAILED" || verdict_for([], 1, 3) !== "FAILED") {
+      failures.push("a hit or a rejected exemption did not outrank the coverage gap in the verdict");
+    }
+
+    // A multi-word term whose words fall either side of a directory separator.
+    if (!caught("vondrel/mikashe-notes.md", "name:vondrel mikashe")) {
+      failures.push("a phrase split across a directory separator was not matched");
+    }
+    if (result.hits.some((hit) => hit.source === "vondrel-mikashe/inner.txt" && hit.term === "vondrel mikashe")) {
+      failures.push("the cross-separator pass reported a phrase that sits inside one component, twice over");
+    }
+
     // A phrase followed by a long run of separators used to take quadratic time to fail.
     const started = Date.now();
     scan_text("backtracking", `vondrel${" \t_-".repeat(8000)}!`, matchers, null);
@@ -1998,6 +2381,7 @@ function self_test(categories: TermCategory[]): number {
       line: 1,
       column: 1,
       span: 1,
+      chars: 5,
       term: "brulq",
       category: "self_test_fixture",
       why: "",
@@ -2013,6 +2397,7 @@ function self_test(categories: TermCategory[]): number {
       line: 1,
       why: "fixture",
       source: "self-test",
+      contexts: [],
     };
     const split = partition_hits([shared, elsewhere, far_below, in_the_name], [entry]);
     if (!split.exempt.some((hit) => hit === shared) || split.exempt.length !== 1) {
@@ -2096,6 +2481,59 @@ function self_test(categories: TermCategory[]): number {
       failures.push("the history scan reported hits with no vocabulary loaded");
     }
 
+    // An annotated tag carries its own message object, and a tag is pushed with the branch.
+    if (history.tags === 0) {
+      failures.push("the clearance read no annotated tag objects at all");
+    }
+    if (!history.hits.some((hit) => hit.source.startsWith("tag ") && hit.term === "zarquilon")) {
+      failures.push("an annotated tag's message was not scanned, and a tag is as published as a commit");
+    }
+
+    // A blob too large to read is named, not merely counted: a number leaves no trace of the gap.
+    if (!history.unread.some((entry) => entry.includes("oversized.txt"))) {
+      failures.push("a historical blob over the size limit was skipped without being named");
+    }
+    if (history.hits.some((hit) => hit.source.includes("oversized.txt"))) {
+      failures.push("the oversized fixture was read after all, so it proves nothing about the skip");
+    }
+
+    // An exemption written for a line in the tree covers its own sentence in every version of its
+    // file, and nothing else that has ever stood at that path.
+    const policy = resolve_exemption_contexts(
+      repository,
+      [
+        {
+          path: "policy.md",
+          category: "self_test_fixture",
+          term: "brulq",
+          line: 7,
+          why: "fixture",
+          source: "self-test",
+          contexts: [],
+        },
+      ],
+      matchers,
+    );
+    if (policy[0]?.contexts.length !== 1) {
+      failures.push("an exemption did not read the one sentence it names out of the tree");
+    }
+    const historic = partition_hits(
+      history.hits.filter((hit) => historical_path(hit.source) === "policy.md" && hit.line > 0),
+      policy,
+    );
+    if (!historic.exempt.some((hit) => hit.text.includes("policy list names"))) {
+      failures.push("an exempted policy line failed the clearance in an older version of its own file");
+    }
+    if (!historic.reported.some((hit) => hit.text.includes("belongs to nobody else"))) {
+      failures.push("a historical disclosure was laundered by an exemption written for a different line");
+    }
+    if (historic.exempt.some((hit) => hit.text.includes("belongs to nobody else"))) {
+      failures.push("a disclosure at an exempted path was suppressed by that path's exemption");
+    }
+    if (historic.reported.some((hit) => hit.text.includes("policy list names"))) {
+      failures.push("the exempted sentence was reported in a historical copy that carries it verbatim");
+    }
+
     // A commit message is stripped the way git strips it before it is matched.
     const message = strip_commit_message(
       "a subject line\n\n# a comment naming zarquilon\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x containing zarquilon\n",
@@ -2124,8 +2562,10 @@ function self_test(categories: TermCategory[]): number {
         `${all.length === 1 ? "category" : "categories"}, ${planted.length - terms} evasion fixtures, ` +
         `${controls.length} controls, ${bounded.length} whole-word ${bounded.length === 1 ? "term" : "terms"} ` +
         `buried in the boundary control, ${result.scanned} files and ${result.nodes.length} path components ` +
-        `scanned, ${result.binary.length} unread, ${history.blobs} historical blobs across ` +
-        `${history.commits} commits, ` +
+        `scanned, ${result.salvaged.length} read only for the runs of text in them, ${result.binary.length} ` +
+        `unread, ${history.blobs} historical blobs, ${history.tags} tag ` +
+        `${history.tags === 1 ? "message" : "messages"} and ${history.unread.length} named ` +
+        `${history.unread.length === 1 ? "skip" : "skips"} across ${history.commits} commits, ` +
         `phrase separators cleared in ${elapsed}ms.`,
     );
     if (failures.length > 0) {
@@ -2138,8 +2578,11 @@ function self_test(categories: TermCategory[]): number {
     console.log(
       "Self-test PASSED — every term is found where it was planted; a decomposed, wrapped, zero-width-broken, " +
         "percent-encoded, fullwidth, mathematical, ligatured, Cyrillic or Greek spelling is caught; a term in a " +
-        "filename, a directory name, a symlink target, a UTF-16 file and a deleted file's historical blob are all " +
-        "caught; no control fires; an exemption covers one occurrence; an empty or malformed overlay fails " +
+        "filename, a directory name, a phrase split across a directory separator, a symlink target, a UTF-16 " +
+        "file, the readable runs of a file with one stray NUL, an annotated tag's message and a deleted file's " +
+        "historical blob are all caught; a run too short to be text and every control are not; an exemption " +
+        "covers one occurrence, and in the history one sentence rather than every version of its path; a blob " +
+        "too large to read is named; an unread file changes the verdict; an empty or malformed overlay fails " +
         "--require-overlay; and a hit exits 1.",
     );
     return 0;
@@ -2204,8 +2647,8 @@ function print_usage(): void {
       "  --staged              scan the staged content and paths only, for a pre-commit gate",
       "  --path <p>            scan one file or directory instead of the repository",
       "  --message <file>      scan a commit message file, for a commit-msg gate",
-      "  --history [<range>]   also clear the history: every blob, path and message reachable",
-      "                        from every ref (default), or from <range>",
+      "  --history [<range>]   also clear the history: every blob, path, tag message and commit",
+      "                        message reachable from every ref (default), or from <range>",
       "  --terms <path>        merge an overlay dictionary; repeatable",
       "  --require-overlay     fail unless vocabulary was loaded; use it wherever this is a gate",
       "  --audit               list every exemption with its reason and flag the stale ones",
@@ -2328,6 +2771,7 @@ function main(): number {
         rejected,
         scope: "the commit message, with its comments and any verbose diff stripped as git strips them",
         unread: [],
+        partial: [],
         quiet: options.quiet,
         dictionaries,
       });
@@ -2374,11 +2818,14 @@ function main(): number {
       options.mode === "staged" ? staged_contents(root, files) : null,
     );
     const hits = [...result.hits];
+    const unread = [...result.binary];
+    const partial = [...result.salvaged];
     // Coverage is part of the verdict, and a deliberate suppression is not the same fact as a file
     // that could not be read: one is a measured blind spot, the other is a gap nobody chose.
     const coverage =
       `${result.nodes.length} path components, ` +
-      `${result.binary.length} binary and named below, ` +
+      `${result.binary.length} not text and named above, ` +
+      `${result.salvaged.length} not text but read for the runs that are, and named above, ` +
       `${result.missing} absent or not a readable file, ` +
       `${result.excluded} excluded by path, ` +
       `${result.self_quoted} ${result.self_quoted === 1 ? "occurrence" : "occurrences"} suppressed inside the ` +
@@ -2399,23 +2846,33 @@ function main(): number {
           : { blobs: new Set(), names: new Set() };
       const scanned = scan_history(repo_root(root), options.history_range, matchers, covered);
       hits.push(...scanned.hits);
+      unread.push(...scanned.unread);
+      partial.push(...scanned.salvaged);
       const note = scanned.note === "" ? "" : `, ${scanned.note}`;
       scopes.push(
         `${scanned.blobs} superseded ${scanned.blobs === 1 ? "blob" : "blobs"} of ${scanned.objects} reachable ` +
-          `objects, ${scanned.names} historical path components and ${scanned.commits} commit ` +
+          `objects, ${scanned.names} historical path components, ${scanned.tags} annotated tag ` +
+          `${scanned.tags === 1 ? "message" : "messages"} and ${scanned.commits} commit ` +
           `${scanned.commits === 1 ? "message" : "messages"} (${scanned.current} blobs already read above as ` +
-          `the current version, ${scanned.skipped} skipped as binary or oversized${note})`,
+          `the current version, ${scanned.unread.length} not read at all and ${scanned.salvaged.length} read only ` +
+          `for their runs of text, each one named above${note})`,
       );
     }
 
-    const { reported, exempt } = partition_hits(hits, exemptions);
+    const { reported, exempt } = partition_hits(
+      hits,
+      // Only a history hit consults the sentence an exemption names, and reading it costs a file per
+      // exemption, which a per-commit hook has no reason to pay for.
+      options.history ? resolve_exemption_contexts(root, exemptions, matchers) : exemptions,
+    );
     report({
       reported,
       exempt,
       exemptions: exemptions.length,
       rejected,
       scope: scopes.join(" and "),
-      unread: result.binary,
+      unread,
+      partial,
       quiet: options.quiet,
       dictionaries,
     });

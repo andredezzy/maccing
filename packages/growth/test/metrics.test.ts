@@ -8,18 +8,24 @@ import {
   CellDeclarationError,
   COUNTABLE_OUTCOMES,
   ControlError,
+  DuplicateColumnError,
   EmptyCellError,
   ExportBlankColumnError,
   ExportColumnError,
+  ExportJoinError,
+  ExportStatusError,
   ExportValueError,
   MAX_P,
   MapStaleError,
   MIN_CONTROL_EVENTS,
+  MissingColumnError,
   MissingExportError,
   measure,
   ProvisionalCutError,
+  TextListOptionError,
   UnparseablePhonesError,
   UnsupportedListFormatError,
+  UnterminatedQuoteError,
   WINDOW_FLOOR_HOURS,
 } from "../src/meta/whatsapp/campaigns/metrics.ts";
 
@@ -70,7 +76,7 @@ function phone(n: number): string {
   return `480${String(n).padStart(6, "0")}`;
 }
 
-const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists.
+const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists by default.
 
 model Member {
   id           String   @id
@@ -87,6 +93,17 @@ model Movement {
 model Unlisted {
   id String @id
 }
+
+enum Standing {
+  LIVE
+  SETTLED
+  LAPSED
+}
+
+enum Funding {
+  WIRE
+  CREDIT
+}
 `;
 
 const MODELS = ["Member", "Movement"] as const;
@@ -95,14 +112,18 @@ const MODELS = ["Member", "Movement"] as const;
  * The fingerprint rule, restated here rather than imported. Recomputing the digest by the same
  * rule is what makes the fresh-map case mean something; a literal copied from the implementation
  * would only prove that two files can hold the same string.
+ *
+ * A listed name is a model or an enum, and the rule does not care which — which is the whole
+ * point of hashing enums: the statuses a map counts as committed and the marker that separates
+ * recycled money from new one are enum values, and a rename there is invisible in every model.
  */
-function digest_of(schema: string, models: readonly string[]): string {
+function digest_of(schema: string, blocks: readonly string[]): string {
   const lines = schema.split("\n");
-  const blocks = models.map((name) => {
-    const opener = new RegExp(`^\\s*model\\s+${name}\\s*\\{`);
+  const hashed = blocks.map((name) => {
+    const opener = new RegExp(`^\\s*(?:model|enum)\\s+${name}\\s*\\{`);
     const start = lines.findIndex((line) => opener.test(line));
     if (start === -1) {
-      throw new Error(`the fixture has no model ${name}`);
+      throw new Error(`the fixture has no block ${name}`);
     }
     let end = -1;
     for (let i = start + 1; i < lines.length; i += 1) {
@@ -112,11 +133,11 @@ function digest_of(schema: string, models: readonly string[]): string {
       }
     }
     if (end === -1) {
-      throw new Error(`the fixture never closes model ${name}`);
+      throw new Error(`the fixture never closes block ${name}`);
     }
     return lines.slice(start, end + 1).join("\n");
   });
-  return new Bun.CryptoHasher("sha256").update(blocks.join("\n")).digest("hex");
+  return new Bun.CryptoHasher("sha256").update(hashed.join("\n")).digest("hex");
 }
 
 const FRESH_SHA = digest_of(SCHEMA, MODELS);
@@ -166,6 +187,9 @@ type MapParts = {
   churn?: Rows | null;
   /** Drops `split` and `recycled_when`, for a project with no recycled-balance concept. */
   no_split?: boolean;
+  /** Which schema blocks the fingerprint covers. Defaults to the two models; a case about a
+   *  renamed status or split marker lists the enum that holds them. */
+  models?: readonly string[];
   sha256?: string;
 };
 
@@ -181,8 +205,10 @@ function render_map(parts: MapParts = {}): string {
     section("## Phone format", { ...PHONE_ROWS, ...parts.phone }),
     section("## Fingerprint", {
       schema: "db/schema.prisma",
-      models: MODELS.join(", "),
-      sha256: parts.sha256 ?? FRESH_SHA,
+      models: (parts.models ?? MODELS).join(", "),
+      // Always the digest of the pristine schema, so a case that writes an edited one records the
+      // hash taken before the edit — which is what drift is.
+      sha256: parts.sha256 ?? digest_of(SCHEMA, parts.models ?? MODELS),
     }),
     section("## Role: person", { ...PERSON_ROWS, ...parts.person }),
     section("## Role: conversion", conversion),
@@ -612,6 +638,20 @@ describe("top2_share puts concentration beside the total", () => {
     expect(record.acquired.revenue?.value).toBe(100);
     expect(record.acquired.revenue?.top2_share).toBe(1);
   });
+
+  test("is null when a contributor nets out below zero, since there is then no whole to share", async () => {
+    // Two people paid ten each and a third's events net out at minus fifteen — a reversal larger
+    // than what they put in, which is data rather than a fault and totals correctly. The share is
+    // the part that stops meaning anything: the denominator shrinks to five while the two largest
+    // parts still sum to twenty, so the ratio comes out at 4 and the field says the top two hold
+    // four hundred percent of the money. A number outside the range it is read in is worse than
+    // no number, and null is what the two other meaningless cases here already return.
+    const record = await paid("top2-negative", [10, 10, -15]);
+
+    expect(record.acquired.revenue?.people).toBe(3);
+    expect(record.acquired.revenue?.value).toBe(5);
+    expect(record.acquired.revenue?.top2_share).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -819,6 +859,79 @@ describe("the conversion split", () => {
 
     expect(record.conversions.count).toBe(1);
     expect(record.conversions.value).toBe(30);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Drift inside an enum
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The two values a map reads that are not columns: the statuses it counts as committed, and the
+ * marker that separates recycled money from new. Both are enum values, both live outside every
+ * model block, and a migration renaming one of them changes what every binding means while
+ * leaving the hashed schema byte-identical. The status half has a runtime refusal of its own
+ * further down, because a status nobody matches drops the whole file. The split half has none
+ * and can have none — a file where nothing was paid out of a balance is an ordinary month — so
+ * the fingerprint is the only place it can be caught, and only if the map lists the enum.
+ */
+describe("a marker renamed inside the schema's enum", () => {
+  /** The export as it reads after a migration renamed the recycled marker to `LEDGER`. */
+  const after_rename = conversions(
+    ["one", from_cut(HOUR), 60, "LIVE", "WIRE"],
+    ["one", from_cut(2 * HOUR), 40, "SETTLED", "LEDGER"],
+  );
+  const renamed_schema = SCHEMA.replace("  CREDIT", "  LEDGER");
+
+  test("silently doubles what is reported as new money while the map lists only models", async () => {
+    // Nothing here is malformed. Forty of the hundred was recycled from a balance the business
+    // already held, the map still looks for `CREDIT`, and the row now says `LEDGER` — so the
+    // whole sum falls through to the other side of the split and the report says every unit of
+    // it was fresh. The models the map hashes did not move, so the fingerprint passes.
+    const fixture = await build("enum-drift-silent", {
+      schema: renamed_schema,
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: after_rename,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("enum-drift-silent", fixture.list("reached.txt")));
+
+    expect(record.conversions).toEqual({ count: 2, value: 100, new_money: 100, recycled: 0 });
+  });
+
+  test("stops the run once the map lists the enum that holds it", async () => {
+    // The same rename against the same export, with `Funding` added to the map's hashed blocks.
+    // The fingerprint now covers the one place the value lives, so the run refuses before it
+    // reads an export — which is the whole reason a map is allowed to list an enum at all.
+    const fixture = await build("enum-drift-caught", {
+      map: { models: [...MODELS, "Funding"] },
+      schema: renamed_schema,
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: after_rename,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("enum-drift-caught", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MapStaleError);
+    expect((error as MapStaleError).expected).toBe(digest_of(SCHEMA, [...MODELS, "Funding"]));
+    expect((error as MapStaleError).actual).toBe(digest_of(renamed_schema, [...MODELS, "Funding"]));
+  });
+
+  test("and leaves a schema whose enums are untouched passing, with the enum listed", async () => {
+    // The listing itself must not become a permanent mismatch: a map naming an enum against the
+    // schema it was hashed from reads clean, or nobody would add one.
+    const fixture = await build("enum-listed-fresh", {
+      map: { models: [...MODELS, "Funding", "Standing"] },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: conversions(["one", from_cut(HOUR), 60, "LIVE", "CREDIT"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("enum-listed-fresh", fixture.list("reached.txt")));
+
+    expect(record.conversions).toEqual({ count: 1, value: 60, new_money: 0, recycled: 60 });
   });
 });
 
@@ -1483,5 +1596,277 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(ControlError);
     expect(error.message).toContain("treated");
+  });
+
+  test("a conversion export whose statuses were all renamed under the map", async () => {
+    // A role export can be present, well-formed and contribute nothing. Every column is bound,
+    // every timestamp parses, every amount is a number — and a migration renamed the statuses,
+    // so the per-cell filter drops all of them one at a time and the record says nobody
+    // committed. Counted once over the whole file, the difference between a quiet window and a
+    // status list that matches nothing becomes a fact this can refuse on.
+    const fixture = await build("refuse-status-drift", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      conversion: conversions(
+        ["one", from_cut(HOUR), 60, "RUNNING", "WIRE"],
+        ["two", from_cut(2 * HOUR), 40, "RUNNING", "CREDIT"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, base("refuse-status-drift", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportStatusError);
+    expect((error as ExportStatusError).declared).toEqual(["LIVE", "SETTLED"]);
+    // What the column actually holds, so the rename is legible without opening the export.
+    expect((error as ExportStatusError).found).toEqual(["RUNNING"]);
+    expect(error.message).toContain("2 rows");
+  });
+
+  test("but not a file where one row in three carries a status the map counts", async () => {
+    // The same distinction the blank-column check draws. A file whose rows are mostly abandoned
+    // or cancelled is an ordinary file; it is a file with nothing countable in it that is a
+    // fault, and refusing the first would make every honest month unmeasurable.
+    const fixture = await build("status-partial-is-legal", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      conversion: conversions(
+        ["one", from_cut(HOUR), 10, "LAPSED", "WIRE"],
+        ["one", from_cut(2 * HOUR), 20, "LIVE", "WIRE"],
+        ["one", from_cut(3 * HOUR), 30, "LAPSED", "WIRE"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, base("status-partial-is-legal", fixture.list("reached.txt")));
+
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(20);
+  });
+
+  test("a conversion export whose person column holds the wrong kind of id", async () => {
+    // The join is the one binding that can be wrong while every column is present and every
+    // value well-formed: a conversion export keyed by the contract's own primary key instead of
+    // the person's matches nobody. What comes out is a thousand matched accounts and no
+    // conversions, which is exactly what a campaign nobody responded to looks like.
+    const fixture = await build("refuse-join-conversion", {
+      person: people(["member-1", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["contract-9", from_cut(HOUR), 50, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, base("refuse-join-conversion", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportJoinError);
+    expect((error as ExportJoinError).role).toBe("conversion");
+    expect((error as ExportJoinError).column).toBe("member_id");
+    // Both sides quoted, because the shape of the two ids is what tells the reader which one is
+    // the wrong kind.
+    expect(error.message).toContain("contract-9");
+    expect(error.message).toContain("member-1");
+  });
+
+  test("a money role that references nobody in the person export either", async () => {
+    const fixture = await build("refuse-join-revenue", {
+      person: people(["member-1", phone(1), from_cut(-DAY)]),
+      revenue: revenue(["wallet-7", from_cut(HOUR), 25]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-join-revenue", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportJoinError);
+    expect((error as ExportJoinError).role).toBe("revenue");
+    expect((error as ExportJoinError).path).toContain("revenue.csv");
+  });
+
+  test("but not a role that references only some of them, which is a narrower export", async () => {
+    // One shared identifier is enough, and this must never become a coverage threshold: a role
+    // exported over a shorter window than the person export legitimately references a fraction
+    // of it, and a fraction is not a fault. Zero is the fault, because zero is the only overlap
+    // two files describing the same people cannot produce.
+    const fixture = await build("join-partial-is-legal", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["one", from_cut(HOUR), 10], ["outside-this-export", from_cut(HOUR), 90]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("join-partial-is-legal", fixture.list("reached.txt")));
+
+    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
+  });
+
+  test("an export whose header names one column twice", async () => {
+    // The duplicate defeats the check that exists to catch a bad binding: `handset` is in the
+    // header, so the binding passes, and only the second column of that name survives into each
+    // row — so the run reads whatever the second query put there and joins on nothing.
+    const fixture = await build("refuse-duplicate-column", {
+      person: csv(["member_id", "handset", "enrolled_at", "handset"], [["one", phone(1), from_cut(HOUR), "480999999"]]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-duplicate-column", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(DuplicateColumnError);
+    expect((error as DuplicateColumnError).column).toBe("handset");
+  });
+
+  test("a list whose quoted field never closes, which would swallow every row below it", async () => {
+    // The scanner is a real RFC 4180 reader and was proven identical to the reference one this
+    // engine replaced — except here, where an unterminated quote reads the rest of the file as a
+    // single field. No parse error, no short row: the list simply ends at the stray quote and
+    // the identifiers below it are never measured.
+    const fixture = await build("refuse-unterminated-quote", {
+      person: people(
+        ["one", phone(1), from_cut(HOUR)],
+        ["two", phone(2), from_cut(HOUR)],
+        ["three", phone(3), from_cut(HOUR)],
+      ),
+      lists: { "roster.csv": `handset,note\n${phone(1)},fine\n${phone(2)},"unclosed\n${phone(3)},fine\n` },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-unterminated-quote", fixture.list("roster.csv"), { column: "handset" })),
+    );
+
+    expect(error).toBeInstanceOf(UnterminatedQuoteError);
+    // The line the quote opened on, not the end of the file where the fault surfaces.
+    expect((error as UnterminatedQuoteError).line).toBe(3);
+  });
+
+  test("a text list declared with a column it has nowhere to hold", async () => {
+    const fixture = await build("refuse-txt-column", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-txt-column", fixture.list("reached.txt"), { column: "handset" })),
+    );
+
+    expect(error).toBeInstanceOf(TextListOptionError);
+    expect(error.message).toContain("handset");
+  });
+
+  test("a text list declared with a filter, which would measure the whole file under one name", async () => {
+    // Ignored, the cell reports every line in the file under the name of the slice that was
+    // asked for. That is not a wider number with the same meaning; it is a different population
+    // wearing this cell's label.
+    const fixture = await build("refuse-txt-filter", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-txt-filter", fixture.list("reached.txt"), { filter: { column: "cell", value: "a" } })),
+    );
+
+    expect(error).toBeInstanceOf(TextListOptionError);
+    expect((error as TextListOptionError).options).toEqual(['filter on "cell"']);
+  });
+
+  test("a filter naming a column the list does not carry, named as itself", async () => {
+    // The phone column here is right and the filter column is wrong. Unchecked, the filter
+    // matches no row, the cell comes out empty, and the error names the phone column — sending
+    // the reader to correct the one binding that was correct.
+    const fixture = await build("refuse-filter-column", {
+      person: people(["a1", phone(1), from_cut(HOUR)]),
+      lists: { "roster.csv": `handset,cell\n${phone(1)},alpha\n` },
+    });
+
+    const error = await caught(
+      one(fixture, {
+        name: "refuse-filter-column",
+        cut: CUT,
+        lists: [fixture.list("roster.csv")],
+        column: "handset",
+        filter: { column: "celula", value: "alpha" },
+        audience: "cold",
+      }),
+    );
+
+    expect(error).toBeInstanceOf(MissingColumnError);
+    expect((error as MissingColumnError).column).toBe("celula");
+  });
+
+  test("a cut later than the moment of the reading", async () => {
+    // A planning date left in place after the send slipped. The window comes out negative, every
+    // comparison against the cut excludes everything, and the record reads as a campaign that
+    // reached people and produced nothing.
+    const fixture = await build("refuse-future-cut", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("planned", fixture.list("reached.txt"), { cut: from_cut(31 * DAY) })));
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect((error as CellDeclarationError).cell).toBe("planned");
+    // Both instants, because the fault is the pair and not either one alone.
+    expect(error.message).toContain(from_cut(31 * DAY));
+    expect(error.message).toContain(NOW.toISOString());
+  });
+
+  test("but not a cut at the exact moment of the reading, which is a zero-hour window", async () => {
+    const fixture = await build("cut-at-the-reading", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(
+      fixture,
+      cold("cut-at-the-reading", fixture.list("reached.txt"), { cut: NOW.toISOString() }),
+    );
+
+    expect(record.window_hours).toBe(0);
+    expect(record.pre_existing.accounts).toBe(1);
+  });
+
+  test("a control pair whose arms share members, which is not two samples", async () => {
+    // The four checks a pair already passes say nothing about who is in it. A control drawn as
+    // "everyone we did not send to" from a list that had already been extended carries the
+    // treated numbers back, and every shared person is counted as evidence on both sides: the
+    // control drifts towards the treated arm and whatever difference survives is an artefact of
+    // how the lists were drawn, published with a p-value on top.
+    const fixture = await build("refuse-control-overlap", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
+      lists: {
+        "treated.txt": lines(phone(1), phone(2)),
+        "untouched.txt": lines(phone(1), phone(2), phone(3)),
+      },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    // The count, because two shared out of forty and forty shared out of forty are different
+    // conversations with whoever drew the lists.
+    expect(error.message).toContain("shares 2");
+  });
+
+  test("a pair naming one cell on both sides, which compares a group against itself", async () => {
+    const fixture = await build("refuse-control-self", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("solo", fixture.list("reached.txt"))],
+        controls: [{ treated: "solo", control: "solo", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toMatch(/both sides/);
   });
 });

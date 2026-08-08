@@ -16,7 +16,13 @@ export {
 } from "../../../internal/map.ts";
 export type { PhoneFormat } from "../../../internal/phone.ts";
 export { PhoneFormatError } from "../../../internal/phone.ts";
-export { MissingColumnError, UnsupportedListFormatError } from "../../../internal/table.ts";
+export {
+  DuplicateColumnError,
+  MissingColumnError,
+  TextListOptionError,
+  UnsupportedListFormatError,
+  UnterminatedQuoteError,
+} from "../../../internal/table.ts";
 export { TimestampError } from "../../../internal/timestamp.ts";
 
 /**
@@ -235,6 +241,58 @@ export class ExportBlankColumnError extends Error {
   }
 }
 
+/** A conversion export with rows, not one of which carries a status the map counts as committed. */
+export class ExportStatusError extends Error {
+  readonly path: string;
+  readonly column: string;
+  readonly declared: readonly string[];
+  readonly found: readonly string[];
+
+  constructor(path: string, column: string, declared: readonly string[], found: readonly string[], rows: number) {
+    const quote = (values: readonly string[]): string => values.map((value) => JSON.stringify(value)).join(", ");
+    super(
+      `the conversion role counts ${quote(declared)} as committed, and not one of the ${rows} rows in ` +
+        `${path} carries any of them — column ${JSON.stringify(column)} holds ${quote(found)}. Every row ` +
+        "is then dropped by the status filter and the cell reports no conversions at all, which reads " +
+        "exactly like a campaign nobody committed to. A status renamed in a migration is the usual " +
+        "cause, and the fingerprint cannot see it unless the map lists the status enum among its " +
+        "hashed blocks. Correct `valid_statuses`, or re-export from the query that produces them. A " +
+        "file with no rows at all is a fact and passes here — this is a file with rows and nothing " +
+        "countable in them, which is a fault.",
+    );
+    this.name = "ExportStatusError";
+    this.path = path;
+    this.column = column;
+    this.declared = declared;
+    this.found = found;
+  }
+}
+
+/** A role's export that references nobody in the person export. Every row is well-formed and the
+ *  join is against the wrong kind of identifier, so the whole file falls out of every cell. */
+export class ExportJoinError extends Error {
+  readonly path: string;
+  readonly role: string;
+  readonly column: string;
+
+  constructor(path: string, role: string, column: string, sample: string, person_sample: string, identifiers: number) {
+    super(
+      `the ${role} role binds ${JSON.stringify(column)} to reference a person, and not one of the ` +
+        `${identifiers} distinct identifiers in ${path} appears in the person export. One of them reads ` +
+        `${JSON.stringify(sample)}; the person export's first id is ${JSON.stringify(person_sample)}. ` +
+        "Both files are well-formed and they join on nothing, so every event in this one falls out " +
+        "of every cell and the run reports a matched audience that did nothing. A column holding the " +
+        "wrong kind of id — a wallet, an order, a row's own primary key where the person's was meant " +
+        "— is what this looks like, and it is silent in every other check. Bind the column that " +
+        "carries the person, or re-export through the join that resolves it.",
+    );
+    this.name = "ExportJoinError";
+    this.path = path;
+    this.role = role;
+    this.column = column;
+  }
+}
+
 /** A cell whose declaration cannot be measured as written. */
 export class CellDeclarationError extends Error {
   readonly cell: string;
@@ -350,6 +408,45 @@ async function read_export(path: string, role: string, bound: readonly string[])
 }
 
 /**
+ * Refuse a role whose rows reference nobody in the person export.
+ *
+ * Every other check on a role's export asks whether it is well-formed, and a file joining on the
+ * wrong kind of identifier passes all of them: the columns are bound, the timestamps parse, the
+ * amounts are numbers. It then contributes nothing to any cell, because `accumulate` looks each
+ * account's id up in this index and misses every time — a thousand matched accounts and no
+ * revenue, no churn, no conversions, and not a word about why.
+ *
+ * One shared key is enough to pass. This is not a coverage check and must not become one: a role
+ * exported over a narrower window than the person export legitimately references a fraction of it,
+ * and a threshold on that fraction would refuse quiet months. Zero is the fault, because zero is
+ * the only overlap that cannot happen while both files describe the same people.
+ *
+ * The person side is every id in the person export, including accounts whose phone was unreadable
+ * and switchboards evicted from the index. They are still people this role can reference, and
+ * measuring the overlap against the surviving subset would turn a phone-format problem into a
+ * join error and send the reader to the wrong file.
+ */
+function assert_joins(
+  index: ReadonlyMap<string, unknown>,
+  person_ids: ReadonlySet<string>,
+  path: string,
+  role: string,
+  column: string,
+): void {
+  if (index.size === 0 || person_ids.size === 0) {
+    return;
+  }
+  for (const id of index.keys()) {
+    if (person_ids.has(id)) {
+      return;
+    }
+  }
+  const [sample] = index.keys();
+  const [person_sample] = person_ids;
+  throw new ExportJoinError(path, role, column, sample as string, person_sample as string, index.size);
+}
+
+/**
  * Group a money-carrying role's rows under the person they reference.
  *
  * The header check in `read_export` proves the bound timestamp column exists; the count below
@@ -359,7 +456,12 @@ async function read_export(path: string, role: string, bound: readonly string[])
  * real money reports as none. The bound amount needs no such count, because `amount_of` already
  * refuses a blank on the first row it meets.
  */
-async function money_index(directory: string, binding: RoleBinding, role: string): Promise<Map<string, MoneyEvent[]>> {
+async function money_index(
+  directory: string,
+  binding: RoleBinding,
+  role: string,
+  person_ids: ReadonlySet<string>,
+): Promise<Map<string, MoneyEvent[]>> {
   const path = `${directory}/${binding.export}`;
   const person = column_of(binding, "person", role);
   const at = column_of(binding, "at", role);
@@ -386,10 +488,15 @@ async function money_index(directory: string, binding: RoleBinding, role: string
   if (rows.length > 0 && dated === 0) {
     throw new ExportBlankColumnError(path, role, [at], rows.length);
   }
+  assert_joins(index, person_ids, path, role, person);
   return index;
 }
 
-async function conversion_index(directory: string, binding: RoleBinding): Promise<Map<string, ConversionEvent[]>> {
+async function conversion_index(
+  directory: string,
+  binding: RoleBinding,
+  person_ids: ReadonlySet<string>,
+): Promise<Map<string, ConversionEvent[]>> {
   const path = `${directory}/${binding.export}`;
   const person = column_of(binding, "person", "conversion");
   const at = column_of(binding, "at", "conversion");
@@ -410,6 +517,13 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
   const rows = await read_export(path, "conversion", bound);
 
   const index = new Map<string, ConversionEvent[]>();
+  // The status filter runs per cell, against the cut, so a drifted status is invisible there: the
+  // events are simply skipped one by one. Counted once here, over the whole file, the difference
+  // between "nobody committed in this window" and "nothing in this column is a status the map
+  // knows" becomes a fact the run can refuse on.
+  const valid = new Set(binding.valid_statuses ?? []);
+  const found = new Set<string>();
+  let committed = 0;
   let dated = 0;
   for (const row of rows) {
     // The primary timestamp is nullable on this role, so the map may name a second column to
@@ -423,6 +537,13 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
     };
     if (event.at !== null) {
       dated += 1;
+    }
+    if (valid.has(event.status)) {
+      committed += 1;
+    } else if (found.size < 8) {
+      // Capped: the message needs enough of the column to show the reader what is there instead,
+      // not every distinct value a broken export might carry.
+      found.add(event.status);
     }
     // Absent where the map declares no split, so a product with no recycled balance carries no
     // half-read field that later reads as "not recycled".
@@ -448,6 +569,10 @@ async function conversion_index(directory: string, binding: RoleBinding): Promis
       rows.length,
     );
   }
+  if (rows.length > 0 && committed === 0) {
+    throw new ExportStatusError(path, status, binding.valid_statuses ?? [], [...found].sort(), rows.length);
+  }
+  assert_joins(index, person_ids, path, "conversion", person);
   return index;
 }
 
@@ -504,14 +629,33 @@ function accumulate(
 
 /**
  * Share of a group's total held by its two largest contributors. Null where the question is
- * meaningless: nothing collected, or fewer than two contributors to compare.
+ * meaningless: nothing collected, fewer than two contributors to compare, or a total that is not
+ * a whole made of parts.
  *
  * An average over a group where two people account for most of the money describes nobody in it,
  * and the concentration is invisible until someone goes looking. This puts it beside the total.
+ *
+ * That last condition is the one worth stating. A share is a part over a whole, and it only reads
+ * as one while every part is non-negative — a person whose events net out below zero, a refund or
+ * a reversal larger than what they paid, shrinks the denominator without shrinking the two
+ * numerators, and the arithmetic then returns something above 1 or below 0. Read as a percentage
+ * it says the top two hold four hundred percent of the money, which is not a fact about
+ * concentration at all; it is the ratio complaining that this group has no whole to take a share
+ * of. Null says exactly that, and it is the same null the two other meaningless cases already
+ * return, sitting in a field the reader can see beside a `value` that is very much not null.
+ *
+ * Not refused, because a negative contribution is data rather than a fault: a reversal is a real
+ * thing that happens to a real account, and `value` still totals it correctly. Only the share is
+ * undefined, so only the share goes null.
  */
 function top2_share(per_person: number[], total: number): number | null {
-  if (total === 0 || per_person.length < 2) {
+  if (total <= 0 || per_person.length < 2) {
     return null;
+  }
+  for (const one of per_person) {
+    if (one < 0) {
+      return null;
+    }
   }
   const ranked = [...per_person].sort((a, b) => b - a);
   return round_half_even(((ranked[0] as number) + (ranked[1] as number)) / total, 2);
@@ -646,9 +790,14 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   const person_rows = await read_export(person_path, "person", [person_id, person_phone, person_created]);
 
   const by_key = new Map<string, Account[]>();
+  // Every id in the file, whether or not its phone was readable and whether or not its key
+  // survives the switchboard eviction below. It is what the other roles are asked to join
+  // against, and that question is about the id column, not about the dialling plan.
+  const person_ids = new Set<string>();
   let unreadable = 0;
   let dated = 0;
   for (const row of person_rows) {
+    person_ids.add(row[person_id] ?? "");
     // Parsed before the phone is looked at, so the count below describes the file rather than the
     // subset of it this market's dialling plan happened to understand.
     const created = parse_ts(row[person_created]);
@@ -691,13 +840,14 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
   }
 
-  const revenue = map.revenue === undefined ? null : await money_index(opts.exports, map.revenue, "revenue");
-  const churn = map.churn === undefined ? null : await money_index(opts.exports, map.churn, "churn");
-  const conversions = await conversion_index(opts.exports, map.conversion);
+  const revenue =
+    map.revenue === undefined ? null : await money_index(opts.exports, map.revenue, "revenue", person_ids);
+  const churn = map.churn === undefined ? null : await money_index(opts.exports, map.churn, "churn", person_ids);
+  const conversions = await conversion_index(opts.exports, map.conversion, person_ids);
   const valid_statuses = new Set(map.conversion.valid_statuses ?? []);
   const recycled_when = map.conversion.recycled_when;
 
-  const measured: { cell: Cell; record: CellRecord }[] = [];
+  const measured: { cell: Cell; record: CellRecord; keys: ReadonlySet<string> }[] = [];
 
   for (const cell of opts.cells) {
     // The cut is the one instant the truncation in `parse_ts` is not provably harmless for: every
@@ -715,6 +865,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
     const cut_ms = cut.getTime();
+    // A cut later than the reading is not a small error. The window comes out negative, every
+    // comparison against the cut excludes everything, and the record reads as a campaign that
+    // reached people and produced nothing — the same zeros a real failure produces. A planning
+    // date left in place after the send slipped is exactly how it happens.
+    if (cut_ms > now_ms) {
+      throw new CellDeclarationError(
+        cell.name,
+        `its cut ${JSON.stringify(cell.cut)} is later than the moment this reading was taken ` +
+          `(${measured_utc}), so the window it measures is negative and nothing can fall inside it. ` +
+          "Every count would come back zero and read as a campaign nobody responded to. Correct the " +
+          "cut to the real moment of contact, or wait until it has passed and measure then",
+      );
+    }
 
     const keys = new Set<string>();
     for (const list of cell.lists) {
@@ -858,7 +1021,9 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       record.pre_existing.churn = { people: held.people, value: round_half_even(held.value, 2) };
     }
 
-    measured.push({ cell, record });
+    // The key set travels with the record. It is the cell's membership, and the only place a
+    // control pair can be checked for the one fault that makes its arithmetic meaningless.
+    measured.push({ cell, record, keys });
   }
 
   // A provisional cut is a date somebody wrote down while waiting for the real one. Everything
@@ -896,6 +1061,37 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
           `${[...by_name.keys()].map((name) => JSON.stringify(name)).join(", ")}. A pair joins on the name, ` +
           "so correct the spelling here or declare the cell — naming a cell that was not measured cannot " +
           "be read as a comparison against nothing.",
+      );
+    }
+
+    // The two-proportion test assumes two independent samples. Arms that share members break that
+    // assumption without breaking anything visible: the shared people are counted on both sides,
+    // so the control drifts towards the treated arm and the difference that survives is a
+    // selection artefact wearing a p-value. A control drawn as "everyone we did not send to" from
+    // a list that was later extended, or the same cell named twice, both land here — and both
+    // publish `publishable: true` on a comparison of a group against itself.
+    const smaller = treated.keys.size <= untouched.keys.size ? treated.keys : untouched.keys;
+    const larger = smaller === treated.keys ? untouched.keys : treated.keys;
+    let overlap = 0;
+    for (const key of smaller) {
+      if (larger.has(key)) {
+        overlap += 1;
+      }
+    }
+    if (overlap > 0) {
+      throw new ControlError(
+        control.treated === control.control
+          ? `the pair names ${JSON.stringify(control.treated)} on both sides, so it compares a cell ` +
+              "against itself. The result is a rate against the identical rate, a lift of exactly one and " +
+              "a p-value of one, published as though a comparison had been made. Name the untouched cell " +
+              "this one is meant to be read against."
+          : `the pair ${JSON.stringify(control.treated)} against ${JSON.stringify(control.control)} ` +
+              `shares ${overlap} of the ${treated.keys.size} identifiers listed by the first and the ` +
+              `${untouched.keys.size} listed by the second. A two-proportion test reads two independent ` +
+              "samples, and a person counted in both arms is counted as evidence twice — the control " +
+              "moves towards the treated cell and whatever difference survives is an artefact of how the " +
+              "two lists were drawn rather than of anything that was sent. Subtract the treated " +
+              "identifiers from the control list, or exclude them on the control cell, and measure again.",
       );
     }
 

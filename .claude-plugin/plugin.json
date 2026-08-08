@@ -42,7 +42,5 @@
     "./skills/notion/notion/",
     "./skills/reasoning/"
   ],
-  "commands": [
-    "./commands/"
-  ]
+  "commands": ["./commands/"]
 }

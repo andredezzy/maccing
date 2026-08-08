@@ -412,6 +412,51 @@ describe("load_map refuses a document it cannot bind", () => {
     expect(error).toBeInstanceOf(PhoneFormatError);
     expect(error.message).toMatch(/vary in length|variable[- ]length/i);
   });
+
+  test("rejects a heading declared twice, naming it", async () => {
+    // Two `## Role: person` sections is what a map edited by two people, or copied from another
+    // project and half-adjusted, looks like. The later one silently replaced the earlier, so the
+    // binding a reader checks at the top of the file was not the binding the run used — every
+    // column reading as correct while pointing at another table.
+    const second_person = `## Role: person
+
+| field | value |
+|---|---|
+| export | legacy-person.csv |
+| id | legacy_id |
+| phone | phone_digits |
+| created_at | created_at |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "duplicate-role",
+          compose(PHONE_SECTION, FINGERPRINT_SECTION, PERSON_SECTION, second_person, CONVERSION_SECTION),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Role: person");
+  });
+
+  test("rejects a repeated heading the parser does not otherwise read", async () => {
+    // The rule is about headings, not about the four the parser binds. It cannot know which
+    // heading matters — a name it ignores today is one it reads after the next section is added —
+    // and a document with two sections under one name has no single answer to give either way.
+    const notes = "## Notes\n\nWhy the join goes through the wallet.\n";
+    const error = await caught(
+      load_map(
+        await write_map(
+          "duplicate-prose",
+          compose(PHONE_SECTION, FINGERPRINT_SECTION, notes, PERSON_SECTION, notes, CONVERSION_SECTION),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Notes");
+  });
 });
 
 /**
@@ -420,7 +465,7 @@ describe("load_map refuses a document it cannot bind", () => {
  * about to publish numbers has to care, so the run calls this itself.
  */
 describe("verify_fingerprint", () => {
-  const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists.
+  const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists by default.
 
 model Account {
   id            String   @id
@@ -437,20 +482,30 @@ model Ledger {
 model Untracked {
   id String @id
 }
+
+enum Standing {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
 `;
 
   /**
    * The hash rule, restated here on purpose. Recomputing the expected digest by the same rule
    * is what makes the passing case mean anything — a hardcoded literal would only prove that
    * a hash can be copied between two files.
+   *
+   * A listed name is a model or an enum, and the rule reads either. That is not a convenience:
+   * the statuses a map counts as committed live in an enum and nowhere else, so a map that
+   * cannot list one has no way to notice a status being renamed under it.
    */
-  function digest_of(schema: string, models: string[]): string {
+  function digest_of(schema: string, names: string[]): string {
     const lines = schema.split("\n");
-    const blocks = models.map((name) => {
-      const opener = new RegExp(`^\\s*model\\s+${name}\\s*\\{`);
+    const blocks = names.map((name) => {
+      const opener = new RegExp(`^\\s*(?:model|enum)\\s+${name}\\s*\\{`);
       const start = lines.findIndex((line) => opener.test(line));
       if (start === -1) {
-        throw new Error(`the fixture has no model ${name}`);
+        throw new Error(`the fixture has no block ${name}`);
       }
       let end = -1;
       for (let i = start + 1; i < lines.length; i += 1) {
@@ -460,7 +515,7 @@ model Untracked {
         }
       }
       if (end === -1) {
-        throw new Error(`the fixture never closes model ${name}`);
+        throw new Error(`the fixture never closes block ${name}`);
       }
       return lines.slice(start, end + 1).join("\n");
     });
@@ -468,13 +523,18 @@ model Untracked {
   }
 
   /** Writes a map and its schema, with the schema sitting where the map says it sits. */
-  async function write_pair(name: string, sha256: string, schema: string | null): Promise<string> {
+  async function write_pair(
+    name: string,
+    sha256: string,
+    schema: string | null,
+    blocks = "Account, Ledger",
+  ): Promise<string> {
     const fingerprint = `## Fingerprint
 
 | field | value |
 |---|---|
 | schema | db/schema.prisma |
-| models | Account, Ledger |
+| models | ${blocks} |
 | sha256 | ${sha256} |
 `;
     const path = join(root, name, "MAPPING.md");
@@ -550,5 +610,64 @@ model Untracked {
     const error = await caught(verify_fingerprint(map, path));
     expect(error).toBeInstanceOf(MapSectionError);
     expect(error.message).toContain("Ledger");
+  });
+
+  test("hashes an enum block a map lists among its models", async () => {
+    // Without this the check has a hole exactly where it matters most. `valid_statuses` and
+    // `recycled_when` name enum values, not columns, and a migration renaming one of them leaves
+    // every model byte-identical while the run it guards silently counts nothing or moves a whole
+    // sum from one side of the split to the other. A map that lists the enum used to be refused
+    // outright, which left nowhere to declare the dependency at all.
+    const expected = digest_of(SCHEMA, ["Account", "Ledger", "Standing"]);
+    const path = await write_pair("fingerprint-enum", expected, SCHEMA, "Account, Ledger, Standing");
+    const map = await load_map(path);
+
+    const result = await verify_fingerprint(map, path);
+    expect(result.ok).toBe(true);
+    expect(result.actual).toBe(expected);
+  });
+
+  test("notices a status renamed inside a listed enum", async () => {
+    // The rename this exists for: `ACTIVE` becomes `RUNNING` in a migration, the map still counts
+    // `ACTIVE`, and every conversion in the export stops matching. Nothing in any model moved.
+    const renamed = SCHEMA.replace("  ACTIVE", "  RUNNING");
+    const path = await write_pair(
+      "fingerprint-enum-drift",
+      digest_of(SCHEMA, ["Account", "Ledger", "Standing"]),
+      renamed,
+      "Account, Ledger, Standing",
+    );
+    const map = await load_map(path);
+
+    const result = await verify_fingerprint(map, path);
+    expect(result.ok).toBe(false);
+    expect(result.actual).toBe(digest_of(renamed, ["Account", "Ledger", "Standing"]));
+  });
+
+  test("still hashes nothing but the blocks listed, enum or model", async () => {
+    // An enum nobody lists changes freely, exactly as an unlisted model does. The scope of the
+    // hash is the map's declaration, and widening it to every enum would make the check cry wolf
+    // on migrations this map does not depend on.
+    const elsewhere = SCHEMA.replace("  COMPLETED", "  COMPLETED\n  REFUNDED");
+    const path = await write_pair("fingerprint-enum-unlisted", digest_of(SCHEMA, ["Account", "Ledger"]), elsewhere);
+    const map = await load_map(path);
+
+    const result = await verify_fingerprint(map, path);
+    expect(result.ok).toBe(true);
+  });
+
+  test("throws when a listed name is neither a model nor an enum in the schema", async () => {
+    const path = await write_pair(
+      "fingerprint-no-enum",
+      digest_of(SCHEMA, ["Account", "Ledger", "Standing"]),
+      SCHEMA.replace("enum Standing {", "enum ContractStanding {"),
+      "Account, Ledger, Standing",
+    );
+    const map = await load_map(path);
+
+    const error = await caught(verify_fingerprint(map, path));
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect(error.message).toContain("Standing");
+    expect(error.message).toMatch(/model or enum/);
   });
 });

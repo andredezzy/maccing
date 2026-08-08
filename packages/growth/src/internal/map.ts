@@ -42,6 +42,9 @@ export type DatabaseMap = {
    *  reporting it as zero, because unbound and empty are different facts. */
   revenue?: RoleBinding;
   churn?: RoleBinding;
+  /** `models` names the schema blocks the hash covers. A block is a `model` or an `enum`: the
+   *  statuses a map counts as committed and the value marking recycled money are enum values, and
+   *  a rename there changes what every binding means while leaving every model untouched. */
   fingerprint: { schema: string; models: readonly string[]; sha256: string };
 };
 
@@ -112,6 +115,12 @@ type Table = Map<string, string>;
 /**
  * Split the document into the lines under each `##` heading, dropping everything inside a fenced
  * block. Fences are matched by length, so a fence demonstrating another fence closes correctly.
+ *
+ * A heading declared twice is refused rather than merged or overwritten. Two `## Role: person`
+ * sections is what a map edited by two people, or copied from another project and half-adjusted,
+ * looks like; the second silently wins, so the bindings a reader sees at the top of the file are
+ * not the ones the run uses, and every column in between reads as correct while pointing at the
+ * wrong table.
  */
 function split_sections(text: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
@@ -135,8 +144,17 @@ function split_sections(text: string): Map<string, string[]> {
 
     const heading = /^##(?!#)\s*(.+?)\s*$/.exec(line);
     if (heading !== null) {
+      const name = `## ${heading[1] as string}`;
+      if (sections.has(name)) {
+        throw new MapSectionError(
+          name,
+          "declared twice in this map. The later one silently replaces the earlier, so the binding " +
+            "a reader checks is not the binding the run uses. Merge the two into one section, or " +
+            "rename whichever of them describes something else",
+        );
+      }
       current = [];
-      sections.set(`## ${heading[1] as string}`, current);
+      sections.set(name, current);
       continue;
     }
     if (current !== null) {
@@ -395,6 +413,14 @@ export async function load_map(path: string): Promise<DatabaseMap> {
  * caller with a difference in hand still has to say what it means. A missing file and an unfindable
  * block do throw, and they throw as different errors: a hash that differs and a file that is not
  * there are different problems, and merging them teaches people to ignore the check.
+ *
+ * A listed name may be a `model` or an `enum`, and an enum is not a nicety. The status list a map
+ * declares under `valid_statuses`, and the value it declares under `recycled_when`, are values of
+ * an enum that lives outside every model block — so a migration renaming one of them leaves every
+ * hashed block byte-identical while the run it guards silently counts nothing, or moves a whole
+ * sum from one side of the split to the other. Those are the two drifts this check exists for and
+ * the two it could not see, so a map that names its status enum among its blocks now gets what it
+ * asked for instead of an error.
  */
 export async function verify_fingerprint(
   map: DatabaseMap,
@@ -417,8 +443,10 @@ export async function verify_fingerprint(
 
   const lines = (await file.text()).split("\n");
   const blocks: string[] = [];
-  for (const model of map.fingerprint.models) {
-    const opener = new RegExp(`^\\s*model\\s+${model.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{`);
+  for (const block of map.fingerprint.models) {
+    // `model` or `enum`: a schema declares the two the same way, and a map lists a name rather
+    // than a kind, so the reader does not have to know which it is to hash it.
+    const opener = new RegExp(`^\\s*(?:model|enum)\\s+${block.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{`);
     let start = -1;
     for (let i = 0; i < lines.length; i++) {
       if (opener.test(lines[i] as string)) {
@@ -428,8 +456,8 @@ export async function verify_fingerprint(
     }
     if (start === -1) {
       throw new MapSectionError(
-        model,
-        `no block declaring it in ${schema_path}, though the map's fingerprint lists it`,
+        block,
+        `no model or enum block declaring it in ${schema_path}, though the map's fingerprint lists it`,
       );
     }
     let end = -1;
@@ -441,7 +469,7 @@ export async function verify_fingerprint(
     }
     if (end === -1) {
       throw new MapSectionError(
-        model,
+        block,
         `its block in ${schema_path} never closes, so there is nothing definite to hash`,
       );
     }

@@ -44,11 +44,78 @@ export class MissingColumnError extends Error {
   }
 }
 
+/** A header carrying one name twice. Refused rather than resolved, because the record built from
+ *  such a header holds only the last column of that name — so a caller checking that its bound
+ *  columns are present passes, reads the wrong one of the two, and gets whatever the second query
+ *  put there. A join column shadowed this way matches nothing and reads as a cell that never
+ *  converted, which is the one wrong answer this engine spends everything to avoid. */
+export class DuplicateColumnError extends Error {
+  readonly path: string;
+  readonly column: string;
+
+  constructor(path: string, column: string, header: readonly string[]) {
+    super(
+      `${path} names the column ${JSON.stringify(column)} twice in its header, which reads ` +
+        `${header.map((name) => JSON.stringify(name)).join(", ")}. Only the second one survives into ` +
+        "each row, so a binding on that name silently reads the wrong column and the header check " +
+        "meant to catch exactly that passes. Re-export with the duplicate renamed or dropped.",
+    );
+    this.name = "DuplicateColumnError";
+    this.path = path;
+    this.column = column;
+  }
+}
+
+/** A quoted field that never closes. The scanner would otherwise swallow every remaining line
+ *  into that one field: no parse error, no short row, just a file that ends after the last row
+ *  before the stray quote and a cell measured against a fraction of the list it named. */
+export class UnterminatedQuoteError extends Error {
+  readonly path: string;
+  readonly line: number;
+
+  constructor(path: string, line: number) {
+    super(
+      `${path} opens a quoted field on line ${line} and never closes it. Every line after that one ` +
+        "reads as part of that single field rather than as rows of its own, so the file ends where " +
+        "the stray quote begins and the identifiers below it are silently not measured. Close the " +
+        "quote, or double it if the value genuinely contains one.",
+    );
+    this.name = "UnterminatedQuoteError";
+    this.path = path;
+    this.line = line;
+  }
+}
+
+/** A `.txt` list declared with a column or a filter. Refused rather than ignored: a cell whose
+ *  filter never runs measures the whole file instead of the slice it named, and reports that
+ *  wider population under the narrower cell's name. */
+export class TextListOptionError extends Error {
+  readonly path: string;
+  readonly options: readonly string[];
+
+  constructor(path: string, options: readonly string[]) {
+    super(
+      `${path} is read as one identifier per line, and this cell declares ${options.join(" and ")}, ` +
+        "which a text file has nowhere to hold. Ignoring them would measure every line in the file " +
+        "under the name of the slice that was asked for — a filter that never runs reports the wrong " +
+        "population, not a smaller one. Export the list as CSV with the column the declaration names, " +
+        `or drop ${options.length === 1 ? "it" : "them"} and point the cell at a file already narrowed.`,
+    );
+    this.name = "TextListOptionError";
+    this.path = path;
+    this.options = options;
+  }
+}
+
 /**
  * RFC 4180 field scanner. Quoted fields may hold commas, newlines and doubled quotes; rows end at
  * either line terminator. Returns rows of raw field text, header row included.
+ *
+ * The path is carried only so an unterminated quote can name the file it is in. That case is the
+ * one place this scanner refuses: a quote nobody closed is not a malformed row the reader can skip
+ * over, it is the rest of the document disappearing into one field.
  */
-function scan(text: string): string[][] {
+function scan(text: string, path: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -56,6 +123,11 @@ function scan(text: string): string[][] {
   // Distinguishes a blank line from a row holding one empty field, so a trailing newline does
   // not become a phantom record.
   let occupied = false;
+  // Physical lines, counted for the unterminated-quote message alone. `quote_line` is where the
+  // quote currently open was opened, which is the line a reader has to go and look at — the end
+  // of the file, where the fault surfaces, says nothing about where it started.
+  let line = 1;
+  let quote_line = 0;
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i] as string;
@@ -75,6 +147,7 @@ function scan(text: string): string[][] {
     if (ch === '"') {
       quoted = true;
       occupied = true;
+      quote_line = line;
     } else if (ch === ",") {
       row.push(field);
       field = "";
@@ -90,12 +163,16 @@ function scan(text: string): string[][] {
       row = [];
       field = "";
       occupied = false;
+      line++;
     } else {
       field += ch;
       occupied = true;
     }
   }
 
+  if (quoted) {
+    throw new UnterminatedQuoteError(path, quote_line);
+  }
   if (occupied || field !== "" || row.length > 0) {
     row.push(field);
     rows.push(row);
@@ -121,10 +198,20 @@ export type Rows = { header: string[]; records: Record<string, string>[] };
  */
 export async function read_rows(path: string): Promise<Rows> {
   const text = (await Bun.file(path).text()).replace(/^\uFEFF/, "");
-  const rows = scan(text);
+  const rows = scan(text, path);
   const header = rows[0];
   if (header === undefined) {
     return { header: [], records: [] };
+  }
+  // Checked here rather than by the caller comparing its bindings, because the loss happens here:
+  // the second column of a repeated name overwrites the first as the record is built, and every
+  // check downstream then asks whether the name is present, which it is.
+  const seen = new Set<string>();
+  for (const name of header) {
+    if (seen.has(name)) {
+      throw new DuplicateColumnError(path, name, header);
+    }
+    seen.add(name);
   }
 
   const records: Record<string, string>[] = [];
@@ -148,13 +235,17 @@ export async function read_table(path: string): Promise<Record<string, string>[]
  * Read the identifiers a list file carries, as raw text — deriving a join key from them is the
  * caller's business and depends on a format this file knows nothing about.
  *
- * A `.txt` is one identifier per line. A `.csv` is read as a table: the named column, or the first
- * column when none is named, which is what a bare export of one column looks like. A name that the
- * header does not carry is an error and not a fall back to the first column — the fall back reads
- * a column of the wrong kind, every value of which fails to convert, and a file that converts
- * nothing is indistinguishable from a cell whose people never signed up. `filter` cuts one cell out
- * of a file holding several, so the mapping from identifier to cell stays in the single frozen file
- * the attribution depends on instead of being copied into derived files free to drift from it.
+ * A `.txt` is one identifier per line, and a `.txt` declared with a column or a filter is refused
+ * rather than read without them: a file has no columns to narrow, so honouring the declaration is
+ * impossible and ignoring it measures a wider population under the narrower cell's name. A `.csv`
+ * is read as a table: the named column, or the first column when none is named, which is what a
+ * bare export of one column looks like. A name that the header does not carry is an error and not
+ * a fall back to the first column — the fall back reads a column of the wrong kind, every value of
+ * which fails to convert, and a file that converts nothing is indistinguishable from a cell whose
+ * people never signed up. `filter` cuts one cell out of a file holding several, so the mapping from
+ * identifier to cell stays in the single frozen file the attribution depends on instead of being
+ * copied into derived files free to drift from it; its column is checked against the header for
+ * the same reason the identifier column is, and separately, so the error names the one that moved.
  */
 export async function read_identifiers(
   path: string,
@@ -165,6 +256,19 @@ export async function read_identifiers(
   const extension = dot === -1 ? "" : path.slice(dot).toLowerCase();
 
   if (extension === ".txt") {
+    // A text list has no columns, so neither of these can be honoured. Ignoring them is the
+    // dangerous reading: the cell was declared as one slice of a file and would be measured as
+    // all of it, under the slice's name.
+    const declared: string[] = [];
+    if (column !== undefined) {
+      declared.push(`column ${JSON.stringify(column)}`);
+    }
+    if (filter !== undefined) {
+      declared.push(`filter on ${JSON.stringify(filter.column)}`);
+    }
+    if (declared.length > 0) {
+      throw new TextListOptionError(path, declared);
+    }
     const text = await Bun.file(path).text();
     return text
       .split("\n")
@@ -179,6 +283,13 @@ export async function read_identifiers(
   const { header, records } = await read_rows(path);
   if (column !== undefined && !header.includes(column)) {
     throw new MissingColumnError(path, column, header);
+  }
+  // The filter column is asserted against the header exactly like the identifier column. Left
+  // unchecked, a renamed filter column matches no row, the cell comes out empty, and the error
+  // that eventually surfaces names the phone column — sending the reader to the one binding that
+  // was right.
+  if (filter !== undefined && !header.includes(filter.column)) {
+    throw new MissingColumnError(path, filter.column, header);
   }
   if (records.length === 0) {
     return [];

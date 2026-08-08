@@ -2,21 +2,52 @@
   "name": "@maccing/growth",
   "version": "0.1.0",
   "type": "module",
-  "description": "Campaign measurement machinery. Reads exported CSVs plus a database map, returns one record per cell. No host coupling, no country baked in, no vocabulary from any one project.",
+  "description": "Campaign measurement for Bun. Exported CSVs plus a map of your own database in, one record per measured group out. Every ambiguity throws; nothing degrades to zero.",
+  "keywords": [
+    "campaign",
+    "measurement",
+    "attribution",
+    "ab-testing",
+    "two-proportion",
+    "statistics",
+    "whatsapp",
+    "csv",
+    "bun"
+  ],
   "license": "MIT",
+  "author": "Andre Dezzy",
+  "homepage": "https://github.com/andredezzy/maccing/tree/main/packages/growth#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andredezzy/maccing.git",
+    "directory": "packages/growth"
+  },
+  "bugs": {
+    "url": "https://github.com/andredezzy/maccing/issues"
+  },
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": "<0"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
-    "./meta/whatsapp/campaigns/metrics": "./src/meta/whatsapp/campaigns/metrics.ts"
+    "./meta/whatsapp/campaigns/metrics": "./src/meta/whatsapp/campaigns/metrics.ts",
+    "./package.json": "./package.json"
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/bun": "^1.3.0",
     "typescript": "^5.7.0"
   }
 }

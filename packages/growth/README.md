@@ -2,6 +2,8 @@
 
 *Campaign measurement. Exported CSVs plus a map of your own database in, one record per measured group out.*
 
+> **Runs on Bun 1.0 or newer, and on nothing else.** There is no Node build, and there will not be one while the engine reads files through `Bun.file`. The reasoning is under [Install](#install).
+
 A campaign reaches a list of people at a known moment. Afterwards someone has to say what happened, and the honest version of that sentence needs numbers: how many of the people reached already had an account, how many arrived after the send, how fast they arrived, how much of the money came from two of them, and whether the difference against a group nobody touched survives the sample sizes that produced it.
 
 This package computes that. It knows four roles — a **person**, **revenue** arriving, **churn** leaving, a **conversion** committing — and nothing else. It does not know your schema, your product, your market's dialling plan, or what the campaign was for. All of that lives in a map file inside your project, which the engine reads and never writes.
@@ -12,9 +14,13 @@ This package computes that. It knows four roles — a **person**, **revenue** ar
 bun add @maccing/growth
 ```
 
-Nothing is published to a registry yet. A consumer in the same checkout therefore depends on it by path — `"@maccing/growth": "file:../relative/path/to/packages/growth"` — and every caller resolving through that one manifest gets the same working copy. That is one shared version for a whole tree of callers, not a pin per caller: editing `src/` changes what a script written months ago measures the next time it runs.
+`exports` points at TypeScript source, and Node refuses to strip types from any file under `node_modules` — on every version, by design — so importing this package there fails with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. Compiling to JavaScript would not rescue it, because the engine reads through `Bun.file` and hashes through `Bun.CryptoHasher`: the build would import cleanly under Node and then throw `Bun is not defined` on the first call, which is the worse of the two failures because it arrives later and reads like a bug in your own code. So `engines` names Bun and refuses Node outright — `"node": "<0"` is a range no release satisfies, and it is deliberate rather than a typo — which buys an `EBADENGINE` warning from npm at install time instead of a stack trace at run time.
 
-Publishing is what makes the pin real, and it is most of why the measurement lives in a package at all. Once a version is on a registry, a folder with its own manifest can name an exact one and hold it — the arithmetic behind an old reading stops moving, so re-running that reading reproduces it instead of re-deriving it under today's code. Until then the honest statement is that every caller shares one version, and any claim that a caller pins its own describes the mechanism rather than the current state.
+`engines` declares a floor of Bun 1.0, which is the support commitment; this release was tested on Bun 1.3.14.
+
+Pinning is most of why the measurement lives in a package at all. A folder with its own manifest names an exact version and holds it, so the arithmetic behind an old reading stops moving: re-running that reading reproduces it instead of re-deriving it under today's code. A consumer inside this repository depends on it by path instead — `"@maccing/growth": "file:../relative/path/to/packages/growth"` — and every caller resolving through that one manifest gets the same working copy. That is one shared version for a whole tree of callers, not a pin per caller: editing `src/` changes what a script written months ago measures the next time it runs.
+
+While the version is `0.x` the record shape and the map format can change on a minor bump, so pin exactly wherever a stored reading has to keep reproducing.
 
 ## The one import
 
@@ -104,13 +110,13 @@ const records = await measure({
   cells: [
     {
       name: "evening-send",
-      cut: "2031-04-02T19:30:00.000Z",
+      cut: "2026-04-02T19:30:00.000Z",
       lists: ["campaigns/lists/evening-send.txt"],
       audience: "cold",
     },
     {
       name: "held-back",
-      cut: "2031-04-02T19:30:00.000Z",
+      cut: "2026-04-02T19:30:00.000Z",
       lists: ["campaigns/lists/held-back.txt"],
       audience: "cold",
     },
@@ -125,7 +131,7 @@ The `cut` is the real moment of contact — not midnight, not the date the campa
 
 Three optional fields on a cell cover the shapes a list actually arrives in. `column` names which column of a `.csv` holds the phone, when it is not the first. `filter` cuts one cell out of a file holding several — better than splitting it into derived files, which are free to drift from the single frozen source the attribution depends on. `exclude` subtracts identifiers before measuring: planted probes and internal numbers, each of which would otherwise inflate the rate of whichever cell it landed in.
 
-Two things about those worth knowing before you rely on them. `column` and `filter` read a `.csv`; a `.txt` list is one identifier per line, and a `column` or `filter` declared beside one is ignored rather than refused. And `column` is checked against the file's header while `filter.column` is not — a misspelt filter column matches no row, and the cell then fails as `EmptyCellError` naming the file and the phone column rather than the filter. That second one is a known gap: spell a filter column off the header in front of you, not from memory.
+Two things about those worth knowing before you rely on them. `column` and `filter` read a `.csv`; a `.txt` list is one identifier per line, and a `column` or `filter` declared beside one is refused with `TextListOptionError` rather than ignored, because a filter that never runs measures the whole file and reports that wider population under the narrower cell's name. And both column names are checked against the file's header before any row is read — a misspelt `column` or a misspelt `filter.column` fails as `MissingColumnError` naming the file and the name that is not in it, rather than surfacing later as an empty cell.
 
 ## The record
 
@@ -134,8 +140,8 @@ One `CellRecord` per cell, in declaration order. This is the first of the two th
 ```json
 {
   "cell": "evening-send",
-  "cut_utc": "2031-04-02T19:30:00.000Z",
-  "measured_utc": "2031-04-12T19:30:00.000Z",
+  "cut_utc": "2026-04-02T19:30:00.000Z",
+  "measured_utc": "2026-04-12T19:30:00.000Z",
   "window_hours": 240,
   "audience": { "listed": 40, "matched_phones": 40, "matched_accounts": 40 },
   "acquired": {
@@ -192,10 +198,15 @@ So the pass refuses at every point where the two are indistinguishable, and each
 | `UnparseablePhonesError` | More of the person export is unreadable than the map permits |
 | `MissingExportError` | A bound export, or a file a cell lists, is not where it was said to be |
 | `ExportColumnError` | A column the map binds is absent from that export's header |
-| `MissingColumnError` | The column a cell names as its phone column is absent from its list file's header |
+| `MissingColumnError` | A column a cell names by hand — its phone `column`, or its `filter.column` — is absent from its list file's header |
+| `DuplicateColumnError` | A CSV header naming one column twice. Only the second survives into each row, so a binding on that name reads the wrong column while the header check meant to catch it passes |
+| `UnterminatedQuoteError` | A quoted field that never closes, naming the line the quote was opened on. The rest of the file would otherwise disappear into that one field |
+| `TextListOptionError` | A `.txt` list declared with a `column` or a `filter`, which a file of one identifier per line has nowhere to hold |
 | `UnsupportedListFormatError` | A list in a format the reader will not guess at |
 | `ExportValueError` | A bound amount column is absent from the file, empty on a row, or holding something that is not a number — the message says which of the three |
 | `ExportBlankColumnError` | A bound timestamp column is in the header but empty or unreadable on every row of an export that has rows. An export with no rows at all is a fact and passes |
+| `ExportStatusError` | A conversion export with rows, not one of which carries a status the map counts as committed — every row is dropped by the status filter and the cell reads as a campaign nobody committed to |
+| `ExportJoinError` | A role's export whose rows are all well-formed and reference nobody in the person export, so the join lands on nothing and the whole file falls out of every cell |
 | `TimestampError` | A timestamp reached the parser and could not be read as a moment |
 | `CellDeclarationError` | A cell cannot be measured as written — blank cut, sub-millisecond cut, duplicate name |
 | `EmptyCellError` | A cell's lists yielded no usable identifier, before or after its exclusions |
@@ -216,4 +227,4 @@ The last two are worth dwelling on. A provisional cut is a guess, so nothing dat
 
 ## Licence
 
-MIT
+MIT — see [LICENSE](./LICENSE), which ships in the tarball.

@@ -9,6 +9,8 @@ description: WhatsApp Business Platform (Cloud API) production reference. Covers
 
 > **Depends on:** the `meta` skill (BM health, verification, account quality/classifier, proxy/isolation, disposable-BM strategy, ban mechanics). ALWAYS load `meta` first. Do NOT load `meta-ads` unless doing CTWA.
 
+> **Also depends on:** the `database-mapping` skill, for anything that measures a dispatch. Measurement has to know which table holds a person, which column holds a phone, and what counts as money arriving or leaving; that binding is the project's and lives in its database map. Load `database-mapping` before measuring — a dispatch whose project is unmapped, or mapped against a schema that has since moved, cannot be measured, and the engine stops rather than guessing. It is named here rather than left to a hook: the reach has to work in any project and any harness, with nothing auto-loading it on your behalf.
+
 > **Related:** `meta-ads` (CTWA campaign setup + CAPI attribution); `ycloud` (the YCloud BSP platform) + `ycloud-api` (YCloud v2 REST API).
 
 ---

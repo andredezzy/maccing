@@ -33,6 +33,13 @@ set -euo pipefail
 STDIN_TIMEOUT_SECONDS=5
 STATE_ROOT="${TMPDIR:-/tmp}/maccing-hooks"
 
+# Where the skills live, derived from this script rather than from the
+# environment or the caller's working directory. The deny message names a file
+# for the agent to open, and the agent's cwd is the governed project, not this
+# checkout — a relative path would name nothing there. Empty if the directory
+# cannot be resolved, which the deny path treats as "no path to offer".
+PLUGIN_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)" || PLUGIN_ROOT=""
+
 # Only these tools are gated, spelled exactly as the hosts that offer them
 # spell them. The observe side matches tool names case-insensitively and over a
 # wider list, because the two directions have different costs: observing too
@@ -57,21 +64,36 @@ governing_skill() {
   esac
 }
 
-# Where a skill lives, so that reading its own files counts as loading it.
+# Where a skill's own SKILL.md lives, relative to PLUGIN_ROOT. This is the path
+# the denial tells the agent to read, so it has to resolve: `growth` is one
+# skill among six under the `skills/growth/` grouping folder, not the folder
+# itself.
 skill_home() {
   case "$1" in
-    growth) printf 'skills/growth/' ;;
+    growth) printf 'skills/growth/growth/' ;;
     database-mapping) printf 'skills/database/mapping/' ;;
     database-ops) printf 'skills/database/ops/' ;;
   esac
 }
 
+# The tree whose files count as reaching for the skill, which is wider than the
+# skill's own directory wherever the skill has siblings that route back through
+# it: an agent reading skills/growth/meta/whatsapp/SKILL.md has engaged with
+# growth. Defaults to the skill's own directory, so a new governed tree needs
+# nothing here.
+skill_family() {
+  case "$1" in
+    growth) printf 'skills/growth/' ;;
+    *) skill_home "$1" ;;
+  esac
+}
+
 # Does this text point at a skill's own files? Three shapes count: a path
-# inside the skill's directory, a path that is the directory itself, and the
+# inside the skill's family tree, a path that is the tree itself, and the
 # skill:// URI some hosts use to address a skill that has no path on disk.
 points_at_skill() {
   local home
-  home="$(skill_home "$1")"
+  home="$(skill_family "$1")"
   [ -n "$home" ] || return 1
   case "$2" in
     *"$home"* | *"${home%/}" | *"skill://$1"*) return 0 ;;
@@ -193,10 +215,25 @@ reason="$(deny_reason "$skill")"
 [ -n "$reason" ] || exit 0
 
 # Name the way through. It is the only way through, so leaving the agent to
-# work it out would be the wedge arriving by a quieter route.
+# work it out would be the wedge arriving by a quieter route — and a path that
+# does not resolve is worse than no path, because the agent follows it, finds
+# nothing, and is still denied. So the file is checked before it is named, and
+# where it cannot be found the denial offers only the gesture that needs no
+# path at all.
 home="$(skill_home "$skill")"
-if [ -n "$home" ]; then
-  reason="$reason Load it — invoke the $skill skill, or read ${home}SKILL.md — and the edit goes through."
+if [ -n "$PLUGIN_ROOT" ] && [ -n "$home" ] && [ -f "$PLUGIN_ROOT/${home}SKILL.md" ]; then
+  reason="$reason Load it — invoke the $skill skill, or read $PLUGIN_ROOT/${home}SKILL.md — and the edit goes through."
+else
+  reason="$reason Load it — invoke the $skill skill — and the edit goes through."
 fi
 
-printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$reason"
+# jq builds the envelope rather than printf, because the reason now carries a
+# filesystem path and a hand-escaped JSON string would break on the first one
+# holding a quote or a backslash.
+jq -cn --arg reason "$reason" '{
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: $reason
+  }
+}' || exit 0
