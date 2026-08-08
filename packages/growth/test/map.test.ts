@@ -14,7 +14,11 @@ import { PhoneFormatError } from "../src/internal/phone.ts";
  * which reads exactly like a result. So the suite spends most of its assertions on what the
  * parser refuses, not on what it accepts.
  *
- * Every table name, column name and figure in these fixtures is invented.
+ * Every table name, column name and figure in these fixtures is invented, the numbering plan
+ * included: `997` is not a dialling code any country answers on, and no market pairs a
+ * three-digit area code with a six-digit subscriber tail. The parser reads every length out of
+ * the document, so a plan copied from somewhere real would test nothing extra and would invite
+ * being reused as though it described that place.
  */
 
 /** An invented digest. Nothing verifies it during `load_map`, so it only has to be well-formed. */
@@ -22,18 +26,18 @@ const PLACEHOLDER_SHA = "1b3a9d0c7e5f24688a0d3c5e7f91b2d4c6e8a0f2143658790abcdef
 
 const PHONE_SECTION = `## Phone format
 
-The area code is fixed at two digits in this market and the trailing eight digits survived the
+The area code is fixed at three digits in this market and the trailing six digits survived the
 last numbering reform, so a key built from those two pieces joins across exports taken years
 apart.
 
 | field | value |
 |---|---|
-| country_code | 55 |
-| area_digits | 2 |
-| subscriber_digits | 8 |
-| max_unparseable_rate | 0.4 |
-| shared_account_ceiling | 4 |
-| area_codes | 11, 21 ,  31 |
+| country_code | 997 |
+| area_digits | 3 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
+| area_codes | 480, 481 ,  482 |
 `;
 
 const FINGERPRINT_SECTION = `## Fingerprint
@@ -139,15 +143,15 @@ describe("load_map on a complete document", () => {
 
     // The country code stays a string. Read as a number it would lose a leading zero in
     // the markets that have one, and it is never arithmetic.
-    expect(map.phone.country_code).toBe("55");
-    expect(map.phone.area_digits).toBe(2);
-    expect(map.phone.subscriber_digits).toBe(8);
-    expect(map.phone.max_unparseable_rate).toBe(0.4);
-    expect(map.phone.shared_account_ceiling).toBe(4);
+    expect(map.phone.country_code).toBe("997");
+    expect(map.phone.area_digits).toBe(3);
+    expect(map.phone.subscriber_digits).toBe(6);
+    expect(map.phone.max_unparseable_rate).toBe(0.25);
+    expect(map.phone.shared_account_ceiling).toBe(3);
     expect(typeof map.phone.area_digits).toBe("number");
     expect(typeof map.phone.max_unparseable_rate).toBe("number");
     // Written with ragged spacing in the fixture on purpose.
-    expect(map.phone.area_codes).toEqual(["11", "21", "31"]);
+    expect(map.phone.area_codes).toEqual(["480", "481", "482"]);
   });
 
   test("reads the fingerprint section", async () => {
@@ -290,10 +294,10 @@ describe("load_map refuses a document it cannot bind", () => {
 
 | field | value |
 |---|---|
-| country_code | 55 |
-| area_digits | 2 |
-| max_unparseable_rate | 0.4 |
-| shared_account_ceiling | 4 |
+| country_code | 997 |
+| area_digits | 3 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
 `;
     const error = await caught(
       load_map(
@@ -340,12 +344,12 @@ describe("load_map refuses a document it cannot bind", () => {
 
 | field | value |
 |---|---|
-| country_code | 55 |
-| area_digits | 2 |
-| subscriber_digits | 8 |
-| max_unparseable_rate | 0.4 |
-| shared_account_ceiling | 4 |
-| area_code | 11, 21 |
+| country_code | 997 |
+| area_digits | 3 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
+| area_code | 480, 481 |
 `;
     const error = await caught(
       load_map(
@@ -390,11 +394,11 @@ describe("load_map refuses a document it cannot bind", () => {
 
 | field | value |
 |---|---|
-| country_code | 55 |
+| country_code | 997 |
 | area_digits | 0 |
-| subscriber_digits | 8 |
-| max_unparseable_rate | 0.4 |
-| shared_account_ceiling | 4 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
 `;
     const error = await caught(
       load_map(

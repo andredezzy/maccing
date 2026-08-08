@@ -45,6 +45,14 @@ function decompose(value: number): { significand: bigint; exponent: number } {
  * written as a rational `numerator / denominator` in BigInt, and the tie is decided by comparing
  * twice the remainder against the denominator rather than by inspecting a decimal string.
  *
+ * The result is handed back by writing the exact quotient as a decimal string and parsing it,
+ * not by dividing it by `10 ** digits`. That division is a float operation at the end of an
+ * otherwise exact computation, and it has its own rounding: `10 ** digits` is not exactly
+ * representable past a handful of digits, so the quotient of two approximations can land on a
+ * different double than the decimal actually asked for. Parsing the decimal has no such step —
+ * the language specifies that a numeric string becomes the nearest double to the value it
+ * denotes, which is by definition the correctly rounded answer.
+ *
  * `digits` must be a non-negative integer within a range a double can express. Anything else is a
  * caller bug that would otherwise come back as a silent `NaN` or `Infinity`, which is the one kind
  * of wrong answer this whole file exists to prevent.
@@ -82,7 +90,12 @@ export function round_half_even(x: number, digits: number): number {
     quotient += 1n;
   }
 
-  const rounded = Number(quotient) / 10 ** digits;
+  // `quotient` counts units of 10**-digits, so the decimal point goes `digits` places from the
+  // right; zero-padding first covers the case where the value is smaller than one such unit.
+  const scaled_text = quotient.toString().padStart(digits + 1, "0");
+  const point = scaled_text.length - digits;
+  const decimal = digits === 0 ? scaled_text : `${scaled_text.slice(0, point)}.${scaled_text.slice(point)}`;
+  const rounded = Number(decimal);
   return negative ? -rounded : rounded;
 }
 

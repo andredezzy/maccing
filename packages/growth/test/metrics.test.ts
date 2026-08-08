@@ -1,0 +1,1250 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import type { Cell, CellRecord, Control } from "../src/meta/whatsapp/campaigns/metrics.ts";
+import {
+  CellDeclarationError,
+  COUNTABLE_OUTCOMES,
+  ControlError,
+  EmptyCellError,
+  ExportColumnError,
+  ExportValueError,
+  MAX_P,
+  MapStaleError,
+  MIN_CONTROL_EVENTS,
+  MissingExportError,
+  measure,
+  ProvisionalCutError,
+  UnparseablePhonesError,
+  UnsupportedListFormatError,
+  WINDOW_FLOOR_HOURS,
+} from "../src/meta/whatsapp/campaigns/metrics.ts";
+
+/**
+ * `measure` is the package's only entry point, and everything else in this suite tests a piece it
+ * calls rather than the pass itself. That gap is not academic: a reviewer inverted all four
+ * comparisons against the cut at once and the rest of the suite stayed green, which means the
+ * decision separating "already had an account" from "arrived because of this" was undefended. So
+ * the boundary cases come first here, and each one is written to fail if the comparison it guards
+ * moves by one instant in either direction.
+ *
+ * The other half of the file is about refusal. This engine's cheapest wrong answer is zero, and a
+ * record full of zeros reads exactly like a campaign nobody responded to, so every ambiguity has a
+ * named error and every named error gets a test proving it is reachable from the public call. An
+ * unreachable guard is prose.
+ *
+ * Nothing in the fixtures is borrowed. `997` is not a dialling code any country answers on, no
+ * market pairs a three-digit area code with a six-digit subscriber tail, and every table, column,
+ * status and amount below was made up to exercise a branch.
+ */
+
+// ---------------------------------------------------------------------------------------------
+// Fixture vocabulary
+// ---------------------------------------------------------------------------------------------
+
+/** The one instant everything is measured against. Whole-millisecond, as a cut must be. */
+const CUT = "2030-01-01T00:00:00.000Z";
+const CUT_MS = Date.parse(CUT);
+
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
+
+/** An ISO instant a given number of milliseconds from the cut. Negative is before it. */
+function from_cut(offset: number): string {
+  return new Date(CUT_MS + offset).toISOString();
+}
+
+/** The default reading time: far enough past the cut that the publishability floor is clear of
+ *  it, so a test about anything else never trips over the floor by accident. */
+const NOW = new Date(CUT_MS + 30 * DAY);
+
+/**
+ * Under this fixture's plan a nine-digit number is its own join key — three area digits plus six
+ * subscriber digits, with no reform digit in play — so a list row and a person row join with
+ * nothing in between for the reader to work out.
+ */
+function phone(n: number): string {
+  return `480${String(n).padStart(6, "0")}`;
+}
+
+const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists.
+
+model Member {
+  id           String   @id
+  handset      String
+  enrolled_at  DateTime
+}
+
+model Movement {
+  id         String   @id
+  member_id  String
+  amount     Int
+}
+
+model Unlisted {
+  id String @id
+}
+`;
+
+const MODELS = ["Member", "Movement"] as const;
+
+/**
+ * The fingerprint rule, restated here rather than imported. Recomputing the digest by the same
+ * rule is what makes the fresh-map case mean something; a literal copied from the implementation
+ * would only prove that two files can hold the same string.
+ */
+function digest_of(schema: string, models: readonly string[]): string {
+  const lines = schema.split("\n");
+  const blocks = models.map((name) => {
+    const opener = new RegExp(`^\\s*model\\s+${name}\\s*\\{`);
+    const start = lines.findIndex((line) => opener.test(line));
+    if (start === -1) {
+      throw new Error(`the fixture has no model ${name}`);
+    }
+    let end = -1;
+    for (let i = start + 1; i < lines.length; i += 1) {
+      if (lines[i] === "}") {
+        end = i;
+        break;
+      }
+    }
+    if (end === -1) {
+      throw new Error(`the fixture never closes model ${name}`);
+    }
+    return lines.slice(start, end + 1).join("\n");
+  });
+  return new Bun.CryptoHasher("sha256").update(blocks.join("\n")).digest("hex");
+}
+
+const FRESH_SHA = digest_of(SCHEMA, MODELS);
+
+// ---------------------------------------------------------------------------------------------
+// Building a map
+// ---------------------------------------------------------------------------------------------
+
+type Rows = Record<string, string>;
+
+function section(heading: string, rows: Rows): string {
+  const lines = [heading, "", "| field | value |", "|---|---|"];
+  for (const [field, value] of Object.entries(rows)) {
+    lines.push(`| ${field} | ${value} |`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+const PHONE_ROWS: Rows = {
+  country_code: "997",
+  area_digits: "3",
+  subscriber_digits: "6",
+  max_unparseable_rate: "0.25",
+  shared_account_ceiling: "3",
+};
+
+const PERSON_ROWS: Rows = { export: "person.csv", id: "member_id", phone: "handset", created_at: "enrolled_at" };
+const REVENUE_ROWS: Rows = { export: "revenue.csv", person: "member_id", at: "arrived_at", amount: "amount" };
+const CHURN_ROWS: Rows = { export: "churn.csv", person: "member_id", at: "left_at", amount: "amount" };
+const CONVERSION_ROWS: Rows = {
+  export: "conversion.csv",
+  person: "member_id",
+  at: "signed_at",
+  amount: "amount",
+  status: "state",
+  valid_statuses: "LIVE, SETTLED",
+  split: "funding",
+  recycled_when: "CREDIT",
+};
+
+type MapParts = {
+  phone?: Rows;
+  person?: Rows;
+  conversion?: Rows;
+  /** Present by default. `null` drops the section, leaving the role unbound. */
+  revenue?: Rows | null;
+  churn?: Rows | null;
+  /** Drops `split` and `recycled_when`, for a project with no recycled-balance concept. */
+  no_split?: boolean;
+  sha256?: string;
+};
+
+function render_map(parts: MapParts = {}): string {
+  const conversion: Rows = { ...CONVERSION_ROWS, ...parts.conversion };
+  if (parts.no_split === true) {
+    delete conversion.split;
+    delete conversion.recycled_when;
+  }
+
+  const out = [
+    "# Database map\n",
+    section("## Phone format", { ...PHONE_ROWS, ...parts.phone }),
+    section("## Fingerprint", {
+      schema: "db/schema.prisma",
+      models: MODELS.join(", "),
+      sha256: parts.sha256 ?? FRESH_SHA,
+    }),
+    section("## Role: person", { ...PERSON_ROWS, ...parts.person }),
+    section("## Role: conversion", conversion),
+  ];
+  if (parts.revenue !== null) {
+    out.push(section("## Role: revenue", { ...REVENUE_ROWS, ...parts.revenue }));
+  }
+  if (parts.churn !== null) {
+    out.push(section("## Role: churn", { ...CHURN_ROWS, ...parts.churn }));
+  }
+  return out.join("\n");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Building exports and lists
+// ---------------------------------------------------------------------------------------------
+
+type Row = readonly (string | number)[];
+
+function csv(header: readonly string[], rows: readonly Row[]): string {
+  return `${[header.join(","), ...rows.map((row) => row.join(","))].join("\n")}\n`;
+}
+
+/** One row per account, not per person: a phone answering for several accounts appears twice. */
+function people(...rows: readonly Row[]): string {
+  return csv(["member_id", "handset", "enrolled_at"], rows);
+}
+
+function revenue(...rows: readonly Row[]): string {
+  return csv(["member_id", "arrived_at", "amount"], rows);
+}
+
+function churn(...rows: readonly Row[]): string {
+  return csv(["member_id", "left_at", "amount"], rows);
+}
+
+function conversions(...rows: readonly Row[]): string {
+  return csv(["member_id", "signed_at", "amount", "state", "funding"], rows);
+}
+
+/** A `.txt` list: one identifier per line. */
+function lines(...values: readonly string[]): string {
+  return `${values.join("\n")}\n`;
+}
+
+type Parts = {
+  map?: MapParts;
+  /** `null` writes no schema file at all. */
+  schema?: string | null;
+  /** `null` leaves the role bound in the map with no file behind it. */
+  person?: string | null;
+  revenue?: string | null;
+  churn?: string | null;
+  conversion?: string | null;
+  /** Filename to body. Written under the case's `lists/`. */
+  lists?: Record<string, string>;
+};
+
+type Fixture = {
+  map: string;
+  exports: string;
+  /** Absolute path of one of this case's list files, written or not. */
+  list: (name: string) => string;
+};
+
+let root = "";
+
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), "growth-metrics-"));
+});
+
+afterAll(async () => {
+  if (root !== "") {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function build(name: string, parts: Parts = {}): Promise<Fixture> {
+  const base = join(root, name);
+  const exports = join(base, "exports");
+
+  await Bun.write(join(base, "MAPPING.md"), render_map(parts.map));
+  if (parts.schema !== null) {
+    await Bun.write(join(base, "db", "schema.prisma"), parts.schema ?? SCHEMA);
+  }
+
+  const files: readonly (readonly [string, string | null])[] = [
+    ["person.csv", parts.person === undefined ? people() : parts.person],
+    ["revenue.csv", parts.revenue === undefined ? revenue() : parts.revenue],
+    ["churn.csv", parts.churn === undefined ? churn() : parts.churn],
+    ["conversion.csv", parts.conversion === undefined ? conversions() : parts.conversion],
+  ];
+  for (const [file, body] of files) {
+    if (body !== null) {
+      await Bun.write(join(exports, file), body);
+    }
+  }
+  for (const [file, body] of Object.entries(parts.lists ?? {})) {
+    await Bun.write(join(base, "lists", file), body);
+  }
+
+  return { map: join(base, "MAPPING.md"), exports, list: (file) => join(base, "lists", file) };
+}
+
+/** A cold cell on this fixture's cut, which is what most cases want. */
+function cold(name: string, list: string, extra: Partial<Cell> = {}): Cell {
+  return { name, cut: CUT, lists: [list], audience: "cold", ...extra };
+}
+
+/** Returns the error a rejection produced, and fails if there was no rejection at all. */
+async function caught(work: Promise<unknown>): Promise<Error> {
+  try {
+    await work;
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("expected the measurement to be refused, but it returned a record");
+}
+
+/** The single record a one-cell run emits. */
+async function one(fixture: Fixture, cell: Cell, now: Date = NOW): Promise<CellRecord> {
+  const records = await measure({ map: fixture.map, exports: fixture.exports, cells: [cell], now });
+  expect(records).toHaveLength(1);
+  return records[0] as CellRecord;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The cut
+// ---------------------------------------------------------------------------------------------
+
+describe("the cut separates who was already there from who arrived", () => {
+  /**
+   * The comparison this pins is the one the whole record is built on, and inverting it changes
+   * the two headline numbers a campaign is judged by while breaking nothing else. It is `<`
+   * against the cut, so an account created at the exact instant of contact is *acquired*: the
+   * same polarity the event side uses, where an event at the cut counts as after it. An instant
+   * that appears in two comparisons on one record has to fall the same side in both.
+   */
+  test("an account created at the exact cut is acquired, one a millisecond earlier is not", async () => {
+    const fixture = await build("cut-boundary", {
+      person: people(
+        ["before", phone(1), from_cut(-1)],
+        ["exactly", phone(2), from_cut(0)],
+        ["after", phone(3), from_cut(1)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const record = await one(fixture, cold("cut-boundary", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 3, matched_phones: 3, matched_accounts: 3 });
+    // Only the account a millisecond before the cut was already there. The one sitting exactly
+    // on it is an arrival, and moving the comparison to `<=` swaps a member between these two
+    // numbers — which is the mutation this test exists to catch.
+    expect(record.pre_existing.accounts).toBe(1);
+    expect(record.acquired.accounts).toBe(2);
+  });
+
+  test("an account with no creation time falls in neither group rather than the flattering one", async () => {
+    const fixture = await build("cut-undated", {
+      person: people(["dated", phone(1), from_cut(HOUR)], ["undated", phone(2), ""]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("cut-undated", fixture.list("reached.txt")));
+
+    expect(record.audience.matched_accounts).toBe(2);
+    expect(record.acquired.accounts).toBe(1);
+    expect(record.pre_existing.accounts).toBe(0);
+  });
+
+  test("the within windows include their own boundary and exclude the millisecond after it", async () => {
+    const fixture = await build("cut-windows", {
+      person: people(
+        ["at-cut", phone(1), from_cut(0)],
+        ["h24", phone(2), from_cut(24 * HOUR)],
+        ["h24-plus", phone(3), from_cut(24 * HOUR + 1)],
+        ["d7", phone(4), from_cut(7 * DAY)],
+        ["d7-plus", phone(5), from_cut(7 * DAY + 1)],
+        ["d30", phone(6), from_cut(30 * DAY)],
+        ["d30-plus", phone(7), from_cut(30 * DAY + 1)],
+      ),
+      lists: { "reached.txt": lines(...[1, 2, 3, 4, 5, 6, 7].map(phone)) },
+    });
+
+    const record = await one(fixture, cold("cut-windows", fixture.list("reached.txt")), new Date(CUT_MS + 40 * DAY));
+
+    expect(record.acquired.accounts).toBe(7);
+    // Cumulative, and each boundary is inclusive: 24h holds the cut itself and the account at
+    // exactly 24h; the one a millisecond later waits for the seven-day window.
+    expect(record.acquired.within).toEqual({ h24: 2, d7: 4, d30: 6 });
+  });
+
+  test("an event on the cut counts and one a millisecond earlier does not, in every money role", async () => {
+    const fixture = await build("cut-events", {
+      person: people(
+        ["on", phone(1), from_cut(-DAY)],
+        ["early", phone(2), from_cut(-DAY)],
+        ["void", phone(3), from_cut(-DAY)],
+      ),
+      revenue: revenue(["on", from_cut(0), 25], ["early", from_cut(-1), 99]),
+      churn: churn(["on", from_cut(0), 5], ["early", from_cut(-1), 88]),
+      conversion: conversions(
+        ["on", from_cut(0), 10, "LIVE", "WIRE"],
+        ["early", from_cut(-1), 77, "LIVE", "WIRE"],
+        // A status outside the map's list is not a commitment, whenever it happened.
+        ["void", from_cut(HOUR), 500, "LAPSED", "WIRE"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const record = await one(fixture, cold("cut-events", fixture.list("reached.txt")));
+
+    expect(record.pre_existing.accounts).toBe(3);
+    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 25 });
+    expect(record.pre_existing.churn).toEqual({ people: 1, value: 5 });
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(10);
+  });
+
+  test("a cut finer than a millisecond is refused rather than silently truncated", async () => {
+    const fixture = await build("cut-precision", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("cut-precision", fixture.list("reached.txt"), { cut: "2030-01-01T00:00:00.0005Z" })),
+    );
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect((error as CellDeclarationError).cell).toBe("cut-precision");
+    expect(error.message).toMatch(/millisecond/i);
+  });
+
+  test("a blank cut is refused, because there is no moment to measure from", async () => {
+    const fixture = await build("cut-blank", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("cut-blank", fixture.list("reached.txt"), { cut: "   " })));
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect(error.message).toMatch(/blank/i);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Matching
+// ---------------------------------------------------------------------------------------------
+
+describe("matching a list against the person index", () => {
+  test("one subscriber written several ways in one list counts once", async () => {
+    const fixture = await build("match-forms", {
+      person: people(["multi", "480224466", from_cut(HOUR)], ["other", "481224466", from_cut(HOUR)]),
+      lists: {
+        // The same subscriber as a mixed set of sources writes it: with the dialling prefix and
+        // the reform digit, with the prefix alone, bare with the reform digit, and bare.
+        "reached.txt": lines("9974807224466", "997480224466", "4807224466", "480224466", "481224466"),
+      },
+    });
+
+    const record = await one(fixture, cold("match-forms", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
+    expect(record.acquired.accounts).toBe(2);
+  });
+
+  test("one phone answering for two accounts contributes one key and two accounts", async () => {
+    // The record separates the two counts on purpose: a cell of 100 phones that matched 130
+    // accounts is a different fact from one that matched 130 phones.
+    const fixture = await build("match-two-accounts", {
+      person: people(["old", phone(10), from_cut(-DAY)], ["new", phone(10), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(10)) },
+    });
+
+    const record = await one(fixture, cold("match-two-accounts", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 1, matched_phones: 1, matched_accounts: 2 });
+    // Each account is placed against the cut on its own, so one phone can land on both sides.
+    expect(record.pre_existing.accounts).toBe(1);
+    expect(record.acquired.accounts).toBe(1);
+  });
+
+  test("a phone at the shared ceiling is evicted before matching, so it cannot inflate a cell", async () => {
+    // The ceiling is three here. Left in the index, the switchboard below would hand this cell
+    // three arrivals it never reached — the failure the eviction exists to prevent — and it is
+    // the *matching* that must not see it, not merely the reported total.
+    const fixture = await build("match-ceiling", {
+      person: people(
+        ["desk-a", phone(20), from_cut(HOUR)],
+        ["desk-b", phone(20), from_cut(HOUR)],
+        ["desk-c", phone(20), from_cut(HOUR)],
+        ["person", phone(21), from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(20), phone(21)) },
+    });
+
+    const record = await one(fixture, cold("match-ceiling", fixture.list("reached.txt")));
+
+    expect(record.audience.listed).toBe(2);
+    expect(record.audience.matched_phones).toBe(1);
+    expect(record.audience.matched_accounts).toBe(1);
+    expect(record.acquired.accounts).toBe(1);
+  });
+
+  test("a phone one account below the ceiling is kept", async () => {
+    // The ceiling is `at or above`, not `above`. Two accounts under a ceiling of three survive,
+    // which is what pins the comparison rather than merely the constant.
+    const fixture = await build("match-under-ceiling", {
+      person: people(["pair-a", phone(22), from_cut(HOUR)], ["pair-b", phone(22), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(22)) },
+    });
+
+    const record = await one(fixture, cold("match-under-ceiling", fixture.list("reached.txt")));
+
+    expect(record.audience.matched_accounts).toBe(2);
+    expect(record.acquired.accounts).toBe(2);
+  });
+
+  test("a filter cuts one cell out of a file holding several", async () => {
+    const fixture = await build("match-filter", {
+      person: people(
+        ["a1", phone(1), from_cut(HOUR)],
+        ["b1", phone(2), from_cut(HOUR)],
+        ["a2", phone(3), from_cut(HOUR)],
+      ),
+      lists: {
+        "roster.csv": `handset,cell\n${phone(1)},alpha\n${phone(2)},beta\n${phone(3)},alpha\n`,
+      },
+    });
+
+    const record = await one(fixture, {
+      name: "alpha",
+      cut: CUT,
+      lists: [fixture.list("roster.csv")],
+      column: "handset",
+      filter: { column: "cell", value: "alpha" },
+      audience: "cold",
+    });
+
+    expect(record.audience.listed).toBe(2);
+    expect(record.acquired.accounts).toBe(2);
+  });
+
+  test("an excluded identifier is subtracted from the cell it landed in", async () => {
+    const fixture = await build("match-exclude", {
+      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(
+      fixture,
+      // The probe is written in a different form from the list row on purpose: exclusion is by
+      // derived key, so a planted number spelt another way still comes out.
+      cold("match-exclude", fixture.list("reached.txt"), { exclude: [`997${phone(2)}`] }),
+    );
+
+    expect(record.audience.listed).toBe(1);
+    expect(record.acquired.accounts).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Concentration
+// ---------------------------------------------------------------------------------------------
+
+describe("top2_share puts concentration beside the total", () => {
+  /** Builds a cell where everyone is acquired and each named member paid once. */
+  async function paid(name: string, amounts: readonly number[]): Promise<CellRecord> {
+    const ids = amounts.map((_, i) => `payer-${i}`);
+    const fixture = await build(name, {
+      person: people(...ids.map((id, i) => [id, phone(i + 1), from_cut(HOUR)] as Row)),
+      revenue: revenue(...ids.map((id, i) => [id, from_cut((i + 1) * DAY), amounts[i] as number] as Row)),
+      lists: { "reached.txt": lines(...ids.map((_, i) => phone(i + 1))) },
+    });
+    return one(fixture, cold(name, fixture.list("reached.txt")));
+  }
+
+  test("is null when nobody paid, because the question is meaningless", async () => {
+    const fixture = await build("top2-none", {
+      person: people(["quiet", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("top2-none", fixture.list("reached.txt")));
+
+    expect(record.acquired.revenue).toEqual({ people: 0, value: 0, top2_share: null, median_lag_days: null });
+  });
+
+  test("is null when exactly one person paid, because there is no second to compare", async () => {
+    const record = await paid("top2-one", [40]);
+
+    expect(record.acquired.revenue?.people).toBe(1);
+    expect(record.acquired.revenue?.value).toBe(40);
+    expect(record.acquired.revenue?.top2_share).toBeNull();
+  });
+
+  test("is one when exactly two people paid, since between them they are the whole total", async () => {
+    const record = await paid("top2-two", [30, 10]);
+
+    expect(record.acquired.revenue?.value).toBe(40);
+    expect(record.acquired.revenue?.top2_share).toBe(1);
+  });
+
+  test("reports the real share once there is a third contributor to hide behind", async () => {
+    const record = await paid("top2-three", [60, 30, 10]);
+
+    expect(record.acquired.revenue?.value).toBe(100);
+    expect(record.acquired.revenue?.top2_share).toBe(0.9);
+    // Lags of one, two and four days: the median is the value the mean would flatter away.
+    expect(record.acquired.revenue?.median_lag_days).toBe(2);
+  });
+
+  test("is one when a single person paid everything and the rest paid nothing", async () => {
+    // A zero-value event still counts its person: they did transact. The share then says that
+    // the total belongs to one of them, which is exactly the fact worth surfacing.
+    const record = await paid("top2-all-one", [100, 0, 0]);
+
+    expect(record.acquired.revenue?.people).toBe(3);
+    expect(record.acquired.revenue?.value).toBe(100);
+    expect(record.acquired.revenue?.top2_share).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The emitted record
+// ---------------------------------------------------------------------------------------------
+
+describe("the emitted record", () => {
+  async function shape_fixture(): Promise<Fixture> {
+    return build("record-shape", {
+      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5]),
+      churn: churn(["existing", from_cut(DAY), 3]),
+      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+  }
+
+  test("carries every role the map bound, and dates itself", async () => {
+    const fixture = await shape_fixture();
+
+    const record = await one(fixture, cold("record-shape", fixture.list("reached.txt")));
+
+    expect(record).toEqual({
+      cell: "record-shape",
+      cut_utc: CUT,
+      measured_utc: NOW.toISOString(),
+      window_hours: 720,
+      audience: { listed: 2, matched_phones: 2, matched_accounts: 2 },
+      acquired: {
+        accounts: 1,
+        within: { h24: 1, d7: 1, d30: 1 },
+        revenue: { people: 1, value: 12.5, top2_share: null, median_lag_days: 0.1 },
+        churn: { people: 0, value: 0 },
+      },
+      pre_existing: {
+        accounts: 1,
+        revenue: { people: 0, value: 0 },
+        churn: { people: 1, value: 3 },
+      },
+      conversions: { count: 1, value: 12.5, new_money: 12.5, recycled: 0 },
+    });
+  });
+
+  test("omits a role the map never bound rather than reporting it as a measured zero", async () => {
+    // Unbound and empty are different facts, and a zero for a role a project does not have is
+    // a number someone will eventually try to explain.
+    const fixture = await build("record-unbound", {
+      map: { revenue: null, churn: null },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: null,
+      churn: null,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("record-unbound", fixture.list("reached.txt")));
+
+    expect(record.acquired.revenue).toBeUndefined();
+    expect(record.acquired.churn).toBeUndefined();
+    expect(record.pre_existing.revenue).toBeUndefined();
+    expect("revenue" in record.acquired).toBe(false);
+    expect("churn" in record.pre_existing).toBe(false);
+  });
+
+  test("every outcome the allowlist names resolves to a number on a fully bound record", async () => {
+    // An allowlist naming a path the record does not carry would refuse a control for the wrong
+    // reason and read as though the outcome were forbidden rather than absent.
+    const fixture = await shape_fixture();
+    const record = await one(fixture, cold("record-shape", fixture.list("reached.txt")));
+
+    expect([...COUNTABLE_OUTCOMES]).toEqual([
+      "acquired.accounts",
+      "conversions.count",
+      "acquired.revenue.people",
+      "acquired.churn.people",
+      "pre_existing.accounts",
+      "pre_existing.revenue.people",
+      "pre_existing.churn.people",
+    ]);
+
+    for (const path of COUNTABLE_OUTCOMES) {
+      let node: unknown = record;
+      for (const step of path.split(".")) {
+        node = (node as Record<string, unknown>)[step];
+      }
+      expect(typeof node).toBe("number");
+    }
+  });
+
+  test("reads several cells in one pass and keeps them apart", async () => {
+    const fixture = await build("record-two-cells", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(-DAY)]),
+      lists: { "alpha.txt": lines(phone(1)), "beta.txt": lines(phone(2)) },
+    });
+
+    const records = await measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      cells: [cold("alpha", fixture.list("alpha.txt")), cold("beta", fixture.list("beta.txt"))],
+      now: NOW,
+    });
+
+    expect(records.map((record) => record.cell)).toEqual(["alpha", "beta"]);
+    expect(records[0]?.acquired.accounts).toBe(1);
+    expect(records[1]?.acquired.accounts).toBe(0);
+    expect(records[1]?.pre_existing.accounts).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The conversion split
+// ---------------------------------------------------------------------------------------------
+
+describe("the conversion split", () => {
+  const two_conversions = conversions(
+    ["one", from_cut(HOUR), 60, "LIVE", "WIRE"],
+    ["one", from_cut(2 * HOUR), 40, "SETTLED", "CREDIT"],
+  );
+
+  test("divides committed money when the map declares it", async () => {
+    const fixture = await build("split-declared", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: two_conversions,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-declared", fixture.list("reached.txt")));
+
+    expect(record.conversions).toEqual({ count: 2, value: 100, new_money: 60, recycled: 40 });
+  });
+
+  test("omits the split fields entirely when the map does not declare one", async () => {
+    // A recycled balance is a property of one kind of product. Requiring every project to
+    // declare the concept produced two fields of zeros wherever it does not exist, and a zero
+    // that looks like a measurement is the expensive failure here.
+    const fixture = await build("split-absent", {
+      map: { no_split: true },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: two_conversions,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-absent", fixture.list("reached.txt")));
+
+    expect(record.conversions).toEqual({ count: 2, value: 100 });
+    expect("new_money" in record.conversions).toBe(false);
+    expect("recycled" in record.conversions).toBe(false);
+  });
+
+  test("falls back to a second timestamp column where the map names one", async () => {
+    // The commitment timestamp is nullable on this role, and empty is what unset looks like in
+    // an export. Without the fallback the event drops out and the cell loses a conversion.
+    const fixture = await build("split-fallback", {
+      map: { conversion: { at_fallback: "opened_at" } },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: csv(
+        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
+        [["one", "", from_cut(2 * HOUR), 30, "LIVE", "WIRE"]],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-fallback", fixture.list("reached.txt")));
+
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(30);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Provisional cuts
+// ---------------------------------------------------------------------------------------------
+
+describe("a provisional cut", () => {
+  test("measures normally while nobody has arrived, and says so on the record", async () => {
+    const fixture = await build("provisional-quiet", {
+      person: people(["old", phone(1), from_cut(-DAY)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(
+      fixture,
+      cold("provisional-quiet", fixture.list("reached.txt"), { cut_provisional: true }),
+    );
+
+    expect(record.acquired.accounts).toBe(0);
+    expect(record.pre_existing.accounts).toBe(1);
+    // The warning travels with the record, so a reader two weeks later sees it in the JSON
+    // rather than having to remember which cells were placeholders.
+    expect(record.cut_provisional).toBe(true);
+  });
+
+  test("refuses once anybody has arrived, and names the cell and the count", async () => {
+    // A placeholder cut is not a moment of contact, so arrivals after it cannot be attributed
+    // to anything. This is the documented way a report once claimed arrivals that never
+    // happened, and it is the reason the flag exists at all.
+    const fixture = await build("provisional-arrivals", {
+      person: people(
+        ["old", phone(1), from_cut(-DAY)],
+        ["new-a", phone(2), from_cut(HOUR)],
+        ["new-b", phone(3), from_cut(2 * HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const error = await caught(one(fixture, cold("guessed", fixture.list("reached.txt"), { cut_provisional: true })));
+
+    expect(error).toBeInstanceOf(ProvisionalCutError);
+    expect(error.message).toContain("guessed");
+    expect(error.message).toContain("2");
+    expect((error as ProvisionalCutError).cells).toEqual([{ cell: "guessed", accounts: 2 }]);
+  });
+
+  test("refuses before any control is read", async () => {
+    // The pair would otherwise be computed against a number the engine is about to refuse, and
+    // a ControlError here would send the reader after the wrong problem.
+    const fixture = await build("provisional-control", {
+      person: people(["new", phone(1), from_cut(HOUR)], ["old", phone(2), from_cut(-DAY)]),
+      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [
+          cold("treated", fixture.list("treated.txt"), { cut_provisional: true }),
+          cold("untouched", fixture.list("untouched.txt")),
+        ],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ProvisionalCutError);
+  });
+
+  test("leaves the key off a cell whose cut is confirmed", async () => {
+    const fixture = await build("provisional-absent", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("provisional-absent", fixture.list("reached.txt")));
+
+    expect("cut_provisional" in record).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------------------------
+
+describe("a control pair", () => {
+  /**
+   * Forty listed phones a side, twenty-eight arrivals against eighteen. The sizes are what make
+   * the comparison significant with a control large enough to be worth reading, which is what a
+   * test of the publishability gate needs in order to isolate the one condition it is about.
+   */
+  async function pair(name: string): Promise<Fixture> {
+    const person_rows: Row[] = [];
+    const treated_list: string[] = [];
+    const control_list: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      const treated = phone(100 + i);
+      const control = phone(200 + i);
+      treated_list.push(treated);
+      control_list.push(control);
+      person_rows.push([`t${i}`, treated, from_cut(i < 28 ? HOUR : -DAY)]);
+      person_rows.push([`c${i}`, control, from_cut(i < 18 ? HOUR : -DAY)]);
+    }
+    return build(name, {
+      person: people(...person_rows),
+      lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
+    });
+  }
+
+  async function read(fixture: Fixture, now: Date): Promise<CellRecord[]> {
+    return measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+      controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+      now,
+    });
+  }
+
+  test("attaches the reading to the treated cell only", async () => {
+    const fixture = await pair("control-attach");
+
+    const [treated, untouched] = await read(fixture, new Date(CUT_MS + 200 * HOUR));
+
+    expect(treated?.control).toEqual({
+      against: "untouched",
+      outcome: "acquired.accounts",
+      treated_rate: 70,
+      control_rate: 45,
+      lift: 1.56,
+      control_events: 18,
+      p: 0.024,
+      publishable: true,
+    });
+    expect(untouched?.control).toBeUndefined();
+  });
+
+  test("is not publishable inside the window floor, however significant it looks", async () => {
+    // Every other gate is open here: the difference clears significance and the control carries
+    // more than the minimum events. Only the window is short, and that alone has to be enough.
+    const fixture = await pair("control-floor");
+
+    const [treated] = await read(fixture, new Date(CUT_MS + 100 * HOUR));
+    const reading = treated?.control;
+
+    expect(treated?.window_hours).toBe(100);
+    expect(treated?.window_hours).toBeLessThan(WINDOW_FLOOR_HOURS);
+    expect(reading?.p).not.toBeNull();
+    expect(reading?.p as number).toBeLessThan(MAX_P);
+    expect(reading?.control_events).toBeGreaterThanOrEqual(MIN_CONTROL_EVENTS);
+    expect(reading?.publishable).toBe(false);
+  });
+
+  test("becomes publishable once the window clears the floor, on the same numbers", async () => {
+    const fixture = await pair("control-floor-clear");
+
+    const [treated] = await read(fixture, new Date(CUT_MS + 200 * HOUR));
+
+    expect(treated?.window_hours).toBeGreaterThanOrEqual(WINDOW_FLOOR_HOURS);
+    expect(treated?.control?.p).toBe(0.024);
+    expect(treated?.control?.publishable).toBe(true);
+  });
+
+  test("reads a base that already holds accounts on commitment, and reports a null lift against nothing", async () => {
+    const fixture = await build("control-own-base", {
+      person: people(
+        ["t1", phone(1), from_cut(-DAY)],
+        ["t2", phone(2), from_cut(-DAY)],
+        ["c1", phone(3), from_cut(-DAY)],
+        ["c2", phone(4), from_cut(-DAY)],
+      ),
+      conversion: conversions(
+        ["t1", from_cut(HOUR), 10, "LIVE", "WIRE"],
+        ["t2", from_cut(HOUR), 20, "SETTLED", "WIRE"],
+      ),
+      lists: { "treated.txt": lines(phone(1), phone(2)), "untouched.txt": lines(phone(3), phone(4)) },
+    });
+
+    const [treated] = await measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      cells: [
+        { name: "treated", cut: CUT, lists: [fixture.list("treated.txt")], audience: "own_base" },
+        { name: "untouched", cut: CUT, lists: [fixture.list("untouched.txt")], audience: "own_base" },
+      ],
+      controls: [{ treated: "treated", control: "untouched", outcome: "conversions.count" }],
+      now: NOW,
+    });
+
+    expect(treated?.control?.control_events).toBe(0);
+    // A ratio against zero is an infinity, and an infinity in a published table is a bug wearing
+    // a number's clothes.
+    expect(treated?.control?.lift).toBeNull();
+    // Two events on the control side is not a comparison, whatever the p-value says.
+    expect(treated?.control?.publishable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Refusals
+// ---------------------------------------------------------------------------------------------
+
+describe("the run refuses what it cannot measure", () => {
+  test("a stale fingerprint, before reading a single export", async () => {
+    const fixture = await build("refuse-stale", {
+      map: { sha256: "0".repeat(64) },
+      person: null,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-stale", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MapStaleError);
+    expect((error as MapStaleError).actual).toBe(FRESH_SHA);
+    expect((error as MapStaleError).expected).toBe("0".repeat(64));
+  });
+
+  test("a person export that is not where the map says it is", async () => {
+    const fixture = await build("refuse-missing-person", {
+      person: null,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-missing-person", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MissingExportError);
+    expect((error as MissingExportError).path).toContain("person.csv");
+    expect(error.message).toMatch(/person/i);
+  });
+
+  test("a bound role whose export was never produced", async () => {
+    const fixture = await build("refuse-missing-revenue", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: null,
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-missing-revenue", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MissingExportError);
+    expect((error as MissingExportError).path).toContain("revenue.csv");
+    expect(error.message).toMatch(/revenue/i);
+  });
+
+  test("a list file the cell names and nobody produced", async () => {
+    const fixture = await build("refuse-missing-list", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+    });
+
+    const error = await caught(one(fixture, cold("refuse-missing-list", fixture.list("never-written.txt"))));
+
+    expect(error).toBeInstanceOf(MissingExportError);
+    expect(error.message).toContain("never-written.txt");
+    expect(error.message).toContain("refuse-missing-list");
+  });
+
+  test("a list in a format it will not guess at", async () => {
+    const fixture = await build("refuse-format", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "roster.json": `["${phone(1)}"]\n` },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-format", fixture.list("roster.json"))));
+
+    expect(error).toBeInstanceOf(UnsupportedListFormatError);
+    expect(error.message).toContain(".json");
+  });
+
+  test("a bound column the export's header does not carry", async () => {
+    // A timestamp column renamed under its binding reads as empty on every row, which places
+    // every account in neither group and reports a cell that arrived at nothing.
+    const fixture = await build("refuse-column-person", {
+      person: csv(["member_id", "handset", "joined_at"], [["one", phone(1), from_cut(HOUR)]]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-column-person", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportColumnError);
+    expect((error as ExportColumnError).role).toBe("person");
+    expect((error as ExportColumnError).column).toBe("enrolled_at");
+    // The header as it actually reads, so the reader can see the rename without opening the file.
+    expect(error.message).toContain("joined_at");
+  });
+
+  test("a bound column missing from a money role's header too", async () => {
+    const fixture = await build("refuse-column-revenue", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: csv(["member_id", "arrived_at", "value"], [["one", from_cut(HOUR), 10]]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-column-revenue", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportColumnError);
+    expect((error as ExportColumnError).role).toBe("revenue");
+    expect((error as ExportColumnError).column).toBe("amount");
+  });
+
+  test("an amount column holding something that is not a number", async () => {
+    const fixture = await build("refuse-amount", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(["one", from_cut(HOUR), "twelve"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-amount", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportValueError);
+    expect(error.message).toContain("twelve");
+    expect(error.message).toContain("amount");
+  });
+
+  test("more unreadable numbers than the map allows", async () => {
+    // The map permits a quarter. Two rows in three is a dialling plan that does not describe
+    // this market, and that produces the same zero as a list nobody on it ever registered.
+    const fixture = await build("refuse-unparseable", {
+      person: people(
+        ["good", phone(1), from_cut(HOUR)],
+        ["bad-a", "not a number", from_cut(HOUR)],
+        ["bad-b", "12", from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-unparseable", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("2 of 3");
+  });
+
+  test("a cell whose lists yielded no usable identifier", async () => {
+    const fixture = await build("refuse-empty", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines("not a number", "also not one") },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-empty", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(EmptyCellError);
+    expect((error as EmptyCellError).cell).toBe("refuse-empty");
+  });
+
+  test("a cell left empty by its own exclusions", async () => {
+    // A cell consisting only of planted probes is as unmeasurable as one whose file moved, and
+    // it must fail the same way rather than reporting a clean row of zeros.
+    const fixture = await build("refuse-empty-excluded", {
+      person: people(["probe", phone(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-empty-excluded", fixture.list("reached.txt"), { exclude: [phone(2)] })),
+    );
+
+    expect(error).toBeInstanceOf(EmptyCellError);
+    expect((error as EmptyCellError).cell).toBe("refuse-empty-excluded");
+  });
+
+  test("two cells sharing one name, which would make every control join ambiguous", async () => {
+    const fixture = await build("refuse-duplicate-cell", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("twice", fixture.list("reached.txt")), cold("twice", fixture.list("reached.txt"))],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect((error as CellDeclarationError).cell).toBe("twice");
+  });
+
+  test("a control naming a cell nobody declared", async () => {
+    const fixture = await build("refuse-control-unknown", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("reached.txt"))],
+        controls: [{ treated: "treated", control: "imaginary", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toContain("imaginary");
+  });
+
+  test("a control read on an outcome its audience cannot have", async () => {
+    // Nobody who has never heard of the brand can commit before arriving, so a cold pair read
+    // on commitment is zero against zero: not a null result, a question never asked.
+    const fixture = await build("refuse-control-audience", {
+      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "conversions.count" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toMatch(/audience/i);
+  });
+
+  test("a control read on a sum of money rather than a count of people", async () => {
+    // A money total fed to a two-proportion test produces a p-value and a `publishable: true`
+    // that mean nothing: the test counts successes out of trials, and currency is neither.
+    const fixture = await build("refuse-control-outcome", {
+      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.revenue.value" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toContain("acquired.revenue.value");
+    expect(error.message).toContain("acquired.accounts");
+  });
+
+  test("two controls on one treated cell, where the last would silently win", async () => {
+    const fixture = await build("refuse-control-duplicate", {
+      person: people(
+        ["one", phone(1), from_cut(HOUR)],
+        ["two", phone(2), from_cut(HOUR)],
+        ["three", phone(3), from_cut(HOUR)],
+      ),
+      lists: { "treated.txt": lines(phone(1)), "first.txt": lines(phone(2)), "second.txt": lines(phone(3)) },
+    });
+
+    const controls: Control[] = [
+      { treated: "treated", control: "first", outcome: "acquired.accounts" },
+      { treated: "treated", control: "second", outcome: "acquired.accounts" },
+    ];
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [
+          cold("treated", fixture.list("treated.txt")),
+          cold("first", fixture.list("first.txt")),
+          cold("second", fixture.list("second.txt")),
+        ],
+        controls,
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toContain("treated");
+  });
+});

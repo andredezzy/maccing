@@ -1,8 +1,10 @@
 # Hooks
 
-Host wiring for agent runtimes that offer lifecycle hooks. Two scripts live here, registered in `hooks.json`.
+Three files live here, of two different kinds.
 
-Neither script is part of any skill. Nothing inside any `SKILL.md` names a file in this directory, and nothing in a skill's instructions depends on one having run. That separation is deliberate and is explained under [Adapters, not enforcement](#adapters-not-enforcement).
+Two are agent-runtime hooks — `session-start.sh` and `pre-tool-use.sh` — registered in `hooks.json` and fired by a host that offers lifecycle hooks. The third, `pre-commit`, is a git hook: git fires it, it is registered nowhere, and it does nothing at all until somebody installs it. What it runs and how to install it are in [`scripts/README.md`](../scripts/README.md), beside the checker it gates.
+
+Neither runtime hook is part of any skill. Nothing inside any `SKILL.md` names a file in this directory, and nothing in a skill's instructions depends on one having run. That separation is deliberate and is explained under [Adapters, not enforcement](#adapters-not-enforcement).
 
 ## `session-start.sh`
 

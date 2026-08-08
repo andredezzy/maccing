@@ -26,7 +26,11 @@ export type RoleBinding = {
   columns: Record<string, string>;
   /** Only on the conversion role: statuses that count as committed. */
   valid_statuses?: readonly string[];
-  /** Only on the conversion role: the value of the split column meaning recycled, not new. */
+  /** Only on the conversion role, and optional there: the value of the `split` column meaning
+   *  recycled rather than new. It travels with `columns.split` — both are declared or neither is,
+   *  and the pair being absent says the product has no recycled-balance concept to split on, not
+   *  that it has one measuring zero. Forcing every project to name a split would make it invent
+   *  a distinction its product does not have. */
   recycled_when?: string;
 };
 
@@ -316,18 +320,47 @@ export async function load_map(path: string): Promise<DatabaseMap> {
       at: take(conversion_table, SECTION_CONVERSION, "at"),
       amount: take(conversion_table, SECTION_CONVERSION, "amount"),
       status: take(conversion_table, SECTION_CONVERSION, "status"),
-      split: take(conversion_table, SECTION_CONVERSION, "split"),
     },
     valid_statuses: take(conversion_table, SECTION_CONVERSION, "valid_statuses")
       .split(",")
       .map((status) => status.trim())
       .filter((status) => status !== ""),
-    recycled_when: take(conversion_table, SECTION_CONVERSION, "recycled_when"),
   };
   const at_fallback = conversion_table.get("at_fallback");
   if (at_fallback !== undefined) {
     conversion_table.delete("at_fallback");
     conversion.columns.at_fallback = at_fallback;
+  }
+  // The split is optional, and the two keys that express it are one declaration. A project whose
+  // product has no recycled balance leaves both out and the record omits the breakdown rather
+  // than reporting zeros for a distinction that does not exist. Half of it is neither: it is a
+  // binding somebody started and stopped, and reading it as "no split" would silently drop a
+  // distinction the map says exists.
+  const split = conversion_table.get("split");
+  const recycled_when = conversion_table.get("recycled_when");
+  conversion_table.delete("split");
+  conversion_table.delete("recycled_when");
+  if (split !== undefined && recycled_when === undefined) {
+    throw new MapFieldError(
+      SECTION_CONVERSION,
+      "recycled_when",
+      "missing while `split` is declared. The two are declared together or not at all: a split " +
+        "column with no value marking the recycled side cannot be read, and treating the pair as " +
+        "absent would drop a distinction this map says the product has",
+    );
+  }
+  if (recycled_when !== undefined && split === undefined) {
+    throw new MapFieldError(
+      SECTION_CONVERSION,
+      "split",
+      "missing while `recycled_when` is declared. The two are declared together or not at all: a " +
+        "value marking the recycled side names no column to read it from, and treating the pair " +
+        "as absent would drop a distinction this map says the product has",
+    );
+  }
+  if (split !== undefined && recycled_when !== undefined) {
+    conversion.columns.split = split;
+    conversion.recycled_when = recycled_when;
   }
   reject_unknown(conversion_table, SECTION_CONVERSION);
   if (conversion.valid_statuses?.length === 0) {

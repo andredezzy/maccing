@@ -24,6 +24,26 @@ export class UnsupportedListFormatError extends Error {
   }
 }
 
+/** A column the caller named by hand is not in the file's header. Its own error rather than a
+ *  fallback, because falling back to another column reads every row as a value that did not
+ *  convert — which is indistinguishable from a cell whose people genuinely never signed up. */
+export class MissingColumnError extends Error {
+  readonly path: string;
+  readonly column: string;
+
+  constructor(path: string, column: string, header: readonly string[]) {
+    super(
+      `${path} has no column named ${JSON.stringify(column)}. Its header is ` +
+        `${header.map((name) => JSON.stringify(name)).join(", ") || "(empty)"}. ` +
+        "Reading a different column instead would report the whole file as unconvertible, so " +
+        "the name has to be corrected in the declaration rather than guessed at here.",
+    );
+    this.name = "MissingColumnError";
+    this.path = path;
+    this.column = column;
+  }
+}
+
 /**
  * RFC 4180 field scanner. Quoted fields may hold commas, newlines and doubled quotes; rows end at
  * either line terminator. Returns rows of raw field text, header row included.
@@ -83,6 +103,9 @@ function scan(text: string): string[][] {
   return rows;
 }
 
+/** A CSV as this engine reads it: the scanned header beside the records it keys. */
+export type Rows = { header: string[]; records: Record<string, string>[] };
+
 /**
  * Read a CSV into its header and its records. A short row leaves the missing columns empty rather
  * than absent, because a caller reading a bound column should not have to distinguish "column not
@@ -91,9 +114,12 @@ function scan(text: string): string[][] {
  * The header comes back as an array beside the records rather than being recovered from a record's
  * keys later. A key that looks like an array index is enumerated before every other key on a plain
  * object, so a file whose first column is headed `1` would report a different column as its first
- * one — and that column would still contain plausible-looking text.
+ * one — and that column would still contain plausible-looking text. It is exported for the same
+ * reason: a caller holding a map's bound column names can only check that the file still carries
+ * them against the header as scanned, and a header recovered from the records cannot be trusted to
+ * be that.
  */
-async function read_rows(path: string): Promise<{ header: string[]; records: Record<string, string>[] }> {
+export async function read_rows(path: string): Promise<Rows> {
   const text = (await Bun.file(path).text()).replace(/^\uFEFF/, "");
   const rows = scan(text);
   const header = rows[0];
@@ -122,11 +148,13 @@ export async function read_table(path: string): Promise<Record<string, string>[]
  * Read the identifiers a list file carries, as raw text — deriving a join key from them is the
  * caller's business and depends on a format this file knows nothing about.
  *
- * A `.txt` is one identifier per line. A `.csv` is read as a table: the named column when the
- * header carries it, the first column otherwise, which is what a bare export of one column looks
- * like. `filter` cuts one cell out of a file holding several, so the mapping from identifier to
- * cell stays in the single frozen file the attribution depends on instead of being copied into
- * derived files free to drift from it.
+ * A `.txt` is one identifier per line. A `.csv` is read as a table: the named column, or the first
+ * column when none is named, which is what a bare export of one column looks like. A name that the
+ * header does not carry is an error and not a fall back to the first column — the fall back reads
+ * a column of the wrong kind, every value of which fails to convert, and a file that converts
+ * nothing is indistinguishable from a cell whose people never signed up. `filter` cuts one cell out
+ * of a file holding several, so the mapping from identifier to cell stays in the single frozen file
+ * the attribution depends on instead of being copied into derived files free to drift from it.
  */
 export async function read_identifiers(
   path: string,
@@ -149,10 +177,13 @@ export async function read_identifiers(
   }
 
   const { header, records } = await read_rows(path);
+  if (column !== undefined && !header.includes(column)) {
+    throw new MissingColumnError(path, column, header);
+  }
   if (records.length === 0) {
     return [];
   }
-  const name = column !== undefined && header.includes(column) ? column : (header[0] as string);
+  const name = column ?? (header[0] as string);
 
   const out: string[] = [];
   for (const row of records) {

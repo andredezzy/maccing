@@ -32,9 +32,23 @@ export function median(xs: number[]): number {
  * Returns null where the test has nothing to say: an empty denominator on either side, or a
  * standard error of zero, which happens when both groups are all-or-nothing. Null is the honest
  * answer there — a p-value of 1 would read as "tested and found no difference".
+ *
+ * Inputs outside the domain of a proportion — a non-finite or non-positive denominator, or a
+ * success count that is negative, non-finite, or larger than its denominator — return null for
+ * the same reason, rather than the NaN the arithmetic would otherwise hand back. NaN serialises
+ * to `null` in JSON, which is exactly what a legitimately absent result serialises to, so a
+ * comparison broken by impossible counts would arrive downstream indistinguishable from one that
+ * was never run. Returning null deliberately keeps "nothing to say" one fact instead of two that
+ * render identically, and refusing at the boundary means no caller has to test for NaN to find
+ * out which it got.
  */
 export function two_proportion(a: number, na: number, b: number, nb: number): { z: number; p: number } | null {
-  if (!na || !nb) {
+  const denominators_valid = Number.isFinite(na) && na > 0 && Number.isFinite(nb) && nb > 0;
+  if (!denominators_valid) {
+    return null;
+  }
+  const successes_valid = Number.isFinite(a) && a >= 0 && a <= na && Number.isFinite(b) && b >= 0 && b <= nb;
+  if (!successes_valid) {
     return null;
   }
   const pooled = (a + b) / (na + nb);

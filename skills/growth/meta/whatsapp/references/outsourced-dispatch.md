@@ -61,13 +61,13 @@ The phone identifies the cell no matter what the link did. Nothing has to surviv
 | Depends on vendor reporting | no | no |
 | Requires | ref preserved end to end | segment files frozen after dispatch |
 
-**The decisive advantage** is the failure that already happened. A silently dropped ref put leads on the root account; they had to be reassigned by hand, and a multi-template split test would have been unmeasurable. Per-template accounts cannot see that failure — the leads simply are not there. Phone matching recovers all of it, because the phone still says which cell the contact was in.
+**The decisive advantage** is the failure that already happened. A silently dropped ref put leads on the default account; they had to be reassigned by hand, and a multi-template split test would have been unmeasurable. Per-template accounts cannot see that failure — the leads simply are not there. Phone matching recovers all of it, because the phone still says which cell the contact was in.
 
 **Its one requirement is hard: freeze the segment files after dispatch.** Re-splitting, re-ordering, or de-duplicating them destroys the phone→cell map and voids the whole experiment. Commit the dispatched files unchanged and treat them as read-only from the moment the vendor receives them. There is no way to reconstruct the mapping afterwards.
 
-**Still verify the click path before dispatch:** short link → landing page → signup. Confirm the ref param survives every hop. Attribution now survives a dropped ref, but the referral tree does not — a broken ref still costs you the referral relationship even when the measurement holds. Test one real end-to-end signup per cell and check where it landed, before a single message goes out.
+**Still verify the click path before dispatch:** short link → landing page → signup. Confirm the ref param survives every hop. Attribution now survives a dropped ref, but the product's own attribution does not — a broken ref still costs you the link between a signup and its source *inside* the product, even when the measurement holds. Test one real end-to-end signup per cell and check where it landed, before a single message goes out.
 
-Per-template referral accounts remain a valid second layer when you want the referral tree split by cell as well. They are no longer the primary method.
+Per-template ref accounts remain a valid second layer when you want the product's own attribution split by cell as well. They are no longer the primary method.
 
 ---
 
@@ -82,8 +82,8 @@ Take one vendor campaign, one template, one consumer funnel, with these invented
 | Fee paid | 6,000 |
 | Messages the vendor reports as sent | 12,000 |
 | Delivered share the vendor will evidence | 90%, so 10,800 delivered |
-| New signups matched back to the dispatched files (§3) | 120 |
-| Of those, made a first payment | 20 |
+| New signups matched back to the dispatched files (§3) — arrival, `acquired.accounts` in §10's record | 120 |
+| Of those, that converted downstream — `conversions.count` in the same record | 20 |
 | Revenue from those 20 | 15,000 |
 | Payments after the send date by contacts already registered before it | 9,000 |
 
@@ -95,11 +95,11 @@ Six readings follow, and the order matters — each one narrows the population o
 | Cost per **delivered** message | 6,000 ÷ 10,800 | 0.56 |
 | Signup rate | 120 ÷ 12,000 | 1.0% |
 | Cost per signup | 6,000 ÷ 120 | 50 |
-| Cost per depositor | 6,000 ÷ 20 | 300 |
+| Cost per conversion | 6,000 ÷ 20 | 300 |
 | Attributed ROAS | 15,000 ÷ 6,000 | 2.50x |
 | Wide ROAS | (15,000 + 9,000) ÷ 6,000 | 4.00x |
 
-Cost per delivered message is the honest unit price and cost per send is the one the invoice implies; quote the first and keep the second only to show the gap. Cost per depositor is the number that decides whether the channel pays, because it is the only one that has met the product.
+Cost per delivered message is the honest unit price and cost per send is the one the invoice implies; quote the first and keep the second only to show the gap. Cost per conversion is the number that decides whether the channel pays, because it is the only one that has met the product.
 
 ### The two ROAS readings are not equally trustworthy
 
@@ -121,7 +121,7 @@ A list salted with dormant registered users behaves differently from a list of s
 
 ### General rule — report the concentration, not just the multiple
 
-When a campaign's ROAS leans on a handful of large tickets, publish the depositor count and the top-N share next to the number. A few people carrying most of the return is a fact about those few people, not a fact about the channel. A multiple built on a single-digit number of observations will not repeat, and budgeting on it buys the next campaign at a large multiple of its real expected return. The measurement contract in §10 emits that share beside the revenue total for exactly this reason, so it cannot be left out by accident.
+When a campaign's ROAS leans on a handful of large tickets, publish the conversion count and the top-N share next to the number. A few people carrying most of the return is a fact about those few people, not a fact about the channel. A multiple built on a single-digit number of observations will not repeat, and budgeting on it buys the next campaign at a large multiple of its real expected return. The measurement contract in §10 emits that share beside the revenue total for exactly this reason, so it cannot be left out by accident.
 
 ---
 
@@ -176,11 +176,11 @@ This matters beyond honesty. The copy promised terms the live product does not o
 
 | Claim class | Verify against |
 |---|---|
-| Referral depth and rates | The referral logic in code |
-| Payout schedule and fees | The live product, not a deck |
-| Minimums and limits | Config or the signup flow |
-| Yield or return structure | The product itself |
-| Any headline percentage | Whichever of the above defines it |
+| What the user gets, and on what terms | The logic in code, not a deck and not memory |
+| When it happens — timings, schedules, waiting periods | The live product, walked end to end |
+| What it costs them — prices, fees, deductions | The live product, not a deck |
+| Minimums, limits, and eligibility | Config or the signup flow |
+| Any headline number or percentage | Whichever of the above defines it |
 
 **Reused copy from a sibling product is the specific trap.** The structure survives the move; the facts do not. Treat any inherited template as unverified until every number in it has a source.
 
@@ -192,12 +192,12 @@ Every item below is a real gap a campaign left behind. Run all eight.
 
 - [ ] **Save the exact copy before dispatch.** Into `templates.md` in the campaign folder. A lost template means you cannot tell what was said, so you cannot repeat a winner or diagnose a burn.
 - [ ] **Wire attribution to the phone, and freeze the segment files** (§3). Verify the click path end to end before any send. Never re-split, re-order, or de-duplicate a dispatched file.
-- [ ] **Verify every concrete claim against the product** (§7). Referral depth, payout schedule and fees, minimums, yield structure, headline percentages — each with a cited source.
+- [ ] **Verify every concrete claim against the product** (§7). Terms, timings, costs, minimums and limits, headline numbers — each with a cited source.
 - [ ] **Apply suppression before splitting the list.** Never send to someone who opted out of your own channel. Never blindly re-send to a list a previous vendor already burned. Suppress first, then split into segments — suppressing afterwards skews the split.
-- [ ] **Exclude the people your own product burned.** Where a prior product is wound down, the segment that paid in and never got made whole is the highest-complaint audience that exists, and on WhatsApp a report is one tap. Audited on a real base, most of the people who had paid into a dormant product were net negative, and collectively the shortfall was large enough to make the exclusion obvious. Excluded. Two rules make the exclusion actually work:
-  - **Aggregate money per person, not per account row.** Observed defect: the exclusion judged one account row at a time, and hundreds of phones held several accounts — a large share of them only read as net losers once summed. A single zeroed second account laundered them back in as "never paid". Aggregate on the contact key (phone) before classifying.
+- [ ] **Exclude the audience your own business has already failed.** Where a product was wound down or a promise was not kept, the people who paid for it are the highest-complaint audience that exists, and on WhatsApp a report is one tap. Exclude them by default. This is a reading problem as much as a deliverability one: a campaign can hit its acquisition target while the people it reached are people the business has already let down, and a result read without that context flatters the channel. Record what share of each cell came from that group, so the reading carries it. Two rules make the exclusion actually work:
+  - **Aggregate money per person, not per account row.** Observed defect: the exclusion judged one account row at a time, and a single contact can hold several account rows — so a person reads as having come out behind only once their rows are summed. One zeroed second account launders them back in as "never paid". Aggregate on the contact key (phone) before classifying.
   - **The exclusion follows the person across lists.** If a burned contact also appears in a clean second source, they stay out. The complaint risk belongs to the person, not to the list they arrived on.
-- [ ] **Spend the finite source first.** When lists come from more than one base, they are rarely equally replaceable. Observed: one source was almost entirely consumed by a previous blast and its monthly intake had collapsed by roughly two orders of magnitude, while the other still held a large surplus. Use the finite source **whole** and let the surplus source absorb the shortfall — it is the only one that should be ranked down on quality.
+- [ ] **Spend the finite source first.** When lists come from more than one base, they are rarely equally replaceable. Observed: one source had been almost entirely consumed by a previous blast and its fresh intake had collapsed to a trickle, while the other still held a large surplus. Use the finite source **whole** and let the surplus source absorb the shortfall — it is the only one that should be ranked down on quality.
 - [ ] **Record price and send date the day it runs.** Ledger row per the `growth` skill's `references/cost-tracking.md`; campaign README updated the same turn. Record how many usable leads remain in each base after the campaign — where every base is dead or dying, the channel itself has a countdown. Write that down before it is a surprise.
 - [ ] **Demand opt-out and complaint counts as part of the vendor report.** Agree this before paying, alongside per-segment click counts (§6). A vendor that only reports sends and reads is hiding the number that predicts the next campaign's performance.
 
@@ -254,11 +254,12 @@ Each of these was a rule held in prose, enforced by whoever remembered it. As me
 
 | Guard | What the engine does |
 |---|---|
-| A cut must be a real send time | Any cell may carry `cut_provisional`, and a reading raises a loud banner when arrivals appear against a provisional cut. Measuring against a placeholder is how a campaign reports acquisition that never happened. |
+| A cut must be a real send time | Any cell may carry `cut_provisional`, and the record carries the flag back out. A reading **refuses outright** when arrivals appear against a provisional cut, naming the cells and their counts. Measuring against a placeholder is how a campaign reports acquisition that never happened. |
 | An own-base list must not be read as acquisition | The `audience` field decides the outcome, and a control pair contradicting it is rejected. |
-| No reading below the seven-day floor decides anything | `window_hours` is emitted with every record, and a reading below the floor is not publishable whatever its p-value says. |
+| No reading below the seven-day floor decides anything | `window_hours` is emitted with every record, and `publishable` is false below the floor whatever the p-value says. The floor is arithmetic now, not a reminder. |
 | Concentration must not hide in an average | The top-two share is emitted beside the revenue total rather than being found by hand — see §4. |
-| A comparison must carry its uncertainty | Every comparison emits its p-value and its control-event count, and it is not publishable unless the difference clears significance and the control holds enough events. Below that, one outlier flips the sign — which has already happened, twice in two days. |
+| A comparison must carry its uncertainty | A control pair may only be read on a **count-valued** field, from an allowlist the engine exports — feeding a money sum to a two-proportion test produces a confident answer to a question that was never asked. Every comparison emits its p-value and its control-event count, and it is not publishable unless the difference clears significance and the control holds enough events. Below that, one outlier flips the sign — which has already happened, twice in two days. |
+| A bound column must exist | Every column the map binds is checked against the export's header before anything is counted. A renamed column used to produce zeros that read as "nobody converted"; it now names the column and the header it actually found. |
 
 ### The map is a prerequisite
 
