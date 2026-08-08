@@ -43,7 +43,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "bun test",
+    "test": "TZ=Asia/Kolkata bun test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

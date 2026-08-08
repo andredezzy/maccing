@@ -304,6 +304,37 @@ export class CellDeclarationError extends Error {
   }
 }
 
+/** An exclusion entry that cannot be read as a number in the format the map declares.
+ *
+ *  This is the one refusal in the pass that guards against overstatement rather than a silent
+ *  zero. An entry that yields no key subtracts nobody: the probe or internal handset it names
+ *  stays in the population, and everything that account did is counted as the campaign's. One
+ *  planted number carrying a single large conversion is enough to move a small cell by two orders
+ *  of magnitude, and an inflated reading is the kind that gets published rather than questioned.
+ *  A mistyped digit, an extension that pushes the string past a national length, and an empty
+ *  string all land here. What does not is a value that yields a well-formed key for somebody
+ *  else, since nothing in it distinguishes that from a number this cell could really hold. */
+export class CellExclusionError extends Error {
+  readonly cell: string;
+  readonly entries: readonly string[];
+
+  constructor(cell: string, entries: readonly string[]) {
+    const listed = entries.map((entry) => JSON.stringify(entry)).join(", ");
+    const count = entries.length === 1 ? "an exclusion" : `${entries.length} exclusions`;
+    super(
+      `cell ${JSON.stringify(cell)} lists ${count} that cannot be read as a number in the format ` +
+        `the map declares: ${listed}. An entry that yields no key subtracts nobody, so the account ` +
+        "it names stays in the cell and everything that account did is counted as this campaign's " +
+        "— the reading comes out too high rather than empty, which is the failure that survives " +
+        "review. Correct the spelling, or drop the entry if the number it meant to remove is not " +
+        "one this cell could reach.",
+    );
+    this.name = "CellExclusionError";
+    this.cell = cell;
+    this.entries = entries;
+  }
+}
+
 /** A cell's lists yielded nothing usable, either as read or after its exclusions were subtracted. */
 export class EmptyCellError extends Error {
   readonly cell: string;
@@ -899,11 +930,21 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // come out empty are reported apart: a file that yielded nothing is a different fix from a file
     // whose every entry was excluded. Both are refused, because a cell with no members left reads
     // downstream as an audience that converted nothing.
+    //
+    // An entry that yields no key is refused ahead of both. Dropped in silence it subtracts nobody
+    // and the number it named stays in the cell, so this fault inflates where every other one
+    // empties — and of the two, the inflated reading is the one that gets published.
+    const unusable: string[] = [];
     for (const raw of cell.exclude ?? []) {
       const key = key_of(raw);
-      if (key !== null) {
-        keys.delete(key);
+      if (key === null) {
+        unusable.push(raw);
+        continue;
       }
+      keys.delete(key);
+    }
+    if (unusable.length > 0) {
+      throw new CellExclusionError(cell.name, unusable);
     }
     if (keys.size === 0) {
       throw new EmptyCellError(cell.name, cell.lists, cell.column, true);

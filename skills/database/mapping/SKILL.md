@@ -11,11 +11,14 @@ MANDATORY — before anything else, and before any clarifying question:
    being worked on. Read it.
 2. VERIFY its fingerprint against the live schema:
    read the `## Fingerprint` table, open the schema file at the recorded path,
-   and take each named model/table block in the order listed. A block runs from
-   its `model <Name> {` line through the first following line that is exactly
-   `}`, closing brace included. Join each block's lines with `\n`, then join the
-   blocks with `\n` — no trailing newline anywhere — take the sha256 of those
-   UTF-8 bytes as lowercase hex, and compare against the recorded hash.
+   and take each named block in the order listed. A block runs from its
+   `model <Name> {` **or** `enum <Name> {` line through the first following line
+   that is exactly `}`, closing brace included — a schema declares the two the
+   same way, and the map lists a name rather than a kind, because some of what a
+   map binds is a value rather than a column. Join each block's lines with `\n`,
+   then join the blocks with `\n` — no trailing newline anywhere — take the
+   sha256 of those UTF-8 bytes as lowercase hex, and compare against the
+   recorded hash.
 3. STOP if the file is absent, or if the two hashes differ. Do not compute a
    single number, do not "use the map anyway, it is probably fine". Repair the
    binding first, then rehash and record the new hash.

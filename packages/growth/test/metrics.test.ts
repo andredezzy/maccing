@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { Cell, CellRecord, Control } from "../src/meta/whatsapp/campaigns/metrics.ts";
 import {
   CellDeclarationError,
+  CellExclusionError,
   COUNTABLE_OUTCOMES,
   ControlError,
   DuplicateColumnError,
@@ -560,17 +561,80 @@ describe("matching a list against the person index", () => {
     expect(record.acquired.accounts).toBe(2);
   });
 
-  test("an excluded identifier is subtracted from the cell it landed in", async () => {
+  test("a list that needs a real scanner is read as written, not split on commas", async () => {
+    // Four properties of the scanner at once, because each one is invisible in a well-behaved
+    // file and each one quietly moves people between cells. The cohort label holds a comma, so a
+    // split on commas would shift every column after it on those rows alone; it holds a doubled
+    // quote, which is how a CSV writes one inside a quoted field; the last row stops short of the
+    // header, which is what a writer that trims trailing empties produces; and the file opens
+    // with a byte-order mark, which a spreadsheet adds and which would otherwise be read as part
+    // of the first column's name, so a cell naming that column would not find it.
+    const fixture = await build("match-scanner", {
+      person: people(
+        ["a1", phone(1), from_cut(HOUR)],
+        ["a2", phone(2), from_cut(HOUR)],
+        ["b1", phone(3), from_cut(HOUR)],
+      ),
+      lists: {
+        "roster.csv":
+          "\uFEFFhandset,cohort\n" +
+          `${phone(1)},"evening, the ""late"" batch"\n` +
+          `${phone(2)},"evening, the ""late"" batch"\n` +
+          `${phone(3)}\n`,
+      },
+    });
+
+    const records = await measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      now: NOW,
+      cells: [
+        {
+          name: "labelled",
+          cut: CUT,
+          lists: [fixture.list("roster.csv")],
+          column: "handset",
+          filter: { column: "cohort", value: 'evening, the "late" batch' },
+          audience: "cold",
+        },
+        {
+          // A row that stops before the label is a row whose label is blank, not a row with no
+          // label at all, and it can be selected as such.
+          name: "unlabelled",
+          cut: CUT,
+          lists: [fixture.list("roster.csv")],
+          column: "handset",
+          filter: { column: "cohort", value: "" },
+          audience: "cold",
+        },
+      ],
+    });
+
+    expect(records[0]?.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
+    expect(records[1]?.audience).toEqual({ listed: 1, matched_phones: 1, matched_accounts: 1 });
+  });
+
+  test("an excluded identifier is subtracted however the number is written", async () => {
     const fixture = await build("match-exclude", {
-      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1), phone(2)) },
+      person: people(
+        ["real", phone(1), from_cut(HOUR)],
+        ["probe-a", phone(2), from_cut(HOUR)],
+        ["probe-b", phone(3), from_cut(HOUR)],
+        ["probe-c", phone(4), from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
     });
 
     const record = await one(
       fixture,
-      // The probe is written in a different form from the list row on purpose: exclusion is by
-      // derived key, so a planted number spelt another way still comes out.
-      cold("match-exclude", fixture.list("reached.txt"), { exclude: [`997${phone(2)}`] }),
+      // The probes are written in different forms from their list rows on purpose: exclusion is
+      // by derived key, so the three ways a planted number reaches a declaration — copied with
+      // its dialling prefix, pasted out of a spreadsheet with spaces, typed bare — all subtract
+      // the same person. The refusal for entries that yield no key must not narrow this to one
+      // spelling.
+      cold("match-exclude", fixture.list("reached.txt"), {
+        exclude: [`997${phone(2)}`, "480 000 003", phone(4)],
+      }),
     );
 
     expect(record.audience.listed).toBe(1);
@@ -1480,6 +1544,33 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(EmptyCellError);
     expect((error as EmptyCellError).cell).toBe("refuse-empty-excluded");
+  });
+
+  test("an exclusion that cannot be read as a number, which would leave the probe in the cell", async () => {
+    // The one fault here that overstates instead of emptying. Each entry below is a real way a
+    // probe number is mistyped — a capital letter for a zero, an extension appended, a row of the
+    // declaration left blank — and none of them yields a key. Skipped rather than refused, they
+    // subtract nobody: the probe stays in a two-member cell, its conversion is counted as the
+    // campaign's, and the reading comes back a hundred times what it should be. An empty reading
+    // is queried by whoever reads it; an inflated one is published.
+    const fixture = await build("refuse-exclude-unreadable", {
+      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const entries = ["48O000002", `${phone(2)} ext 20`, ""];
+    const error = await caught(
+      one(fixture, cold("refuse-exclude-unreadable", fixture.list("reached.txt"), { exclude: entries })),
+    );
+
+    expect(error).toBeInstanceOf(CellExclusionError);
+    expect((error as CellExclusionError).cell).toBe("refuse-exclude-unreadable");
+    // Every one of them, not the first: a declaration corrected one entry per run is corrected
+    // over three runs, and the second and third are found only after the first is fixed.
+    expect((error as CellExclusionError).entries).toEqual(entries);
+    for (const entry of entries) {
+      expect(error.message).toContain(JSON.stringify(entry));
+    }
   });
 
   test("two cells sharing one name, which would make every control join ambiguous", async () => {

@@ -140,6 +140,8 @@ Lifecycle, all four steps:
 
 If the export genuinely must outlive the operation, that is a decision someone else makes explicitly, and the case file records who made it and where the file went. Silence is not that decision.
 
+**One artifact is not an export in this sense, and deleting it destroys the record.** The before-state you captured to build the dry run — the rows as they stood, with the values the write was about to change — is the evidence the case file's own "what changed" section rests on. It is narrow by construction, it is dated, and it is the only thing that lets anyone later check that the undo statement was correct. Keep it beside the case file under the same date and slug, and say in the file that it is kept and why. The rule above is about the broad pull taken to answer a question, which has served its purpose the moment the answer is written down; a project may also record, once and in one place rather than per operation, that these narrow snapshots are kept as part of its record. What is never allowed is a wide export left lying around because nobody decided anything.
+
 ## `database-mapping` is a required substrate
 
 Load the `database-mapping` skill before any operation that depends on knowing which table holds what, what a column actually means, or how two entities relate. This skill governs *how* you may touch data; that one tells you *what* you are touching.
