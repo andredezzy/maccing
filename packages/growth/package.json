@@ -1,0 +1,22 @@
+{
+  "name": "@maccing/growth",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Campaign measurement machinery. Reads exported CSVs plus a database map, returns one record per cell. No host coupling, no country baked in, no vocabulary from any one project.",
+  "license": "MIT",
+  "exports": {
+    "./meta/whatsapp/campaigns/metrics": "./src/meta/whatsapp/campaigns/metrics.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  }
+}
