@@ -1,8 +1,8 @@
 # Runs .github/scripts/leak-check.ts as a gate, on every push and every pull request.
 #
 # The dictionary is not in this repository — not the terms, not the exemptions, and not a schema
-# describing either. `LEAK_OVERLAY` is the only way this job gets a vocabulary: its value is the
-# whole overlay JSON, written by the first step to `$RUNNER_TEMP/leak-terms.json`. Nothing under
+# describing either. `LEAK_PROTECTIONS_JSON` is the only way this job gets a vocabulary: its value is the
+# whole overlay JSON, written by the first step to `$RUNNER_TEMP/leak-protections.json`. Nothing under
 # version control here names a term, a category or a client, so a reader of this repository learns
 # the mechanism and nothing about the work it protects.
 #
@@ -60,25 +60,25 @@ jobs:
 
       - name: Write the overlay dictionary outside the workspace
         env:
-          LEAK_OVERLAY: ${{ secrets.LEAK_OVERLAY }}
+          LEAK_PROTECTIONS_JSON: ${{ secrets.LEAK_PROTECTIONS_JSON }}
         run: |
           set -eu
-          if [ -z "${LEAK_OVERLAY:-}" ]; then
-            echo "::error::No overlay dictionary. The LEAK_OVERLAY secret is unset, so this run" \
+          if [ -z "${LEAK_PROTECTIONS_JSON:-}" ]; then
+            echo "::error::No overlay dictionary. The LEAK_PROTECTIONS_JSON secret is unset, so this run" \
                  "would check no name, no figure and no domain word and still pass. Set the secret" \
                  "to the contents of the private overlay JSON. Do not substitute a checkout of the" \
                  "private repository here: its name is a term the dictionary declares, and this" \
                  "repository's logs are public. Forks get no secrets and so cannot be cleared here."
             exit 1
           fi
-          printf '%s' "$LEAK_OVERLAY" > "$RUNNER_TEMP/leak-terms.json"
+          printf '%s' "$LEAK_PROTECTIONS_JSON" > "$RUNNER_TEMP/leak-protections.json"
 
       # Proves the checker itself before trusting its verdict. It plants its own invented fixtures
       # and needs no dictionary, but it also plants every term of every loaded category — so the
       # overlay makes it a stronger test, and --require-overlay here is what turns a secret rotated
       # to `{}` into a red job at the first step rather than a green one at the last.
       - name: Self-test
-        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --self-test
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-protections.json" --require-overlay --self-test
 
       # `--quiet` on both scanning steps, and it is not about noise. On a hit the gate prints the
       # matched term, its category and the overlay's own justification prose for that term — which
@@ -98,7 +98,7 @@ jobs:
       # quotes the token it choked on, is never forwarded. `leak-check.ts` carries the full list of
       # print sites and the guard on each; keep it in step with any new output.
       - name: Audit the exemptions
-        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit --quiet
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-protections.json" --require-overlay --audit --quiet
 
       - name: Scan every tracked file and clear the whole history
-        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history --quiet
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-protections.json" --require-overlay --history --quiet

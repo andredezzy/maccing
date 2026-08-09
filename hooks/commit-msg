@@ -30,6 +30,17 @@
 set -eu
 
 repository=$(git rev-parse --show-toplevel)
-: "${LEAK_PROTECTIONS:=$repository/leak-protections.json}"
+# Two conventional homes, first one found wins: the repository root, and `.maccing/` for a
+# repository that already keeps its maccing-related files there. Neither is tracked. When
+# neither exists nothing is set, the checker loads no vocabulary, and --require-overlay turns
+# that into a refusal that says so rather than a pass over an unchecked tree.
+if [ -z "${LEAK_PROTECTIONS:-}" ]; then
+  for candidate in "$repository/leak-protections.json" "$repository/.maccing/leak-protections.json"; do
+    if [ -f "$candidate" ]; then
+      LEAK_PROTECTIONS=$candidate
+      break
+    fi
+  done
+fi
 export LEAK_PROTECTIONS
 exec bun "$repository/.github/scripts/leak-check.ts" --message "$1" --require-overlay

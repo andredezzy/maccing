@@ -30,3 +30,5 @@ pictura-output/
 # the same bytes under a name a single entry would miss.
 /leak-protections.json*
 /.leak-protections.json*
+.maccing/leak-protections.json*
+.maccing/.leak-protections.json*
