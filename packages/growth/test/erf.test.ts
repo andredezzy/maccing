@@ -36,6 +36,18 @@ describe("erf", () => {
     expect(erf(-1)).toBeCloseTo(-0.8427007929497149, 12);
   });
 
+  test("saturates at infinity rather than dividing its way to a NaN", () => {
+    // The continued fraction divides by the argument, so an infinite input arrives as a NaN
+    // unless the guards catch it first — and a NaN p-value reads as "no result" at every gate
+    // downstream, which is a comparison quietly declining to be published rather than failing.
+    // Unreachable through `two_proportion`, which refuses a non-finite z before this is called,
+    // so it is this function's own contract that is being kept here.
+    expect(erf(Number.POSITIVE_INFINITY)).toBe(1);
+    expect(erf(Number.NEGATIVE_INFINITY)).toBe(-1);
+    expect(Number.isNaN(erf(Number.NaN))).toBe(true);
+    expect(normal_cdf(Number.POSITIVE_INFINITY)).toBe(1);
+  });
+
   test("is odd: erf(-x) is exactly -erf(x)", () => {
     // Exact rather than approximate. A sign handled by a separate branch instead of by
     // negating the result would show up here as a difference in the last bits. Compared
@@ -80,7 +92,11 @@ describe("erf", () => {
       const x = SWEEP[i] as number;
       const expected = Number((lines as string[])[i]);
       const actual = erf(x);
-      if (Math.abs(actual - expected) > TOLERANCE) {
+      // Negated `<=` rather than `>`, because a comparison against NaN is false either way and
+      // `>` reads that as agreement. An interpreter answering nan for every value would leave this
+      // oracle green while the other two go red — the one failure the harness exists to prevent,
+      // reintroduced by the shape of a single operator.
+      if (!(Math.abs(actual - expected) <= TOLERANCE)) {
         mismatches.push(`erf(${x}): python ${expected}, ours ${actual}`);
       }
     }

@@ -16,15 +16,20 @@ import { test } from "bun:test";
 /** Set to any non-empty value to permit the skip. Named to read straight out of the failure. */
 const PERMIT = "GROWTH_ALLOW_MISSING_PYTHON3";
 
+/** Seconds any one snippet may take. The probe runs at module load, outside every test's own
+ *  timeout, so an interpreter that hangs would hang the whole process with nothing printed —
+ *  which is the one failure mode a reader cannot diagnose from the output. */
+const LIMIT_MS = 10_000;
+
 /**
  * Runs a Python snippet and returns its stdout lines, or null when there is no usable `python3`.
  * A real spawn is the probe rather than a PATH lookup, because a `python3` that exists and cannot
- * run is the same problem as one that is absent.
+ * run is the same problem as one that is absent — and so is one that never comes back.
  */
 export function python_lines(script: string): string[] | null {
   let stdout: string;
   try {
-    const proc = Bun.spawnSync(["python3", "-c", script]);
+    const proc = Bun.spawnSync(["python3", "-c", script], { timeout: LIMIT_MS });
     if (!proc.success) {
       return null;
     }
