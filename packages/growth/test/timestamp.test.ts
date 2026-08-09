@@ -38,7 +38,13 @@ describe("parse_ts, absent input", () => {
 
 describe("parse_ts, shapes an export produces", () => {
   test("a space between the date and the time is accepted", () => {
+    // The second source is what a database actually writes: the space separator by default and the
+    // fraction out to the microsecond. Pinned at whole seconds alone, this asserted the same instant
+    // from the same string as the UTC-default case below, so the two were one test written twice —
+    // and a fraction dropped or left-padded on the space path alone would have reached every export
+    // taken in the default format with nothing here reading it.
     expect(parse_ts("2026-03-04 05:06:07")?.getTime()).toBe(at_utc(5, 6, 7));
+    expect(parse_ts("2026-03-04 05:06:07.123456")?.getTime()).toBe(at_utc(5, 6, 7, 123));
   });
 
   test("a T between the date and the time is accepted", () => {
@@ -138,8 +144,13 @@ describe("parse_ts, unreadable input", () => {
 
 describe("parse_ts_with_precision", () => {
   test("it reads the same instant as parse_ts", () => {
+    // Both readings pinned to the literal rather than to each other. The flagged reading hands back
+    // the very Date `parse_ts` built, so asserting one against the other compares an instant with
+    // itself and holds for any parse whatever: a `parse_ts` an hour out leaves that form of this
+    // test green while every cut in the engine is compared against the wrong moment.
     const source = "2026-03-04T05:06:07.123456";
-    expect(parse_ts_with_precision(source).at?.getTime()).toBe(parse_ts(source)?.getTime());
+    expect(parse_ts_with_precision(source).at?.getTime()).toBe(at_utc(5, 6, 7, 123));
+    expect(parse_ts(source)?.getTime()).toBe(at_utc(5, 6, 7, 123));
   });
 
   test("absent input is null and unflagged", () => {

@@ -2633,6 +2633,28 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("the 1 rows in");
   });
 
+  test("and a status column blank on every row, not on one row in two", async () => {
+    // The other way a status column stops matching, and the one no per-row case can see: nothing
+    // was renamed, the column was emptied at the source while its header stayed. Every row then
+    // carries the empty string, the per-cell filter drops all of them, and the record reports
+    // conversions 0 of 0 for two people who both signed — the same reading a campaign nobody
+    // committed to produces. The counter behind the guard is what separates the two, so counting
+    // a blank as committed silences the refusal on exactly the file it was written for. The
+    // message has to quote what the column holds, because an empty pair of quotes is the only
+    // thing that tells the reader the column was emptied rather than renamed.
+    const fixture = await build("refuse-status-blank-column", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      conversion: conversions(["one", from_cut(HOUR), 60, "", "WIRE"], ["two", from_cut(2 * HOUR), 40, "", "CREDIT"]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, base("refuse-status-blank-column", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportStatusError);
+    expect((error as ExportStatusError).found).toEqual([""]);
+    expect(error.message).toContain('holds ""');
+  });
+
   test("but not a file where one row in three carries a status the map counts", async () => {
     // The same distinction the blank-column check draws. A file whose rows are mostly abandoned
     // or cancelled is an ordinary file; it is a file with nothing countable in it that is a

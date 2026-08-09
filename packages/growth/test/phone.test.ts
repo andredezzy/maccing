@@ -74,6 +74,20 @@ describe("make_key with a dialling prefix", () => {
     expect(key("0 (480) 7-2244-66")).toBe("480224466");
   });
 
+  test("strips a trunk zero left at the head once the country code comes off", () => {
+    // The mirror of the case above: the same trunk zero, written on the other side of the
+    // dialling prefix, which is how a number keyed in from a local pad gets exported with the
+    // prefix bolted on in front of it. It cannot come off with the leading zeros above, because
+    // the country-code test reads from the head of the string, so it has to be stripped after
+    // the slice. Left on, the zero counts as a digit of the number: the nine-digit form reads
+    // as a reformed ten-digit national and keys to "048224466", which no other spelling of this
+    // subscriber produces, and the ten-digit form reads as eleven digits and gets no key at all.
+    // Either way this subscriber stops joining to the same person written the four ways above.
+    expect(key("9970480224466")).toBe("480224466");
+    expect(key("99704807224466")).toBe("480224466");
+    expect(key("+997 (0480) 7-2244-66")).toBe("480224466");
+  });
+
   test("returns null for every shape of absence", () => {
     expect(key(null)).toBeNull();
     expect(key(undefined)).toBeNull();

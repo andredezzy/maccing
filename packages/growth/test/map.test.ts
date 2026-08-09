@@ -217,9 +217,15 @@ describe("load_map on a complete document", () => {
     expect(map.conversion.export).toBe("conversion.csv");
   });
 
-  test("ignores prose, extra headings and a fenced sql block before the table", async () => {
+  test("ignores prose and a sub-heading before the table", async () => {
     // The prose is half the value of the map and the sql block is how the export was
     // taken. Both live under the heading, and neither is the parser's business.
+    //
+    // The fence here is scenery, and deliberately named as such: sql carries no
+    // `| field | value |` header, so nothing in this block could be mistaken for a binding
+    // table and this case reads the same whether the fence guard exists or not. What it does
+    // pin is the rest — prose, a `###` sub-heading, and prose after the table are all skipped
+    // to find the one table that binds. The case below is the one that holds the fence.
     const noisy_person = `## Role: person
 
 Every account carries a phone, but a handful of internal accounts carry a placeholder, which is
@@ -250,6 +256,60 @@ Anything after the table is prose again.
     expect(map.person.export).toBe("person.csv");
     expect(map.person.columns.id).toBe("account_id");
     expect(map.person.columns.phone).toBe("phone_digits");
+  });
+
+  test("binds the real table, not a complete one demonstrated inside a fence", async () => {
+    // A map is half reasoning, and a worked copy of the very table being explained is exactly
+    // what somebody adds to one. Read as a binding it is the worst shape this engine can
+    // produce: every key comes out of a different dialling plan, so the join silently misses
+    // almost everyone — and the same table sets `max_unparseable_rate` to 0.9 and
+    // `shared_account_ceiling` to 99, which are the two guards whose entire job is to notice
+    // that keys have gone wrong. The fault switches off its own detectors and the run reports
+    // a small clean audience with nothing anywhere saying which table it read.
+    //
+    // The illustration has to be complete for this to bite. A half-finished one is missing a
+    // required key and throws, which is loud and already covered; it is the plausible, filled-in
+    // example that loads.
+    const illustrated_phone = `## Phone format
+
+The two lengths are what people get wrong when they first fill this in, so the block below keeps
+a completed copy of this same table for a market with two-digit area codes to compare against.
+It illustrates the shape and describes no database: nothing in it is a binding.
+
+\`\`\`markdown
+| field | value |
+|---|---|
+| country_code | 999 |
+| area_digits | 2 |
+| subscriber_digits | 8 |
+| max_unparseable_rate | 0.9 |
+| shared_account_ceiling | 99 |
+\`\`\`
+
+| field | value |
+|---|---|
+| country_code | 997 |
+| area_digits | 3 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
+| area_codes | 480, 481 ,  482 |
+`;
+    const map = await load_map(
+      await write_map(
+        "fenced-example-table",
+        compose(illustrated_phone, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION),
+      ),
+    );
+
+    expect(map.phone.country_code).toBe("997");
+    expect(map.phone.area_digits).toBe(3);
+    expect(map.phone.subscriber_digits).toBe(6);
+    expect(map.phone.area_codes).toEqual(["480", "481", "482"]);
+    // The detectors, named separately from the rest: these are what the illustrated plan would
+    // have raised, and a run that reads them from the wrong table cannot report that it did.
+    expect(map.phone.max_unparseable_rate).toBe(0.25);
+    expect(map.phone.shared_account_ceiling).toBe(3);
   });
 });
 
@@ -413,6 +473,63 @@ describe("load_map refuses a document it cannot bind", () => {
     expect(error.message).toMatch(/vary in length|variable[- ]length/i);
   });
 
+  test("rejects a blank number cell rather than reading it as zero", async () => {
+    // A cell somebody cleared and meant to come back to. `Number("")` is `0`, so a reader that
+    // only asks whether the value is a number takes this ceiling as zero: no share of
+    // unreadable identifiers is tolerable, and the first file with one bad phone number in it
+    // aborts the run. The ceiling that refuses everything and the ceiling nobody wrote look
+    // identical afterwards, and the one that was meant is nowhere in the document to check.
+    const blank_rate = `## Phone format
+
+| field | value |
+|---|---|
+| country_code | 997 |
+| area_digits | 3 |
+| subscriber_digits | 6 |
+| max_unparseable_rate |  |
+| shared_account_ceiling | 3 |
+`;
+    const error = await caught(
+      load_map(
+        await write_map("blank-rate", compose(blank_rate, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION)),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("max_unparseable_rate");
+    expect((error as MapFieldError).section).toBe("## Phone format");
+  });
+
+  test("rejects a fractional digit count where a whole number is the only readable answer", async () => {
+    // A length is a count of digits, and 3.5 of them is not a length. Accepted as merely
+    // numeric it reaches `slice(0, 3.5)`, which truncates without complaint, so every key comes
+    // out three digits wide as though the cell said 3 — the map states one area-code width and
+    // the run uses another, and the keys look entirely plausible while the document that is
+    // supposed to explain them describes something else.
+    const fractional_area = `## Phone format
+
+| field | value |
+|---|---|
+| country_code | 997 |
+| area_digits | 3.5 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "fractional-area-digits",
+          compose(fractional_area, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("area_digits");
+    expect(error.message).toMatch(/whole number/i);
+  });
+
   test("rejects a heading declared twice, naming it", async () => {
     // Two `## Role: person` sections is what a map edited by two people, or copied from another
     // project and half-adjusted, looks like. The later one silently replaced the earlier, so the
@@ -519,6 +636,62 @@ describe("load_map refuses a document it cannot bind", () => {
 
     expect(error).toBeInstanceOf(MapFieldError);
     expect((error as MapFieldError).key).toBe("split");
+    expect((error as MapFieldError).section).toBe("## Role: conversion");
+  });
+
+  test("rejects a fingerprint listing no blocks to hash", async () => {
+    // An empty `models` list does not weaken the drift check, it removes it: `verify_fingerprint`
+    // concatenates the blocks named here, so with none named it hashes the empty string and
+    // returns the same digest for every schema this project will ever have. Recorded once, that
+    // digest matches forever — a column renamed out from under the map reports `ok: true`, and
+    // the one mechanism that was supposed to catch a map describing a shape the database no
+    // longer has becomes a line in the document that can never fail.
+    const no_models = `## Fingerprint
+
+| field | value |
+|---|---|
+| schema | db/schema.prisma |
+| models |  |
+| sha256 | ${PLACEHOLDER_SHA} |
+`;
+    const error = await caught(
+      load_map(await write_map("no-models", compose(PHONE_SECTION, no_models, PERSON_SECTION, CONVERSION_SECTION))),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("models");
+    expect((error as MapFieldError).section).toBe("## Fingerprint");
+  });
+
+  test("rejects a `valid_statuses` list naming no status at all", async () => {
+    // The column is bound and the list behind it is empty — a cell cleared while someone worked
+    // out what this project's committed states are actually called. Nothing then matches, so no
+    // row is ever a conversion: the run does not fail, it publishes, and every cell of the
+    // record reads zero conversions. That is indistinguishable from a real audience nobody
+    // converted, and it is the answer this whole design refuses to give quietly.
+    const empty_statuses = `## Role: conversion
+
+| field | value |
+|---|---|
+| export | conversion.csv |
+| person | account_id |
+| at | committed_at |
+| at_fallback | created_at |
+| amount | amount_minor |
+| status | state |
+| valid_statuses |  |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "empty-valid-statuses",
+          compose(PHONE_SECTION, FINGERPRINT_SECTION, PERSON_SECTION, empty_statuses),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("valid_statuses");
     expect((error as MapFieldError).section).toBe("## Role: conversion");
   });
 });
