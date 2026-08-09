@@ -793,6 +793,23 @@ enum Standing {
     expect(result.expected).toBe(expected);
   });
 
+  test("reports ok when the recorded hash is the same digest in capitals", async () => {
+    // A map is hand-edited markdown and the digest is pasted into it from whatever produced one.
+    // `sha256sum` writes lowercase; `openssl dgst` and most GUI hashers write uppercase, and a
+    // hex digest means the same number either way. Compared without folding case, a correct hash
+    // recorded in capitals reads as drift on a schema nothing has touched — and the run refuses
+    // before it opens an export, so the fix looks like a schema problem rather than a paste.
+    const expected = digest_of(SCHEMA, ["Account", "Ledger"]);
+    const path = await write_pair("fingerprint-uppercase", expected.toUpperCase(), SCHEMA);
+    const map = await load_map(path);
+
+    const result = await verify_fingerprint(map, path);
+    expect(result.ok).toBe(true);
+    // Reported as recorded, not as compared: the reader is shown what the file says.
+    expect(result.expected).toBe(expected.toUpperCase());
+    expect(result.actual).toBe(expected);
+  });
+
   test("reports both hashes when the schema has moved on", async () => {
     // Drift means the reading is computed against columns that no longer mean what the map
     // says they mean, so the report shows what was recorded next to what is there now.

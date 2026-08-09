@@ -226,11 +226,6 @@ export async function read_rows(path: string): Promise<Rows> {
   return { header, records };
 }
 
-/** Read a CSV as records keyed by its header row. */
-export async function read_table(path: string): Promise<Record<string, string>[]> {
-  return (await read_rows(path)).records;
-}
-
 /**
  * Read the identifiers a list file carries, as raw text — deriving a join key from them is the
  * caller's business and depends on a format this file knows nothing about.

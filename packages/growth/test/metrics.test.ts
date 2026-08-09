@@ -829,6 +829,18 @@ describe("top2_share puts concentration beside the total", () => {
     expect(record.acquired.revenue?.value).toBe(0);
     expect(record.acquired.revenue?.top2_share).toBeNull();
   });
+
+  test("rounds the share to two places, so a third decimal cannot pass for measured concentration", async () => {
+    // Three subtotals that divide to 0.7774725…, which is the only kind of input that can see the
+    // digit count at all: every other share in this describe terminates inside two places and
+    // prints the same at any precision. At three the field emits 0.777 where it emitted 0.78, so
+    // two runs over identical subtotals disagree in the last digit they publish and a share
+    // quoted off an earlier record can no longer be re-checked against the run that produced it.
+    const record = await paid("top2-precision", [40.5, 30.25, 20.25]);
+
+    expect(record.acquired.revenue?.value).toBe(91);
+    expect(record.acquired.revenue?.top2_share).toBe(0.78);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -994,6 +1006,77 @@ describe("the emitted record", () => {
     expect(records[0]?.acquired.accounts).toBe(1);
     expect(records[1]?.acquired.accounts).toBe(0);
     expect(records[1]?.pre_existing.accounts).toBe(1);
+  });
+
+  test("counts a person once in a money role, however many events they generated", async () => {
+    // The first account here paid three times and left twice after the cut, so every count taken
+    // off it is a count of people rather than of rows. Summed per event instead, this cell reports
+    // four acquired payers among two people and two departures among one — and both of those
+    // fields are ones a control pair may be read on, so the comparison would divide an event count
+    // by listed identifiers and publish it as the share of a list that paid. The arm holding the
+    // weekly regulars then wins on nothing but how often its customers transact.
+    const fixture = await build("record-repeat-events", {
+      person: people(
+        ["repeat", phone(1), from_cut(HOUR)],
+        ["single", phone(2), from_cut(2 * HOUR)],
+        ["held", phone(3), from_cut(-DAY)],
+      ),
+      revenue: revenue(
+        ["repeat", from_cut(DAY), 10],
+        ["repeat", from_cut(2 * DAY), 20],
+        ["repeat", from_cut(3 * DAY), 30],
+        ["single", from_cut(4 * DAY), 15],
+        ["held", from_cut(DAY), 5],
+        ["held", from_cut(2 * DAY), 7],
+      ),
+      churn: churn(
+        ["repeat", from_cut(5 * DAY), 4],
+        ["repeat", from_cut(6 * DAY), 6],
+        ["held", from_cut(DAY), 1],
+        ["held", from_cut(2 * DAY), 2],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const record = await one(fixture, cold("record-repeat-events", fixture.list("reached.txt")));
+
+    // Every headcount below is smaller than the number of events behind it, and the sums are what
+    // those events add up to: the pair of them is what separates a count of people from a count of
+    // rows, which a fixture where everyone transacted once cannot do.
+    expect(record.acquired.revenue).toEqual({ people: 2, value: 75, top2_share: 1, median_lag_days: 2.5 });
+    expect(record.acquired.churn).toEqual({ people: 1, value: 10 });
+    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 12 });
+    expect(record.pre_existing.churn).toEqual({ people: 1, value: 3 });
+  });
+
+  test("rounds every money field to the cent, not to a tenth of one", async () => {
+    // Each amount below carries a third decimal, which is what makes the digit count visible: on
+    // the whole cents every other fixture here uses, two places and three emit the same number. At
+    // three this record publishes 10.126 earned and 3.208 lost — a tenth of a cent, in a currency
+    // with no such unit — and a reader reconciling the file against the ledger it was drawn from
+    // finds every total off by a fraction of the smallest coin it can be paid in.
+    const fixture = await build("record-cents", {
+      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["fresh", from_cut(3 * HOUR), 10.126], ["existing", from_cut(5 * HOUR), 20.374]),
+      churn: churn(["fresh", from_cut(DAY), 3.208], ["existing", from_cut(DAY), 4.601]),
+      // One event either side of the recycled marker, so the two split fields round on their own
+      // subtotals rather than out of the total they sit under.
+      conversion: conversions(
+        ["fresh", from_cut(4 * HOUR), 5.121, "LIVE", "WIRE"],
+        ["fresh", from_cut(5 * HOUR), 7.232, "SETTLED", "CREDIT"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("record-cents", fixture.list("reached.txt")));
+
+    expect(record.acquired.revenue?.value).toBe(10.13);
+    expect(record.pre_existing.revenue?.value).toBe(20.37);
+    expect(record.acquired.churn?.value).toBe(3.21);
+    expect(record.pre_existing.churn?.value).toBe(4.6);
+    expect(record.conversions.value).toBe(12.35);
+    expect(record.conversions.new_money).toBe(5.12);
+    expect(record.conversions.recycled).toBe(7.23);
   });
 });
 
@@ -1600,6 +1683,91 @@ describe("a control pair", () => {
     expect(treated?.control?.p).toBe(0.024);
     expect(treated?.control?.control_events).toBe(18);
     expect(treated?.control?.publishable).toBe(false);
+  });
+
+  test("takes both rates over the identifiers each cell listed, not over the accounts it matched", async () => {
+    // The three numbers `audience` reports are all different here, on both sides, and a fixture
+    // like this one is the only place the denominator can be seen: every other pair in this
+    // describe lists phones that each match one account, so `listed`, `matched_phones` and
+    // `matched_accounts` are one number and any of the three reads correctly.
+    //
+    // Listed is the sample the send was drawn on. A number that matched nothing is a number this
+    // cell reached and got nothing back from, which is a miss and belongs in the denominator. Read
+    // over matched accounts the treated arm publishes 77.419% instead of 60%, a rate that climbs
+    // whenever the person export happens to hold a second account for someone; read over the
+    // control's matched phones the pair reports 37.5% against 30%, which moves p from 0.007 to
+    // 0.058 and holds back a reading that was publishable, on sends that did not change.
+    const person_rows: Row[] = [];
+    const treated_list: string[] = [];
+    const control_list: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      treated_list.push(phone(300 + i));
+      control_list.push(phone(400 + i));
+      // Thirty of the forty treated numbers are in the person export, twenty-four of them arriving
+      // after the cut; thirty-two of the forty control numbers, twelve arriving after it.
+      if (i < 30) {
+        person_rows.push([`t${i}`, phone(300 + i), from_cut(i < 24 ? HOUR : -DAY)]);
+      }
+      if (i < 32) {
+        person_rows.push([`c${i}`, phone(400 + i), from_cut(i < 12 ? HOUR : -DAY)]);
+      }
+    }
+    // One matched phone a side answers for a second account, which is what separates
+    // `matched_accounts` from `matched_phones`. Both predate the cut, so the arrivals stay where
+    // the loop above put them and only the denominators under test move.
+    person_rows.push(["t-second", phone(300), from_cut(-DAY)], ["c-second", phone(400), from_cut(-DAY)]);
+
+    const fixture = await build("control-listed-denominator", {
+      person: people(...person_rows),
+      lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
+    });
+
+    const [treated, untouched] = await read(fixture, new Date(CUT_MS + 200 * HOUR));
+
+    expect(treated?.audience).toEqual({ listed: 40, matched_phones: 30, matched_accounts: 31 });
+    expect(untouched?.audience).toEqual({ listed: 40, matched_phones: 32, matched_accounts: 33 });
+    expect(treated?.acquired.accounts).toBe(24);
+    expect(untouched?.acquired.accounts).toBe(12);
+    expect(treated?.control).toEqual({
+      against: "untouched",
+      outcome: "acquired.accounts",
+      treated_rate: 60,
+      control_rate: 30,
+      lift: 2,
+      control_events: 12,
+      p: 0.007,
+      publishable: true,
+    });
+  });
+
+  test("rounds both rates to three places, the precision the reading is published at", async () => {
+    // Seventy listed a side, so neither rate terminates: 40 of 70 is 57.142857… and 15 of 70 is
+    // 21.428571…. Every other pair here lists forty and lands on a whole number of percent, where
+    // two places and three print the same thing. At two this same reading publishes 57.14 against
+    // 21.43, so a rate copied out of an earlier run stops matching the run that produced it and
+    // two passes over identical counts disagree in the last digit they print.
+    const person_rows: Row[] = [];
+    const treated_list: string[] = [];
+    const control_list: string[] = [];
+    for (let i = 0; i < 70; i += 1) {
+      treated_list.push(phone(500 + i));
+      control_list.push(phone(600 + i));
+      person_rows.push([`t${i}`, phone(500 + i), from_cut(i < 40 ? HOUR : -DAY)]);
+      person_rows.push([`c${i}`, phone(600 + i), from_cut(i < 15 ? HOUR : -DAY)]);
+    }
+    const fixture = await build("control-rate-precision", {
+      person: people(...person_rows),
+      lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
+    });
+
+    const [treated, untouched] = await read(fixture, new Date(CUT_MS + 200 * HOUR));
+
+    expect(treated?.audience.listed).toBe(70);
+    expect(untouched?.audience.listed).toBe(70);
+    expect(treated?.acquired.accounts).toBe(40);
+    expect(untouched?.acquired.accounts).toBe(15);
+    expect(treated?.control?.treated_rate).toBe(57.143);
+    expect(treated?.control?.control_rate).toBe(21.429);
   });
 });
 
@@ -2941,6 +3109,28 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(record.window_hours).toBe(0);
     expect(record.pre_existing.accounts).toBe(1);
+  });
+
+  test("and one a single millisecond past it, which is where a skew tolerance would begin", async () => {
+    // The pair above is gross — a cut thirty-one days out against a reading at thirty — so it
+    // stays refused under any tolerance somebody widens this check by. And somebody will: the cut
+    // is written by whoever ran the send, the reading is taken wherever the script runs, and
+    // "allow an hour of clock skew between two hosts" sounds like housekeeping. It is not. A cut
+    // inside such a tolerance is still a cut nothing has reached yet: one millisecond ahead
+    // floors `window_hours` to -1, every comparison against the cut excludes every account and
+    // every event, and what gets published is a full row of zeros under a negative window.
+    const fixture = await build("refuse-future-cut-by-one", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const one_past = new Date(NOW.getTime() + 1).toISOString();
+    const error = await caught(one(fixture, cold("skewed", fixture.list("reached.txt"), { cut: one_past })));
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect((error as CellDeclarationError).cell).toBe("skewed");
+    expect(error.message).toContain(one_past);
+    expect(error.message).toContain(NOW.toISOString());
   });
 
   test("a control pair whose arms share members, which is not two samples", async () => {

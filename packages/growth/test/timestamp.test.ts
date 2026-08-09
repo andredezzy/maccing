@@ -65,8 +65,24 @@ describe("parse_ts, shapes an export produces", () => {
     expect(parse_ts("2026-03-04T05:06:07Z")?.getTime()).toBe(at_utc(5, 6, 7));
   });
 
+  test("a lowercase z is a zone, not a missing one", () => {
+    // The suffix survives being lowercased — by a shell pipeline, by a column somebody normalised
+    // on the way out — and still names UTC. Read as zoneless, the reader appends its own `Z`
+    // behind the one already there (`…07zZ`), which no parser accepts: the first row of an export
+    // whose every instant was correct throws `TimestampError` and the run stops.
+    expect(parse_ts("2026-03-04 05:06:07z")?.getTime()).toBe(at_utc(5, 6, 7));
+  });
+
   test("an explicit offset is honoured and not overwritten with Z", () => {
     expect(parse_ts("2026-03-04T05:06:07+02:00")?.getTime()).toBe(at_utc(3, 6, 7));
+  });
+
+  test("a negative offset is honoured too, which is the sign this engine actually meets", () => {
+    // The two signs are separate checks in the reader, and `+02:00` above is the only offset the
+    // suite has ever read. The database behind this engine is Brazilian, so `-03:00` is what any
+    // export not explicitly forced to UTC carries — losing this arm appends a `Z` behind the
+    // offset and turns the ordinary local export into a `TimestampError` on its first row.
+    expect(parse_ts("2026-03-04T05:06:07-03:00")?.getTime()).toBe(at_utc(8, 6, 7));
   });
 
   test("an offset following a fraction survives the padding step", () => {
