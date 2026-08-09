@@ -3013,6 +3013,47 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
 }
 
 /**
+ * How many links deep an overlay's name is followed: the shallower of the limits the kernels this
+ * runs on impose (macOS 32, Linux 40). Past it there is a cycle rather than a path.
+ */
+const OVERLAY_LINK_HOPS = 32;
+
+/**
+ * Where an overlay's bytes would be read from, with a symlinked last component followed even when
+ * that link dangles.
+ *
+ * `canonical_root` resolves through the kernel, which answers for a path only when every component
+ * of it is there; an overlay named through a broken link falls back to `canonical`, and `canonical`
+ * keeps a leaf's own name on purpose. So the guard's answer depended on whether the target happened
+ * to exist: one link, pointing at one tracked dictionary, read as inside the tree while the file was
+ * present and as outside it the moment the file was not — and the second answer is the one the
+ * operator gets on the run that writes the overlay through that link.
+ *
+ * The chain is followed by hand and lexically, each target resolved against the directory its link
+ * sits in, which is how the kernel reads a relative target. A link that points at itself or into a
+ * cycle stops at the last name reached and is compared as that name, because a name is all there is
+ * to compare and refusing to answer would let the case through.
+ */
+function overlay_target(dictionary: string): string {
+  let here = resolve(dictionary);
+  for (let hop = 0; hop < OVERLAY_LINK_HOPS; hop += 1) {
+    let target: string;
+    try {
+      target = readlinkSync(here);
+    } catch {
+      // Not a link, or not there at all: either way this is the name the bytes would be read from.
+      return here;
+    }
+    const next = resolve(dirname(here), target);
+    if (next === here) {
+      return here;
+    }
+    here = next;
+  }
+  return here;
+}
+
+/**
  * Whether an overlay sits inside the tree this run is about to read, and why that is refused.
  *
  * A dictionary's own terms are muted inside it, so an overlay committed into the tree being
@@ -3025,14 +3066,29 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
  * dictionary arrived from `resolve`, which is lexical and leaves symlinks standing. One spelling
  * of `/tmp` against another of `/private/tmp` made `relative` open with `..`, the guard read that
  * as "outside the repository", and the run it let through committed the overlay into the scan and
- * exited 0. Both sides go through `canonical` here so that no caller can hand this a spelling that
- * defeats it — see `canonical`, and see `under` for why a file called `..notes` is inside too.
+ * exited 0. Both sides go through a full resolution here so that no caller can hand this a
+ * spelling that defeats it — see `under` for why a file called `..notes` is inside too.
+ *
+ * Both spellings of the overlay are tested, the name as given and the bytes it resolves to, and
+ * either one inside the tree is a refusal. They are two different disclosures. `canonical` keeps a
+ * leaf's own name because a scanned symlink is content the walk reports under that name, and
+ * `--terms` is not scanned, it is *read* — so a link standing outside the tree and naming a
+ * dictionary tracked inside it refused when spelt directly and was accepted through the link, one
+ * file and one disclosure with two verdicts, which is why the target is resolved here at all
+ * (`overlay_target` follows that leaf whether or not the target exists yet, so the answer never
+ * turns on the order the operator created the two). The mirror is as bad and is the case resolving
+ * alone let through: a link standing *inside* the tree and naming a dictionary outside it is a
+ * tracked file whose recorded content is the overlay's path, the path may be the engagement's own
+ * name, and the terms of the dictionary are suppressed in the file that supplied it — so the run
+ * printed PASSED over a committed file naming the client. Measured, on a fixture repository: one
+ * occurrence suppressed inside the dictionary that declares it, verdict PASSED, exit 0.
  *
  * The refusal names the overlay by ordinal. The path is the operator's and may be vocabulary; the
  * operator knows which of their own `--terms` arguments this was. See `dictionary_labels`.
  */
 function overlay_inside_scan(root: string, dictionary: string, label: string): string | null {
-  if (under(canonical_root(root), canonical(dictionary)) === null) {
+  const tree = canonical_root(root);
+  if (under(tree, canonical(dictionary)) === null && under(tree, canonical_root(overlay_target(dictionary))) === null) {
     return null;
   }
   return (
@@ -3976,6 +4032,45 @@ function plant_carried(directory: string): Carried {
 }
 
 /**
+ * What a failing self-test may say about which of its checks failed, as the lines to print.
+ *
+ * With an overlay merged the self-test plants every term of every loaded category, and two checks
+ * name the term they failed on — so printing them would publish the private vocabulary. This
+ * repository is public and its CI logs are world-readable, so a broken matcher would put out the
+ * words the dictionary exists to keep out. Note which way that cuts: a secret rotated to `{}` is
+ * safe here and a *working* overlay is the dangerous one, which is the opposite of the intuition.
+ *
+ * With no overlay category loaded there is nothing to withhold, and the checks are printed in
+ * full. Every value a check interpolates is then a count, a duration, a string written in this
+ * file, or a name out of a fixture repository this run built under `tmpdir()` — the two checks
+ * that name a term read it out of `SELF_TEST_CATEGORIES`, whose vocabulary is invented here and
+ * names nobody. That case is not an edge: it is how this repository's own CI runs the self-test,
+ * and it is what the printed line promised for five commits with no code path behind it.
+ *
+ * The argument is the set of categories the fixtures were planted from, not a count of the loaded
+ * ones, so the rule and the risk read the same binding and cannot drift apart: a category is safe
+ * to print about when it is one of this file's own, by identity and not by name — an overlay that
+ * names a category `self_test_fixture` arrives as a category of its own, and comparing names would
+ * hand its terms to the loop below. That it is a property of what was planted rather than a flag
+ * matters for the same reason: a flag can be dropped from a workflow by someone who does not know
+ * any of this. The count is printed either way, and never behind `--quiet`: a failing self-test
+ * means the checker is broken, and that needs no vocabulary to state.
+ */
+function self_test_failures(failures: string[], planted: TermCategory[]): string[] {
+  const count = `${failures.length} self-test ${failures.length === 1 ? "check" : "checks"} failed.`;
+  if (planted.every((category) => SELF_TEST_CATEGORIES.includes(category))) {
+    return [`  ${count}`, ...failures.map((failure) => `    ${failure}`)];
+  }
+  return [
+    `  ${count} Which ones is withheld: an overlay is merged, a check names the term it failed on, and ` +
+      "this stream is a world-readable log. Read them where there is nothing loaded to publish — run " +
+      "--self-test again with no --terms and no LEAK_TERMS, which plants only the vocabulary invented in " +
+      "this file and prints every check that fails. A check that fails only while an overlay is merged " +
+      "will not fail there, and this count is all this stream will ever say about that one.",
+  ];
+}
+
+/**
  * Proves the checker against fixtures it writes itself, so the result never depends on what the
  * repository happens to contain today, and works with no dictionary loaded at all: the vocabulary
  * it plants is invented here, names nobody, and would be a disclosure in no repository.
@@ -4830,6 +4925,59 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a quiet header dropped the fact of the merge, so a partial dictionary reads as a full one");
     }
 
+    // What a failing self-test may say about which checks failed, which is the same stream rule one
+    // level up: with an overlay category among the planted ones, every term of it is the overlay's
+    // own vocabulary and two of the checks name the term they failed on, so the count is the whole
+    // report. With only this file's own categories planted there is nothing to withhold and every
+    // check is printed — the case this repository's own CI runs, and the one the line used to
+    // promise with no code behind it.
+    //
+    // The sets are passed as the categories themselves, the way `self_test` passes the ones it
+    // planted, so a call site handing the helper some other set could not stay green on a count.
+    // The third shape is the one a comparison by name would get wrong: an overlay may declare a
+    // category called `self_test_fixture`, and its terms are still the overlay's.
+    const failing = [`a planted term was not found: ${unquotable}`, "and a second check that also failed"];
+    const overlay_category: TermCategory = {
+      name: "self_test_fixture",
+      why: "fixture",
+      terms: [{ term: unquotable, word_boundary: false, why: "fixture" }],
+    };
+    const printed_checks = self_test_failures(failing, [...SELF_TEST_CATEGORIES]).join("\n");
+    const withheld_checks = self_test_failures(failing, [...SELF_TEST_CATEGORIES, overlay_category]).join("\n");
+    const withheld_alone = self_test_failures(failing, [overlay_category]).join("\n");
+    for (const [shape, report] of [
+      ["beside this file's own", withheld_checks],
+      ["as the only category planted", withheld_alone],
+    ] as Array<[string, string]>) {
+      if (named(report) !== 0) {
+        failures.push(
+          `a failing self-test with an overlay category planted ${shape} printed the term a check named ` +
+            `${named(report)} times, and the terms the checks name are then the overlay's own`,
+        );
+      }
+      if (report.includes(failing[1] as string)) {
+        failures.push(
+          `a failing self-test with an overlay category planted ${shape} printed a check's text, and a ` +
+            "check's text is where the planted terms are",
+        );
+      }
+    }
+    if (!printed_checks.includes(failing[0] as string) || !printed_checks.includes(failing[1] as string)) {
+      failures.push(
+        "a failing self-test with nothing but this file's own categories planted still did not print the " +
+          "checks that failed, so an operator following the line above it is being sent to do something no " +
+          "code path does",
+      );
+    }
+    for (const report of [printed_checks, withheld_checks, withheld_alone]) {
+      if (!report.startsWith("  2 self-test checks failed.")) {
+        failures.push(
+          "a failing self-test dropped the count of failed checks, which is the one thing it may say at " +
+            "either volume and with anything loaded",
+        );
+      }
+    }
+
     // The header line the counts sit on, with an overlay whose *path* is the disclosure.
     //
     // This is the case `--quiet` was never able to cover and nobody had asked it to. The line
@@ -4901,6 +5049,44 @@ function self_test(categories: TermCategory[]): number {
     }
     if (overlay_inside_scan(guarded, guard_terms, overlay_label) === null) {
       failures.push("an overlay plainly inside the tree being scanned was not refused at all");
+    }
+    // Every case above symlinks a *directory*, which `canonical` already resolved, so all three
+    // passed while the leaf went unchecked. A link whose last component is the overlay refused
+    // when named directly and was accepted through the link — one file, one disclosure, two
+    // verdicts. `canonical` keeps a leaf's own name on purpose, because a scanned symlink is
+    // content the walk reports under that name; an overlay is read rather than scanned, so here
+    // the question is which bytes load and the leaf resolves too.
+    const linked_leaf = join(directory, "guard-leaf.json");
+    symlinkSync(guard_terms, linked_leaf);
+    if (overlay_inside_scan(guarded, linked_leaf, overlay_label) === null) {
+      failures.push(
+        "an overlay reached through a symlink standing outside the tree was let through, though the file " +
+          "it names is tracked inside it and is refused when spelt directly",
+      );
+    }
+    // A link that dangles must not read as outside the tree by accident of being unresolvable.
+    const dangling = join(directory, "guard-dangling.json");
+    symlinkSync(join(guarded, "absent-terms.json"), dangling);
+    if (overlay_inside_scan(guarded, dangling, overlay_label) === null) {
+      failures.push(
+        "a broken symlink pointing inside the tree was treated as living outside it, so the guard's answer " +
+          "depended on whether the target happened to exist",
+      );
+    }
+    // And the mirror, which resolving the leaf on its own let through: a link standing *inside* the
+    // tree that names a dictionary outside it. The vocabulary is outside, so the resolved spelling
+    // says nothing is wrong — but the link is a tracked file whose recorded content is the
+    // overlay's path, that path may be the engagement's own name, and the dictionary's terms are
+    // suppressed in the file that supplied it. Measured on a fixture repository before this test
+    // existed: one occurrence suppressed inside the dictionary that declares it, PASSED, exit 0,
+    // over a committed file naming the client.
+    const inward = join(guarded, "guard-inward.json");
+    symlinkSync(join(directory, "outside-terms.json"), inward);
+    if (overlay_inside_scan(guarded, inward, overlay_label) === null) {
+      failures.push(
+        "an overlay named through a symlink that is itself inside the tree was let through: the link is a " +
+          "tracked file holding the overlay's path, and the terms of that overlay are suppressed in it",
+      );
     }
     // A file whose name merely opens with two dots is inside the root; `startsWith("..")` said it
     // was outside, which is the same defect at one character's remove.
@@ -5124,6 +5310,151 @@ function self_test(categories: TermCategory[]): number {
     }
     if (load_dictionaries([twice, join(directory, "overlay-subsumed-2-0.json")]).dictionaries[1]?.exemptions !== 0) {
       failures.push("an anchored repeat of an unanchored entry was counted as a suppression this overlay contributes");
+    }
+
+    // The other three quarters of `exemption_identity`. Only `line` had a case here: dropping
+    // `path`, `category` or `term` from the key left this self-test at exit 0 with nothing to say,
+    // and each of them does two things at once to a pair of entries differing in that one field.
+    // A suppression a person wrote stops being applied, and — where the two state different
+    // reasons — the run is failed on a `conflicting_exemption` between entries that never met.
+    //
+    // So each pair is written twice and the two shapes separate the two faults. With one reason
+    // between them a collapse is counted as a copy, and `duplicate_exemptions` says so while
+    // `rejected` stays empty; with a reason each a collapse is refused, and `rejected` says so.
+    // Dropping `line` raises the same `conflicting_exemption` these do, so the class of the error
+    // tells none of them apart. The counts and the entry that went missing do.
+    for (const [field, value] of [
+      ["path", "b.md"],
+      ["category", "self_test_other_category"],
+      ["term", "vondrel mikashe"],
+    ] as Array<["path" | "category" | "term", string]>) {
+      const first = { path: "a.md", category: "self_test_fixture", term: "zarquilon", line: 3, why: "first reason" };
+      for (const [shape, why, reasons] of [
+        ["copy", "first reason", "one reason between them"],
+        ["conflict", "a different reason", "a reason each"],
+      ] as Array<[string, string, string]>) {
+        const pair_file = join(directory, `overlay-identity-${field}-${shape}.json`);
+        writeFileSync(
+          pair_file,
+          JSON.stringify({ categories: [], exemptions: [first, { ...first, [field]: value, why }] }),
+        );
+        const apart = load_dictionaries([pair_file]);
+        if (apart.exemptions.length !== 2) {
+          failures.push(
+            `two exemptions differing only in their \`${field}\`, with ${reasons}, loaded as ` +
+              `${apart.exemptions.length} rather than 2: one of the two suppressions is not applied, so an ` +
+              "occurrence a person cleared is reported and their judgement is spent on the other one",
+          );
+        }
+        if (!apart.exemptions.some((entry) => entry[field] === value)) {
+          failures.push(
+            `of two exemptions differing only in their \`${field}\`, with ${reasons}, the one naming ` +
+              `${value} is the one that was dropped`,
+          );
+        }
+        if (apart.dictionaries[0]?.duplicate_exemptions !== 0) {
+          failures.push(
+            `two exemptions differing only in their \`${field}\` were counted as one entry and a copy of ` +
+              `it: \`${field}\` is not in the identity, so entries covering nothing in common read as the ` +
+              "same occurrence stated twice",
+          );
+        }
+        if (apart.rejected.length !== 0) {
+          failures.push(
+            `two exemptions differing only in their \`${field}\` were read as two reasons for one ` +
+              "occurrence and the run was failed on a conflict between entries that cover nothing in " +
+              "common — a disagreement that is not in the file",
+          );
+        }
+      }
+    }
+
+    // Two overlays merged, which nothing else here and nothing in the suite does. Everything below
+    // is a property of the pair and of nothing smaller: the ordinal that names each one, the
+    // category the second extends rather than replaces, the term it repeats, and the entry it adds.
+    const overlays: string[] = [];
+    for (const [name, extra, line] of [
+      ["overlay-pair-first.json", "nuvfilax", 3],
+      ["overlay-pair-second.json", "cr\u00ebnalix", 4],
+    ] as Array<[string, string, number]>) {
+      const path = join(directory, name);
+      writeFileSync(
+        path,
+        JSON.stringify({
+          categories: [
+            {
+              name: "self_test_pair",
+              why: "fixture",
+              terms: [
+                { term: "zarquilon", why: "fixture" },
+                { term: extra, why: "fixture" },
+              ],
+            },
+          ],
+          exemptions: [{ path: "a.md", category: "self_test_pair", term: "zarquilon", line, why: "fixture" }],
+        }),
+      );
+      overlays.push(path);
+    }
+    const pair_labels = dictionary_labels([BUILT_IN_TERMS, ...overlays]);
+    if (pair_labels[1] === pair_labels[2]) {
+      failures.push(
+        `both overlays of a two-overlay run are labelled "${pair_labels[1]}", and that ordinal is the only ` +
+          "handle an operator has on a dictionary whose path is never printed — so the header, " +
+          "--require-overlay's list and every refusal name a dictionary that cannot be told from the other",
+      );
+    }
+    if (pair_labels[1] !== "overlay 1 of 2 given to --terms" || pair_labels[2] !== "overlay 2 of 2 given to --terms") {
+      failures.push(
+        `two overlays were labelled "${pair_labels[1]}" and "${pair_labels[2]}", which do not count the ` +
+          "--terms arguments in the order they were given",
+      );
+    }
+    const both = load_dictionaries(overlays);
+    if (both.dictionaries[0]?.terms !== 2 || both.dictionaries[1]?.terms !== 1) {
+      failures.push(
+        "two overlays declaring three terms between them, one of which both declare, loaded " +
+          `${both.dictionaries[0]?.terms} and ${both.dictionaries[1]?.terms}: each row's count is what ` +
+          "says how much of the vocabulary came from that argument",
+      );
+    }
+    if (both.dictionaries[1]?.merged.join() !== "self_test_pair" || both.dictionaries[1]?.duplicate_terms !== 1) {
+      failures.push(
+        "a second overlay declaring a category the first already declared did not record that it extended " +
+          "that category and repeated one of its terms, which is a merge reading as a replacement",
+      );
+    }
+    if (both.categories.length !== 1) {
+      failures.push(
+        `two overlays declaring one category between them pooled it into ${both.categories.length}, so the ` +
+          "merge these labels name is not the merge being measured",
+      );
+    }
+    if (both.exemptions.length !== 2 || both.rejected.length !== 0) {
+      failures.push(
+        "two overlays each exempting a different line of one file did not contribute an entry each, so a " +
+          "second overlay's suppressions depend on what the first one happened to say",
+      );
+    }
+    const pair_header = streams(() => {
+      report_dictionaries(both.dictionaries, true);
+    });
+    for (const wanted of ["overlay 1 of 2", "overlay 2 of 2", "extended rather than replaced"]) {
+      const times = pair_header.out.split(wanted).length - 1;
+      if (times !== 1) {
+        failures.push(`a quiet header over two merged overlays printed "${wanted}" ${times} times rather than once`);
+      }
+    }
+    const nothing_declared =
+      overlay_shortfall(
+        both.dictionaries.map((entry) => ({ ...entry, terms: 0 })),
+        [],
+      ) ?? "";
+    if (nothing_declared.split(pair_labels[1] as string).length - 1 !== 1) {
+      failures.push(
+        "--require-overlay's list of the overlays that declared nothing named one of them twice and the " +
+          "other not at all, so an operator cannot tell which --terms argument to look at",
+      );
     }
 
     // The clearance finds a blob that no ref's tree still points at.
@@ -5656,23 +5987,11 @@ function self_test(categories: TermCategory[]): number {
         `phrase separators cleared in ${elapsed}ms.`,
     );
     if (failures.length > 0) {
-      // Counts and categories, never the terms themselves, and not conditional on `--quiet`.
-      //
-      // With an overlay merged the self-test plants every term of every loaded category, so a
-      // failure loop that printed each message would print the whole private vocabulary — 42 terms
-      // across four categories, measured. This repository is public and its CI logs are
-      // world-readable, so a broken matcher would publish the words the dictionary exists to keep
-      // out. Note which way that cuts: a secret rotated to `{}` is safe here and a *working*
-      // overlay is the dangerous one, which is the opposite of the intuition.
-      //
-      // Unconditional rather than behind the flag, because a flag can be dropped from a workflow
-      // by someone who does not know this, and because a failing self-test means the checker is
-      // broken — a fact that needs no vocabulary to state. Re-run locally, where the overlay
-      // already lives, to read which terms went missing.
-      console.log(
-        `  ${failures.length} self-test ${failures.length === 1 ? "check" : "checks"} failed. ` +
-          "Re-run locally with the overlay merged to read which.",
-      );
+      // `all` is the set the fixtures above were planted from, and it is what decides whether the
+      // checks may be printed; the rule, with the argument for it, lives in `self_test_failures`.
+      for (const line of self_test_failures(failures, all)) {
+        console.log(line);
+      }
       console.log("Self-test FAILED — the checker does not do what it claims.");
       return 1;
     }
@@ -5712,7 +6031,9 @@ function self_test(categories: TermCategory[]): number {
         "overlay loaded twice contributes its exemptions once and says so, while two reasons for the same " +
         "occurrence fail the run rather than merging and two occurrences stay two entries, while an entry " +
         "anchored on a clause an unanchored entry at that line already covers is one of them and not a " +
-        "second; a term carrying a zero-width space, a soft hyphen or a directional mark still matches the " +
+        "second, and while two entries differing only in the path, the category or the term they name stay " +
+        "two entries — neither collapsed as a copy of the other nor refused over a disagreement neither " +
+        "states; a term carrying a zero-width space, a soft hyphen or a directional mark still matches the " +
         "text those marks are stripped out of, and one that normalises away to nothing is refused rather " +
         "than counted as a term this run loaded; an overlay that cannot be opened is reported as an open " +
         "failure and not as a syntax one, and one that is not there at all is reported as not being there " +
@@ -5721,10 +6042,17 @@ function self_test(categories: TermCategory[]): number {
         "the token the engine choked on, nor the path the file was read from, and an error raised anywhere " +
         "else while the dictionary is open is withheld outright; the header prints an overlay's counts and " +
         "never its path, at either volume, so an overlay under a directory named after the engagement " +
-        "publishes nothing; an overlay inside the tree about to be scanned is refused however the two are " +
-        "spelt, through a symlink or with a filename opening on two dots, and one genuinely outside it is " +
+        "publishes nothing, and two merged overlays are told apart by the position of their own --terms " +
+        "argument — in the header, in --require-overlay's list and in every refusal — with the second " +
+        "pooling its category into the first rather than replacing it; an overlay inside the tree about " +
+        "to be scanned is refused however the two are spelt, through a symlink in either direction — one " +
+        "standing outside the tree and naming a dictionary in it, whether or not that target exists yet, " +
+        "and one standing inside the tree and naming a dictionary outside — or with a filename opening on " +
+        "two dots, and one genuinely outside it is " +
         "not; a quiet report and a quiet header keep their verdict and their counts and put no term, " +
-        "no category name and no reason on either stream; and a hit exits 1.",
+        "no category name and no reason on either stream; a failing self-test prints the checks that " +
+        "failed when the only vocabulary loaded is the one invented in this file, and prints their count " +
+        "alone when an overlay is merged; and a hit exits 1.",
     );
     return 0;
   } finally {

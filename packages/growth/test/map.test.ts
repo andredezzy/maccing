@@ -431,6 +431,29 @@ describe("load_map reads the document the way a renderer draws it", () => {
     expect(error.message).toContain("## Phone format");
   }
 
+  /**
+   * The mirror of `both_shapes`, for a document a renderer draws the illustration in. Alone it is
+   * the only `| field | value |` table under the heading and it binds; above the live table it is
+   * the second table the section is refused for, by the message telling the author to fence it.
+   *
+   * Every case using this is a bound on a rule that would otherwise widen, and the pair is what
+   * makes it a bound. On the half with no live table both readings load, so only the bound
+   * `999/2/8` says which table was read; on the half with one, a widened rule loads the live plan
+   * and looks perfectly correct, so only the refusal — by name, and for a second table rather
+   * than a missing one — says the illustration went invisible.
+   */
+  async function illustration_binds(name: string, block: string): Promise<void> {
+    const map = await load_map(await alone(`${name}-alone`, block));
+    expect(map.phone.country_code).toBe("999");
+    expect(map.phone.area_digits).toBe(2);
+    expect(map.phone.shared_account_ceiling).toBe(99);
+
+    const error = await caught(load_map(await document(name, block)));
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Phone format");
+    expect(error.message).toContain("second");
+  }
+
   /** The illustration and a fence around it, pushed out to a column — the shape a list item leaves
    *  them in, and the shape the parser has to measure against the item rather than the margin. */
   function fenced_at(column: number): string {
@@ -439,6 +462,41 @@ describe("load_map reads the document the way a renderer draws it", () => {
       .map((row) => `${pad}${row}`)
       .join("\n");
     return `${pad}~~~markdown\n${rows}\n${pad}~~~`;
+  }
+
+  /** The illustration with no fence at all, pushed out to a column. At four past its container it
+   *  is an indented code block, which is the shape the thematic-break cases below turn on. */
+  function indented_at(column: number): string {
+    const pad = " ".repeat(column);
+    return ILLUSTRATION.split("\n")
+      .map((row) => `${pad}${row}`)
+      .join("\n");
+  }
+
+  /**
+   * An author demonstrating how to fence an illustration, who let one line of the demonstration
+   * slip back to the margin.
+   *
+   * `interior` is that line. It stands before the item's content column, so CommonMark ends the
+   * item on it and the fenced block the item was holding ends with it — closer or no closer. The
+   * run written to close the demonstration therefore opens a block instead, the illustration below
+   * it is that block's content, and the trailing run at the margin is what ends it. Every line of
+   * that reading is what markdown-it draws; a reader watching only for the closer reads the
+   * opposite of all four.
+   */
+  function outdented(run: string, marker: string, column: number, interior: string): string {
+    const pad = " ".repeat(column);
+    return [
+      `${marker}fencing an illustration under a bullet goes like this:`,
+      "",
+      `${pad}${run}markdown`,
+      interior,
+      `${pad}${run}`,
+      "",
+      ILLUSTRATION,
+      "",
+      run,
+    ].join("\n");
   }
 
   test("binds the live table, not one demonstrated inside a tilde fence", async () => {
@@ -560,6 +618,230 @@ describe("load_map reads the document the way a renderer draws it", () => {
     await both_shapes("fence-on-the-marker-line", `- ~~~markdown\n${rows}\n  ~~~`);
   });
 
+  test("ends a fence with the list item holding it, not only at a closer", async () => {
+    // The half of the container mechanism that shipped unimplemented. `fence_closed_by` measures
+    // a closer against the container its opener was measured against, but while a fence was open
+    // the container stack never advanced, so the item never ended and the block never ended with
+    // it. Measured against markdown-it in commonmark mode on twenty-four generated shapes — two
+    // fence spellings, bullet and ordered markers, four kinds of outdented line, closed and
+    // unclosed — sixteen bound `illustration.csv` out of a run the renderer draws inside
+    // `<pre><code>`, and the other four refused a section the renderer draws as an ordinary table.
+    // After the rule below all twenty-four agree.
+    //
+    // Both halves of `both_shapes` are load-bearing here, and neither can be spelled as an error
+    // class. Without the container rule the document with a live table refuses too — for a second
+    // table rather than for a missing one, but `MapSectionError` either way — so only
+    // `expect_live_plan` reading `997/3/6` off the bound plan separates a parser that ends the
+    // fence correctly from one that ends it at the demonstration's own run. On the half with no
+    // live table both readings refuse, and what separates them is which section the refusal names:
+    // correctly, `## Phone format` carries no table; incorrectly, the trailing run swallows the
+    // rest of the file and `## Fingerprint` is reported missing from a map that declares it.
+    await both_shapes("outdent-ends-the-fence", outdented("~~~", "- ", 2, "Ordinary prose at the margin."));
+    await both_shapes("outdent-ends-the-fence-ordered", outdented("```", "1. ", 3, "Ordinary prose at the margin."));
+    // Prose at the margin is the line an author writes by accident; a heading is the line he
+    // writes on purpose, and it ends the item just as flatly.
+    await both_shapes("outdent-ends-the-fence-heading", outdented("~~~", "- ", 2, "### Notes"));
+  });
+
+  test("closes a nested fence on a closer measured from the item, with the section never outdenting", async () => {
+    // The coverage the rule above took away, which is a different thing from coverage it never
+    // had. `fence_closed_by` measures the closer's indent against the container rather than the
+    // margin, and that comparison used to be defended: measure it absolutely and a fence closed
+    // four columns from the margin stopped closing. Ending the fence with its container added a
+    // second way out, and every fixture defending the comparison takes that way instead — they
+    // all put the live table back at the margin, which outdents below the fence's base and ends
+    // the block whether the closer matched or not. Measured across five closer indents, the
+    // margin shape cannot see the comparison break at any of them.
+    //
+    // What reaches it is a section that never outdents: the live table left where the author wrote
+    // it, inside the item, with nothing between the fence and the next heading standing at the
+    // margin. Then the closer is the only thing that can end the block, and measuring it from the
+    // margin loses the live table — `## Phone format` carries no table at all and a map nobody
+    // wrote anything wrong in is refused. markdown-it draws the table at every one of these
+    // indents, four columns from the margin included, because two columns past a container whose
+    // content starts at two is inside the three CommonMark allows.
+    //
+    // Only the shape with a live table can ask this. Take it away and both readings refuse for the
+    // same missing table, which is the reverse of the asymmetry the rest of this block turns on.
+    const inside_the_item = (closer: string): string =>
+      [
+        "- the market this map does not describe:",
+        "",
+        "  ~~~markdown",
+        ILLUSTRATION.split("\n")
+          .map((row) => `  ${row}`)
+          .join("\n"),
+        `${closer}~~~`,
+        "",
+        LIVE_TABLE.split("\n")
+          .map((row) => `  ${row}`)
+          .join("\n"),
+      ].join("\n");
+
+    // Two and three columns from the margin are inside the allowance measured either way, so they
+    // are controls rather than cases: they pin that the closer still closes where it always did.
+    for (const [name, closer] of [
+      ["two", "  "],
+      ["three", "   "],
+      ["four", "    "],
+      ["five", "     "],
+      ["tab", "\t"],
+    ] as const) {
+      const map = await load_map(
+        await write_map(
+          `nested-closer-${name}-live-inside-the-item`,
+          compose(
+            `## Phone format\n\n${inside_the_item(closer)}\n`,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      );
+      expect_live_plan(map);
+    }
+  });
+
+  test("keeps a fence open across the blank lines inside it", async () => {
+    // The companion of the rule above and the way to get it wrong. A blank line is scanned to
+    // column zero, which is below the content column of any item, so a container rule that reads
+    // every line the same way ends the fence on the first empty line inside it. Nothing in the
+    // suite would have said so: every fenced illustration here is a solid block of rows.
+    //
+    // A blank directly after the opener is the shape that bites, and only that shape. Further down
+    // the block the illustration's `| field | value |` header has already been consumed inside the
+    // fence, so what escapes cannot start a table and the document reads correctly by accident.
+    // With the blank on top, the whole illustration escapes: alone it binds `999/2/8`, and above
+    // the live table it is a second table and the section is refused. A line of two spaces will
+    // not do either — it measures to column two, which is the item's own content column.
+    await both_shapes(
+      "blank-line-after-a-nested-opener",
+      `- Its plan, for contrast:\n\n  ~~~markdown\n\n${indented_at(2)}\n  ~~~`,
+    );
+  });
+
+  test("reads the rest of the map after a bullet's fence is left unclosed", async () => {
+    // The loud half of the same defect, and a wrong refusal in its own right. An unclosed fence
+    // under a bullet ends where the bullet ends, so a renderer draws every heading below it. The
+    // reader swallowed all of them and reported the first as absent — `## Fingerprint: the map
+    // does not declare this section` about a map that declares it three lines further down, which
+    // sends an author looking for a missing section instead of an unclosed fence.
+    //
+    // The assertion is a successful load rather than a corrected message, because the message was
+    // never the fault: there is no section missing here at all. Measured across four containers
+    // and both spellings, this was eight documents refused by name. A fence left unclosed at the
+    // margin still swallows the rest of the file, and still should — markdown-it draws no heading
+    // after it either.
+    const map = await load_map(
+      await write_map(
+        "unclosed-fence-under-a-bullet",
+        compose(
+          `## Phone format\n\n${LIVE_TABLE}\n\n- the market this map does not describe:\n\n  ~~~markdown\nIts plan never got written down.\n`,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          CONVERSION_SECTION,
+        ),
+      ),
+    );
+    expect_live_plan(map);
+    expect(map.person.export).toBe("person.csv");
+    expect(map.fingerprint.schema).toBe("db/schema.prisma");
+  });
+
+  test("reads a thematic break as a break, so a block indented under it is still code", async () => {
+    // `---` above the table that replaced a correction is ordinary punctuation in a map, and read
+    // as markers it is three nested list items: the container's content column goes out to four,
+    // and the indented code block below stops being code. A refusal turns into `999/2/8` bound
+    // silently out of a document markdown-it draws no table in. No case here put a break above an
+    // *indented* illustration before — every one of them fenced it — so the boundary went
+    // unexercised in both directions.
+    //
+    // As with the outdent cases, the half with a live table cannot be spelled as an error class:
+    // it refuses when the break is misread too, for a second table rather than a missing one, so
+    // only `expect_live_plan` reading `997/3/6` off the bound plan tells the two apart.
+    await both_shapes("thematic-break-hyphens", `---\n\n${indented_at(4)}`);
+    await both_shapes("thematic-break-asterisks", `***\n\n${indented_at(4)}`);
+    // The spellings no lookahead can reach, and the one that was live in this parser rather than
+    // only in a mutant. CommonMark lets a break carry whitespace between its characters and gives
+    // the break precedence over the list item the same line could open, so `- - -` is one break
+    // and not three items. This reader made it three items and bound the illustration under it:
+    // `999/2/8` with a `shared_account_ceiling` of 99, out of a run a reader sees as code.
+    await both_shapes("thematic-break-spaced-hyphens", `- - -\n\n${indented_at(4)}`);
+    await both_shapes("thematic-break-spaced-asterisks", `* * *\n\n${indented_at(4)}`);
+    await both_shapes("thematic-break-uneven-hyphens", `-- -\n\n${indented_at(4)}`);
+    // The whitespace between the characters is a run, not one space, and it may trail the last one
+    // — three separate claims, each of which a shorter pattern drops on its own and none of which
+    // the single-spaced case above can speak for. Written `[ \t]?` the rule stops seeing `-  -  -`
+    // and `- - -  `; written with spaces alone it stops seeing `-\t-\t-`; written as separators
+    // between the characters with nothing allowed after, it stops seeing `- - -  ` alone. Each of
+    // those three fails the same way, silently: the line goes back to being nested markers and
+    // the illustration indented under it binds `999/2/8`. A trailing space is what an editor
+    // leaves behind, so that one is not a curiosity.
+    await both_shapes("thematic-break-double-spaced", `-  -  -\n\n${indented_at(4)}`);
+    await both_shapes("thematic-break-tab-separated", `-\t-\t-\n\n${indented_at(4)}`);
+    await both_shapes("thematic-break-trailing-space", `- - -  \n\n${indented_at(4)}`);
+    // And the break is looked for wherever a marker would be, not only at the margin. A rule under
+    // a bullet is the ordinary place for one — the note introduces the correction, the rule
+    // separates it — and it is the placement where getting it wrong costs the most: three markers
+    // read inside an item already two columns in carry the content column out to eight, so the
+    // illustration indented under it is not merely content but content at a depth nothing else
+    // reaches. `---` here is safe on the marker lookahead alone, which is why the spaced spelling
+    // is the one that has to be asked.
+    await both_shapes("nested-thematic-break-hyphens", `- a note about the plan:\n\n  - - -\n\n${indented_at(6)}`);
+    await both_shapes("nested-thematic-break-asterisks", `- a note about the plan:\n\n  * * *\n\n${indented_at(6)}`);
+  });
+
+  test("reads a marker character with no whitespace after it as the prose it is", async () => {
+    // What the whitespace lookahead in `LIST_MARKER` is for, once the thematic break above is
+    // read separately. A marker is the character *and* the space after it; without the lookahead
+    // any line opening with one of them opens a container one or two columns wide, and a block
+    // indented four columns below stops being the code a renderer draws.
+    //
+    // These are not contrived lines. A map's prose quotes its own figures and emphasises the
+    // market it is not describing, and every one of the five below silently bound `999/2/8` with
+    // a ceiling of 99 under a marker pattern with the lookahead deleted, against a renderer that
+    // draws no table in any of them. The mutation used to die on `---` alone; it no longer can,
+    // because the break rule catches that line first, so the lookahead needs cases of its own or
+    // it is undefended again.
+    await both_shapes("prose-opening-with-a-decimal", `0.25 is the ceiling this map sets.\n\n${indented_at(4)}`);
+    await both_shapes("prose-opening-with-emphasis", `*the market this map does not describe*\n\n${indented_at(4)}`);
+    await both_shapes("prose-opening-with-a-sign", `-3 marks a column that is absent.\n\n${indented_at(4)}`);
+    // Two hyphens are neither a break — a break wants three — nor a marker, so the line is prose
+    // in both directions and the illustration under it stays code. The plus is here because it is
+    // the one bullet character with no break spelling at all, so the lookahead is the only rule
+    // standing between `+ready` and a container.
+    await both_shapes("prose-opening-with-two-hyphens", `-- and the plan it replaced:\n\n${indented_at(4)}`);
+    await both_shapes("prose-opening-with-a-plus", `+ready is not a column in this export.\n\n${indented_at(4)}`);
+  });
+
+  test("keeps the thematic break from widening onto lines that are list items", async () => {
+    // The three bounds on the rule above, and each of them costs a real document if it slips.
+    //
+    // `-` and `*` spell a bullet and a break; `+` spells only a bullet, so `+ + +` is three nested
+    // items to CommonMark and the block indented under them is the innermost item's own content.
+    // A break rule that took its character class from `LIST_MARKER` would sweep the plus in.
+    await illustration_binds("plus-is-not-a-thematic-break", `+ + +\n\n${indented_at(4)}`);
+    // A break is three characters or more. Two are two list items, one nested in the other, and
+    // the same block is again the inner item's content. Written `{2,}` the rule reads them as a
+    // break, the illustration goes back to being code, and the section that should be refused for
+    // a second table loads the live plan instead — quietly correct-looking, and wrong about what
+    // the page shows.
+    await illustration_binds("two-hyphens-spaced-are-two-items", `- -\n\n${indented_at(4)}`);
+    await illustration_binds("two-asterisks-spaced-are-two-items", `* *\n\n${indented_at(4)}`);
+    // And a break carries nothing but its own characters. `- - - and then` is three nested items
+    // introducing a paragraph, so the rule has to reach the end of the line before it fires;
+    // unanchored it matches the first three characters of any line that starts with them, which
+    // is most of the bulleted prose in a map.
+    await illustration_binds(
+      "break-characters-with-text-after",
+      `- - - and the plan it replaced:\n\n${indented_at(4)}`,
+    );
+    await illustration_binds(
+      "break-characters-with-text-after-stars",
+      `* * * and the plan it replaced:\n\n${indented_at(4)}`,
+    );
+  });
+
   test("reads an illustration indented four columns as the code block a renderer draws", async () => {
     // Four spaces at the top level is an indented code block. A renderer draws no table there, so
     // neither does this reader, and the heading below binds the live table with nothing said about
@@ -585,12 +867,34 @@ describe("load_map reads the document the way a renderer draws it", () => {
       .join("\n");
     await both_shapes("marker-then-five-spaces", `-     ~~~markdown\n${rows}\n      ~~~`);
 
-    // With the run closed, moving the item's content out to meet it and leaving it where it belongs
-    // look identical — both hide the illustration. Unclosed, they separate: left where it belongs
-    // the run is code and the live table below survives, moved out it is an opener with nothing to
-    // end it and the table spends the rest of the document inside the block. A renderer draws the
-    // table.
+    // With the run closed, moving the item's content out to meet it and leaving it where it
+    // belongs look identical — both hide the illustration. The unclosed run below used to separate
+    // them and no longer does: moved out it opens a fence with nothing to close it, but the live
+    // table at the margin outdents below that fence's base, which now ends the block on its own.
+    // The case is kept because a renderer draws the table and this reader has to as well, but it
+    // no longer says anything about where the item's content column landed.
     expect_live_plan(await load_map(await document("marker-then-five-spaces-lone-run", "-     ~~~")));
+
+    // What does say it is the same document with no fence anywhere in it, which is the shape the
+    // rule is actually about. A marker and five spaces put the item's first block into indented
+    // code, so a table written at the column the content lands on is code and a renderer draws
+    // nothing; move the content column out to meet it and the table is live. Every fence case
+    // above reaches this rule through a fence, and a fence has a second way to end, so none of
+    // them can tell the two readings apart any more — measured, the whole `-     ~~~` family
+    // gives the same verdict either way at every indent.
+    const at_column = (column: number): string =>
+      ILLUSTRATION.split("\n")
+        .map((row) => `${" ".repeat(column)}${row}`)
+        .join("\n");
+    await both_shapes("marker-five-spaces-table-at-six", `-     Its plan, for contrast:\n\n${at_column(6)}`);
+    await both_shapes("marker-six-spaces-table-at-seven", `-      Its plan, for contrast:\n\n${at_column(7)}`);
+
+    // And the control on the other side of the boundary, which is what keeps the rule from being
+    // read as "anything indented is code": four spaces after the marker carry the content column
+    // out to five, the table there is the item's own content, and a renderer draws it. A fix that
+    // pushed every item's content back to one past the marker would pass the two cases above and
+    // lose this one.
+    await illustration_binds("marker-four-spaces-table-at-five", `-    Its plan, for contrast:\n\n${at_column(5)}`);
   });
 
   test("reads a tilde fence whose info string holds a backtick", async () => {
@@ -718,6 +1022,51 @@ describe("load_map reads the document the way a renderer draws it", () => {
       .map((row) => `\t${row}`)
       .join("\n");
     await both_shapes("fence-after-a-tab-marker", `-\t~~~markdown\n${rows}\n\t~~~`);
+
+    // Both cases above turn on a tab counted as one column against four, and neither can tell four
+    // columns from the next four-column stop — a tab at the margin lands on four either way, and
+    // that is the only tab they measure. The distinction is the whole rule, and it only shows on a
+    // tab that does not start at a multiple of four: the one after a one-character marker, which
+    // stands at column one and advances three, not four. Add four instead and the item's content
+    // column lands one past the run it introduces, so everything the item holds outdents below it
+    // — the illustration is dropped as code rather than read inside the fence, and so is the live
+    // table the author left inside the item. The heading is refused for a table markdown-it draws.
+    const live_rows = LIVE_TABLE.split("\n")
+      .map((row) => `\t${row}`)
+      .join("\n");
+    expect_live_plan(
+      await load_map(
+        await write_map(
+          "tab-marker-live-table-inside-the-item",
+          compose(
+            `## Phone format\n\n-\t~~~markdown\n${rows}\n\t~~~\n\n${live_rows}\n`,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
+
+    // The same document with a second live table at the margin really does carry two, and is
+    // refused for it. Counted as a flat four the item's copy disappears and the margin one binds
+    // alone, which reads as a clean load and is a table short.
+    const two = await caught(
+      load_map(
+        await write_map(
+          "tab-marker-live-table-inside-and-at-the-margin",
+          compose(
+            `## Phone format\n\n-\t~~~markdown\n${rows}\n\t~~~\n\n${live_rows}\n\n${LIVE_TABLE}\n`,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
+    expect(two).toBeInstanceOf(MapSectionError);
+    expect((two as MapSectionError).section).toBe("## Phone format");
+    expect(two.message).toContain("second");
   });
 
   test("leaves a fence inside a block quote alone, because nothing it hides was readable anyway", async () => {
@@ -785,6 +1134,34 @@ describe("load_map reads the document the way a renderer draws it", () => {
       expect(error).toBeInstanceOf(MapSectionError);
       expect((error as MapSectionError).section).toBe("## Phone format");
     }
+
+    // The thematic break is the third pattern that has to absorb the CR, and the one where losing
+    // it is silent. `---` survives a missing `\r?` by accident — the marker lookahead refuses it
+    // anyway — but `- - -` does not: unrecognised as a break it is three nested items, the
+    // container's content column goes out to four, and the illustration indented under it is read
+    // as live content. One anchor, and every CRLF map separating a correction from the table that
+    // replaced it binds `999/2/8`.
+    const spaced = `## Phone format\n\n- - -\n\n${indented_at(4)}\n\n${LIVE_TABLE}\n`;
+    expect_live_plan(
+      await load_map(
+        await write_map(
+          "carriage-returns-thematic-break",
+          crlf(compose(spaced, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION)),
+        ),
+      ),
+    );
+    const lone = crlf(
+      compose(
+        `## Phone format\n\n- - -\n\n${indented_at(4)}\n`,
+        FINGERPRINT_SECTION,
+        PERSON_SECTION,
+        CONVERSION_SECTION,
+      ),
+    );
+    const break_error = await caught(load_map(await write_map("carriage-returns-thematic-break-alone", lone)));
+    expect(break_error).toBeInstanceOf(MapSectionError);
+    expect((break_error as MapSectionError).section).toBe("## Phone format");
+    expect(break_error.message).toContain("only prose");
   });
 
   test("binds a live table written inside a nested list item", async () => {

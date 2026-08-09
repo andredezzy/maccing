@@ -167,10 +167,28 @@ type Fence = { char: string; width: number; base: number };
 const FENCE_OPEN = /(`{3,}|~{3,})(.*)/y;
 const FENCE_CLOSE = /(`{3,}|~{3,})[ \t]*\r?$/y;
 
-/** A bullet or an ordered-list marker, matched where a container's content begins. The whitespace
- *  after it is looked at rather than consumed, so `-` alone on a line is a marker and `---` is
- *  not one. */
+/** A bullet or an ordered-list marker, matched where a container's content begins. A marker is
+ *  the character and the space after it, so the space is looked at rather than consumed: `-`
+ *  alone on a line is a marker, and `0.25 is the ceiling`, `-3 marks an absent column` and
+ *  `*the market this map does not describe*` are prose. Without the lookahead each of those opens
+ *  a container one or two columns wide, and a block indented four columns under it stops being
+ *  the code a renderer draws — measured, an illustration under a line of ordinary prose bound
+ *  `999/2/8` with a `shared_account_ceiling` of 99. `---` is prose here too, but no longer only
+ *  because of the lookahead: `THEMATIC_BREAK` below reaches it first, along with the spaced
+ *  spellings no lookahead can. */
 const LIST_MARKER = /([-+*]|\d{1,9}[.)])(?=[ \t]|\r?$)/y;
+
+/** A thematic break written with a character that also spells a bullet: three or more `-`, or
+ *  three or more `*`, with nothing but whitespace between them and after the last. CommonMark
+ *  gives the break precedence over the list item the same line could open, and the collision is
+ *  the ordinary shape of a map correcting itself — a rule above the table that replaced the
+ *  correction. Read as markers instead, `- - -` opens three nested items and carries the content
+ *  column out to four, which turns the indented block under it from the code a renderer draws
+ *  into a live table: measured, an illustration indented four columns under `- - -` bound
+ *  `999/2/8` with a `shared_account_ceiling` of 99 where markdown-it drew no table at all.
+ *  `_` gets no entry here because it opens no list, so nothing can mistake it for one, and `+`
+ *  is deliberately absent: `+ + +` is three nested items to CommonMark and not a break. */
+const THEMATIC_BREAK = /(?:-[ \t]*){3,}\r?$|(?:\*[ \t]*){3,}\r?$/y;
 
 /** Nothing but whitespace. A blank line closes no list item, so the block scan leaves it alone. */
 const BLANK = /^[ \t]*\r?$/;
@@ -258,6 +276,12 @@ function block_position(line: string, open: number[]): { base: number; offset: n
   // own line — `- ~~~markdown`, which is how a short illustration gets written — is a fence, and
   // so is the inner one in `- - ~~~`.
   while (at.column - base < CODE_INDENT) {
+    // The break wins the tie, as it does in CommonMark, and it is checked at every depth: `- - -`
+    // reads as a break at the margin, and so does the `- - -` a bullet introduces.
+    THEMATIC_BREAK.lastIndex = at.offset;
+    if (THEMATIC_BREAK.test(line)) {
+      break;
+    }
     LIST_MARKER.lastIndex = at.offset;
     const marker = LIST_MARKER.exec(line);
     if (marker === null) {
@@ -322,13 +346,17 @@ function fence_opened_by(line: string, at: { base: number; offset: number }): Fe
  * within three columns of the same container its opener was measured against, so a run indented
  * into code inside the block is content.
  *
- * Its indent is otherwise its own business: the opener's constrains nothing, so a fence opened at
- * its container's content column can be closed by a closer two columns further in, and the other
- * way round. A closer standing further out than the container closes, because a line that outdents
- * past a list item ends the item, and the fenced block the item was holding ends with it.
+ * Its indent is otherwise its own business inside those bounds: the opener's constrains nothing,
+ * so a fence opened at its container's content column can be closed by a closer two columns
+ * further in, and the other way round. A run standing further out than the container never
+ * reaches here, because `split_sections` has already ended the block by the time it is read — a
+ * line that outdents past a list item ends the item, and the fenced block the item was holding
+ * ends with it. Such a run is then read as a line of the document like any other, which is where
+ * a renderer puts it too: it opens a fence rather than closing one.
+ *
+ * `at` is where the line's own text begins, already scanned by the caller.
  */
-function fence_closed_by(line: string, open: Fence): boolean {
-  const at = text_start(line, 0, 0);
+function fence_closed_by(line: string, at: { offset: number; column: number }, open: Fence): boolean {
   if (at.column - open.base >= CODE_INDENT) {
     return false;
   }
@@ -354,6 +382,17 @@ function fence_closed_by(line: string, open: Fence): boolean {
  * either side of it, which is what dropping a fenced block between two tables has always done in
  * this reader.
  *
+ * A fenced block ends at its closer or with the block that contains it, whichever comes first.
+ * CommonMark closes a list item on the first line that outdents past its content column, and
+ * everything the item was holding closes with it — the fence included, closer or no closer. A
+ * reader that watches only for the closer keeps swallowing: under a bullet, an illustration whose
+ * fence a `##` at the margin has already ended reads on to the next run of backticks, and the
+ * table below that run — which a renderer draws inside `<pre><code>`, because the outdented run
+ * opened a second fence rather than closing the first — is read as live content and installed as
+ * the binding. Measured against markdown-it in commonmark mode, sixteen of twenty-four generated
+ * shapes bound `illustration.csv` that way, in both fence spellings, under bullet and ordered
+ * markers, and for four kinds of outdented line including ordinary prose at the margin.
+ *
  * A heading declared twice is refused rather than merged or overwritten. Two `## Role: person`
  * sections is what a map edited by two people, or copied from another project and half-adjusted,
  * looks like; the second silently wins, so the bindings a reader sees at the top of the file are
@@ -367,13 +406,25 @@ function split_sections(text: string): Map<string, string[]> {
   let fence: Fence | null = null;
 
   for (const line of text.split("\n")) {
+    const blank = BLANK.test(line);
     if (fence !== null) {
-      if (fence_closed_by(line, fence)) {
-        fence = null;
+      // A blank line closes no container, so it ends no fence either.
+      if (blank) {
+        continue;
       }
-      continue;
+      const start = text_start(line, 0, 0);
+      if (start.column >= fence.base) {
+        if (fence_closed_by(line, start, fence)) {
+          fence = null;
+        }
+        continue;
+      }
+      // The line begins before the content column the fence was measured against, so it has
+      // outdented past the container holding the block and ended both. It is a line of the
+      // document rather than of the block, and falls through to be read as one.
+      fence = null;
     }
-    if (BLANK.test(line)) {
+    if (blank) {
       if (current !== null) {
         current.push(line);
       }
