@@ -63,6 +63,7 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -1856,7 +1857,21 @@ function scan_files(
         unreadable.push(`${label} — not a readable file: a submodule's directory, a stale index entry, or a device`);
         continue;
       } else {
-        const bytes = readFileSync(absolute);
+        // `lstat` answering does not mean `open` will. A mode this user cannot read escaped here
+        // as an exception and took the whole run with it — exit 2, the absolute path on stderr,
+        // and no verdict at all about the files that were read. It is the same kind of gap as a
+        // path that is absent, and the report already has a place to name it.
+        let bytes: Buffer;
+        try {
+          bytes = readFileSync(absolute);
+        } catch (failure) {
+          const code = (failure as NodeJS.ErrnoException).code;
+          if (code !== "EACCES" && code !== "EPERM") {
+            throw failure;
+          }
+          unreadable.push(`${label} — not readable by this user: the file is there and its mode refuses the read`);
+          continue;
+        }
         receipt(bytes);
         const read = read_text(bytes);
         if (read === null) {
@@ -5913,6 +5928,44 @@ function self_test(categories: TermCategory[]): number {
     if (verdict_for([], 0, tracked.unreadable.length) !== "PASSED WITH GAPS") {
       failures.push("a file that could not be read at all left the verdict word unchanged");
     }
+    // The third way a tracked file goes unread, and the one that used to escape as an exception
+    // rather than a gap: the file is there, `lstat` answers, and `open` refuses. It reached
+    // `throw` and took the run with it — exit 2, the absolute path on stderr, no verdict about
+    // the files that were read. Skipped where mode 000 does not stop this user, since root reads
+    // it regardless and the case would assert nothing.
+    const barred = join(repository, "barred.txt");
+    writeFileSync(barred, "zarquilon lives here");
+    run_git(["add", "--", "barred.txt"], repository);
+    chmodSync(barred, 0o000);
+    let barred_holds = true;
+    try {
+      readFileSync(barred);
+      barred_holds = false;
+    } catch {
+      barred_holds = true;
+    }
+    if (barred_holds) {
+      const with_barred = scan_files(
+        list_repository_files(repository, false),
+        matchers,
+        repository,
+        new Map(),
+        null,
+        object_hash,
+      );
+      if (!with_barred.unreadable.some((entry) => entry.startsWith("barred.txt "))) {
+        failures.push(
+          "a tracked file whose mode refuses the read was not named as unread, so the run either aborted on it " +
+            "or dropped it without saying so",
+        );
+      }
+      if (with_barred.hits.some((hit) => hit.path === "barred.txt")) {
+        failures.push("a file that could not be opened reported a hit, so something read bytes nothing could read");
+      }
+    }
+    chmodSync(barred, 0o644);
+    rmSync(barred);
+    run_git(["add", "-A"], repository);
     // And a file that was read leaves a receipt git agrees with, or every skip above is a
     // coincidence: the digest of the bytes on disk is the object id the index lists for them.
     const clean_blob = blob_id(object_hash ?? "sha1", readFileSync(join(repository, "clean.txt")));
