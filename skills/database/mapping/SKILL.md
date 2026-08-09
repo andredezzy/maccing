@@ -66,12 +66,14 @@ Binding a role you cannot honestly fill is worse than leaving it out. If the nea
 The map is markdown a human reads, with tables a parser reads.
 
 - A **section** is an `##` heading. Only these headings are read: `## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: revenue`, `## Role: churn`, `## Role: conversion`.
-- Under each section the parser reads the **first pipe table** whose header row is `| field | value |`. Rows are `| key | value |`. Everything else under the heading is prose, and prose is ignored.
+- Under each section the parser reads **one pipe table**, whose header row is `| field | value |`. Rows are `| key | value |`. Everything else under the heading is prose, and prose is ignored.
 - A value listing several items is comma-separated: `ACTIVE, COMPLETED`.
 - Any `## Role:` section may carry a fenced ` ```sql ` block. The parser never reads it and nothing ever executes it: it is written down for whoever runs the export, because the data path is a one-shot manual export.
-- **Everything inside a fence is invisible to the parser**, fences matched by length. A fenced worked example may therefore carry its own `| field | value |` table without it being read as the live one — including the example below.
+- **Everything inside a fence is invisible to the parser**, fences matched by length. A fenced worked example may therefore carry its own `| field | value |` table without it being read as the live one — including the example below. Fencing it is not decoration: an example left unfenced is a second table under the same heading, which is the next bullet.
+- **A section carrying two `| field | value |` tables is refused**, not read from one end. Whichever end a parser picked, somebody read the other: an example above the real table wins if the first is read, a correction appended under a superseded block wins if the last is. Measured on a real shape — an unfenced illustration for another market above a live `## Phone format` table — the run published a third of the audience it should have, with the illustration's own loose `max_unparseable_rate` switching off the guard that would have noticed. Fence the illustration or delete it.
 - Four sections are required — `## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion` — and two are optional: `## Role: revenue` and `## Role: churn`. A missing required section is `MapSectionError`, and so is a required section carrying no `| field | value |` table. So is the same heading written twice, whichever section it is: the second table would silently replace the first, leaving the binding a reader checks different from the binding the run uses.
 - **An unknown key inside a read table is an error, not a warning.** A typo that parses as silence is exactly how a binding goes missing without anyone noticing: the section is present, the table is present, the run succeeds, and one column was never read.
+- **A key written twice in one table is an error too**, for the mirror reason: a parser keeps the last row and a reader sees the first, so the binding that runs is the one nobody checked. A copied row somebody forgot to rename is how it arrives.
 
 ### `## Phone format`
 
@@ -227,7 +229,7 @@ A number that cannot be parsed must never be dropped in silence.
 - `max_unparseable_rate` declares a ceiling. Above it, the run **aborts** and reports the count. A misconfigured dialling plan and a genuinely unmatched list both produce zero matches, and only one of those is a result. Silence lets the first be read as the second.
 - A format declared as inexpressible — `area_digits` or `subscriber_digits` below 1 — is rejected by name, not mangled. A variable-length plan hidden behind plausible numbers is not detected at all, which is why the plan is established before the pair is written.
 - A stale fingerprint stops the run. It does not warn and continue.
-- An unknown key in a read table is an error, not a warning.
+- An unknown key in a read table is an error, not a warning. So is the same key twice, and so is a second `| field | value |` table under one heading.
 
 Set `max_unparseable_rate` from what the data actually looks like, and write down the reasoning beside it. A ceiling set high enough never to fire is the same as having none.
 
@@ -239,8 +241,10 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 | a required section absent | `MapSectionError` — names the section |
 | a section declared twice | `MapSectionError` — names the section; the later one silently replaces the earlier, so the binding a reader checks is not the binding the run uses |
 | a required section carrying prose but no read table | `MapSectionError` — names the section; a heading with no field/value table under it binds nothing |
+| a section carrying a second field/value table | `MapSectionError` — names the section; an unfenced worked example above the real table is read as the binding and installs the example's values, and a corrected table appended under a superseded one is the same fault from the other end, so neither end is picked |
 | a required key absent | `MapFieldError` — names section and key |
 | unknown key in a read table | `MapFieldError` — names section and key |
+| a key declared twice in one read table | `MapFieldError` — names section and key; the last row is what a parser keeps and the first is what a reader sees, so the binding that runs is the one nobody checked |
 | a numeric key holding something that is not a number, or not a whole one where the key requires one | `MapFieldError` — names section, key and the raw value it found |
 | `models` listing no block | `MapFieldError` — a fingerprint over no blocks hashes nothing and can never report drift |
 | `split` or `recycled_when` declared without the other | `MapFieldError` — names the missing half of the pair |
@@ -255,7 +259,7 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 | a listed block whose opening brace never closes | `MapSectionError` — names the block; an unclosed block leaves nothing definite to hash |
 | fingerprint mismatch | `MapStaleError` — names the schema path and both hashes |
 
-The first fifteen are raised while the map itself is read — the phone format included, since the format is validated at the moment the key deriver is built rather than row by row. The last four belong to the fingerprint check against the schema. Everything the reader can refuse is above: a condition absent from this table is one it does not refuse.
+The first seventeen are raised while the map itself is read — the phone format included, since the format is validated at the moment the key deriver is built rather than row by row. The last four belong to the fingerprint check against the schema. Everything the reader can refuse is above: a condition absent from this table is one it does not refuse.
 
 ---
 

@@ -277,6 +277,9 @@ Anything after the table is prose again.
     // The illustration has to be complete for this to bite. A half-finished one is missing a
     // required key and throws, which is loud and already covered; it is the plausible, filled-in
     // example that loads.
+    //
+    // The same illustration left unfenced is refused outright — the two-tables case further down —
+    // so the fence is what makes an example legible here rather than the thing that rescues it.
     const illustrated_phone = `## Phone format
 
 The two lengths are what people get wrong when they first fill this in, so the block below keeps
@@ -580,6 +583,106 @@ describe("load_map refuses a document it cannot bind", () => {
 
     expect(error).toBeInstanceOf(MapSectionError);
     expect((error as MapSectionError).section).toBe("## Notes");
+  });
+
+  /**
+   * A section carrying one `| field | value |` table per row block given, with prose between them.
+   *
+   * Shared by the two cases below, which are one shape at two scales — a table too many, a row too
+   * many — and which need disjoint documents rather than one: a map repeating a key has a single
+   * table, and a map carrying two tables need not repeat a key inside either. So neither case can
+   * stand in for the other, and deleting either guard leaves the other case green.
+   */
+  const section_of = (heading: string, ...tables: readonly string[]): string =>
+    `${heading}\n\n${tables
+      .map((rows) => `| field | value |\n|---|---|\n${rows}\n`)
+      .join("\nAnd prose, because half of a map is the reasoning written between its tables.\n\n")}`;
+
+  /** The live plan for this fixture's market, as `PHONE_SECTION` declares it. */
+  const REAL_PHONE_ROWS = `| country_code | 997 |
+| area_digits | 3 |
+| subscriber_digits | 6 |
+| max_unparseable_rate | 0.25 |
+| shared_account_ceiling | 3 |
+| area_codes | 480, 481 ,  482 |`;
+
+  /** A completed copy of the same table for another market. Describes no database. */
+  const ILLUSTRATED_PHONE_ROWS = `| country_code | 999 |
+| area_digits | 2 |
+| subscriber_digits | 8 |
+| max_unparseable_rate | 0.9 |
+| shared_account_ceiling | 99 |`;
+
+  test("rejects a second `| field | value |` table under one heading, naming the section", async () => {
+    // The unfenced sibling of the fenced-example case above, and the worse spelling of it: nothing
+    // about a plain table looks like a trick, so nobody thinks to fence it. Measured end to end
+    // before this refused, on a three-person export and a list of the same three numbers read
+    // through the illustration's plan: `matched_accounts` 1 and `conversions {count: 1, value: 10}`
+    // where the live table below gives 3 and `{count: 3, value: 30}`. A third of the truth, no
+    // error anywhere, and the illustration sets `max_unparseable_rate` to 0.9 so the guard that
+    // would have noticed the keys going wrong is switched off by the same fault.
+    //
+    // The illustration has to be complete for this to bite, as in the fenced case: a half-filled
+    // one is missing a required key and throws on that instead, which proves nothing about this.
+    //
+    // Reading the last table rather than the first is not the fix, which is why this expects a
+    // refusal rather than the live values: it would move the silence to the other end of the
+    // section, where a correction appended under a superseded block is the shape nobody sees.
+    const error = await caught(
+      load_map(
+        await write_map(
+          "two-tables-one-heading",
+          compose(
+            section_of("## Phone format", ILLUSTRATED_PHONE_ROWS, REAL_PHONE_ROWS),
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Phone format");
+    expect(error.message).toContain("## Phone format");
+  });
+
+  test("rejects a key declared twice in one table, naming the section and the key", async () => {
+    // A row copied and half-edited: `at` bound to the commitment stamp and then again to the row's
+    // own creation stamp. A `Map` keeps the last write and the reader sees the first, so the
+    // binding that runs is the one nobody checked. Measured end to end before this refused, on one
+    // member with one committed conversion two days after the cut: `conversions {count: 0, value:
+    // 0}` against the `{count: 1, value: 500}` the visible binding gives — the second `at` points
+    // at a stamp from before the cut, so the commitment falls outside the window and a row of
+    // zeros is this engine's cheapest wrong answer.
+    //
+    // Both keys name a column that is really in the export, so nothing downstream notices: the
+    // header check passes on whichever one won.
+    const repeated_at = `| export | conversion.csv |
+| person | account_id |
+| at | committed_at |
+| at | row_created_at |
+| amount | amount_minor |
+| status | state |
+| valid_statuses | ACTIVE, COMPLETED |`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "key-declared-twice",
+          compose(
+            PHONE_SECTION,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            section_of("## Role: conversion", repeated_at),
+          ),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).section).toBe("## Role: conversion");
+    expect((error as MapFieldError).key).toBe("at");
+    expect(error.message).toContain("## Role: conversion");
   });
 
   test("rejects `split` declared with no value marking the recycled side", async () => {

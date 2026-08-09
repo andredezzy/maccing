@@ -210,8 +210,30 @@ function cells_of(line: string): string[] | null {
   return inner.split("|").map((cell) => cell.trim());
 }
 
-/** The first `| field | value |` table under a heading, or null when the section has none. */
+/**
+ * The one `| field | value |` table under a heading, or null where the section carries none.
+ *
+ * A second table under the same heading is refused. This is the unfenced sibling of the case the
+ * fence guard closes, and the worse spelling of it, because nothing about a plain table above the
+ * real one looks like a trick: measured end to end, an unfenced worked example above the live
+ * `## Phone format` block installed the example's dialling plan and the run published
+ * `matched_accounts` 1 with `conversions {count: 1, value: 10}` where the same exports under the
+ * honest table give 3 and `{count: 3, value: 30}` — a third of the truth, and no error anywhere.
+ *
+ * Reading the last table rather than the first would relocate the fault instead of closing it: an
+ * example above the real block is silent under first-wins, and a correction appended below a
+ * superseded block is silent under last-wins, so whichever end the parser picks, somebody read the
+ * other. Refusing is also what the guards either side of this one do — the duplicate-heading guard
+ * refuses rather than merging, the duplicate-key guard below refuses rather than resolving — and
+ * this would be the only one of the three where the parser still picks. The cost is that a map
+ * documenting an example has to fence it, which is the convention the fence guard already set.
+ *
+ * The whole section is scanned for headers before any row is read, so a section carrying both a
+ * second table and a bad key inside the first reports the second table: which table binds is not
+ * a question the key-level errors can be read against.
+ */
 function read_table_of(lines: string[], heading: string): Table | null {
+  let start = -1;
   for (let i = 0; i < lines.length; i++) {
     const header = cells_of(lines[i] as string);
     if (header === null || header.length !== 2) {
@@ -220,39 +242,52 @@ function read_table_of(lines: string[], heading: string): Table | null {
     if (header[0]?.toLowerCase() !== "field" || header[1]?.toLowerCase() !== "value") {
       continue;
     }
-
-    const table: Table = new Map();
-    for (let r = i + 1; r < lines.length; r++) {
-      const row = cells_of(lines[r] as string);
-      if (row === null) {
-        break;
-      }
-      const key = row[0] as string;
-      // The alignment row carries no data; every cell is dashes and colons.
-      if (/^:?-{1,}:?$/.test(key)) {
-        continue;
-      }
-      // A key written twice is refused rather than resolved, for the reason the duplicate-heading
-      // guard one level up already gives: a `Map` keeps the last write, and the reader looking at
-      // the document sees the first. So the binding that runs is the one nobody read. Measured
-      // before this refused: an `at` declared as `signed_at` and then again as `row_created_at`
-      // published `conversions {count: 0, value: 0}` where the visible first binding gives
-      // `{count: 1, value: 500}` — no error, and a row of zeros is this engine's cheapest wrong
-      // answer. Editing a map by copying a line and forgetting to change its key is how it arrives.
-      if (table.has(key)) {
-        throw new MapFieldError(
-          heading,
-          key,
-          "declared twice in this table. Only the second row would be read, while a person reading " +
-            "the document sees the first, so the binding that runs is the one nobody checked. " +
-            "Delete the row that does not belong.",
-        );
-      }
-      table.set(key, row.slice(1).join("|").trim());
+    if (start !== -1) {
+      throw new MapSectionError(
+        heading,
+        "carries a second `| field | value |` table. Only one of them can be the binding and " +
+          "neither end is safe to pick: an example above the real table wins if the first is " +
+          "read, a correction below a superseded one wins if the last is, and either way somebody " +
+          "read the table that does not run. Fence whichever of them is illustration — nothing " +
+          "inside a fence is read here — or delete it",
+      );
     }
-    return table;
+    start = i;
   }
-  return null;
+  if (start === -1) {
+    return null;
+  }
+
+  const table: Table = new Map();
+  for (let r = start + 1; r < lines.length; r++) {
+    const row = cells_of(lines[r] as string);
+    if (row === null) {
+      break;
+    }
+    const key = row[0] as string;
+    // The alignment row carries no data; every cell is dashes and colons.
+    if (/^:?-{1,}:?$/.test(key)) {
+      continue;
+    }
+    // A key written twice is refused rather than resolved, for the reason the duplicate-heading
+    // guard one level up already gives: a `Map` keeps the last write, and the reader looking at
+    // the document sees the first. So the binding that runs is the one nobody read. Measured
+    // before this refused: an `at` declared as `signed_at` and then again as `row_created_at`
+    // published `conversions {count: 0, value: 0}` where the visible first binding gives
+    // `{count: 1, value: 500}` — no error, and a row of zeros is this engine's cheapest wrong
+    // answer. Editing a map by copying a line and forgetting to change its key is how it arrives.
+    if (table.has(key)) {
+      throw new MapFieldError(
+        heading,
+        key,
+        "declared twice in this table. Only the second row would be read, while a person reading " +
+          "the document sees the first, so the binding that runs is the one nobody checked. " +
+          "Delete the row that does not belong.",
+      );
+    }
+    table.set(key, row.slice(1).join("|").trim());
+  }
+  return table;
 }
 
 function section_table(sections: Map<string, string[]>, heading: string): Table {

@@ -202,8 +202,9 @@ type Dictionary = {
   terms: number;
   categories: number;
   merged: string[];
-  duplicates: number;
+  duplicate_terms: number;
   exemptions: number;
+  duplicate_exemptions: number;
 };
 
 type Loaded = {
@@ -326,6 +327,9 @@ const SKIPPED_DIRECTORIES: Record<string, true> = { ".git": true, node_modules: 
 
 /** `git log --format=%B%n%H` terminates each message with its own SHA on a line of its own. */
 const SHA_LINE = /^[0-9a-f]{40}$/;
+
+/** A full object id, at either width git names objects with: forty hex for SHA-1, sixty-four for SHA-256. */
+const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 /** Everything from git's scissors line down is stripped from the message before it is recorded. */
 const SCISSORS = /^.\s*-{2,}\s*>8\s*-{2,}/;
@@ -544,6 +548,16 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
  * Exemptions travel with the dictionary that needs them, because an exemption quotes the term it
  * exempts and a public list of those republishes the vocabulary the split exists to withhold.
  *
+ * Exemptions are deduplicated on the same rule as terms, and for the same reason. They were not,
+ * and the asymmetry was load-bearing: name one overlay twice — `LEAK_TERMS` exported and the same
+ * path passed again to `--terms`, which the release runbook did to itself — and the run reported
+ * 42 terms and said the second copy was a duplicate, while eleven exemptions became twenty-two
+ * with nothing printed about the collision. No wrong verdict came of it, because suppressing the
+ * same occurrence twice suppresses it once. What went was the count's meaning: `--audit`'s
+ * `N active` stopped being a property of the dictionary, and one stale entry was read out twice
+ * under a single verdict. Three agents filed findings against a correct criterion on the strength
+ * of a doubled count in one pass of this review.
+ *
  * A file that does not parse, or that parses into something that is not a dictionary, fails the
  * run. Treating either as an absent overlay is how a rotated secret containing `{}` passes a gate
  * that was asked to require one.
@@ -554,6 +568,7 @@ function load_dictionaries(paths: string[]): Loaded {
   const rejected: string[] = [];
   const dictionaries: Dictionary[] = [];
   const quoted = new Map<string, Set<string>>();
+  const first_entry = new Map<string, Exemption>();
   for (const path of paths) {
     if (!existsSync(path)) {
       throw new Error(`Dictionary not found: ${path}`);
@@ -563,7 +578,7 @@ function load_dictionaries(paths: string[]): Loaded {
     quoted.set(path, quotes);
     const merged: string[] = [];
     let added = 0;
-    let duplicates = 0;
+    let duplicate_terms = 0;
     for (const category of parsed.categories) {
       for (const entry of category.terms) {
         quotes.add(entry.term.toLowerCase());
@@ -577,7 +592,7 @@ function load_dictionaries(paths: string[]): Loaded {
       merged.push(category.name);
       for (const entry of category.terms) {
         if (existing.terms.some((candidate) => candidate.term === entry.term)) {
-          duplicates += 1;
+          duplicate_terms += 1;
           continue;
         }
         existing.terms.push(entry);
@@ -585,21 +600,84 @@ function load_dictionaries(paths: string[]): Loaded {
       }
     }
     const parsed_exemptions = read_exemptions(path, parsed.exemptions ?? []);
+    let applied = 0;
+    let duplicate_exemptions = 0;
     for (const entry of parsed_exemptions.exemptions) {
+      // Quoted whether or not the entry is applied: the file holds the word either way, and it is
+      // the file's own text that must not be reported against itself.
       quotes.add(entry.term.toLowerCase());
+      const identity = exemption_identity(entry);
+      const first = first_entry.get(identity);
+      if (first === undefined) {
+        first_entry.set(identity, entry);
+        exemptions.push(entry);
+        applied += 1;
+        continue;
+      }
+      if (first.why !== entry.why) {
+        rejected.push(conflicting_exemption(first, entry));
+        continue;
+      }
+      duplicate_exemptions += 1;
     }
-    exemptions.push(...parsed_exemptions.exemptions);
     rejected.push(...parsed_exemptions.rejected);
     dictionaries.push({
       path,
       terms: added,
       categories: parsed.categories.length,
       merged,
-      duplicates,
-      exemptions: parsed_exemptions.exemptions.length,
+      duplicate_terms,
+      exemptions: applied,
+      duplicate_exemptions,
     });
   }
   return { categories, exemptions, rejected, dictionaries, quoted };
+}
+
+/**
+ * What makes two exemptions one suppression rather than two, and why it is these five fields.
+ *
+ * They are exactly the fields that decide which occurrences an entry suppresses. `partition_hits`
+ * looks entries up by path, category and term, folding the term's case the way the matcher lookup
+ * folds it, so two spellings differing only in case are already one entry to everything
+ * downstream. `covers` then consults `line` — 0 names the path, anything else names content — and
+ * the sentences `resolve_exemption_contexts` reads at that line, narrowed by `anchor`. Two entries
+ * agreeing on all five suppress the same occurrences under every input, which is what makes the
+ * second one nothing but a second copy.
+ *
+ * Nothing looser will do, and the file already paid for finding out. Drop `anchor` and two entries
+ * naming two different clauses of one line collapse into one — the case `covered_contexts` exists
+ * to keep apart. Drop `line` as well and every entry for a path, category and term becomes one
+ * entry, which is precisely the key `covers` was moved off because it spent one person's judgement
+ * on text they never read.
+ *
+ * `why` and `source` are deliberately absent. Neither changes what is suppressed, so neither can
+ * make two entries into two suppressions — but a `why` that differs is a real disagreement rather
+ * than a copy, and `conflicting_exemption` handles that rather than this.
+ */
+function exemption_identity(entry: Exemption): string {
+  return `${exemption_key(entry.path, entry.category, entry.term)}\u0000${entry.line}\u0000${entry.anchor}`;
+}
+
+/**
+ * Two entries covering the same occurrence for different stated reasons. One of them is wrong, or
+ * describes text that has since been rewritten, and nothing here can tell which — so the run
+ * refuses rather than picking. Collapsing them silently would leave the second author believing a
+ * reason is in force that nobody will ever print, and keeping both would read the same occurrence
+ * out twice under one verdict, which is the doubling this dedupe exists to stop.
+ *
+ * The first entry stands, so no coverage is lost while the disagreement is settled; the second is
+ * not applied and the run fails, because an exemption error is how this file says a suppression
+ * needs a person.
+ */
+function conflicting_exemption(first: Exemption, second: Exemption): string {
+  return (
+    `${shorten(second.source)} (${second.path}:${second.line} — ${second.term}): the same occurrence is ` +
+    `already exempted for a different reason by ${shorten(first.source)}. First: "${first.why}". ` +
+    `This one: "${second.why}". Two reasons for one occurrence is not a duplicate — one of them describes ` +
+    "text that has changed, and this run cannot tell which. The first entry stands and this one is not " +
+    "applied; correct or remove one of them."
+  );
 }
 
 /**
@@ -1638,18 +1716,109 @@ function parse_commit_messages(log: string): Array<{ sha: string; message: strin
   return commits;
 }
 
-/** At least one commit a blob is reachable from, so a hit in the history is something to act on. */
-function containing_commit(root: string, oid: string, path: string): string {
-  const introduced = git_text(["log", "--all", "--format=%H", "-1", `--find-object=${oid}`], root);
-  const first = introduced.ok ? (introduced.stdout.trim().split("\n")[0] ?? "") : "";
-  if (first !== "") {
-    return first;
+/**
+ * The object each `<commit>:<path>` names, in the order asked, so a commit's tree can be compared
+ * against its parents' without one process per lookup. `--batch-check` prints one line per
+ * request and prints the *resolved* id rather than the request, so the answers are matched by
+ * position exactly as `read_objects` matches its own; a request git could not resolve answers
+ * `<request> missing` and still occupies its line.
+ *
+ * An answer is only read as an id when it is exactly `<id> <type> <size>`. A path with a space in
+ * it makes `<request> missing` three fields as well, and the first of them is the head of the
+ * request rather than any object — a shape that would resolve to a string no comparison here can
+ * ever match, but by accident rather than because it was rejected.
+ */
+function resolve_specs(root: string, specs: string[]): Array<string | null> {
+  const resolved: Array<string | null> = [];
+  for (let start = 0; start < specs.length; start += 4096) {
+    const chunk = specs.slice(start, start + 4096);
+    const run = run_git(["cat-file", "--batch-check"], root, new TextEncoder().encode(`${chunk.join("\n")}\n`));
+    const lines = run.stdout.toString("utf8").split("\n");
+    for (let index = 0; index < chunk.length; index += 1) {
+      const fields = (lines[index] ?? "").split(" ");
+      const id = fields[0] ?? "";
+      resolved.push(fields.length === 3 && OBJECT_ID.test(id) ? id : null);
+    }
+  }
+  return resolved;
+}
+
+/**
+ * The commits that put this blob at this path, oldest first — the commits a rewrite has to cut at.
+ *
+ * `--find-object` reports every commit whose diff *touches* the object, which is the commit that
+ * added it and the commit that replaced or deleted it alike. Asking git for one of them and taking
+ * the first answer took the newest: the commit holding the *next* version of the path, which is
+ * the one commit in the list whose tree is guaranteed not to contain the blob. Measured on a clone
+ * of the recovery bundle detached at `9a0162d4`, on
+ * `skills/growth/growth/references/outsourced-dispatch.md`: `4cc66fa`, added by `a37cc43`, was
+ * labelled `d88c3b22`; `a90bcbe`, added by `d88c3b22`, was labelled `46c63d1`; and the version in
+ * the checked-out tree, `96f0d82`, added by `46c63d1`, was labelled `9368a954`.
+ *
+ * So the candidates are filtered rather than trusted. A commit introduces the blob at the path
+ * when its own tree holds it there and no parent's tree does; a root commit has no parents and
+ * qualifies on its own tree alone. That is exact, and it is the question a cleanup asks.
+ *
+ * The walk's own range is the range asked here, and that is the second half of the third case
+ * above. `9368a954` moved the file elsewhere and is a *descendant* of the scanned tip, so asking
+ * `--all` reached past everything the run was given and named a commit that holds neither that
+ * path nor any part of the range — a label pointing outside the thing being cleared. A run that
+ * scanned a range answers out of that range or says it cannot.
+ *
+ * Every answer is reported, not the first. One blob can be introduced more than once — added,
+ * deleted and added back, or committed independently on two branches — and each of those is a
+ * separate point the history has to be cut at. Naming one of them silently would send somebody to
+ * cut at one and stop.
+ *
+ * Two things fall back to the oldest commit git listed. With no path there is no tree entry to
+ * compare against. With a path no candidate's tree holds, either the same bytes live under another
+ * name or a merge git did not diff carried them, and the range may itself begin mid-history so
+ * that every commit in it inherited the blob from a parent outside. The object is in those commits
+ * either way, and the oldest is the earliest arrival there is evidence of, because an object has to
+ * enter the graph before a diff can take it out again.
+ */
+function introducing_commits(root: string, range: string | null, oid: string, path: string): string[] {
+  const touched = git_text(["log", "--format=%H %P", `--find-object=${oid}`, range ?? "--all"], root);
+  if (!touched.ok) {
+    return [];
+  }
+  const candidates: Array<{ sha: string; parents: string[] }> = [];
+  for (const line of touched.stdout.split("\n")) {
+    const fields = line.trim().split(" ");
+    const sha = fields[0];
+    if (sha === undefined || !OBJECT_ID.test(sha)) {
+      continue;
+    }
+    candidates.push({ sha, parents: fields.slice(1).filter((parent) => OBJECT_ID.test(parent)) });
+  }
+  const oldest = candidates[candidates.length - 1]?.sha;
+  if (oldest === undefined) {
+    return [];
   }
   if (path === "") {
-    return "";
+    return [oldest];
   }
-  const touched = git_text(["log", "--all", "--format=%H", "-1", "--", path], root);
-  return touched.ok ? (touched.stdout.trim().split("\n")[0] ?? "") : "";
+  // One request for the commit's own entry at the path, then one for each parent's, in that order,
+  // so the answers can be read back off the same walk that wrote them.
+  const specs: string[] = [];
+  for (const candidate of candidates) {
+    specs.push(`${candidate.sha}:${path}`);
+    for (const parent of candidate.parents) {
+      specs.push(`${parent}:${path}`);
+    }
+  }
+  const resolved = resolve_specs(root, specs);
+  const introduced: string[] = [];
+  let at = 0;
+  for (const candidate of candidates) {
+    const here = resolved[at];
+    const parents = resolved.slice(at + 1, at + 1 + candidate.parents.length);
+    at += 1 + candidate.parents.length;
+    if (here === oid && !parents.includes(oid)) {
+      introduced.push(candidate.sha);
+    }
+  }
+  return introduced.length === 0 ? [oldest] : introduced.reverse();
 }
 
 /**
@@ -1730,11 +1899,11 @@ function scan_refs(root: string, matchers: Matcher[]): { hits: Hit[]; refs: numb
  * Reading both versions costs one extra blob per unreproduced file and is always correct, so that
  * is what happens: those blobs arrive here like any other superseded object, and the report tells
  * the two apart by source — the working copy under its own path, the commit under a `history:`
- * label naming the commit. Refusing to clear a dirty tree instead is simpler and unambiguous, and
- * it makes the clearance unusable during exactly the hours a repository is dirty — mid-work, which
- * is when somebody types a client's name — so it would be run less, and a gate that is skipped
- * clears nothing. Nothing is left unscanned, so no run has to invent a verdict for a clearance
- * that stopped halfway.
+ * label naming the commit that added it. Refusing to clear a dirty tree instead is simpler and
+ * unambiguous, and it makes the clearance unusable during exactly the hours a repository is dirty
+ * — mid-work, which is when somebody types a client's name — so it would be run less, and a gate
+ * that is skipped clears nothing. Nothing is left unscanned, so no run has to invent a verdict for
+ * a clearance that stopped halfway.
  *
  * A shallow clone holds only what was fetched, and an explicit range may not resolve in one. Both
  * still run, and both say so in the scope, because a partial history that prints PASSED is the
@@ -1867,13 +2036,21 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
       if (found.hits.length === 0) {
         continue;
       }
-      const commit = containing_commit(root, oid, path);
-      // The commit is a clause of its own and the path travels on the hit, because a path may
-      // contain an `@`. Recovering the path by cutting the label at its last `@` read
+      // What the commit clause means is written into it. `commit X` beside a hit reads as "X
+      // introduced this" to anybody about to rewrite a history, so the label says `added in` and
+      // means it, and where a blob was added at more than one point it names every one of them
+      // rather than picking a home and keeping quiet about the others.
+      const introduced = introducing_commits(root, range, oid, path);
+      const origin =
+        introduced.length === 0
+          ? "no commit in the scanned range adds it"
+          : `added in ${introduced.map((sha) => sha.slice(0, 12)).join(", ")}`;
+      // The commit clause is a clause of its own and the path travels on the hit, because a path
+      // may contain an `@`. Recovering the path by cutting the label at its last `@` read
       // `node_modules/@scope/name` as `node_modules/`, so an exemption written for one path could
       // suppress a hit belonging to another. Nothing parses a label now, and the shape here is the
       // one `name_of` above already uses, so a reader can see where the path ends.
-      const label = `history:${path === "" ? "(no path)" : path} (commit ${commit === "" ? "unknown" : commit.slice(0, 12)})`;
+      const label = `history:${path === "" ? "(no path)" : path} (${origin})`;
       hits.push(
         ...found.hits.map((hit) => (path === "" ? { ...hit, source: label } : { ...hit, source: label, path })),
       );
@@ -2270,10 +2447,17 @@ function report_dictionaries(loaded: Dictionary[]): void {
     if (entry.merged.length > 0) {
       console.log(`    extended rather than replaced: ${entry.merged.join(", ")}`);
     }
-    if (entry.duplicates > 0) {
+    if (entry.duplicate_terms > 0) {
       console.log(
-        `    ${entry.duplicates} ${entry.duplicates === 1 ? "term was" : "terms were"} already defined earlier; ` +
-          "the first definition stands, so the reason printed on a hit is that one",
+        `    ${entry.duplicate_terms} ${entry.duplicate_terms === 1 ? "term was" : "terms were"} already ` +
+          "defined earlier; the first definition stands, so the reason printed on a hit is that one",
+      );
+    }
+    if (entry.duplicate_exemptions > 0) {
+      console.log(
+        `    ${entry.duplicate_exemptions} ${entry.duplicate_exemptions === 1 ? "exemption was" : "exemptions were"} ` +
+          "already recorded earlier for the same occurrence and the same reason; the first entry stands, so " +
+          "the active count and --audit read it once",
       );
     }
   }
@@ -2777,6 +2961,98 @@ function plant_history(directory: string): string {
   // The unstaged edit itself: scrubbed on disk, intact in the object graph, staged nowhere.
   writeFileSync(join(repository, "unstaged.txt"), "a line with nothing in it at all\n");
   return repository;
+}
+
+/** One version of one path, and the commit whose tree first held it. */
+type Version = { blob: string; commit: string };
+
+type Versions = {
+  repository: string;
+  path: string;
+  versions: Version[];
+  /** A second path, deleted and restored byte for byte, and the two commits that each added it. */
+  restored: string;
+  homes: string[];
+};
+
+/**
+ * The attribution case, built here rather than measured against the repository, because the
+ * history this reproduced in is the history a scrub is about to rewrite and a test tied to it dies
+ * with it.
+ *
+ * One path holds three versions across three commits, with the term on a different line in each,
+ * so a hit says which blob it came out of without the label having to. A fourth commit deletes
+ * that path and writes the content somewhere else: `--find-object` on the third blob answers with
+ * a commit whose tree does not hold the path at all, and which — when the walk is given the third
+ * commit as its range — is outside that range entirely, being a descendant of it.
+ *
+ * A second path is committed, deleted and committed again byte for byte, so one blob has two
+ * homes and neither of them may be dropped from the label.
+ */
+function plant_versions(directory: string): Versions {
+  const repository = join(directory, "versions-fixture");
+  const path = "versions/dispatch.md";
+  const restored = "versions/restored.md";
+  mkdirSync(join(repository, "versions"), { recursive: true });
+  Bun.spawnSync(["git", "init", "--quiet", "-b", "main", repository], { stdout: "pipe", stderr: "pipe" });
+  const commit = (message: string): string => {
+    Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+    const made = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.email=self-test@example.invalid",
+        "-c",
+        "user.name=self test",
+        "commit",
+        "--no-verify",
+        "--quiet",
+        "-m",
+        message,
+      ],
+      { cwd: repository, stdout: "pipe", stderr: "pipe" },
+    );
+    if (made.exitCode !== 0) {
+      throw new Error(`self-test could not commit a version: ${made.stderr.toString()}`);
+    }
+    const named = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+    return named.stdout.toString().trim();
+  };
+  const restored_body = "the restored copy carries zarquilon\n";
+  const versions: Version[] = [];
+  const homes: string[] = [];
+  const bodies = [
+    "the first version carries zarquilon\n",
+    "an ordinary line\nthe second version carries zarquilon\n",
+    "an ordinary line\nanother ordinary line\nthe third version carries zarquilon\n",
+  ];
+  for (const [index, body] of bodies.entries()) {
+    writeFileSync(join(repository, path), body);
+    // Added, taken away, and put back byte for byte: two additions of one object.
+    if (index === 1) {
+      rmSync(join(repository, restored));
+    } else {
+      writeFileSync(join(repository, restored), restored_body);
+    }
+    const sha = commit(`version ${index + 1}`);
+    if (index !== 1) {
+      homes.push(sha);
+    }
+    const blob = Bun.spawnSync(["git", "rev-parse", `HEAD:${path}`], {
+      cwd: repository,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    versions.push({ blob: blob.stdout.toString().trim(), commit: sha });
+  }
+  rmSync(join(repository, path));
+  mkdirSync(join(repository, "moved"), { recursive: true });
+  writeFileSync(
+    join(repository, "moved/dispatch.md"),
+    "a fourth line\nan ordinary line\nanother ordinary line\nthe moved version carries zarquilon\n",
+  );
+  commit("move the path away");
+  return { repository, path, versions, restored, homes };
 }
 
 /**
@@ -3372,8 +3648,24 @@ function self_test(categories: TermCategory[]): number {
 
     // --require-overlay tests loaded vocabulary, not a merged file.
     const empty_overlay: Dictionary[] = [
-      { path: BUILT_IN_TERMS, terms: 0, categories: 0, merged: [], duplicates: 0, exemptions: 0 },
-      { path: "/outside/leak-terms.json", terms: 0, categories: 0, merged: [], duplicates: 0, exemptions: 0 },
+      {
+        path: BUILT_IN_TERMS,
+        terms: 0,
+        categories: 0,
+        merged: [],
+        duplicate_terms: 0,
+        exemptions: 0,
+        duplicate_exemptions: 0,
+      },
+      {
+        path: "/outside/leak-terms.json",
+        terms: 0,
+        categories: 0,
+        merged: [],
+        duplicate_terms: 0,
+        exemptions: 0,
+        duplicate_exemptions: 0,
+      },
     ];
     if (overlay_shortfall(empty_overlay, []) === null) {
       failures.push("--require-overlay accepted an overlay that declared no terms");
@@ -3405,6 +3697,87 @@ function self_test(categories: TermCategory[]): number {
       }
     }
 
+    // The same overlay named twice — `LEAK_TERMS` exported and the same path passed again to
+    // `--terms`, which is what following the release runbook verbatim used to do. Terms were
+    // deduplicated and said so; exemptions were not, so eleven became twenty-two in silence and
+    // `--audit` read one stale entry out twice under one verdict.
+    const twice = join(directory, "overlay-twice.json");
+    writeFileSync(
+      twice,
+      JSON.stringify({
+        categories: [{ name: "self_test_fixture", why: "fixture", terms: [{ term: "zarquilon", why: "fixture" }] }],
+        exemptions: [
+          { path: "a.md", category: "self_test_fixture", term: "zarquilon", line: 3, why: "first reason" },
+          { path: "b.md", category: "self_test_fixture", term: "zarquilon", line: 0, why: "second reason" },
+        ],
+      }),
+    );
+    const doubled = load_dictionaries([twice, twice]);
+    if (doubled.exemptions.length !== 2) {
+      failures.push(
+        `loading one overlay twice produced ${doubled.exemptions.length} exemptions rather than the 2 it ` +
+          "declares, so the active count is not a property of the dictionary",
+      );
+    }
+    if (doubled.rejected.length !== 0) {
+      failures.push("an exemption repeated verbatim was reported as a conflict rather than as a duplicate");
+    }
+    if (doubled.dictionaries[1]?.exemptions !== 0 || doubled.dictionaries[1]?.duplicate_exemptions !== 2) {
+      failures.push("a second copy of an overlay did not report its exemptions as already recorded");
+    }
+    if (doubled.dictionaries[1]?.duplicate_terms !== 1) {
+      failures.push("the term half of the dedupe stopped reporting, so the fixture proves nothing about the pair");
+    }
+
+    // Same occurrence, different stated reason: two judgements, not two copies. The first stands
+    // and the second is rejected, which fails the run rather than choosing a reason on its own.
+    const disagreeing = join(directory, "overlay-disagrees.json");
+    writeFileSync(
+      disagreeing,
+      JSON.stringify({
+        categories: [],
+        exemptions: [
+          { path: "a.md", category: "self_test_fixture", term: "zarquilon", line: 3, why: "a different reason" },
+        ],
+      }),
+    );
+    const conflicting = load_dictionaries([twice, disagreeing]);
+    if (conflicting.exemptions.length !== 2 || conflicting.rejected.length !== 1) {
+      failures.push("two reasons for one occurrence were merged as a duplicate instead of failing the run");
+    }
+    if (!conflicting.exemptions.some((entry) => entry.why === "first reason")) {
+      failures.push("a conflicting second reason displaced the first entry rather than being refused");
+    }
+
+    // And the identity is the tuple that decides what an entry suppresses, not the path and term
+    // alone: a different line, or a different anchor on the same line, is a different occurrence
+    // and survives the merge as its own entry.
+    const distinct = join(directory, "overlay-distinct.json");
+    writeFileSync(
+      distinct,
+      JSON.stringify({
+        categories: [],
+        exemptions: [
+          { path: "a.md", category: "self_test_fixture", term: "zarquilon", line: 4, why: "first reason" },
+          {
+            path: "a.md",
+            category: "self_test_fixture",
+            term: "zarquilon",
+            line: 3,
+            why: "first reason",
+            anchor: anchor_digest("some other clause on that line"),
+          },
+        ],
+      }),
+    );
+    const separate = load_dictionaries([twice, distinct]);
+    if (separate.exemptions.length !== 4 || separate.rejected.length !== 0) {
+      failures.push(
+        "entries differing only in the line they name, or in the clause their anchor names, were " +
+          "collapsed into one — which is one judgement spent on text nobody read",
+      );
+    }
+
     // The clearance finds a blob that no ref's tree still points at.
     const nothing_covered: Covered = { blobs: new Set(), names: new Set() };
     const repository = plant_history(directory);
@@ -3412,8 +3785,8 @@ function self_test(categories: TermCategory[]): number {
     if (!history.hits.some((hit) => hit.term === "zarquilon" && hit.path === "was-here.txt")) {
       failures.push("the history scan did not find a deleted file's blob, which is the whole clearance");
     }
-    if (!history.hits.some((hit) => / \(commit [0-9a-f]{12}\)$/.test(hit.source))) {
-      failures.push("a history hit did not name a commit that contains it");
+    if (!history.hits.some((hit) => / \(added in [0-9a-f]{12}\)$/.test(hit.source))) {
+      failures.push("a history hit did not name the commit that added it");
     }
     if (history.blobs < 2) {
       failures.push(`the history scan read ${history.blobs} blobs, so it is not walking the object graph`);
@@ -3425,6 +3798,61 @@ function self_test(categories: TermCategory[]): number {
       failures.push(
         "a historical path was never scanned because an earlier path held identical content: content is " +
           "deduplicated by content, and a name is not content",
+      );
+    }
+
+    // Attribution. One path, three versions, and a fourth commit that moves the path away.
+    // `--find-object` names every commit whose diff touches a blob — the one that added it and
+    // the one that replaced or removed it — so taking git's first answer labelled every version
+    // with the commit holding the *next* one, and labelled the last version with a commit that
+    // does not hold the path at all. Both spellings are checked: the range the walk was given,
+    // where that fourth commit is a descendant and outside the range entirely, and the whole
+    // graph, where it is in range and still wrong.
+    const planted_versions = plant_versions(directory);
+    const third = planted_versions.versions[2] as Version;
+    for (const [range, spelling] of [
+      [third.commit, "the scanned range"],
+      [null, "every ref"],
+    ] as Array<[string | null, string]>) {
+      const walked = scan_history(planted_versions.repository, range, matchers, nothing_covered);
+      for (const [index, version] of planted_versions.versions.entries()) {
+        const wanted = `history:${planted_versions.path} (added in ${version.commit.slice(0, 12)})`;
+        const found = walked.hits.find((hit) => hit.path === planted_versions.path && hit.line === index + 1);
+        if (found === undefined) {
+          failures.push(`over ${spelling}, version ${index + 1} of a three-version path was not found at all`);
+        } else if (found.source !== wanted) {
+          failures.push(
+            `over ${spelling}, version ${index + 1} of a three-version path is labelled "${found.source}" and ` +
+              `not "${wanted}": a blob is being attributed to a commit that does not hold it`,
+          );
+        }
+      }
+    }
+    // The commit that moved the path away is a descendant of the range the walk was given, so a
+    // label naming it points outside the history the run cleared — the reader is sent to rewrite
+    // at a commit the run never looked at.
+    const beyond = scan_history(planted_versions.repository, third.commit, matchers, nothing_covered);
+    const moved_away = git_text(["rev-parse", "HEAD"], planted_versions.repository);
+    const descendant = moved_away.ok ? moved_away.stdout.trim().slice(0, 12) : "";
+    if (descendant !== "" && beyond.hits.some((hit) => hit.source.includes(descendant))) {
+      failures.push(
+        "a history hit scanned over a range was labelled with a commit outside that range, and a descendant " +
+          "of its tip at that",
+      );
+    }
+    // One blob, two homes. A path committed, deleted and committed again byte for byte was added
+    // twice, and both additions are points a rewrite has to cut at. Naming the later one alone —
+    // which is what taking git's first answer did — sends somebody to cut once and stop.
+    const several = `history:${planted_versions.restored} (added in ${planted_versions.homes
+      .map((sha) => sha.slice(0, 12))
+      .join(", ")})`;
+    const two_homes = beyond.hits.find((hit) => hit.path === planted_versions.restored);
+    if (two_homes === undefined) {
+      failures.push("a blob added, deleted and added back was not found in the history at all");
+    } else if (two_homes.source !== several) {
+      failures.push(
+        `a blob with two homes is labelled "${two_homes.source}" and not "${several}": one of the commits it ` +
+          "has to be cut out of is not named",
       );
     }
 
@@ -3629,7 +4057,10 @@ function self_test(categories: TermCategory[]): number {
         "file, the readable runs of a file with one stray NUL, a short plaintext run behind NULs, a phrase " +
         "either side of one damaged byte, a branch name, a lightweight tag name, an annotated tag's message, " +
         "a deleted file's historical blob and a historical path whose blob another path already supplied are " +
-        "all caught; the clearance skips only blobs whose bytes this run hashed as it read them, so the " +
+        "all caught; a historical blob is labelled with the commit that added it at that path and not with " +
+        "the one that replaced it, out of the range the walk was given rather than from past its tip, and " +
+        "with every commit that added it where a blob was added more than once; " +
+        "the clearance skips only blobs whose bytes this run hashed as it read them, so the " +
         "committed version of a file carrying an unstaged edit and of one hidden behind a skip-worktree bit " +
         "are both read here rather than skipped, where the index rule they replaced skipped both; a run one " +
         "character under the salvage threshold, a phrase either side of dropped bytes, and every control are " +
@@ -3640,8 +4071,9 @@ function self_test(categories: TermCategory[]): number {
         "lost the term or has been rewritten out from under a recorded anchor, nor a hit whose historical path " +
         "merely shares a prefix with its own up to an @; an entry whose file this run could not read is " +
         "unresolved rather than rewritten; a blob too large to read is named; a file that could not be read " +
-        "at all is named and changes the verdict; an empty or malformed overlay fails --require-overlay; and " +
-        "a hit exits 1.",
+        "at all is named and changes the verdict; an empty or malformed overlay fails --require-overlay; one " +
+        "overlay loaded twice contributes its exemptions once and says so, while two reasons for the same " +
+        "occurrence fail the run rather than merging and two occurrences stay two entries; and a hit exits 1.",
     );
     return 0;
   } finally {
