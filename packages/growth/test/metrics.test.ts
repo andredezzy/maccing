@@ -14,6 +14,7 @@ import {
   ExportBlankColumnError,
   ExportColumnError,
   ExportJoinError,
+  ExportRepeatedPersonError,
   ExportStatusError,
   ExportValueError,
   is_publishable,
@@ -23,8 +24,10 @@ import {
   MissingColumnError,
   MissingExportError,
   measure,
+  OverflowedTotalError,
   ProvisionalCutError,
   TextListOptionError,
+  UnmatchedBaseError,
   UnparseablePhonesError,
   UnsupportedListFormatError,
   UnterminatedQuoteError,
@@ -485,6 +488,94 @@ describe("the cut separates who was already there from who arrived", () => {
     expect(error).toBeInstanceOf(CellDeclarationError);
     expect(error.message).toMatch(/blank/i);
   });
+
+  /**
+   * The fourth way a hand-typed cut goes wrong, and the only one the runtime answers by guessing:
+   * `new Date` counts an impossible day past the end of its month instead of refusing it. Every
+   * cut on disk is transcribed off a delivery report, where a slipped day is an ordinary typo, and
+   * the roll moves arrivals across the cut in whichever direction the typo points while the record
+   * goes on publishing the date that was typed. Each case below pins the day the runtime would
+   * have measured from, so a check that refuses on the wrong arithmetic still fails.
+   */
+  const ROLLED_CUTS: readonly { case: string; cut: string; rolls_to: string; now: string }[] = [
+    // A 30-day month. The slip a delivery report invites most, because 31 is a real day in seven
+    // of the other eleven months.
+    { case: "cut-april-31", cut: "2030-04-31T00:00:00Z", rolls_to: "2030-05-01", now: "2030-06-01T00:00:00Z" },
+    // 29 February in a common year, which is a real date in three years out of four.
+    { case: "cut-feb-29-common", cut: "2030-02-29T00:00:00Z", rolls_to: "2030-03-01", now: "2030-06-01T00:00:00Z" },
+    // Past the end of February in a *leap* year. February is 29 days long here, so this rolls one
+    // day rather than two — which is what proves the check consults the leap rule instead of
+    // refusing every February day above 28.
+    { case: "cut-feb-30-leap", cut: "2028-02-30T00:00:00Z", rolls_to: "2028-03-01", now: "2028-06-01T00:00:00Z" },
+  ];
+
+  for (const shape of ROLLED_CUTS) {
+    test(`a cut of ${shape.cut} is refused rather than rolled forward to ${shape.rolls_to}`, async () => {
+      const fixture = await build(shape.case, {
+        person: people(["one", phone(1), from_cut(HOUR)]),
+        lists: { "reached.txt": lines(phone(1)) },
+      });
+
+      // Read from well after the declared date, so the only refusal this cut can draw is the
+      // rollover: a reading taken before it would also be later-than-now, and the test would pass
+      // on the wrong error.
+      const error = await caught(
+        one(fixture, cold(shape.case, fixture.list("reached.txt"), { cut: shape.cut }), new Date(shape.now)),
+      );
+
+      expect(error).toBeInstanceOf(CellDeclarationError);
+      expect((error as CellDeclarationError).cell).toBe(shape.case);
+      // Both dates, because the fault is the gap between them: what the record would say, and
+      // what it would have counted from.
+      expect(error.message).toContain(shape.cut);
+      expect(error.message).toContain(shape.rolls_to);
+    });
+  }
+
+  test("a legitimate 29 February in a leap year still measures", async () => {
+    // The other half of the refusal above. 2028 is divisible by four, so the day exists and the
+    // cut is honoured exactly — a check written as "February above 28 is a typo" turns a real
+    // send date into a stop, and the campaign it measured never gets read at all.
+    const fixture = await build("cut-feb-29-leap", {
+      person: people(
+        ["before", phone(1), "2028-02-28T23:59:59.999Z"],
+        ["exactly", phone(2), "2028-02-29T00:00:00.000Z"],
+        ["after", phone(3), "2028-02-29T12:00:00.000Z"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const record = await one(
+      fixture,
+      cold("cut-feb-29-leap", fixture.list("reached.txt"), { cut: "2028-02-29T00:00:00Z" }),
+      new Date("2028-04-01T00:00:00Z"),
+    );
+
+    expect(record.cut_utc).toBe("2028-02-29T00:00:00Z");
+    expect(record.pre_existing.accounts).toBe(1);
+    expect(record.acquired.accounts).toBe(2);
+  });
+
+  test("a cut whose explicit offset carries it into another civil date is left alone", async () => {
+    // 1 March at +05:30 is 28 February in UTC. The declared day is real, and only the declared day
+    // is the check's business — reading the date back off the parsed instant would refuse this cut
+    // for naming a March day the reading never touches, which is a correct send date turned into a
+    // stop by a guard meant for typos.
+    const fixture = await build("cut-offset-date", {
+      person: people(["before", phone(1), "2030-02-28T18:29:59.999Z"], ["after", phone(2), "2030-02-28T18:30:00.000Z"]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(
+      fixture,
+      cold("cut-offset-date", fixture.list("reached.txt"), { cut: "2030-03-01T00:00:00+05:30" }),
+      new Date("2030-06-01T00:00:00Z"),
+    );
+
+    expect(record.cut_utc).toBe("2030-03-01T00:00:00+05:30");
+    expect(record.pre_existing.accounts).toBe(1);
+    expect(record.acquired.accounts).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -840,6 +931,31 @@ describe("top2_share puts concentration beside the total", () => {
 
     expect(record.acquired.revenue?.value).toBe(91);
     expect(record.acquired.revenue?.top2_share).toBe(0.78);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The lag
+// ---------------------------------------------------------------------------------------------
+
+describe("median_lag_days measures from the cut to the first payment", () => {
+  test("not from the account's own creation, and not as a mean over its events", async () => {
+    // The field's name is the whole risk: "lag" reads as time-since-signup, and it is not. This
+    // fixture separates the three readings somebody could implement or document. The account arrives
+    // ten days after contact and pays on day twelve and again on day twenty, so from the cut to its
+    // first payment is 12, from its own creation would be 2, and the mean of both events would be
+    // 16. Every other fixture in this file creates its accounts at one instant an hour after the
+    // cut, where from-creation and from-cut differ by a constant and round to the same number — so
+    // the reading has never been held apart from its two neighbours anywhere else.
+    const fixture = await build("lag-from-cut", {
+      person: people(["late", phone(1), from_cut(10 * DAY)]),
+      revenue: revenue(["late", from_cut(12 * DAY), 30], ["late", from_cut(20 * DAY), 30]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("lag-from-cut", fixture.list("reached.txt")));
+
+    expect(record.acquired.revenue?.median_lag_days).toBe(12);
   });
 });
 
@@ -2962,6 +3078,256 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.pre_existing.accounts).toBe(2);
     expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
     expect(record.conversions).toEqual({ count: 1, value: 20, new_money: 20, recycled: 0 });
+  });
+
+  /**
+   * Twenty listed phones, four of them arriving two hours after the cut, with `wallets` rows per
+   * person and the same person id on every copy of a row.
+   *
+   * One wallet is the honest export. Two is what the map's own warning about the money roles
+   * produces when it is followed into the wrong file: those roles reach a person through the wallet
+   * table, so an author writes the person export the same way and gets one row per person and
+   * wallet. It is not an artificial duplicate — nobody types the same id twice — and it is the only
+   * shape this arrives in.
+   */
+  async function fanned_out(name: string, wallets: number): Promise<Fixture> {
+    const rows: Row[] = [];
+    for (let n = 1; n <= 20; n += 1) {
+      const created = n <= 4 ? from_cut(2 * HOUR) : from_cut(-30 * DAY);
+      for (let w = 0; w < wallets; w += 1) {
+        rows.push([`member-${n}`, phone(n), created]);
+      }
+    }
+    return build(name, {
+      person: people(...rows),
+      revenue: revenue(...[1, 2, 3, 4].map((n): Row => [`member-${n}`, from_cut(3 * HOUR), 25])),
+      conversion: conversions(["member-1", from_cut(4 * HOUR), 70, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(...Array.from({ length: 20 }, (_, i) => phone(i + 1))) },
+    });
+  }
+
+  test("a person export fanned out onto one row per wallet, which multiplies every figure it publishes", async () => {
+    // Measured rather than refused, this file reads 40 matched accounts, 8 arrivals, 200 collected
+    // and two commitments worth 140 — every figure in the test below doubled, and an acquisition
+    // rate of 40% against a truth of 20%. None of it is distinguishable downstream from a base
+    // whose people each hold two accounts, which the record documents as ordinary, and the narrower
+    // version of the same fault does not even move `matched_accounts` off `matched_phones`.
+    const fixture = await fanned_out("refuse-fan-out", 2);
+
+    const error = await caught(one(fixture, cold("refuse-fan-out", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportRepeatedPersonError);
+    expect((error as ExportRepeatedPersonError).rows).toBe(40);
+    expect((error as ExportRepeatedPersonError).identifiers).toBe(20);
+    expect((error as ExportRepeatedPersonError).path).toContain("person.csv");
+    // Both quantities in the sentence: 40 against 20 says the file is doubled without anybody
+    // opening it, where either number alone says nothing.
+    expect(error.message).toContain("40 rows");
+    expect(error.message).toContain("20 distinct");
+    // And the remedy names the join, because that is where the rows came from.
+    expect(error.message).toContain("wallet");
+  });
+
+  test("and one still refused where a row carrying no id sits beside it, which is where the two counts meet", async () => {
+    // The blank carve-out has to hold on both sides of the comparison or it opens the hole it was
+    // written to close. Three people, one of whom holds a second wallet, and one row whose person
+    // join missed: four rows carry an id and three spellings are among them, so the file is doubled
+    // for exactly one person. Count the blank as a fourth identifier and four rows meet four
+    // spellings, the guard falls silent, and that person's money is collected twice — the same
+    // inflation as the case above, reached through an off-by-one nothing else here can see.
+    const fixture = await build("refuse-fan-out-with-blank", {
+      person: people(
+        ["", phone(1), from_cut(-DAY)],
+        ["member-1", phone(2), from_cut(2 * HOUR)],
+        ["member-1", phone(2), from_cut(2 * HOUR)],
+        ["member-2", phone(3), from_cut(2 * HOUR)],
+        ["member-3", phone(4), from_cut(-DAY)],
+      ),
+      revenue: revenue(["member-1", from_cut(3 * HOUR), 50]),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-fan-out-with-blank", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportRepeatedPersonError);
+    expect((error as ExportRepeatedPersonError).rows).toBe(4);
+    // Three, not four: the blank row is on neither side of the comparison.
+    expect((error as ExportRepeatedPersonError).identifiers).toBe(3);
+  });
+
+  test("but the same twenty people at one row each, which is the reading the refusal protects", async () => {
+    // The truth the doubled numbers above are doubled against, measured rather than asserted in a
+    // comment. `listed` and `acquired.accounts` are the two numbers every control divides to
+    // publish an acquisition rate, and 4 of 20 is the 20% the fan-out reported as 40%.
+    const fixture = await fanned_out("fan-out-one-row-each", 1);
+
+    const record = await one(fixture, cold("fan-out-one-row-each", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 20, matched_phones: 20, matched_accounts: 20 });
+    expect(record.acquired.accounts).toBe(4);
+    expect(record.acquired.revenue?.value).toBe(100);
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(70);
+  });
+
+  test("and a person export carrying no id on several rows, which is a left join that missed", async () => {
+    // The carve-out the count above depends on. A left join that matched nothing writes a null
+    // person, and a null reads as blank in an export, so three blanks among five rows is an
+    // ordinary file — one this engine already measures by crediting those rows nothing. Counted as
+    // identifiers they are one spelling on five rows, and this file is then refused as a fan-out:
+    // every export with a handful of unresolved rows becomes unmeasurable, which is the opposite
+    // failure and by far the commoner one.
+    const fixture = await build("fan-out-blank-ids-are-legal", {
+      person: people(
+        ["", phone(1), from_cut(-DAY)],
+        ["member-1", phone(2), from_cut(2 * HOUR)],
+        ["", phone(3), from_cut(-DAY)],
+        ["member-2", phone(4), from_cut(2 * HOUR)],
+        ["", phone(5), from_cut(-DAY)],
+      ),
+      revenue: revenue(["member-1", from_cut(3 * HOUR), 40]),
+      conversion: conversions(["member-2", from_cut(3 * HOUR), 60, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4), phone(5)) },
+    });
+
+    const record = await one(fixture, cold("fan-out-blank-ids-are-legal", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 5, matched_phones: 5, matched_accounts: 5 });
+    expect(record.acquired.accounts).toBe(2);
+    expect(record.acquired.revenue?.value).toBe(40);
+    expect(record.conversions).toEqual({ count: 1, value: 60, new_money: 60, recycled: 0 });
+  });
+
+  test("an own_base cell not one of whose listed numbers answers for an account", async () => {
+    // The declaration is the claim: own_base says these people already hold accounts, so arrival
+    // measures nothing about them and commitment is the outcome. None of these four holds one, so
+    // every count comes back zero and the record publishes a base that was reached and did nothing.
+    // It sits past both of the cell's own guards rather than between them — four readable numbers
+    // clear the unreadable-share ceiling and yield four keys, so `EmptyCellError` passes them too.
+    // Nothing else in the pass ever compares the keys against the index they are matched in.
+    const fixture = await build("refuse-own-base-unmatched", {
+      person: people(["member-1", phone(90), from_cut(-30 * DAY)]),
+      revenue: revenue(["member-1", from_cut(HOUR), 10]),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
+    });
+
+    const error = await caught(one(fixture, base("refuse-own-base-unmatched", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnmatchedBaseError);
+    expect((error as UnmatchedBaseError).cell).toBe("refuse-own-base-unmatched");
+    expect((error as UnmatchedBaseError).listed).toBe(4);
+    // The export path, because the fix is a comparison between two files and the reader needs the
+    // second one named. And the audience word, because the refusal turns on the declaration.
+    expect(error.message).toContain("person.csv");
+    expect(error.message).toContain("own_base");
+  });
+
+  test("but the same list declared cold, where matching nobody is the finding rather than a fault", async () => {
+    // The asymmetry the guard turns on, and the reason it reads the audience rather than the count.
+    // A cold send to four numbers none of which has ever registered is the number that send was run
+    // to get: people were reached and none of them arrived. Refusing it would refuse every honest
+    // cold reading, a real sub-one-percent baseline included.
+    const fixture = await build("cold-unmatched-is-a-finding", {
+      person: people(["member-1", phone(90), from_cut(-30 * DAY)]),
+      revenue: revenue(["member-1", from_cut(HOUR), 10]),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
+    });
+
+    const record = await one(fixture, cold("cold-unmatched-is-a-finding", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 4, matched_phones: 0, matched_accounts: 0 });
+    expect(record.acquired.accounts).toBe(0);
+    expect(record.conversions.count).toBe(0);
+  });
+
+  test("a total that overflows the range, on every one of the seven money fields", async () => {
+    // The per-row check cannot see any of these: every amount below is a finite number that passes
+    // it, and the sum is what leaves the range. `round_half_even` then hands a non-finite value
+    // straight back — deliberately, it is exact integer arithmetic and has nothing to say about
+    // infinity — and `JSON.stringify` writes it as `null`. That is the same `null` the record uses
+    // for a role the map never bound, so the overflow publishes as a legitimate absence.
+    //
+    // Seven cases because there are seven call sites and a guard missing at one of them is a field
+    // that still publishes the null. The two split fields are not folded into `conversions.value`:
+    // a recycled row of the opposite sign between the two payments keeps the running total finite
+    // while the new-money side of the same split still overflows, so each is reachable alone.
+    const BIG = "9e307";
+    const cases: readonly { field: string; parts: Parts }[] = [
+      {
+        field: "acquired.revenue.value",
+        parts: {
+          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          revenue: revenue(["late", from_cut(3 * HOUR), BIG], ["late", from_cut(4 * HOUR), BIG]),
+        },
+      },
+      {
+        field: "pre_existing.revenue.value",
+        parts: {
+          person: people(["old", phone(1), from_cut(-DAY)]),
+          revenue: revenue(["old", from_cut(3 * HOUR), BIG], ["old", from_cut(4 * HOUR), BIG]),
+        },
+      },
+      {
+        field: "acquired.churn.value",
+        parts: {
+          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          churn: churn(["late", from_cut(3 * HOUR), BIG], ["late", from_cut(4 * HOUR), BIG]),
+        },
+      },
+      {
+        field: "pre_existing.churn.value",
+        parts: {
+          person: people(["old", phone(1), from_cut(-DAY)]),
+          churn: churn(["old", from_cut(3 * HOUR), BIG], ["old", from_cut(4 * HOUR), BIG]),
+        },
+      },
+      {
+        field: "conversions.value",
+        parts: {
+          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          conversion: conversions(
+            ["late", from_cut(3 * HOUR), BIG, "LIVE", "WIRE"],
+            ["late", from_cut(4 * HOUR), BIG, "LIVE", "WIRE"],
+          ),
+        },
+      },
+      {
+        field: "conversions.new_money",
+        parts: {
+          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          conversion: conversions(
+            ["late", from_cut(3 * HOUR), BIG, "LIVE", "WIRE"],
+            ["late", from_cut(4 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
+            ["late", from_cut(5 * HOUR), BIG, "LIVE", "WIRE"],
+          ),
+        },
+      },
+      {
+        field: "conversions.recycled",
+        parts: {
+          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          conversion: conversions(
+            ["late", from_cut(3 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
+            ["late", from_cut(4 * HOUR), BIG, "LIVE", "WIRE"],
+            ["late", from_cut(5 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
+          ),
+        },
+      },
+    ];
+
+    for (const { field, parts } of cases) {
+      const name = `refuse-overflow-${field.replaceAll(".", "-")}`;
+      const fixture = await build(name, { ...parts, lists: { "reached.txt": lines(phone(1)) } });
+
+      const error = await caught(one(fixture, cold(name, fixture.list("reached.txt"))));
+
+      expect(error).toBeInstanceOf(OverflowedTotalError);
+      // The field by its own dotted path, so the sentence names the number the reader is looking at
+      // rather than the role behind it. A guard copied to a second site with the first site's label
+      // sends them to the wrong line of the record.
+      expect((error as OverflowedTotalError).field).toBe(field);
+      expect((error as OverflowedTotalError).cell).toBe(name);
+    }
   });
 
   test("an export whose header names one column twice", async () => {

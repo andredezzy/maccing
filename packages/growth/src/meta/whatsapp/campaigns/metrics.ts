@@ -48,7 +48,9 @@ export type Cell = {
   /** Join key for controls and for the emitted record. */
   name: string;
   /** ISO-8601 UTC. The real moment of contact — not midnight, not the planning date. A cut
-   *  earlier than the truth counts people who arrived before anything reached them. */
+   *  earlier than the truth counts people who arrived before anything reached them. A day its
+   *  month does not have is refused rather than rolled forward: the runtime would answer
+   *  `2030-02-30` with 2 March and the record would go on publishing 30 February. */
   cut: string;
   /** True while no confirmed contact time exists. Measuring against a placeholder is the
    *  documented way this kind of report once claimed arrivals that never happened. */
@@ -86,6 +88,12 @@ export type AcquiredRevenue = EventTotals & {
   /** Share of the total held by the two largest contributors. Concentration hides in an
    *  average, and it has been found by hand more than once. */
   top2_share: number | null;
+  /** Days from the **cut** to a person's first payment counted from it, medianed over the acquired
+   *  accounts that paid and rounded to one decimal. From the cut, not from the account's creation:
+   *  an account that arrives ten days after contact and pays the same afternoon reports ten, not
+   *  nothing, because what this measures is how long the money took to follow the send. A median
+   *  over people rather than a mean over events, so somebody paying weekly cannot drag it. Null
+   *  where nobody in the group paid — there is no first payment to measure to. */
   median_lag_days: number | null;
 };
 
@@ -355,6 +363,42 @@ export class ExportJoinError extends Error {
   }
 }
 
+/** A person export carrying the same identifier on more than one row. Every copy becomes its own
+ *  account in the index, and both the money loop and the conversion loop look each account's id up
+ *  once per copy, so one person arrives, pays and commits as many times as the file repeats them.
+ *  A file fanned out two ways publishes twice the acquisitions, twice the revenue and twice the
+ *  commitments, and an acquisition rate at double the truth — twenty percent published as forty.
+ *
+ *  It is the inflating direction, and nothing else here can see it. `matched_accounts` above
+ *  `matched_phones` is also what a base whose people genuinely hold two accounts looks like, which
+ *  the record documents as ordinary; and the narrower shape, one person landing on two phone rows,
+ *  does not move `matched_accounts` off `matched_phones` at all. A fan-out as wide as the declared
+ *  switchboard ceiling is worse again: every phone reaches the ceiling, the eviction empties the
+ *  index, and the run publishes a campaign that reached nobody. */
+export class ExportRepeatedPersonError extends Error {
+  readonly path: string;
+  readonly rows: number;
+  readonly identifiers: number;
+
+  constructor(path: string, rows: number, identifiers: number) {
+    super(
+      `${rows} rows of ${path} carry a person identifier and there are only ${identifiers} distinct ` +
+        "ones among them. This export is one row per person, and a repeated identifier is counted " +
+        "once per row: that person's arrival, their money and their commitments are added as many " +
+        "times as they appear, so every figure this run publishes comes out multiplied and the " +
+        "acquisition rate with it. Nothing downstream tells that apart from a base whose people " +
+        "really do hold several accounts. The export is missing a `distinct`, or it joins a table " +
+        "that fans out — a wallet table above all, since a person holds one per type and currency, " +
+        "which is the join the map warns at length about for the money roles. Re-export one row " +
+        "per person.",
+    );
+    this.name = "ExportRepeatedPersonError";
+    this.path = path;
+    this.rows = rows;
+    this.identifiers = identifiers;
+  }
+}
+
 /** A cell whose declaration cannot be measured as written. */
 export class CellDeclarationError extends Error {
   readonly cell: string;
@@ -425,6 +469,46 @@ export class EmptyCellError extends Error {
   }
 }
 
+/** An `own_base` cell not one of whose listed identifiers answers for an account.
+ *
+ *  The declaration is the claim. `own_base` says these people already hold accounts, which is why
+ *  arrival measures nothing about them and commitment is the outcome instead. Matching none of them
+ *  contradicts the claim, and every count on the record then comes back zero — a base that was
+ *  listed, reached, and did nothing, which is exactly what an indifferent base looks like. The same
+ *  zeros on a `cold` cell are left alone: nobody who had never heard of the brand registered, and
+ *  that is the number a cold send exists to produce rather than a fault in how it was measured.
+ *
+ *  It sits past the cell's own two guards rather than between them, because neither asks this
+ *  question. The unreadable-share ceiling asks whether the identifiers could be keyed, and three
+ *  well-formed numbers pass it; `EmptyCellError` asks whether the list yielded any keys at all, and
+ *  three keys pass that too. Nothing else compares the keys against the index they are matched in.
+ *
+ *  Three faults land here and the message names all three, because the record cannot separate them:
+ *  a list of the wrong people, a `column` holding numbers that are not phones, and a person export
+ *  cut narrower than the list — to a window, to a segment, or to a market whose numbers key
+ *  differently on the two sides. */
+export class UnmatchedBaseError extends Error {
+  readonly cell: string;
+  readonly listed: number;
+
+  constructor(cell: string, listed: number, person_path: string) {
+    super(
+      `cell ${JSON.stringify(cell)} is declared own_base, and not one of its ${listed} listed ` +
+        `identifiers answers for an account in ${person_path}. own_base is the claim that these ` +
+        "people already hold accounts, so nothing matched is not a reading: every count on the " +
+        "record comes back zero and publishes as a base that was reached and did nothing. The list " +
+        "names people this export does not cover, or the cell's `column` holds numbers that are not " +
+        "phones, or the export was cut to a window or a segment narrower than the list. Take one " +
+        "listed number and look for it in the export by hand before changing either of them. A cold " +
+        "cell matching nobody is measured, because there it is the finding; this one contradicts " +
+        "its own declaration.",
+    );
+    this.name = "UnmatchedBaseError";
+    this.cell = cell;
+    this.listed = listed;
+  }
+}
+
 /** A control pair that cannot be read, or that reads the wrong outcome for its audience. */
 export class ControlError extends Error {
   constructor(reason: string) {
@@ -455,12 +539,85 @@ export class ProvisionalCutError extends Error {
   }
 }
 
+/** A published money total that summed past the range a number here can hold.
+ *
+ *  Every row that went into it was finite and passed the per-row check; the sum is what left the
+ *  range. `JSON.stringify` writes a non-finite number as `null`, and that is the same `null` the
+ *  record already uses for a total nobody measured — `EventTotals.value` is `number | null` exactly
+ *  so a role the map never bound reads as absent instead of as zero. An overflowed total is
+ *  therefore indistinguishable from a documented, legitimate absence, which is the half of this
+ *  that misleads in silence. `conversions.value` is the louder half: it is typed a plain `number`,
+ *  so the null it publishes is not a value its own type admits.
+ *
+ *  Two overflows of opposite sign sum to `NaN` rather than to `Infinity` — a group of refunds
+ *  against a group of payments, both past the range — and `NaN` publishes as the same `null`. So the
+ *  test is for finiteness, and infinity alone would miss it. */
+export class OverflowedTotalError extends Error {
+  readonly cell: string;
+  readonly field: string;
+
+  constructor(cell: string, field: string) {
+    super(
+      `cell ${JSON.stringify(cell)} summed ${field} past the largest number this engine can hold, so ` +
+        "the field would publish as JSON null — the same null the record uses for a total it never " +
+        "measured, which reads as a role the map does not bind rather than as arithmetic that came " +
+        "apart. Every row behind it is a finite number and each one passed the per-row check, so the " +
+        "fault is in the magnitudes rather than in any single value: an amount column exported in a " +
+        "unit the map does not assume, or a planted row left in from a test. Sort that export by " +
+        "amount and read the top of it.",
+    );
+    this.name = "OverflowedTotalError";
+    this.cell = cell;
+    this.field = field;
+  }
+}
+
 type Account = { id: string; created: Date | null };
 type MoneyEvent = { at: Date | null; amount: number };
 type ConversionEvent = MoneyEvent & { status: string; split?: string };
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
+
+/** Days in each month of a common year, indexed by month number minus one. February's other
+ *  answer is the leap rule in `rolls_forward_to`; every other month has one length forever. */
+const COMMON_YEAR_MONTH_DAYS: readonly number[] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** The civil date a declared cut opens with. A month outside 01–12 or a day outside 01–31 never
+ *  reaches this — the parser refuses those outright — so what arrives here is a real-looking date
+ *  that may still name a day its own month does not have. */
+const CIVIL_DATE = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/**
+ * The date the runtime would measure from, where that is not the date the cut names. Null for
+ * every real day, which is every cut but a mistyped one.
+ *
+ * Only the `YYYY-MM-DD` a person typed is read, never the instant it parsed to. Taking the date
+ * back off the instant would refuse correct cuts: `2030-03-01T00:00:00+05:30` is 28 February in
+ * UTC, and a check comparing UTC fields against the typed ones would call that a rollover and stop
+ * a reading that is exactly right.
+ *
+ * Only a month shorter than thirty-one days can overflow, so the roll lands at most three days
+ * into the next month of the same year and needs no calendar arithmetic beyond a subtraction.
+ */
+function rolls_forward_to(declared: string): string | null {
+  const match = CIVIL_DATE.exec(declared.trim());
+  if (match === null) {
+    return null;
+  }
+  const year = Number(match[1] as string);
+  const month = Number(match[2] as string);
+  const day = Number(match[3] as string);
+  // Divisible by four, except a century not also divisible by four hundred. Both exceptions reach
+  // a cut: `2100-02-29` is not a date and `2000-02-29` is, and a rule written as `year % 4` alone
+  // waves the first one through to be measured from 1 March.
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const length = month === 2 && leap ? 29 : (COMMON_YEAR_MONTH_DAYS[month - 1] as number);
+  if (day <= length) {
+    return null;
+  }
+  return `${match[1] as string}-${String(month + 1).padStart(2, "0")}-${String(day - length).padStart(2, "0")}`;
+}
 
 function column_of(binding: RoleBinding, name: string, role: string): string {
   const column = binding.columns[name];
@@ -483,6 +640,20 @@ function amount_of(raw: string, path: string, column: string): number {
     throw new ExportValueError(path, column, raw);
   }
   return value;
+}
+
+/** Round a money total to the cent, having first refused one that has stopped being a number.
+ *
+ *  The per-row check above bounds each value; nothing bounds their sum, and `round_half_even` passes
+ *  a non-finite input straight through by design. Every total the record publishes goes through
+ *  here, because the field would otherwise serialise as `null` and read as a role nobody measured.
+ *  `field` is the record's own dotted path, so the sentence names the number the reader is looking
+ *  at rather than the role it came from. */
+function published_total(total: number, cell: string, field: string): number {
+  if (!Number.isFinite(total)) {
+    throw new OverflowedTotalError(cell, field);
+  }
+  return round_half_even(total, 2);
 }
 
 /**
@@ -933,12 +1104,20 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   // survives the switchboard eviction below. It is what the other roles are asked to join
   // against, and that question is about the id column, not about the dialling plan.
   const person_ids = new Set<string>();
+  // Rows that carried an id, against the distinct spellings among them. One row per person is what
+  // the id column being a primary key means, and the check below costs nothing here because both
+  // quantities are already being built.
+  let identified = 0;
   // Distinct spellings, not rows, so both sides of the rate below count the same kind of thing.
   // One sentinel repeated down a column is a single unknown, and it can hide at most one person.
   const unknowns = new Set<string>();
   let dated = 0;
   for (const row of person_rows) {
-    person_ids.add(row[person_id] ?? "");
+    const id = row[person_id] ?? "";
+    person_ids.add(id);
+    if (id !== "") {
+      identified += 1;
+    }
     // Parsed before the phone is looked at, so the count below describes the file rather than the
     // subset of it this market's dialling plan happened to understand.
     const created = parse_ts(row[person_created]);
@@ -960,7 +1139,7 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       unknowns.add(written);
       continue;
     }
-    const account: Account = { id: row[person_id] ?? "", created };
+    const account: Account = { id, created };
     const bucket = by_key.get(key);
     if (bucket === undefined) {
       by_key.set(key, [account]);
@@ -968,6 +1147,17 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       bucket.push(account);
     }
   }
+  // Before the two checks below, which describe the index this file builds and which a fanned-out
+  // file has already inflated: a fan-out as wide as the switchboard ceiling puts every phone at it,
+  // the eviction empties the index, and the run then publishes a campaign that reached nobody with
+  // nothing said about why. Blanks count on neither side — a blank id is a left join that matched
+  // nothing, already handled as a person who collects nothing, and a column of them read as one id
+  // repeated would refuse a file that measures correctly.
+  const distinct_ids = person_ids.has("") ? person_ids.size - 1 : person_ids.size;
+  if (identified > distinct_ids) {
+    throw new ExportRepeatedPersonError(person_path, identified, distinct_ids);
+  }
+
   if (person_rows.length > 0) {
     // Divided by the index this protects rather than by the file, so the reading survives an
     // export where one number answers for several accounts. Each distinct unknown could have added
@@ -1026,6 +1216,25 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       throw new CellDeclarationError(
         cell.name,
         `its cut ${JSON.stringify(cell.cut)} is declared finer than a millisecond, and this engine's instant resolves to the millisecond, so that cut cannot be honoured exactly — declare it to the millisecond or coarser`,
+      );
+    }
+    // Refused before the instant is taken, because the fault is in the string and not in where it
+    // landed. `new Date` answers an impossible day by counting past the end of the month instead
+    // of refusing it, so `2030-02-30` measures from 2 March. Every cut on disk is transcribed by
+    // hand off a delivery report, where `2026-04-31`, `2026-06-31` and `2026-02-30` are ordinary
+    // slips, and the shift runs whichever way the typo points — it can credit the campaign as
+    // easily as rob it. Left alone the record publishes the day that was typed while the counts
+    // behind it were taken from a different one, and nothing in the record says so.
+    const rolled = rolls_forward_to(cell.cut);
+    if (rolled !== null) {
+      throw new CellDeclarationError(
+        cell.name,
+        `its cut ${JSON.stringify(cell.cut)} names a day that month does not have, and the runtime ` +
+          `counts past the end of the month rather than refusing it, so the reading would be taken ` +
+          `from ${rolled}. The record would still publish ${JSON.stringify(cell.cut)} as its cut — a ` +
+          "date that never existed and was never measured from — while every account and event " +
+          "arriving in between fell on the wrong side of the comparison. Correct the cut to the day " +
+          "the send actually went out",
       );
     }
     const cut_ms = cut.getTime();
@@ -1149,6 +1358,15 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         matched_accounts.push(account);
       }
     }
+    // Checked here because this is the first line at which the answer exists: the two guards above
+    // ask whether the identifiers could be read and whether any survived, and a list of well-formed
+    // numbers absent from the export passes both. Only `own_base` is refused. It is a declaration
+    // that these people already hold accounts, so nothing matched contradicts it; the same zeros on
+    // a cold cell are the finding that send was run to get, and refusing them would refuse every
+    // honest cold reading this engine takes.
+    if (cell.audience === "own_base" && matched_keys.length === 0) {
+      throw new UnmatchedBaseError(cell.name, keys.size, person_path);
+    }
 
     // An account with no creation time falls in neither group. It cannot be placed relative to
     // the cut, and guessing would put it on whichever side flatters the campaign.
@@ -1227,12 +1445,15 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         within: { h24: within(24), d7: within(24 * 7), d30: within(24 * 30) },
       },
       pre_existing: { accounts: pre_existing.length },
-      conversions: { count: conversion_count, value: round_half_even(conversion_value, 2) },
+      conversions: {
+        count: conversion_count,
+        value: published_total(conversion_value, cell.name, "conversions.value"),
+      },
     };
 
     if (recycled_when !== undefined) {
-      record.conversions.new_money = round_half_even(new_money, 2);
-      record.conversions.recycled = round_half_even(recycled, 2);
+      record.conversions.new_money = published_total(new_money, cell.name, "conversions.new_money");
+      record.conversions.recycled = published_total(recycled, cell.name, "conversions.recycled");
     }
 
     if (revenue !== null) {
@@ -1240,17 +1461,26 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       const held = accumulate(pre_existing, revenue, cut_ms);
       record.acquired.revenue = {
         people: gained.people,
-        value: round_half_even(gained.value, 2),
+        value: published_total(gained.value, cell.name, "acquired.revenue.value"),
         top2_share: top2_share(gained.per_person, gained.value),
         median_lag_days: round_or_null(gained.lags.length === 0 ? null : median(gained.lags), 1),
       };
-      record.pre_existing.revenue = { people: held.people, value: round_half_even(held.value, 2) };
+      record.pre_existing.revenue = {
+        people: held.people,
+        value: published_total(held.value, cell.name, "pre_existing.revenue.value"),
+      };
     }
     if (churn !== null) {
       const gone = accumulate(acquired, churn, cut_ms);
       const held = accumulate(pre_existing, churn, cut_ms);
-      record.acquired.churn = { people: gone.people, value: round_half_even(gone.value, 2) };
-      record.pre_existing.churn = { people: held.people, value: round_half_even(held.value, 2) };
+      record.acquired.churn = {
+        people: gone.people,
+        value: published_total(gone.value, cell.name, "acquired.churn.value"),
+      };
+      record.pre_existing.churn = {
+        people: held.people,
+        value: published_total(held.value, cell.name, "pre_existing.churn.value"),
+      };
     }
 
     // The key set travels with the record. It is the cell's membership, and the only place a
