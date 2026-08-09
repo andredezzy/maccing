@@ -225,7 +225,7 @@ Everything above decides what to send and to whom. This section decides how the 
 import { measure } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
 ```
 
-Each campaign writes its own short script — twenty lines that declare its cells, declare its controls, call `measure`, and write the result beside the script. **This skill layer ships no executable.** It carries the contract and the reasoning; the arithmetic lives somewhere with a build, a version and a changelog.
+Each campaign writes its own short script — 42 to 110 lines in the five written against this package so far, declaring its cells, its controls and the probes it subtracts, then calling `measure` and writing the result beside the script. Length tracks how many cells a campaign ran rather than how much machinery the script carries: the two-cell scripts come out at 42 and 50 lines, the seven-cell ones at 84 and 110. A cell is not one line — it names its lists, its phone column, its audience and its exclusions, and the reasoning behind its cut is worth more room than the declaration itself. **This skill layer ships no executable.** It carries the contract and the reasoning; the arithmetic lives somewhere with a build, a version and a changelog.
 
 **Why a package rather than a copied script.** The alternative is a how-to that every campaign copies into its own file, and copied measurement logic drifts. Five campaigns become five phone-key normalisers and five significance tests, agreeing in shape and free to disagree in arithmetic — and once they disagree there is no way to tell which reading was right, because both were "the method". One implementation that every campaign shares is the fix, and package resolution also means no file has to record where the machinery lives.
 
@@ -254,7 +254,7 @@ A `.txt` list is read as one identifier per line and has nowhere to hold either 
 
 ### The guards the engine enforces
 
-Each of these was a rule held in prose, enforced by whoever remembered it. As mechanism — and this is the whole list of what the engine checks about a declaration and the exports it reads, because a partial one reads as complete and leaves the reader believing the case they hit was allowed. It is not the whole list of what a `measure()` call can raise: that call reads the map first, so `MapMissingError`, `MapSectionError`, `MapFieldError` and `PhoneFormatError` reach the same caller from the same line. Those are the map's own refusals, enumerated in `database-mapping` where the map's rules live, and the section below says why the map is a prerequisite rather than a parameter.
+Each of these was a rule held in prose, enforced by whoever remembered it. As mechanism — and this is the whole list of what the engine checks about a declaration and the exports it reads, because a partial one reads as complete and leaves the reader believing the case they hit was allowed. It is not the whole list of what a `measure()` call can raise: that call reads the map first, so `MapMissingError`, `MapSectionError`, `MapFieldError`, `MapDuplicateBindingError` and `PhoneFormatError` reach the same caller from the same line. Those are the map's own refusals, enumerated in `database-mapping` where the map's rules live, and the section below says why the map is a prerequisite rather than a parameter.
 
 | Guard | What the engine does |
 |---|---|

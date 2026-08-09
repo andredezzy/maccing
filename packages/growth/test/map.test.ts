@@ -3,7 +3,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { load_map, MapFieldError, MapMissingError, MapSectionError, verify_fingerprint } from "../src/internal/map.ts";
+import {
+  load_map,
+  MapDuplicateBindingError,
+  MapFieldError,
+  MapMissingError,
+  MapSectionError,
+  verify_fingerprint,
+} from "../src/internal/map.ts";
 import { PhoneFormatError } from "../src/internal/phone.ts";
 
 /**
@@ -693,6 +700,104 @@ describe("load_map refuses a document it cannot bind", () => {
     expect(error).toBeInstanceOf(MapFieldError);
     expect((error as MapFieldError).key).toBe("valid_statuses");
     expect((error as MapFieldError).section).toBe("## Role: conversion");
+  });
+
+  test("rejects revenue and churn bound to one export through the same three columns", async () => {
+    // The authoring mistake this exists for: the churn section was made by copying the revenue
+    // one and editing the heading. Both sections parse, every key is a key the section defines,
+    // and nothing further down can notice — `money_index` is handed one binding at a time, reads
+    // the same file twice, builds two identical indices, and the record publishes churn as an
+    // exact copy of revenue. Two hundred arriving and the same two hundred leaving, from the same
+    // people at the same instants, is not a reading anybody can tell from a real one.
+    const copied_churn = `## Role: churn
+
+| field | value |
+|---|---|
+| export | revenue.csv |
+| person | account_id |
+| at | received_at |
+| amount | amount_minor |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "churn-copied-from-revenue",
+          compose(
+            PHONE_SECTION,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            REVENUE_SECTION,
+            copied_churn,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapDuplicateBindingError);
+    expect((error as MapDuplicateBindingError).roles).toEqual(["## Role: revenue", "## Role: churn"]);
+    expect((error as MapDuplicateBindingError).export).toBe("revenue.csv");
+  });
+
+  test("and accepts a shared export where any one of the three columns differs", async () => {
+    // Sharing an export is not the fault; reading the identical rows twice is. Each shape below
+    // is a file that honestly carries both directions, and refusing them would refuse a project
+    // whose database is arranged in a way this engine can measure correctly.
+    const churn_of = (rows: string) => `## Role: churn\n\n| field | value |\n|---|---|\n${rows}`;
+
+    // A monthly statement per member: one row, one date, two amounts.
+    const two_amounts = await load_map(
+      await write_map(
+        "shared-export-two-amounts",
+        compose(
+          PHONE_SECTION,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          REVENUE_SECTION,
+          churn_of(
+            "| export | revenue.csv |\n| person | account_id |\n| at | received_at |\n| amount | withdrawn_minor |\n",
+          ),
+          CONVERSION_SECTION,
+        ),
+      ),
+    );
+    expect(two_amounts.churn?.columns.amount).toBe("withdrawn_minor");
+
+    // A position table: one sum in at the open, the same sum out at the close.
+    const two_dates = await load_map(
+      await write_map(
+        "shared-export-two-dates",
+        compose(
+          PHONE_SECTION,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          REVENUE_SECTION,
+          churn_of(
+            "| export | revenue.csv |\n| person | account_id |\n| at | closed_at |\n| amount | amount_minor |\n",
+          ),
+          CONVERSION_SECTION,
+        ),
+      ),
+    );
+    expect(two_dates.churn?.columns.at).toBe("closed_at");
+
+    // A transfer table: the money one person sends is the money another receives.
+    const two_people = await load_map(
+      await write_map(
+        "shared-export-two-people",
+        compose(
+          PHONE_SECTION,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          REVENUE_SECTION,
+          churn_of(
+            "| export | revenue.csv |\n| person | payer_id |\n| at | received_at |\n| amount | amount_minor |\n",
+          ),
+          CONVERSION_SECTION,
+        ),
+      ),
+    );
+    expect(two_people.churn?.columns.person).toBe("payer_id");
   });
 });
 

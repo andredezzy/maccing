@@ -90,6 +90,42 @@ export class MapFieldError extends Error {
   }
 }
 
+/**
+ * Two roles bound to one export through the same columns.
+ *
+ * Revenue and churn are opposite directions, so a row cannot be both. Bound identically they are
+ * not two roles at all: the same file is opened twice, the same rows are indexed twice, and the
+ * record publishes churn as an exact copy of revenue — money arriving and the same money leaving,
+ * from the same people at the same instants. Nothing downstream can tell that from a project
+ * where inflow and outflow really did match to the cent.
+ *
+ * The guard is deliberately narrow: all four of the export and the three columns have to match.
+ * A shared export with any one column different has an honest reading and is left alone — a
+ * monthly statement per member carrying `deposited` and `withdrew` differs in the amount column,
+ * a position table carrying `opened_at` and `closed_at` against one amount differs in the
+ * timestamp, and a transfer table read from `payer` on one side and `payee` on the other differs
+ * in the person. Only the identical quadruple has no reading, which is why it is the whole test.
+ */
+export class MapDuplicateBindingError extends Error {
+  readonly roles: readonly [string, string];
+  readonly export: string;
+
+  constructor(roles: readonly [string, string], binding: RoleBinding) {
+    super(
+      `${roles[0]} and ${roles[1]} both bind ${binding.export} through the same person, at and ` +
+        `amount columns (${binding.columns.person}, ${binding.columns.at}, ${binding.columns.amount}). ` +
+        "Money arriving and money leaving are not the same rows, so one of the two is pointing at " +
+        "the wrong file — usually because the second section was written by copying the first and " +
+        "changing only the heading. Bind it to the export that holds it, or delete the section if " +
+        "this project has no file for that role: an unbound role is omitted from the record, which " +
+        "is the truthful answer and not the same as reporting zero.",
+    );
+    this.name = "MapDuplicateBindingError";
+    this.roles = roles;
+    this.export = binding.export;
+  }
+}
+
 /** The schema moved under the map. Thrown by the caller that checks, never swallowed: a map
  *  describing a shape the database no longer has produces columns that read as empty. */
 export class MapStaleError extends Error {
@@ -391,10 +427,22 @@ export async function load_map(path: string): Promise<DatabaseMap> {
 
   const map: DatabaseMap = { phone, person, conversion, fingerprint };
   const revenue = event_role(sections, SECTION_REVENUE);
+  const churn = event_role(sections, SECTION_CHURN);
+  // Both bindings are in hand here and nowhere later: by the time the indices are built the two
+  // roles have been separated into two arguments and the reader that could compare them is gone.
+  if (
+    revenue !== undefined &&
+    churn !== undefined &&
+    revenue.export === churn.export &&
+    revenue.columns.person === churn.columns.person &&
+    revenue.columns.at === churn.columns.at &&
+    revenue.columns.amount === churn.columns.amount
+  ) {
+    throw new MapDuplicateBindingError([SECTION_REVENUE, SECTION_CHURN], revenue);
+  }
   if (revenue !== undefined) {
     map.revenue = revenue;
   }
-  const churn = event_role(sections, SECTION_CHURN);
   if (churn !== undefined) {
     map.churn = churn;
   }

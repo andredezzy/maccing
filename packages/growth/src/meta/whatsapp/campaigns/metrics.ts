@@ -8,6 +8,7 @@ import { parse_ts, parse_ts_with_precision } from "../../../internal/timestamp.t
 export type { DatabaseMap, RoleBinding } from "../../../internal/map.ts";
 export {
   load_map,
+  MapDuplicateBindingError,
   MapFieldError,
   MapMissingError,
   MapSectionError,

@@ -116,6 +116,8 @@ The hash covers those blocks and nothing else, joined with a single `\n`, no tra
 | `at` | yes | column holding the event timestamp |
 | `amount` | yes | column holding the value |
 
+Both sections take the same four keys, which is what makes the copy tempting: write the churn block by duplicating the revenue one, change the heading, and every key still reads. The reader refuses that exact result — one export bound by both roles through the same `person`, `at` and `amount` — because arriving money and leaving money are not the same rows, and the record would otherwise publish churn as a copy of revenue. One export bound by both with any one of the three columns different is accepted and measured: a statement file with `deposited` and `withdrew`, a position file with `opened_at` and `closed_at`, a transfer file read from the payer on one side and the payee on the other.
+
 ### `## Role: conversion`
 
 | key | required | meaning |
@@ -243,6 +245,7 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 | `models` listing no block | `MapFieldError` — a fingerprint over no blocks hashes nothing and can never report drift |
 | `split` or `recycled_when` declared without the other | `MapFieldError` — names the missing half of the pair |
 | `valid_statuses` naming no status | `MapFieldError` — nothing would ever count as committed and every cell would report zero |
+| `## Role: revenue` and `## Role: churn` bound to one export through the same `person`, `at` and `amount` | `MapDuplicateBindingError` — names both headings and the export; the two roles would read the identical rows and the record would publish churn as a copy of revenue. A shared export is accepted where any one of the three columns differs |
 | `area_digits` or `subscriber_digits` < 1 | `PhoneFormatError` — states that a market with variable-length area codes cannot be expressed by fixed lengths, and that a second strategy is needed rather than different numbers |
 | `country_code` holding anything but digits | `PhoneFormatError` — empty for a market with no dialled prefix, and never a `+` |
 | `max_unparseable_rate` outside 0..1 | `PhoneFormatError` — it is a share of a file's distinct identifiers, not a count of them, and absent identifiers count on neither side |
@@ -252,7 +255,7 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 | a listed block whose opening brace never closes | `MapSectionError` — names the block; an unclosed block leaves nothing definite to hash |
 | fingerprint mismatch | `MapStaleError` — names the schema path and both hashes |
 
-The first fourteen are raised while the map itself is read — the phone format included, since the format is validated at the moment the key deriver is built rather than row by row. The last four belong to the fingerprint check against the schema. Everything the reader can refuse is above: a condition absent from this table is one it does not refuse.
+The first fifteen are raised while the map itself is read — the phone format included, since the format is validated at the moment the key deriver is built rather than row by row. The last four belong to the fingerprint check against the schema. Everything the reader can refuse is above: a condition absent from this table is one it does not refuse.
 
 ---
 

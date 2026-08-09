@@ -19,14 +19,20 @@ import {
   ExportValueError,
   is_publishable,
   MAX_P,
+  MapDuplicateBindingError,
+  MapFieldError,
+  MapMissingError,
+  MapSectionError,
   MapStaleError,
   MIN_CONTROL_EVENTS,
   MissingColumnError,
   MissingExportError,
   measure,
   OverflowedTotalError,
+  PhoneFormatError,
   ProvisionalCutError,
   TextListOptionError,
+  TimestampError,
   UnmatchedBaseError,
   UnparseablePhonesError,
   UnsupportedListFormatError,
@@ -1949,6 +1955,87 @@ describe("the publishability gate", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("the run refuses what it cannot measure", () => {
+  /**
+   * The map is read before anything else, so its refusals reach a `measure` caller from the same
+   * line every other refusal does. Each cause is exercised in `map.test.ts` against `load_map`;
+   * what these four prove is only that the pass does not swallow, wrap or rename them on the way
+   * out — which is the whole reason a caller is told it can catch by class.
+   */
+  test("no map at the path the caller named", async () => {
+    // Everything else this run needs is on disk, so the only thing missing is the map itself.
+    const fixture = await build("refuse-no-map", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: join(root, "refuse-no-map", "NOT-THE-MAP.md"),
+        exports: fixture.exports,
+        cells: [cold("refuse-no-map", fixture.list("reached.txt"))],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(MapMissingError);
+    expect(error.message).toContain("NOT-THE-MAP.md");
+  });
+
+  test("a fingerprint naming a schema block the schema does not declare", async () => {
+    const fixture = await build("refuse-absent-block", {
+      map: { models: [...MODELS, "Ledger"], sha256: "0".repeat(64) },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-absent-block", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect(error.message).toContain("Ledger");
+  });
+
+  test("a key no section of the map defines", async () => {
+    const fixture = await build("refuse-unknown-key", {
+      map: { person: { nickname: "handle" } },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-unknown-key", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("nickname");
+    expect((error as MapFieldError).section).toBe("## Role: person");
+  });
+
+  test("a numbering plan no pair of fixed lengths can express", async () => {
+    const fixture = await build("refuse-plan", {
+      map: { phone: { area_digits: "0" } },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-plan", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(PhoneFormatError);
+  });
+
+  test("a single exported timestamp that cannot be read as a moment", async () => {
+    // Not the column-wide check: the other rows are fine and this one value is not. It stops the
+    // run rather than resolving to null, because a null instant is skipped by the accumulator and
+    // the event would quietly leave the group it belongs to.
+    const fixture = await build("refuse-timestamp", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["one", from_cut(HOUR), 40], ["two", "last tuesday", 60]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-timestamp", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(TimestampError);
+    expect((error as TimestampError).value).toBe("last tuesday");
+  });
+
   test("a stale fingerprint, before reading a single export", async () => {
     const fixture = await build("refuse-stale", {
       map: { sha256: "0".repeat(64) },
@@ -1961,6 +2048,53 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(MapStaleError);
     expect((error as MapStaleError).actual).toBe(FRESH_SHA);
     expect((error as MapStaleError).expected).toBe("0".repeat(64));
+  });
+
+  test("a churn section written by copying the revenue one and changing the heading", async () => {
+    // Both sections parse and every key is one the section defines, so the fault survives the
+    // whole reader and only shows up in the record: `money_index` is handed one binding at a
+    // time, opens the same file twice, and publishes churn as an exact copy of revenue. Before
+    // this refusal existed the fixture below returned `acquired.revenue` of two people and 700
+    // beside `acquired.churn` of two people and 700 — the same 700 arriving and leaving, from the
+    // same two people at the same two instants — and the run exited 0.
+    const fixture = await build("refuse-copied-churn", {
+      map: { churn: { export: "revenue.csv", at: "arrived_at" } },
+      person: people(["alfa", phone(1), from_cut(0)], ["bravo", phone(2), from_cut(DAY)]),
+      revenue: revenue(["alfa", from_cut(DAY), 300], ["bravo", from_cut(4 * DAY), 400]),
+      churn: null,
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-copied-churn", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(MapDuplicateBindingError);
+    expect((error as MapDuplicateBindingError).roles).toEqual(["## Role: revenue", "## Role: churn"]);
+    expect((error as MapDuplicateBindingError).export).toBe("revenue.csv");
+  });
+
+  test("but measures two roles out of one export when they read different amount columns", async () => {
+    // The guard is narrow on purpose, and this is the shape it must not catch: a statement file
+    // carrying both directions per row. The two roles read the same rows and the same instants
+    // and disagree about the money, which is the whole difference between a file that says two
+    // things and a file read twice.
+    const fixture = await build("statement-two-amounts", {
+      map: { churn: { export: "revenue.csv", at: "arrived_at", amount: "withdrew" } },
+      person: people(["alfa", phone(1), from_cut(0)], ["bravo", phone(2), from_cut(DAY)]),
+      revenue: csv(
+        ["member_id", "arrived_at", "amount", "withdrew"],
+        [
+          ["alfa", from_cut(DAY), 300, 50],
+          ["bravo", from_cut(4 * DAY), 400, 20],
+        ],
+      ),
+      churn: null,
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("statement-two-amounts", fixture.list("reached.txt")));
+
+    expect(record.acquired.revenue).toEqual({ people: 2, value: 700, top2_share: 1, median_lag_days: 2.5 });
+    expect(record.acquired.churn).toEqual({ people: 2, value: 70 });
   });
 
   test("a person export that is not where the map says it is", async () => {

@@ -34,7 +34,7 @@ import { measure } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
 
 The map is a markdown file that lives with your project, not with this package. Most of it is prose — why a join goes through one table rather than another, why one status means money actually arrived — and the parser ignores all of it, reading only the `| field | value |` tables under headings it recognises. That is deliberate: the prose is the half of the document that keeps the bindings honest, so the format puts it first.
 
-Four sections are required (`## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion`) and two are optional (`## Role: revenue`, `## Role: churn`). A role you leave out is a role the record omits — not one it reports as zero.
+Four sections are required (`## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion`) and two are optional (`## Role: revenue`, `## Role: churn`). A role you leave out is a role the record omits — not one it reports as zero. Bind the two optional roles to one export through the same person, timestamp and amount columns and the map is refused: money arriving and money leaving are not the same rows, so a copied section is the only way to write that.
 
 ```markdown
 ## Phone format
@@ -196,6 +196,7 @@ So the pass refuses at every point where the two are indistinguishable, and each
 | `MapMissingError` | No map at that path, or its fingerprint points at a schema file that is not there |
 | `MapSectionError` | A required section is absent, or declared twice, or carries only prose where its field-and-value table should be; or a block the fingerprint lists is not in the schema, or that block never closes and there is nothing definite to hash |
 | `MapFieldError` | A key is missing, unreadable, or not one the section defines; a `models` or `valid_statuses` list with nothing in it; half of the `split`/`recycled_when` pair |
+| `MapDuplicateBindingError` | The map binds `revenue` and `churn` to one export through the same person, timestamp and amount columns — a churn section written by copying the revenue one and changing the heading. Both roles then read the identical rows and the record publishes churn as an exact copy of revenue: the same money arriving and leaving, from the same people at the same instants. A shared export is allowed where any one of the three columns differs, because one file can honestly carry both directions |
 | `MapStaleError` | The schema has changed since the map recorded its hash |
 | `PhoneFormatError` | A declared numbering plan this engine cannot honour |
 | `UnparseablePhonesError` | More of the person export — or of one cell's own lists — is unreadable than the map permits. `source` says which, so a caller does not have to read the sentence to know which file to open |
