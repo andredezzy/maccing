@@ -4443,6 +4443,48 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a dictionary's own term was reported inside it");
     }
 
+    // And the same rule end to end, which is the precondition `overlay_inside_scan` exists to
+    // defend rather than a second look at `scan_text`. The case above hands the muting a set built
+    // by hand; nothing asserted that a dictionary passed as --terms is muted in the file that holds
+    // it, nor that the muting is keyed on that file's own path — and the guard is only worth having
+    // because both are true. Take either away and every guard case still passes while the guard
+    // protects nothing, which is why this sits here rather than beside it.
+    //
+    // The key is the path `canonical` gives the file, on both sides: `load_dictionaries` stores it
+    // under the spelling it was handed, `scan_files` asks for the spelling it resolved, and `main`
+    // is what pairs them by canonicalising every --terms argument. A second copy of the same bytes
+    // under another name is reported, because a name is not content.
+    const muted = join(directory, "muted-dictionary");
+    mkdirSync(muted, { recursive: true });
+    const muted_body = JSON.stringify({
+      categories: [{ name: "self_test_muted", why: "fixture", terms: [{ term: "zarquilon", why: "fixture" }] }],
+    });
+    const muted_terms = join(muted, "leak-terms.json");
+    const muted_copy = join(muted, "copy-of-the-dictionary.json");
+    writeFileSync(muted_terms, muted_body);
+    writeFileSync(muted_copy, muted_body);
+    const muted_load = load_dictionaries([canonical(muted_terms)]);
+    const muted_scan = scan_files(
+      [muted_terms, muted_copy],
+      build_matchers(muted_load.categories),
+      muted,
+      muted_load.quoted,
+      null,
+      null,
+    );
+    if (muted_scan.self_quoted === 0 || muted_scan.hits.some((hit) => hit.source === "leak-terms.json")) {
+      failures.push(
+        "a dictionary passed as --terms was reported against its own declared term, so the muting the " +
+          "overlay guard exists to compensate for is not keyed on the file that supplied the dictionary",
+      );
+    }
+    if (!muted_scan.hits.some((hit) => hit.source === "copy-of-the-dictionary.json" && hit.term === "zarquilon")) {
+      failures.push(
+        "a second file carrying a dictionary's bytes under another name was muted along with it, so the " +
+          "muting is keyed on content rather than on a path and the overlay guard measures the wrong thing",
+      );
+    }
+
     // An exemption covers one category and one sentence — not every occurrence of one spelling,
     // and not whatever else happens to be standing nearby.
     const policy_line = "the policy list names brulq as prohibited";

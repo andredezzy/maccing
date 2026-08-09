@@ -889,12 +889,19 @@ describe("load_map reads the document the way a renderer draws it", () => {
     await both_shapes("marker-five-spaces-table-at-six", `-     Its plan, for contrast:\n\n${at_column(6)}`);
     await both_shapes("marker-six-spaces-table-at-seven", `-      Its plan, for contrast:\n\n${at_column(7)}`);
 
-    // And the control on the other side of the boundary, which is what keeps the rule from being
-    // read as "anything indented is code": four spaces after the marker carry the content column
-    // out to five, the table there is the item's own content, and a renderer draws it. A fix that
-    // pushed every item's content back to one past the marker would pass the two cases above and
-    // lose this one.
-    await illustration_binds("marker-four-spaces-table-at-five", `-    Its plan, for contrast:\n\n${at_column(5)}`);
+    // And the other side of the boundary, where the content column has to move out to meet the
+    // content rather than stay one past the marker. A table at the content column itself cannot
+    // ask this — measured, four spaces and a table at column five reads the same whichever way
+    // the column is computed — so both cases below put the table a column or more further in,
+    // which is where the two readings separate. A renderer draws the table in each.
+    //
+    // Two spaces and a table at six separates a content column pinned one past the marker from
+    // one that meets the content. Four spaces and a table at six separates that as well, and also
+    // the four-column bound written `>=` instead of `>`, which would make a four-space gap
+    // "five columns along". Failing both says the column is pinned; failing only the second says
+    // the bound is off by one.
+    await illustration_binds("marker-two-spaces-table-at-six", `-  Its plan, for contrast:\n\n${at_column(6)}`);
+    await illustration_binds("marker-four-spaces-table-at-six", `-    Its plan, for contrast:\n\n${at_column(6)}`);
   });
 
   test("reads a tilde fence whose info string holds a backtick", async () => {
