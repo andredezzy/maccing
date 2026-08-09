@@ -757,7 +757,11 @@ describe("the emitted record", () => {
   async function shape_fixture(): Promise<Fixture> {
     return build("record-shape", {
       person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
-      revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5]),
+      // Both groups earn after the cut, because the one thing this record must never do is credit
+      // the campaign with a customer it already had. With revenue only on the acquired account,
+      // accumulating it over the matched accounts instead reads identically and the misattribution
+      // is invisible — and it is the most flattering mistake the engine can make.
+      revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5], ["existing", from_cut(5 * HOUR), 40]),
       churn: churn(["existing", from_cut(DAY), 3]),
       conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "LIVE", "WIRE"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
@@ -783,7 +787,7 @@ describe("the emitted record", () => {
       },
       pre_existing: {
         accounts: 1,
-        revenue: { people: 0, value: 0 },
+        revenue: { people: 1, value: 40 },
         churn: { people: 1, value: 3 },
       },
       conversions: { count: 1, value: 12.5, new_money: 12.5, recycled: 0 },
