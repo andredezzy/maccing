@@ -8,7 +8,7 @@
  * precisely, so the list is itself the disclosure whether or not a client is ever named — and an
  * empty template naming the *kinds* of thing worth hiding says more than it looks like it does.
  * Every dictionary arrives at run time, through `--terms <path>` or the colon-separated
- * `LEAK_TERMS` variable, and on CI that means the `LEAK_OVERLAY` secret and nowhere else. An
+ * `LEAK_PROTECTIONS` variable, and on CI that means the `LEAK_OVERLAY` secret and nowhere else. An
  * overlay carries its own exemptions too, for the same reason: an exemption has to quote the term
  * it exempts, so a public allowlist would republish a subset of the very vocabulary being withheld.
  *
@@ -576,7 +576,7 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
  * exempts and a public list of those republishes the vocabulary the split exists to withhold.
  *
  * Exemptions are deduplicated on the same rule as terms, and for the same reason. They were not,
- * and the asymmetry was load-bearing: name one overlay twice — `LEAK_TERMS` exported and the same
+ * and the asymmetry was load-bearing: name one overlay twice — `LEAK_PROTECTIONS` exported and the same
  * path passed again to `--terms`, which the release runbook did to itself — and the run reported
  * 42 terms and said the second copy was a duplicate, while eleven exemptions became twenty-two
  * with nothing printed about the collision. No wrong verdict came of it, because suppressing the
@@ -611,7 +611,7 @@ function load_dictionaries(paths: string[]): Loaded {
       throw new Refusal(
         `Dictionary not found: ${label}.\n` +
           "  Nothing was read, so this run would have matched a narrower vocabulary than it was asked to. " +
-          "Check the path given to --terms (or LEAK_TERMS) exists and is readable from here.",
+          "Check the path given to --terms (or LEAK_PROTECTIONS) exists and is readable from here.",
       );
     }
     const parsed = parse_dictionary(path, label);
@@ -3038,7 +3038,7 @@ function shorten(path: string): string {
  * There is no dictionary shipped beside this file to name. This repository holds the mechanism and
  * nothing else — no terms, no categories, not even the empty schema that used to sit here, because
  * a schema documenting which kinds of thing are worth hiding is itself a description of the work
- * being hidden. Every dictionary this run sees arrived through `--terms` or `LEAK_TERMS`, which on
+ * being hidden. Every dictionary this run sees arrived through `--terms` or `LEAK_PROTECTIONS`, which on
  * CI means the secret and nowhere else.
  */
 function dictionary_labels(paths: string[]): string[] {
@@ -3078,7 +3078,7 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
     `${opening}\n` +
     "This repository ships no dictionary of its own, so this run would have checked no name, no " +
     "figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete run. " +
-    "Merge an overlay that declares terms with --terms <path> or LEAK_TERMS."
+    "Merge an overlay that declares terms with --terms <path> or LEAK_PROTECTIONS."
   );
 }
 
@@ -3155,17 +3155,39 @@ function overlay_target(dictionary: string): string {
  *
  * The refusal names the overlay by ordinal. The path is the operator's and may be vocabulary; the
  * operator knows which of their own `--terms` arguments this was. See `dictionary_labels`.
+ *
+ * Containment alone was too coarse, and the cost showed up as a layout it forbade for no reason.
+ * An overlay that sits inside the working tree but that *this run will never read* — untracked and
+ * git-ignored, so it is in no `ls-files`, no index and no commit — cannot have its terms muted in
+ * a file the scan reports on, because the scan never opens it. Refusing it anyway ruled out
+ * keeping the dictionary beside the repository it guards, which is where an operator will look
+ * for it. So each spelling is tested against the set of paths this run is actually about to read,
+ * and containment now decides only *whether the question applies*, not the answer.
+ *
+ * A path inside the tree that does not exist yet is still refused. That is the dangling-link case
+ * and it is deliberate: the guard's answer must not depend on whether the target happened to have
+ * been created, or an operator adopts a setup that is safe this morning and mutes the dictionary
+ * the moment the file appears. `--path` reads untracked files, so an ignored overlay under a
+ * `--path` target *is* in the scan set and *is* refused, which is the one mode where the coarse
+ * rule and this one still agree.
  */
-function overlay_inside_scan(root: string, dictionary: string, label: string): string | null {
+function overlay_inside_scan(root: string, files: string[], dictionary: string, label: string): string | null {
   const tree = canonical_root(root);
-  if (under(tree, canonical(dictionary)) === null && under(tree, canonical_root(overlay_target(dictionary))) === null) {
+  const scanned = new Set(files.map((path) => canonical(path)));
+  // Both spellings, for the reasons above: the name as given, and the bytes it resolves to.
+  const spellings = [canonical(dictionary), canonical_root(overlay_target(dictionary))];
+  const caught = spellings.some(
+    (spelling) => under(tree, spelling) !== null && (!existsSync(spelling) || scanned.has(spelling)),
+  );
+  if (!caught) {
     return null;
   }
   return (
     `Overlay dictionary inside the tree being scanned: ${label}.\n` +
     "A dictionary's own terms are suppressed inside it, so an overlay here would put its vocabulary in " +
     "the single file the gate cannot report it in, and the run would pass over the disclosure. Keep the " +
-    "overlay outside this repository and merge it by path with --terms or LEAK_TERMS."
+    "overlay outside this repository, or somewhere this run does not read, and merge it by path with " +
+    "--terms or LEAK_PROTECTIONS."
   );
 }
 
@@ -3270,7 +3292,7 @@ function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
   }
   if (loaded.reduce((sum, entry) => sum + entry.terms, 0) === 0) {
     console.log(
-      "  No vocabulary loaded (--terms <path>, LEAK_TERMS). This repository ships no dictionary of its " +
+      "  No vocabulary loaded (--terms <path>, LEAK_PROTECTIONS). This repository ships no dictionary of its " +
         "own, so this run can find nothing. Pass --require-overlay wherever this runs as a gate.",
     );
   }
@@ -4166,7 +4188,7 @@ function self_test_failures(failures: string[], planted: TermCategory[]): string
   return [
     `  ${count} Which ones is withheld: an overlay is merged, a check names the term it failed on, and ` +
       "this stream is a world-readable log. Read them where there is nothing loaded to publish — run " +
-      "--self-test again with no --terms and no LEAK_TERMS, which plants only the vocabulary invented in " +
+      "--self-test again with no --terms and no LEAK_PROTECTIONS, which plants only the vocabulary invented in " +
       "this file and prints every check that fails. A check that fails only while an overlay is merged " +
       "will not fail there, and this count is all this stream will ever say about that one.",
   ];
@@ -5175,16 +5197,18 @@ function self_test(categories: TermCategory[]): number {
     writeFileSync(guard_terms, '{"categories":[]}');
     const spelt = join(directory, "guard-link");
     symlinkSync(guarded, spelt);
-    if (overlay_inside_scan(guarded, join(spelt, "leak-terms.json"), overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), join(spelt, "leak-terms.json"), overlay_label) === null) {
       failures.push(
         "an overlay inside the tree being scanned was let through because the root and the overlay were " +
           "spelt differently, and the run it allows prints PASSED over the file holding the dictionary",
       );
     }
-    if (overlay_inside_scan(spelt, guard_terms, overlay_label) === null) {
+    // The scan set is the resolved directory's, because that is what `--path` at a symlinked root
+    // now produces: the argument is resolved before the walk, so the two no longer disagree.
+    if (overlay_inside_scan(spelt, walk_path(canonical_root(spelt), []), guard_terms, overlay_label) === null) {
       failures.push("the same disagreement the other way round — a symlinked root against a resolved overlay");
     }
-    if (overlay_inside_scan(guarded, guard_terms, overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), guard_terms, overlay_label) === null) {
       failures.push("an overlay plainly inside the tree being scanned was not refused at all");
     }
     // Every case above symlinks a *directory*, which `canonical` already resolved, so all three
@@ -5195,7 +5219,7 @@ function self_test(categories: TermCategory[]): number {
     // the question is which bytes load and the leaf resolves too.
     const linked_leaf = join(directory, "guard-leaf.json");
     symlinkSync(guard_terms, linked_leaf);
-    if (overlay_inside_scan(guarded, linked_leaf, overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), linked_leaf, overlay_label) === null) {
       failures.push(
         "an overlay reached through a symlink standing outside the tree was let through, though the file " +
           "it names is tracked inside it and is refused when spelt directly",
@@ -5204,7 +5228,7 @@ function self_test(categories: TermCategory[]): number {
     // A link that dangles must not read as outside the tree by accident of being unresolvable.
     const dangling = join(directory, "guard-dangling.json");
     symlinkSync(join(guarded, "absent-terms.json"), dangling);
-    if (overlay_inside_scan(guarded, dangling, overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), dangling, overlay_label) === null) {
       failures.push(
         "a broken symlink pointing inside the tree was treated as living outside it, so the guard's answer " +
           "depended on whether the target happened to exist",
@@ -5219,7 +5243,7 @@ function self_test(categories: TermCategory[]): number {
     // over a committed file naming the client.
     const inward = join(guarded, "guard-inward.json");
     symlinkSync(join(directory, "outside-terms.json"), inward);
-    if (overlay_inside_scan(guarded, inward, overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), inward, overlay_label) === null) {
       failures.push(
         "an overlay named through a symlink that is itself inside the tree was let through: the link is a " +
           "tracked file holding the overlay's path, and the terms of that overlay are suppressed in it",
@@ -5229,17 +5253,41 @@ function self_test(categories: TermCategory[]): number {
     // was outside, which is the same defect at one character's remove.
     const dotted = join(guarded, "..leak-terms.json");
     writeFileSync(dotted, '{"categories":[]}');
-    if (overlay_inside_scan(guarded, dotted, overlay_label) === null) {
+    if (overlay_inside_scan(guarded, walk_path(guarded, []), dotted, overlay_label) === null) {
       failures.push("an overlay whose filename opens with two dots was read as living outside the tree");
     }
-    if (overlay_inside_scan(guarded, join(directory, "outside-terms.json"), overlay_label) !== null) {
+    if (
+      overlay_inside_scan(guarded, walk_path(guarded, []), join(directory, "outside-terms.json"), overlay_label) !==
+      null
+    ) {
       failures.push(
         "an overlay genuinely outside the tree being scanned was refused, which forbids the only safe setup",
       );
     }
-    const guard_refusal = overlay_inside_scan(guarded, join(spelt, "leak-terms.json"), overlay_label) ?? "";
+    const guard_refusal =
+      overlay_inside_scan(guarded, walk_path(guarded, []), join(spelt, "leak-terms.json"), overlay_label) ?? "";
     if (guard_refusal.includes(unquotable) || guard_refusal.includes(guarded)) {
       failures.push("the overlay-inside-the-scan refusal echoed the overlay's path, and that path is the secret");
+    }
+    // The layout containment forbade for no reason: an overlay inside the working tree that this
+    // run never opens. Untracked and git-ignored, it is in no `ls-files`, no index and no commit,
+    // so its terms cannot be muted in a file the scan reports on — the scan does not read it. Both
+    // directions are pinned, because the whole safety of allowing it rests on the second: the same
+    // file is refused again the moment a run is actually going to read it, which is what `--path`
+    // does to an untracked file.
+    const beside = join(guarded, "leak-protections.json");
+    writeFileSync(beside, '{"categories":[]}');
+    if (overlay_inside_scan(guarded, [], beside, overlay_label) !== null) {
+      failures.push(
+        "an overlay inside the tree but absent from everything this run reads was refused, which forbids " +
+          "keeping the dictionary beside the repository it guards even when nothing opens it",
+      );
+    }
+    if (overlay_inside_scan(guarded, [beside], beside, overlay_label) === null) {
+      failures.push(
+        "an overlay was let through while the run was about to read it, so an ignored dictionary under a " +
+          "--path target would be scanned with its own terms muted inside it",
+      );
     }
 
     // The staged bytes have to be found under the name the scan will ask for them by, and the two
@@ -5322,7 +5370,7 @@ function self_test(categories: TermCategory[]): number {
       );
     }
 
-    // The same overlay named twice — `LEAK_TERMS` exported and the same path passed again to
+    // The same overlay named twice — `LEAK_PROTECTIONS` exported and the same path passed again to
     // `--terms`, which is what following the release runbook verbatim used to do. Terms were
     // deduplicated and said so; exemptions were not, so eleven became twenty-two in silence and
     // `--audit` read one stale entry out twice under one verdict.
@@ -6352,7 +6400,7 @@ function print_usage(): void {
       "  --quiet               print only the summaries, not each hit",
       "  --help                print this text",
       "",
-      "  LEAK_TERMS            colon-separated overlay dictionaries, merged before --terms",
+      "  LEAK_PROTECTIONS            colon-separated overlay dictionaries, merged before --terms",
       "",
       "A run without --history has not looked at the history. Only --history clears a force-push.",
     ].join("\n"),
@@ -6366,7 +6414,7 @@ function parse_arguments(argv: string[]): Options {
     history_range: null,
     path: null,
     message: null,
-    terms: (process.env.LEAK_TERMS ?? "").split(":").filter((entry) => entry.length > 0),
+    terms: (process.env.LEAK_PROTECTIONS ?? "").split(":").filter((entry) => entry.length > 0),
     require_overlay: false,
     quiet: false,
     help: false,
@@ -6565,7 +6613,7 @@ function main(): number {
     }
 
     for (const [index, dictionary] of paths.entries()) {
-      const refusal = overlay_inside_scan(root, dictionary, labels[index] as string);
+      const refusal = overlay_inside_scan(root, files, dictionary, labels[index] as string);
       if (refusal !== null) {
         throw new Refusal(refusal);
       }

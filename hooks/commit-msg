@@ -15,22 +15,21 @@
 # hook in the directory at once; there is nothing to do per hook.
 #
 # The vocabulary lives in no repository, this one included. CI reads it from the LEAK_OVERLAY
-# secret; here it is an untracked file outside every checkout, defaulting to
-# ~/.config/maccing/leak-terms.json. Set LEAK_TERMS to override that if yours lives elsewhere:
+# secret; here it is `leak-protections.json` at the root of this repository, untracked and
+# git-ignored, holding exactly the bytes that secret holds. Set LEAK_PROTECTIONS to override it:
 #
-#   export LEAK_TERMS="$HOME/somewhere/else/leak-terms.json"
+#   export LEAK_PROTECTIONS="$HOME/somewhere/else/leak-terms.json"
 #
 # Naming a default rather than demanding the export is what stops this hook refusing every
 # `git commit` on a machine where nobody remembered to set it.
 #
 # --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
 # would match nothing, exit 0, and let every message through while looking exactly like a clean
-# gate. With it, an unset LEAK_TERMS fails the commit and says what is missing.
+# gate. With it, an unset LEAK_PROTECTIONS fails the commit and says what is missing.
 
 set -eu
 
-: "${LEAK_TERMS:=$HOME/.config/maccing/leak-terms.json}"
-export LEAK_TERMS
-
 repository=$(git rev-parse --show-toplevel)
+: "${LEAK_PROTECTIONS:=$repository/leak-protections.json}"
+export LEAK_PROTECTIONS
 exec bun "$repository/.github/scripts/leak-check.ts" --message "$1" --require-overlay

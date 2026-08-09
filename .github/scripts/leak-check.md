@@ -4,22 +4,39 @@ This repository is public. Some of the work that produced it was not. `.github/s
 
 It lives under `.github/scripts/`, beside the workflow that runs it, because it is CI apparatus rather than anything the published package ships.
 
-### The vocabulary is not in this repository
+### The vocabulary is not *tracked* in this repository
 
-**No dictionary ships here at all** — not the terms, not the exemptions, and not a schema file describing either. Nothing under version control in this repository names a term, a category or a client.
+**No dictionary is committed here** — not the terms, not the exemptions, and not a schema file describing either. Nothing under version control in this repository names a term, a category or a client, and `git ls-files` lists no dictionary at all.
+
+The working copy is a different question. The gate needs a dictionary to be worth running, so one sits at `leak-protections.json` in the repository root: untracked, git-ignored, and holding exactly the bytes of the CI secret. Git cannot see it, `git add -A` will not stage it, and the ignore rule covers editor swap and backup files beside it, because a `.leak-protections.json.swp` carries the same bytes under a name a single entry would miss.
 
 An earlier version of this file kept the "generic" half of a dictionary in public and moved only names and figures to a private overlay. The half that stayed was a curated list of one domain's words, and a curated list of a domain's words identifies that domain precisely — which is what a list of that shape is for. Nobody needs the client's name once they have the vocabulary. The list was the disclosure.
 
 So the whole dictionary is private. This repository ships the mechanism; each project keeps its own terms and merges them at run time:
 
 ```sh
-bun .github/scripts/leak-check.ts --terms ~/private-work/leak-terms.json     # repeatable
-LEAK_TERMS=~/a.json:~/b.json bun .github/scripts/leak-check.ts               # colon-separated
+bun .github/scripts/leak-check.ts --terms ~/elsewhere/leak-protections.json   # repeatable
+LEAK_PROTECTIONS=~/a.json:~/b.json bun .github/scripts/leak-check.ts          # colon-separated
 ```
+
+The three git hooks default to `<repository root>/leak-protections.json` when `LEAK_PROTECTIONS` is unset, so the ordinary case needs no configuration at all.
+
+**That file and the CI secret are one thing in two places, so keep them in step:**
+
+```sh
+gh secret set LEAK_OVERLAY < leak-protections.json    # after every edit to the dictionary
+gh secret list | grep LEAK_OVERLAY                    # updated timestamp is the only readback there is
+```
+
+A secret cannot be read back, so nothing can diff the two for you. An overlay edited locally and not pushed to the secret gives a stricter local gate than CI, which fails safe; the reverse — a term added to the secret and not to the file — gives a local gate that passes what CI will reject, which is merely annoying. Neither is silent: both print their term counts in the header of every run, and a mismatch shows up there.
 
 There used to be an empty `leak-terms.json` beside the script, kept so that `0 terms in 0 categories` on every run said the public repository carries no vocabulary. It is gone. Keeping it meant shipping a template of which *kinds* of thing are worth hiding, which is a thinner disclosure than a word list but is still one, and the header says the same thing without it: a run that loaded nothing says so, and `--require-overlay` turns that into a failure wherever it matters.
 
-An overlay is a JSON file in the shape given under [Overlay format](#overlay-format) below. Categories with the same name pool their terms and a term already defined keeps its first definition, and the run names both so a merge can never be read as a replacement. An overlay that is itself inside this repository is refused outright: a dictionary's own terms are suppressed inside it, so a committed overlay would be the one file its vocabulary could never be reported in. **That refusal resolves both paths the same way before comparing them**, because it did not and a spelling defeated it: `git rev-parse --show-toplevel` answers with the directory the kernel resolved and `resolve` leaves symlinks standing, so a repository under `/tmp` was `/private/tmp/...` to one side of the comparison and `/tmp/...` to the other, the relative path between them opened with `..`, and the guard concluded the overlay was outside the repository. The run it let through scanned the overlay with its own vocabulary muted inside it and printed `PASSED` over the one file holding the dictionary.
+An overlay is a JSON file in the shape given under [Overlay format](#overlay-format) below. Categories with the same name pool their terms and a term already defined keeps its first definition, and the run names both so a merge can never be read as a replacement.
+
+**An overlay that this run would actually read is refused outright**, because a dictionary's own terms are suppressed inside it — so an overlay in the scanned set is the one file its vocabulary could never be reported in, and the run would print PASSED over the disclosure. The test is membership of the scan set, not merely sitting under the repository root: a committed overlay is in `ls-files` and is refused, an untracked and ignored one is in no tracked scan and is allowed, and the same ignored file *is* refused under `--path`, which reads untracked files and so really would open it. A path inside the tree that does not exist yet is refused too, so the answer never turns on whether the target happened to have been created.
+
+**The comparison resolves both paths the same way before testing them**, because it did not and a spelling defeated it: `git rev-parse --show-toplevel` answers with the directory the kernel resolved and `resolve` leaves symlinks standing, so a repository under `/tmp` was `/private/tmp/...` to one side and `/tmp/...` to the other, the relative path between them opened with `..`, and the guard concluded the overlay was outside the repository. The run it let through scanned the overlay with its own vocabulary muted inside it and printed `PASSED` over the one file holding the dictionary. Both spellings of the overlay are tested, the name as given and the bytes it resolves to, because a link standing outside the tree naming a dictionary in it and a link standing inside the tree naming one outside are two different disclosures and each was let through once.
 
 Short or ambiguous terms match as whole words only, so a three-letter term does not fire on every hash in the repository and a four-letter one does not fire on ordinary English that happens to contain it. Longer, unambiguous terms match anywhere, including glued inside a slug, an identifier or a URL. Multi-word terms tolerate spaces, underscores or hyphens between the words, and one line break. Each term's entry records which rule it uses and why.
 
@@ -239,7 +256,7 @@ What it *does* cover, and what nothing else here does: every tracked file's cont
 git config core.hooksPath hooks
 ```
 
-That points git at the tracked `hooks/` directory, so every hook travels with the repository and one setting installs all of them. **No shell profile export is needed.** Each hook falls back to `$HOME/.config/maccing/leak-terms.json` — an untracked file outside every checkout — when `LEAK_TERMS` is unset, so the hooks can be switched on before anything is exported and a machine that forgot the export gets a working gate rather than exit 2 on every commit. Set `LEAK_TERMS` only to point somewhere else. When neither exists the hooks still refuse, naming the missing dictionary by label and not by path.
+That points git at the tracked `hooks/` directory, so every hook travels with the repository and one setting installs all of them. **No shell profile export is needed.** Each hook falls back to `$repository/leak-protections.json` — an untracked file outside every checkout — when `LEAK_PROTECTIONS` is unset, so the hooks can be switched on before anything is exported and a machine that forgot the export gets a working gate rather than exit 2 on every commit. Set `LEAK_PROTECTIONS` only to point somewhere else. When neither exists the hooks still refuse, naming the missing dictionary by label and not by path.
 
 The push hook walks the whole object graph rather than the range being pushed, because the question a public repository has to answer is what the remote holds afterwards, not what this push adds; that costs about three and a half seconds. `git push --no-verify` skips it, which is worth knowing precisely because a force-push during a history rewrite is when somebody is most tempted to — the release runbook's clearance is the check with no off switch, and this is the net for the ordinary push nobody thought about.
 
