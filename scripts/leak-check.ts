@@ -24,6 +24,11 @@
  * commit message. A run without `--history` has not looked at the history at all — which is why it
  * is not the default and why the name says so.
  *
+ * The clearance and the tracked scan divide the work between them: the tracked scan reads the
+ * working tree, so `--history` skips the blobs it has already covered. That skip is only sound
+ * where the working tree and the index agree, and where they do not the committed blob is read
+ * here as well rather than assumed clean — see `scan_history` and `unstaged_paths`.
+ *
  * Dictionaries are scanned like any other file. Only the exact term strings a dictionary declares
  * are suppressed inside it, never the whole file, so a client name typed into a `why` is still
  * found. What could not be read is named rather than counted, and a clean run over content nothing
@@ -44,6 +49,7 @@
  * run was clean, 2 when the run could not be performed as asked.
  */
 
+import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import {
   existsSync,
@@ -82,6 +88,13 @@ type Exemption = {
   why: string;
   source: string;
   /**
+   * A digest of the sentence this entry was written against, when the author recorded one, and
+   * `""` when they did not. It is the only thing an entry may say about the text itself, and the
+   * only way anything here can tell a rewritten anchor line from the one somebody read and
+   * judged. Declared by hand, checked on every run. See `anchor_digest`.
+   */
+  anchor: string;
+  /**
    * Resolved from the tree at run time, never declared: every sentence this entry covers, for
    * matching a hit in the history, where a line number means nothing. See `covers`.
    */
@@ -110,6 +123,13 @@ type Matcher = {
 
 type Hit = {
   source: string;
+  /**
+   * The repository path this hit belongs to, when the source label is not itself that path — set
+   * on history hits, whose label carries a commit as well. An exemption is keyed on this, never on
+   * anything parsed back out of a label, because a path may legally contain the characters a label
+   * separates on. Unset wherever the source already is the path.
+   */
+  path?: string;
   /** 1-based, or 0 when the term is in the path itself rather than in any content. */
   line: number;
   column: number;
@@ -141,6 +161,10 @@ type ScanResult = {
  * What the file scan already looked at, by blob and by path component, so the history scan does
  * not report it a second time under a source no exemption can name. Empty when the file scan
  * covered something narrower than the whole index, because then nothing can be assumed covered.
+ *
+ * `blobs` is what was *read*, never what the index merely lists. A tracked scan reads the working
+ * tree, so the index blob of a file carrying an unstaged edit was not read by it and does not
+ * belong here: see `unstaged_paths` and the note on `scan_history`.
  */
 type Covered = { blobs: Set<string>; names: Set<string> };
 
@@ -219,22 +243,50 @@ const BLOB_BATCH = 256;
 const EXEMPTION_CONTEXT_RADIUS = 48;
 
 /**
+ * How much of the digest an entry records for its own sentence.
+ *
+ * Twelve hexadecimal characters is what a short object id uses, and what this has to survive is a
+ * line being reworded by hand rather than a search for a collision. An author who wants an entry
+ * to keep covering a rewritten sentence can paste the new digest in, which is the point: it is a
+ * prompt to re-read, not a lock.
+ */
+const ANCHOR_LENGTH = 12;
+
+/** What a recorded `anchor` must look like, so a typo is refused rather than silently unmatched. */
+const ANCHOR_SHAPE = new RegExp(`^[0-9a-f]{${ANCHOR_LENGTH}}$`);
+
+/**
  * How long a run of decodable characters has to be before it is read out of a file that is not text.
  *
- * The length is the only defence against matching entropy, and it is measured rather than argued.
- * The twelve historical PNG blobs in this repository — 34.9 MB of compressed image — were salvaged
- * at every threshold and matched with a real forty-two-term dictionary, several of whose terms are
- * three and four characters long and word-bounded:
+ * The length is the only defence against matching entropy, and the number below is empirical: it
+ * was measured here, against the files this repository happened to hold on the day it was
+ * measured, and it generalises to nothing else. The twelve historical PNG blobs in this
+ * repository — 34.9 MB of compressed image — were salvaged at every threshold and matched with a
+ * real forty-two-term dictionary, several of whose terms are three and four characters long and
+ * word-bounded:
  *
  *     threshold      4     5     6     7     8    16    24    64
  *     false hits    10     4     4     2     0     0     0     0
  *     characters  3.6M  2.0M  1.1M  600k  361k  108k   96k   56k
  *
- * Zero begins at eight, so sixteen is twice the measured floor, and it costs almost nothing: above
- * about sixteen characters what survives is no longer the sea of accidental fragments but the
- * genuine ASCII inside a PNG — its chunk names, its embedded colour profile — so sixty-four down to
- * sixteen not quite doubles the salvaged surface where four would have multiplied it by sixty-five.
- * What it buys is a disclosure of sixteen characters, where before it took sixty-four to be found.
+ * Read that row as a knife edge and not as a floor with room beneath it. Zero begins at eight and
+ * two false hits stand at seven, so the whole margin is one character wide, measured over twelve
+ * files: one more image, one more short word-bounded term, or a few more megabytes of pixels can
+ * put a nine-character fragment of noise in front of the matcher, and nothing in the table above
+ * says otherwise. Sixteen is twice the observed edge for exactly that reason. The distance is the
+ * safety here; there is no proof that a sixteen-character run cannot be noise.
+ *
+ * Sixteen also costs almost nothing: above about that length what survives is no longer the sea of
+ * accidental fragments but the genuine ASCII inside a PNG — its chunk names, its embedded colour
+ * profile — so sixty-four down to sixteen not quite doubles the salvaged surface where four would
+ * have multiplied it by sixty-five. What it buys is a disclosure of sixteen characters, where
+ * before it took sixty-four to be found.
+ *
+ * So the number belongs to this repository's current contents rather than to the technique. Once
+ * the image set changes — anything added, replaced or removed — the measurement above is a
+ * measurement of files that are no longer here: re-run the sweep over the new blobs with the
+ * dictionary actually in use, read the false-hit row again, and do not lower this on the strength
+ * of the table above.
  */
 const SALVAGE_RUN_CHARACTERS = 16;
 
@@ -614,6 +666,12 @@ function parse_dictionary(path: string): TermFile {
  * the file it points at. One consequence is worth knowing before writing one: two occurrences of
  * a term in a file, in two different sentences, need two entries. An entry cannot ride on its
  * neighbour's judgement, because it was never asked to make that judgement. See `covers`.
+ *
+ * `anchor` is the one optional field, and the only thing an entry may say about the sentence
+ * itself: the twelve-character digest `--audit` prints for the sentence at `line`. Record it and a
+ * rewrite of that line stops the entry dead — it covers nothing, and the run says why — instead of
+ * quietly re-pointing the same judgement at whatever the line says now. Leave it out and the entry
+ * behaves as it always has, with that one drift unchecked and named as unchecked by `--audit`.
  */
 function read_exemptions(
   source: string,
@@ -630,6 +688,7 @@ function read_exemptions(
     const term = typeof entry.term === "string" ? entry.term.trim() : "";
     const why = typeof entry.why === "string" ? entry.why.trim() : "";
     const line = typeof entry.line === "number" && Number.isInteger(entry.line) && entry.line >= 0 ? entry.line : -1;
+    const anchor = typeof entry.anchor === "string" ? entry.anchor.trim().toLowerCase() : "";
     const named = path === "" ? "" : ` (${path}${term === "" ? "" : ` — ${term}`})`;
     const label = `${shorten(source)} entry ${index + 1}${named}`;
     if (path === "" || term === "" || category === "") {
@@ -648,7 +707,22 @@ function read_exemptions(
       );
       continue;
     }
-    exemptions.push({ path, category, term, line, why, source, contexts: [] });
+    if (anchor !== "" && !ANCHOR_SHAPE.test(anchor)) {
+      rejected.push(
+        `${label}: \`anchor\` is not ${ANCHOR_LENGTH} hexadecimal characters. It is the digest --audit prints ` +
+          "beside the sentence at `line`; copy that value or leave the field out, but do not invent one. The " +
+          "exemption is not applied.",
+      );
+      continue;
+    }
+    if (anchor !== "" && line === 0) {
+      rejected.push(
+        `${label}: \`line\` is 0, which names the path itself, and a path has no sentence to anchor — the text ` +
+          "this entry covers is already written out in its `path`. Drop `anchor`; the exemption is not applied.",
+      );
+      continue;
+    }
+    exemptions.push({ path, category, term, line, why, source, anchor, contexts: [] });
   }
   return { exemptions, rejected };
 }
@@ -1340,8 +1414,15 @@ function list_repository_files(root: string, staged: boolean): string[] {
     .map((entry) => join(root, entry));
 }
 
-/** The object id of every file in the index, which is the version the tracked scan just read. */
-function index_blobs(root: string): Set<string> {
+/**
+ * The object id of every file in the index whose working copy is the one the tracked scan read.
+ *
+ * `dirty` names the paths where the two disagree, and their blobs are deliberately left out. The
+ * scan read the file on disk; the committed object beside it was never opened, so calling it
+ * covered is how a clearance comes to be granted over content nothing looked at. See the note on
+ * `scan_history`.
+ */
+function index_blobs(root: string, dirty: Set<string>): Set<string> {
   const listed = git_text(["ls-files", "-s", "-z"], root);
   const oids = new Set<string>();
   if (!listed.ok) {
@@ -1349,12 +1430,34 @@ function index_blobs(root: string): Set<string> {
   }
   // `<mode> <object> <stage>\t<path>`, NUL-terminated so a path may contain anything but NUL.
   for (const entry of listed.stdout.split("\0")) {
-    const object = entry.split(" ")[1];
-    if (object !== undefined && object.length > 0) {
+    const tab = entry.indexOf("\t");
+    if (tab === -1) {
+      continue;
+    }
+    const object = entry.slice(0, tab).split(" ")[1];
+    if (object !== undefined && object.length > 0 && !dirty.has(entry.slice(tab + 1))) {
       oids.add(object);
     }
   }
   return oids;
+}
+
+/**
+ * Tracked paths whose working copy is not what the index holds — edited, deleted, or replaced by
+ * something that is not a file — or `null` when git could not say.
+ *
+ * `git diff --name-only` compares the working tree against the index, which is exactly the
+ * question a tracked scan raises: it read the working tree, so these are the paths whose index
+ * blob it did not read. A stale stat cache can name a path that turns out to be identical, which
+ * costs one re-read and no correctness. A failure answers `null`, and the caller then assumes
+ * nothing was covered rather than guessing.
+ */
+function unstaged_paths(root: string): Set<string> | null {
+  const listed = git_text(["diff", "--name-only", "-z"], root);
+  if (!listed.ok) {
+    return null;
+  }
+  return new Set(listed.stdout.split("\0").filter((entry) => entry.length > 0));
 }
 
 /**
@@ -1509,6 +1612,19 @@ function scan_refs(root: string, matchers: Matcher[]): { hits: Hit[]; refs: numb
  * clearance forever — a gate nobody can ever get green is a gate people stop running. Skipping it
  * leaves exactly the question a clearance asks: what is in the object graph that is not in the tree.
  *
+ * That skip is sound only while the working tree and the index agree, and keeping it sound is the
+ * caller's job. A tracked scan reads the file on disk: with an unstaged edit, the committed blob
+ * beside it was never opened, and skipping it as "already read" let the one version a push would
+ * carry go unscanned under a plain PASSED. There were two ways out. Refusing to clear a dirty tree
+ * is simpler and unambiguous, and it makes the clearance unusable during exactly the hours a
+ * repository is dirty — mid-work, which is when somebody types a client's name — so it would be
+ * run less, and a gate that is skipped clears nothing. Reading both versions costs one extra blob
+ * per edited file and is always correct, so that is what happens: `main` drops the edited paths
+ * from `covered`, their committed blobs arrive here like any other superseded object, and the
+ * report tells the two apart by source — the working copy under its own path, the commit under a
+ * `history:` label naming the commit. Nothing is left unscanned, so no run has to invent a verdict
+ * for a clearance that stopped halfway.
+ *
  * A shallow clone holds only what was fetched, and an explicit range may not resolve in one. Both
  * still run, and both say so in the scope, because a partial history that prints PASSED is the
  * same failure as a partial dictionary that prints PASSED.
@@ -1549,13 +1665,15 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
   const historical = [...new Set([...paths.values()].filter((entry) => entry !== ""))];
   const nodes = path_nodes(historical).filter((node) => !covered.names.has(node));
   for (const node of nodes) {
-    hits.push(...scan_name(`history:${node}`, matchers).map((hit) => ({ ...hit, text: node })));
+    hits.push(...scan_name(`history:${node}`, matchers).map((hit) => ({ ...hit, path: node, text: node })));
   }
   for (const leaf of historical) {
     if (covered.names.has(leaf)) {
       continue;
     }
-    hits.push(...scan_path(leaf, matchers).map((hit) => ({ ...hit, source: `history:${leaf}`, text: leaf })));
+    hits.push(
+      ...scan_path(leaf, matchers).map((hit) => ({ ...hit, source: `history:${leaf}`, path: leaf, text: leaf })),
+    );
   }
 
   const described = describe_objects(root, oids);
@@ -1623,8 +1741,15 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
         continue;
       }
       const commit = containing_commit(root, oid, path);
-      const label = `history:${path === "" ? "(no path)" : path}@${commit === "" ? "unknown" : commit.slice(0, 12)}`;
-      hits.push(...found.hits.map((hit) => ({ ...hit, source: label })));
+      // The commit is a clause of its own and the path travels on the hit, because a path may
+      // contain an `@`. Recovering the path by cutting the label at its last `@` read
+      // `node_modules/@scope/name` as `node_modules/`, so an exemption written for one path could
+      // suppress a hit belonging to another. Nothing parses a label now, and the shape here is the
+      // one `name_of` above already uses, so a reader can see where the path ends.
+      const label = `history:${path === "" ? "(no path)" : path} (commit ${commit === "" ? "unknown" : commit.slice(0, 12)})`;
+      hits.push(
+        ...found.hits.map((hit) => (path === "" ? { ...hit, source: label } : { ...hit, source: label, path })),
+      );
     }
   }
 
@@ -1783,6 +1908,32 @@ function occurrence_context(hit: Hit): string {
 }
 
 /**
+ * The fingerprint an exemption records for the sentence it was written against.
+ *
+ * `--audit` has the reason, the term and the sentence, and it cannot judge whether the first still
+ * describes the last — that is a person's job and no field changes it. What it could not do at all
+ * was notice that the sentence had *changed*: rewrite the anchored line into a genuinely different
+ * sentence that still carries the term and the entry silently began covering text its `why` no
+ * longer described, while the audit printed `ok`. That is the quiet version of the laundering the
+ * sentence key was introduced to stop. An entry that records this digest gets the one fact a
+ * machine can establish established: the sentence is the one that was judged, or it is not.
+ *
+ * A digest rather than the sentence itself, because an exemption is a note about a line and must
+ * not become a hand-written second copy of the file it points at. A copy drifts, has to be escaped,
+ * and republishes the very text a private overlay exists to keep out of a list somebody might read.
+ *
+ * What it cannot do, so nobody reads more into an `ok`. It proves the sentence is identical after
+ * normalisation and says nothing about meaning: a rewrite outside the forty-eight characters either
+ * side of the term, or of the paragraph around it, leaves the digest intact and the entry covering
+ * an occurrence whose context has changed. It is also optional, so an entry that records none is
+ * not checked at all — every overlay written before this existed keeps working, and `--audit` names
+ * each unchecked entry and prints the digest to paste in.
+ */
+function anchor_digest(context: string): string {
+  return createHash("sha256").update(context).digest("hex").slice(0, ANCHOR_LENGTH);
+}
+
+/**
  * Reads each exemption's own sentence out of the tree, at the line the entry names and nowhere
  * else. The anchor is the whole mechanism.
  *
@@ -1799,18 +1950,24 @@ function occurrence_context(hit: Hit): string {
  * covered. In all three the clearance reports the occurrence again and `--audit` prints the line to
  * move the entry to, which is a ten-second fix. That is the direction to fail in: the alternative
  * spends a judgement on text nobody made it about, and says `ok` while it does.
+ *
+ * A recorded `anchor` is checked here, on every run, and an entry whose anchored sentence has been
+ * rewritten resolves to nothing rather than to the new sentence. The caller reports the mismatch as
+ * an exemption error, because losing a suppression silently is how the next reader concludes the
+ * entry was never needed.
  */
 function resolve_exemption_contexts(
   root: string,
   exemptions: Exemption[],
   matchers: Matcher[],
   contents: Map<string, Uint8Array> | null,
-): Exemption[] {
+): { exemptions: Exemption[]; mismatched: string[] } {
   const by_term = new Map(
     matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
   );
   const cache = new Map<string, Hit[]>();
-  return exemptions.map((entry) => {
+  const mismatched: string[] = [];
+  const resolved = exemptions.map((entry) => {
     const matcher = by_term.get(`${entry.category}\u0000${entry.term.toLowerCase()}`);
     if (entry.line === 0 || matcher === undefined) {
       return entry;
@@ -1821,18 +1978,20 @@ function resolve_exemption_contexts(
         contexts.add(occurrence_context(hit));
       }
     }
+    const digests = [...contexts].map(anchor_digest);
+    if (entry.anchor !== "" && !digests.includes(entry.anchor)) {
+      mismatched.push(
+        `${shorten(entry.source)} (${entry.path}:${entry.line} — ${entry.term}): the sentence recorded as ` +
+          `\`anchor\` ${entry.anchor} is not the one at that line ` +
+          `${digests.length === 0 ? "any more" : `(it now reads ${digests.join(", ")})`}. The entry covers ` +
+          "nothing until it is re-read: run --audit, read the sentence standing there now, and record its " +
+          "digest only if the same reason still holds.",
+      );
+      return { ...entry, contexts: [] };
+    }
     return { ...entry, contexts: [...contexts] };
   });
-}
-
-/** The path inside a `history:<path>@<commit>` label, or null for an ordinary source. */
-function historical_path(source: string): string | null {
-  if (!source.startsWith("history:")) {
-    return null;
-  }
-  const rest = source.slice("history:".length);
-  const at = rest.lastIndexOf("@");
-  return at === -1 ? rest : rest.slice(0, at);
+  return { exemptions: resolved, mismatched };
 }
 
 function exemption_key(path: string, category: string, term: string): string {
@@ -1848,7 +2007,9 @@ function partition_hits(hits: Hit[], exemptions: Exemption[]): { reported: Hit[]
   const reported: Hit[] = [];
   const exempt: Hit[] = [];
   for (const hit of hits) {
-    const path = historical_path(hit.source) ?? hit.source;
+    // The path travels on the hit; nothing is recovered from the label, which may hold a commit
+    // beside a path that itself contains the characters a label puts between them.
+    const path = hit.path ?? hit.source;
     const candidates = allowed.get(exemption_key(path, hit.category, hit.term)) ?? [];
     if (candidates.some((entry) => covers(entry, hit))) {
       exempt.push(hit);
@@ -2087,6 +2248,14 @@ function report({
  * or whose term has left it, no longer covers anything in the history either, because the sentence a
  * history hit is matched against is read from the tree — so the state this reports is the state the
  * clearance will act on.
+ *
+ * The one drift it cannot see on its own is a rewrite: change the anchored line into a different
+ * sentence that still carries the term and the entry goes on covering text its reason no longer
+ * describes, with `ok` printed beside it. An entry that records an `anchor` has that checked, and
+ * `REWRITTEN` says the line still carries the term while the words around it are not the ones
+ * somebody judged. An entry that records none is named as unchecked, with the digest to paste in:
+ * a field nobody can be compelled to write is worth more as a prompt than as a rejection. Neither
+ * state is a judgement about meaning — no digest can be one.
  */
 function audit_allowlist(root: string, exemptions: Exemption[], rejected: string[], matchers: Matcher[]): number {
   const by_key = new Map(
@@ -2107,6 +2276,10 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
     const key = exemption_key(entry.path, entry.category, entry.term);
     const occurrences = file_occurrences(root, entry.path, matcher, null, cache);
     const contexts = new Set(occurrences.filter((hit) => hit.line === entry.line).map(occurrence_context));
+    if (entry.anchor !== "" && ![...contexts].some((context) => anchor_digest(context) === entry.anchor)) {
+      // Anchored on a sentence that is no longer there: it covers nothing, so it judges nothing.
+      continue;
+    }
     const lines = judged.get(key) ?? new Set<number>();
     for (const hit of occurrences) {
       if (contexts.has(occurrence_context(hit))) {
@@ -2118,6 +2291,8 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
 
   let stale = 0;
   let drifted = 0;
+  let rewritten = 0;
+  let unanchored = 0;
   let uncovered = 0;
   const sources = [...new Set(exemptions.map((entry) => shorten(entry.source)))];
   console.log("");
@@ -2158,18 +2333,35 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
           "entry to it only if the same reason still holds.";
       } else {
         const contexts = new Set(anchored.map(occurrence_context));
-        const twins = occurrences.filter((hit) => hit.line !== entry.line && contexts.has(occurrence_context(hit)));
-        if (twins.length > 0) {
-          notes.push(`covers the same sentence again at line ${at(twins)}; one judgement, one entry`);
-        }
-        const group = judged.get(exemption_key(entry.path, entry.category, entry.term));
-        const loose = occurrences.filter((hit) => !(group?.has(hit.line) ?? false));
-        if (loose.length > 0) {
-          uncovered += loose.length;
-          notes.push(
-            `line ${at(loose)} carries this term in a different sentence and no entry covers it, so the ` +
-              "clearance reports it: judge it and give it an entry of its own",
-          );
+        const digests = [...contexts].map(anchor_digest);
+        if (entry.anchor !== "" && !digests.includes(entry.anchor)) {
+          status =
+            `REWRITTEN — line ${entry.line} still carries this term, but not in the sentence this entry was ` +
+            `written against: it records anchor ${entry.anchor} and the line now reads ${digests.join(", ")}. ` +
+            "It covers nothing until somebody reads the sentence standing there now; if the same reason still " +
+            "holds, copy the digest above into `anchor`. A digest can say the words changed and nothing about " +
+            "what they mean, so this one needs a person.";
+        } else {
+          if (entry.anchor === "") {
+            unanchored += 1;
+            notes.push(
+              `no \`anchor\` recorded, so a rewording of this line is not checked; record ` +
+                `"anchor": "${digests[0] ?? ""}"`,
+            );
+          }
+          const twins = occurrences.filter((hit) => hit.line !== entry.line && contexts.has(occurrence_context(hit)));
+          if (twins.length > 0) {
+            notes.push(`covers the same sentence again at line ${at(twins)}; one judgement, one entry`);
+          }
+          const group = judged.get(exemption_key(entry.path, entry.category, entry.term));
+          const loose = occurrences.filter((hit) => !(group?.has(hit.line) ?? false));
+          if (loose.length > 0) {
+            uncovered += loose.length;
+            notes.push(
+              `line ${at(loose)} carries this term in a different sentence and no entry covers it, so the ` +
+                "clearance reports it: judge it and give it an entry of its own",
+            );
+          }
         }
       }
     }
@@ -2177,20 +2369,24 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
       stale += 1;
     } else if (status.startsWith("DRIFTED")) {
       drifted += 1;
+    } else if (status.startsWith("REWRITTEN")) {
+      rewritten += 1;
     }
-    const flag = status === "ok" ? "  ok     " : status.startsWith("STALE") ? "  STALE  " : "  DRIFTED";
+    // The flag is the first word of the status, so a state cannot be added without one.
+    const flag = status === "ok" ? "ok" : (status.split(" ")[0] as string);
+    const indent = " ".repeat(13);
     const where = entry.line === 0 ? "name" : `${entry.line}`;
-    console.log(`${flag}  ${entry.path}:${where} — ${entry.term} (${entry.category})`);
-    console.log(`           ${entry.why}`);
+    console.log(`  ${flag.padEnd(9)}  ${entry.path}:${where} — ${entry.term} (${entry.category})`);
+    console.log(`${indent}${entry.why}`);
     if (status !== "ok") {
-      console.log(`           ${status}`);
+      console.log(`${indent}${status}`);
     }
     for (const note of notes) {
-      console.log(`           ${note}`);
+      console.log(`${indent}${note}`);
     }
   }
   for (const failure of rejected) {
-    console.log(`  REJECTED  ${failure}`);
+    console.log(`  REJECTED   ${failure}`);
   }
   console.log("");
   const loose =
@@ -2198,14 +2394,21 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
       ? ""
       : ` ${uncovered} ${uncovered === 1 ? "occurrence" : "occurrences"} at an exempted path ` +
         `${uncovered === 1 ? "is" : "are"} covered by no entry and named above; the clearance reports them.`;
-  if (stale === 0 && drifted === 0 && rejected.length === 0) {
-    console.log(`Audit PASSED — every exemption still covers the occurrence it was written for.${loose}`);
+  const unchecked =
+    unanchored === 0
+      ? ""
+      : ` ${unanchored} ${unanchored === 1 ? "entry records" : "entries record"} no \`anchor\`, so a rewrite of ` +
+        `${unanchored === 1 ? "that line" : "those lines"} into a different sentence carrying the same term is ` +
+        "the one drift this audit cannot see; the digest to record is printed beside each of them.";
+  if (stale === 0 && drifted === 0 && rewritten === 0 && rejected.length === 0) {
+    console.log(`Audit PASSED — every exemption still covers the occurrence it was written for.${loose}${unchecked}`);
     return 0;
   }
   console.log(
-    `Audit FAILED — ${drifted} drifted onto a different occurrence, ${stale} stale, ` +
-      `${rejected.length} rejected.${loose} Delete what no longer applies, re-read what has drifted before ` +
-      "moving it, and give every remaining entry a reason.",
+    `Audit FAILED — ${drifted} drifted onto a different occurrence, ${rewritten} anchored on a sentence that has ` +
+      `since been rewritten, ${stale} stale, ${rejected.length} rejected.${loose}${unchecked} Delete what no ` +
+      "longer applies, re-read what has drifted or changed before moving it, and give every remaining entry a " +
+      "reason.",
   );
   return 1;
 }
@@ -2222,6 +2425,8 @@ type Fixture = { file: string; body: string | Uint8Array; expect: string[] };
  * - an annotated tag whose message carries a term, because a tag is pushed with the branch;
  * - a branch whose name carries a term, and a lightweight tag whose name carries a phrase either
  *   side of a separator. Neither name is in any object, and both travel with a push.
+ * - a file committed with a term in it and then edited on disk and left unstaged, which is the
+ *   version a tracked scan reads standing beside the version a push would carry.
  */
 function plant_history(directory: string): string {
   const repository = join(directory, "history-fixture");
@@ -2268,6 +2473,9 @@ function plant_history(directory: string): string {
     "a heading\n\nsome prose\nmore prose\nanother line\nand one more\nthe policy list names brulq as prohibited\n",
   );
   writeFileSync(join(repository, "clean.txt"), "nothing to see here\n");
+  // Committed with a term in it, and edited on disk further down without being staged. A tracked
+  // scan reads the working copy, so this file's committed blob is one that scan never opened.
+  writeFileSync(join(repository, "unstaged.txt"), "a line the commit still carries: zarquilon\n");
   Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
   commit("remove it again, the way a scrub would");
   const tagged = Bun.spawnSync(
@@ -2301,6 +2509,8 @@ function plant_history(directory: string): string {
       throw new Error(`self-test could not create ${ref[0]} ${ref[1]}: ${made.stderr.toString()}`);
     }
   }
+  // The unstaged edit itself: scrubbed on disk, intact in the object graph, staged nowhere.
+  writeFileSync(join(repository, "unstaged.txt"), "a line with nothing in it at all\n");
   return repository;
 }
 
@@ -2688,6 +2898,7 @@ function self_test(categories: TermCategory[]): number {
       line: 1,
       why: "fixture",
       source: "self-test",
+      anchor: "",
       contexts: [occurrence_context(shared)],
     };
     const split = partition_hits([shared, elsewhere, moved, different, in_the_name], [entry]);
@@ -2709,25 +2920,20 @@ function self_test(categories: TermCategory[]): number {
 
     // The same rule end to end, against a file on disk rather than hand-built hits: the sentence
     // comes out of the tree at the line the entry names, and everything else follows from it.
-    const in_the_tree = resolve_exemption_contexts(
-      directory,
-      [
-        {
-          path: exempted_file,
-          category: "self_test_fixture",
-          term: "brulq",
-          line: 6,
-          why: "fixture",
-          source: "self-test",
-          contexts: [],
-        },
-      ],
-      matchers,
-      null,
-    );
+    const anchored_entry: Exemption = {
+      path: exempted_file,
+      category: "self_test_fixture",
+      term: "brulq",
+      line: 6,
+      why: "fixture",
+      source: "self-test",
+      anchor: "",
+      contexts: [],
+    };
+    const in_the_tree = resolve_exemption_contexts(directory, [anchored_entry], matchers, null);
     const exempted_hits = result.hits.filter((hit) => hit.source === exempted_file);
-    const tree = partition_hits(exempted_hits, in_the_tree);
-    if (in_the_tree[0]?.contexts.length !== 1) {
+    const tree = partition_hits(exempted_hits, in_the_tree.exemptions);
+    if (in_the_tree.exemptions[0]?.contexts.length !== 1) {
       failures.push("an exemption read something other than the one sentence at the line it names");
     }
     if (!tree.exempt.some((hit) => hit.line === 6)) {
@@ -2745,27 +2951,79 @@ function self_test(categories: TermCategory[]): number {
 
     // And an entry whose own line has lost the term covers nothing at all, rather than sliding
     // sideways onto whichever occurrence happens to be closest.
-    const adrift = resolve_exemption_contexts(
+    const adrift = resolve_exemption_contexts(directory, [{ ...anchored_entry, line: 4 }], matchers, null);
+    if (adrift.exemptions[0]?.contexts.length !== 0) {
+      failures.push("an exemption whose line carries no occurrence still resolved a sentence from somewhere");
+    }
+    if (partition_hits(exempted_hits, adrift.exemptions).exempt.length !== 0) {
+      failures.push("an exemption whose line has lost its term drifted onto a neighbouring occurrence");
+    }
+
+    // An entry may record a digest of the sentence it was written against, and that digest is
+    // checked on every run: rewrite the anchored line into a different sentence carrying the same
+    // term and the entry covers nothing, rather than quietly covering the new sentence instead.
+    const judged_sentence = in_the_tree.exemptions[0]?.contexts[0] ?? "";
+    const anchored_here = resolve_exemption_contexts(
       directory,
-      [
-        {
-          path: exempted_file,
-          category: "self_test_fixture",
-          term: "brulq",
-          line: 4,
-          why: "fixture",
-          source: "self-test",
-          contexts: [],
-        },
-      ],
+      [{ ...anchored_entry, anchor: anchor_digest(judged_sentence) }],
       matchers,
       null,
     );
-    if (adrift[0]?.contexts.length !== 0) {
-      failures.push("an exemption whose line carries no occurrence still resolved a sentence from somewhere");
+    if (anchored_here.mismatched.length !== 0 || anchored_here.exemptions[0]?.contexts.length !== 1) {
+      failures.push("an exemption recording the digest of its own sentence was refused");
     }
-    if (partition_hits(exempted_hits, adrift).exempt.length !== 0) {
-      failures.push("an exemption whose line has lost its term drifted onto a neighbouring occurrence");
+    const rewritten = resolve_exemption_contexts(
+      directory,
+      [{ ...anchored_entry, anchor: anchor_digest("a sentence that was never in the file") }],
+      matchers,
+      null,
+    );
+    if (rewritten.mismatched.length !== 1 || rewritten.exemptions[0]?.contexts.length !== 0) {
+      failures.push("an exemption anchored on a sentence its line no longer carries still resolved that line");
+    }
+    if (partition_hits(exempted_hits, rewritten.exemptions).exempt.length !== 0) {
+      failures.push("a rewritten anchor line was still suppressed, which is the laundering an anchor exists to stop");
+    }
+    const digest = anchor_digest("any sentence at all");
+    const shapes = read_exemptions("self-test", [
+      { path: "x.md", category: "self_test_fixture", term: "brulq", line: 1, why: "fixture", anchor: "nope" },
+      { path: "x.md", category: "self_test_fixture", term: "brulq", line: 0, why: "fixture", anchor: digest },
+      { path: "x.md", category: "self_test_fixture", term: "brulq", line: 1, why: "fixture" },
+    ]);
+    if (shapes.rejected.length !== 2 || shapes.exemptions.length !== 1 || shapes.exemptions[0]?.anchor !== "") {
+      failures.push("a malformed anchor, or one on a path exemption, was applied instead of rejected");
+    }
+
+    // A historical path may contain an `@`. Recovering the path from the label by cutting at its
+    // last `@` read `assets@2x/vondrel-mikashe.png` as `assets`, so an exemption written for one
+    // path suppressed a hit belonging to another. The path travels on the hit instead.
+    const scoped: Hit = {
+      source: "history:assets@2x/vondrel-mikashe.png",
+      path: "assets@2x/vondrel-mikashe.png",
+      line: 0,
+      column: 11,
+      span: 1,
+      chars: 15,
+      term: "vondrel mikashe",
+      category: "self_test_fixture",
+      why: "",
+      text: "assets@2x/vondrel-mikashe.png",
+    };
+    const other_path: Exemption = {
+      path: "assets",
+      category: "self_test_fixture",
+      term: "vondrel mikashe",
+      line: 0,
+      why: "fixture",
+      source: "self-test",
+      anchor: "",
+      contexts: [],
+    };
+    if (partition_hits([scoped], [other_path]).exempt.length !== 0) {
+      failures.push("an exemption for an unrelated path suppressed a hit whose own path contains an @");
+    }
+    if (partition_hits([scoped], [{ ...other_path, path: "assets@2x/vondrel-mikashe.png" }]).exempt.length !== 1) {
+      failures.push("an exemption naming a path that contains an @ did not cover the hit in that path");
     }
 
     // --require-overlay tests loaded vocabulary, not a merged file.
@@ -2807,10 +3065,10 @@ function self_test(categories: TermCategory[]): number {
     const nothing_covered: Covered = { blobs: new Set(), names: new Set() };
     const repository = plant_history(directory);
     const history = scan_history(repository, null, matchers, nothing_covered);
-    if (!history.hits.some((hit) => hit.term === "zarquilon" && hit.source.startsWith("history:was-here.txt@"))) {
+    if (!history.hits.some((hit) => hit.term === "zarquilon" && hit.path === "was-here.txt")) {
       failures.push("the history scan did not find a deleted file's blob, which is the whole clearance");
     }
-    if (!history.hits.some((hit) => /@[0-9a-f]{12}$/.test(hit.source))) {
+    if (!history.hits.some((hit) => / \(commit [0-9a-f]{12}\)$/.test(hit.source))) {
       failures.push("a history hit did not name a commit that contains it");
     }
     if (history.blobs < 2) {
@@ -2818,14 +3076,37 @@ function self_test(categories: TermCategory[]): number {
     }
     // Skipping what the tracked scan already read must not skip anything it did not.
     const superseded = scan_history(repository, null, matchers, {
-      blobs: index_blobs(repository),
+      blobs: index_blobs(repository, new Set()),
       names: new Set(),
     });
     if (superseded.current === 0) {
       failures.push("the history scan re-read the version the tracked scan had already covered");
     }
-    if (!superseded.hits.some((hit) => hit.source.startsWith("history:was-here.txt@"))) {
+    if (!superseded.hits.some((hit) => hit.path === "was-here.txt")) {
       failures.push("skipping the current version also hid a superseded blob, which is the clearance itself");
+    }
+    // And the skip is keyed on what the tracked scan actually read, never on what the index lists.
+    // A file edited and left unstaged was read from disk, so its committed blob is unread — and
+    // leaving that blob in `covered` cleared a history nobody had looked at, under a plain PASSED.
+    if (superseded.hits.some((hit) => hit.path === "unstaged.txt")) {
+      failures.push("the unstaged fixture proves nothing: its committed blob was read even with its path covered");
+    }
+    const edited = unstaged_paths(repository);
+    if (edited === null || !edited.has("unstaged.txt")) {
+      failures.push("an unstaged edit was not detected, so a dirty tree cannot be told from a clean one");
+    }
+    if (index_blobs(repository, edited ?? new Set()).size >= index_blobs(repository, new Set()).size) {
+      failures.push("the index blob of an edited file was still counted as read by the tracked scan");
+    }
+    const dirty_tree = scan_history(repository, null, matchers, {
+      blobs: index_blobs(repository, edited ?? new Set()),
+      names: new Set(),
+    });
+    if (!dirty_tree.hits.some((hit) => hit.path === "unstaged.txt" && hit.term === "zarquilon")) {
+      failures.push("the committed version of an unstaged edit went unscanned, so a dirty tree cleared nothing");
+    }
+    if (dirty_tree.current === 0) {
+      failures.push("dropping the edited paths also dropped the skip for every file that was not edited");
     }
     const staged_only = scan_history(repository, null, build_matchers([]), nothing_covered);
     if (staged_only.hits.length !== 0) {
@@ -2873,18 +3154,19 @@ function self_test(categories: TermCategory[]): number {
           line: 7,
           why: "fixture",
           source: "self-test",
+          anchor: "",
           contexts: [],
         },
       ],
       matchers,
       null,
     );
-    if (policy[0]?.contexts.length !== 1) {
+    if (policy.exemptions[0]?.contexts.length !== 1) {
       failures.push("an exemption did not read the one sentence it names out of the tree");
     }
     const historic = partition_hits(
-      history.hits.filter((hit) => historical_path(hit.source) === "policy.md" && hit.line > 0),
-      policy,
+      history.hits.filter((hit) => hit.path === "policy.md" && hit.line > 0),
+      policy.exemptions,
     );
     if (!historic.exempt.some((hit) => hit.text.includes("policy list names"))) {
       failures.push("an exempted policy line failed the clearance in an older version of its own file");
@@ -2947,12 +3229,15 @@ function self_test(categories: TermCategory[]): number {
         "filename, a directory name, a phrase split across a directory separator, a symlink target, a UTF-16 " +
         "file, the readable runs of a file with one stray NUL, a short plaintext run behind NULs, a phrase " +
         "either side of one damaged byte, a branch name, a lightweight tag name, an annotated tag's message " +
-        "and a deleted file's historical blob are all caught; a run one character under the salvage " +
-        "threshold, a phrase either side of dropped bytes, and every control are not; an exemption covers the " +
-        "sentence at the line it names — both copies of it, wherever an edit has moved them, in the tree and " +
-        "in every version the history holds — and covers neither a different sentence three lines away nor " +
-        "anything at all once its own line has lost the term; a blob too large to read is named; an unread " +
-        "file changes the verdict; an empty or malformed overlay fails --require-overlay; and a hit exits 1.",
+        "and a deleted file's historical blob are all caught; the committed version of a file carrying an " +
+        "unstaged edit is read here rather than skipped as already scanned; a run one character under the " +
+        "salvage threshold, a phrase either side of dropped bytes, and every control are not; an exemption " +
+        "covers the sentence at the line it names — both copies of it, wherever an edit has moved them, in the " +
+        "tree and in every version the history holds — and covers neither a different sentence three lines " +
+        "away, nor anything at all once its own line has lost the term or has been rewritten out from under a " +
+        "recorded anchor, nor a hit whose historical path merely shares a prefix with its own up to an @; a " +
+        "blob too large to read is named; an unread file changes the verdict; an empty or malformed overlay " +
+        "fails --require-overlay; and a hit exits 1.",
     );
     return 0;
   } finally {
@@ -3204,46 +3489,65 @@ function main(): number {
     if (options.history) {
       // Only a full tracked scan can promise that the current version of every file was already
       // read with its exemptions applied. Anything narrower assumes nothing and re-reads it all.
-      const covered: Covered =
-        options.mode === "tracked" && options.path === null
-          ? { blobs: index_blobs(root), names: new Set(result.nodes) }
-          : { blobs: new Set(), names: new Set() };
+      const full = options.mode === "tracked" && options.path === null;
+      // And even a full tracked scan read the working tree. Where the working tree and the index
+      // disagree, what it read was the edited copy and the committed blob beside it went unopened,
+      // so those paths lose their skip and their blobs are cleared below like any other superseded
+      // object. See `scan_history` for why both versions are read rather than the run refused.
+      const edited = full ? unstaged_paths(root) : null;
+      const covered: Covered = {
+        blobs: full && edited !== null ? index_blobs(root, edited) : new Set(),
+        names: full ? new Set(result.nodes) : new Set(),
+      };
       const scanned = scan_history(repo_root(root), options.history_range, matchers, covered);
       hits.push(...scanned.hits);
       unread.push(...scanned.unread);
       partial.push(...scanned.salvaged);
       const note = scanned.note === "" ? "" : `, ${scanned.note}`;
+      // What was skipped is part of the verdict: a reader has to be able to tell a blob that was
+      // read upstairs from one that was merely assumed read.
+      let dirt = "";
+      if (full && edited === null) {
+        dirt = "; git could not compare the working tree with the index, so no blob was assumed already read";
+      } else if (edited !== null && edited.size === 1) {
+        dirt = "; the committed version of 1 tracked file carrying an unstaged edit was read here rather than skipped";
+      } else if (edited !== null && edited.size > 1) {
+        dirt =
+          `; the committed versions of ${edited.size} tracked files carrying unstaged edits were read here ` +
+          "rather than skipped";
+      }
       scopes.push(
         `${scanned.blobs} superseded ${scanned.blobs === 1 ? "blob" : "blobs"} of ${scanned.objects} reachable ` +
           `objects, ${scanned.names} historical path components, ${scanned.refs} ref ` +
           `${scanned.refs === 1 ? "name" : "names"}, ${scanned.tags} annotated tag ` +
           `${scanned.tags === 1 ? "message" : "messages"} and ${scanned.commits} commit ` +
           `${scanned.commits === 1 ? "message" : "messages"} (${scanned.current} blobs already read above as ` +
-          `the current version, ${scanned.unread.length} not read at all and ${scanned.salvaged.length} read only ` +
-          `for their runs of text, each one named above${note})`,
+          `the current version, ${scanned.unread.length} not read at all and ${scanned.salvaged.length} ` +
+          `read only for their runs of text, each one named above${note}${dirt})`,
       );
     }
 
-    const { reported, exempt } = partition_hits(
-      hits,
-      // Every hit consults the sentence its exemption names, tree and history alike, so the
-      // sentences are read once here. It costs one file per distinct path, term and category — a
-      // handful of small reads even in a pre-commit hook, and the alternative was a line number,
-      // which cannot tell the occurrence somebody judged from the one that has replaced it.
-      resolve_exemption_contexts(root, exemptions, matchers, contents),
-    );
+    // Every hit consults the sentence its exemption names, tree and history alike, so the
+    // sentences are read once here. It costs one file per distinct path, term and category — a
+    // handful of small reads even in a pre-commit hook, and the alternative was a line number,
+    // which cannot tell the occurrence somebody judged from the one that has replaced it.
+    const resolved = resolve_exemption_contexts(root, exemptions, matchers, contents);
+    const { reported, exempt } = partition_hits(hits, resolved.exemptions);
+    // An entry whose recorded anchor no longer matches the line it names is not applied, and that
+    // is an error rather than a quiet loss of coverage: it fails the run and prints the reason.
+    const failed_exemptions = [...rejected, ...resolved.mismatched];
     report({
       reported,
       exempt,
-      exemptions: exemptions.length,
-      rejected,
+      exemptions: exemptions.length - resolved.mismatched.length,
+      rejected: failed_exemptions,
       scope: scopes.join(" and "),
       unread,
       partial,
       quiet: options.quiet,
       dictionaries,
     });
-    return exit_code_for(reported, rejected.length);
+    return exit_code_for(reported, failed_exemptions.length);
   } catch (failure) {
     console.error(failure instanceof Error ? failure.message : String(failure));
     return 2;

@@ -70,7 +70,7 @@ The map is markdown a human reads, with tables a parser reads.
 - A value listing several items is comma-separated: `ACTIVE, COMPLETED`.
 - Any `## Role:` section may carry a fenced ` ```sql ` block. The parser never reads it and nothing ever executes it: it is written down for whoever runs the export, because the data path is a one-shot manual export.
 - **Everything inside a fence is invisible to the parser**, fences matched by length. A fenced worked example may therefore carry its own `| field | value |` table without it being read as the live one — including the example below.
-- Four sections are required — `## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion` — and two are optional: `## Role: revenue` and `## Role: churn`. A missing required section is `MapSectionError`, and so is a required section carrying no `| field | value |` table.
+- Four sections are required — `## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion` — and two are optional: `## Role: revenue` and `## Role: churn`. A missing required section is `MapSectionError`, and so is a required section carrying no `| field | value |` table. So is the same heading written twice, whichever section it is: the second table would silently replace the first, leaving the binding a reader checks different from the binding the run uses.
 - **An unknown key inside a read table is an error, not a warning.** A typo that parses as silence is exactly how a binding goes missing without anyone noticing: the section is present, the table is present, the run succeeds, and one column was never read.
 
 ### `## Phone format`
@@ -91,10 +91,10 @@ Never inferred, never defaulted. A guessed dialling plan produces keys that look
 | key | type | meaning |
 |---|---|---|
 | `schema` | path | path to the schema file, resolved from the map's own directory and not from any repository root — a map that has to be told where the repository starts needs configuration to guard anything. An absolute path is honoured as written |
-| `models` | list | the model/table blocks whose text is hashed |
+| `models` | list | the blocks whose text is hashed. A name here may be a `model` or an `enum`: the schema declares the two the same way, and the map lists a name rather than a kind |
 | `sha256` | hex | hash of those blocks, in the order listed |
 
-List every model the map binds. A model left off the list can be renamed under the map without the hash noticing.
+List every block the map binds, models and enums alike. A block left off the list can be renamed under the map without the hash noticing — and an enum is not a nicety here, because `valid_statuses` and `recycled_when` bind *values* of an enum rather than columns of a model. Rename one of those values and every hashed model block stays byte-identical while the run this guard protects quietly counts nothing, or moves a whole sum from one side of the split to the other.
 
 The hash covers those blocks and nothing else, joined with a single `\n`, no trailing newline, in the order `models` lists — reordering the list without rehashing produces a false mismatch. The separator is part of the rule: appending a newline to every block instead of joining them shifts the digest by one byte per block, and that fails on the first run of a brand-new map, which is exactly the false alarm that teaches whoever wrote it to stop reading the guard.
 
@@ -233,15 +233,26 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 
 | Condition | Error |
 |---|---|
-| file missing | `MapMissingError` — names the path it looked for |
+| map file missing | `MapMissingError` — names the path it looked for |
 | a required section absent | `MapSectionError` — names the section |
+| a section declared twice | `MapSectionError` — names the section; the later one silently replaces the earlier, so the binding a reader checks is not the binding the run uses |
+| a required section carrying prose but no read table | `MapSectionError` — names the section; a heading with no field/value table under it binds nothing |
 | a required key absent | `MapFieldError` — names section and key |
 | unknown key in a read table | `MapFieldError` — names section and key |
+| a numeric key holding something that is not a number, or not a whole one where the key requires one | `MapFieldError` — names section, key and the raw value it found |
+| `models` listing no block | `MapFieldError` — a fingerprint over no blocks hashes nothing and can never report drift |
+| `split` or `recycled_when` declared without the other | `MapFieldError` — names the missing half of the pair |
+| `valid_statuses` naming no status | `MapFieldError` — nothing would ever count as committed and every cell would report zero |
 | `area_digits` or `subscriber_digits` < 1 | `PhoneFormatError` — states that a market with variable-length area codes cannot be expressed by fixed lengths, and that a second strategy is needed rather than different numbers |
 | `country_code` holding anything but digits | `PhoneFormatError` — empty for a market with no dialled prefix, and never a `+` |
 | `max_unparseable_rate` outside 0..1 | `PhoneFormatError` — it is a share of rows, not a count of them |
 | `shared_account_ceiling` < 2 | `PhoneFormatError` — a ceiling of 1 evicts every ordinary person, the index comes out empty, and every cell reports zero matches |
+| the schema file the fingerprint names is absent | `MapMissingError` — names the resolved schema path: a hash that cannot be checked is a written date |
+| a listed block that no `model` or `enum` in the schema declares | `MapSectionError` — names the block and the schema path |
+| a listed block whose opening brace never closes | `MapSectionError` — names the block; an unclosed block leaves nothing definite to hash |
 | fingerprint mismatch | `MapStaleError` — names the schema path and both hashes |
+
+The first fourteen are raised while the map itself is read — the phone format included, since the format is validated at the moment the key deriver is built rather than row by row. The last four belong to the fingerprint check against the schema. Everything the reader can refuse is above: a condition absent from this table is one it does not refuse.
 
 ---
 
@@ -253,7 +264,7 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 4. Establish the phone format from the market, not from a sample of the data. Add `area_codes` if the list of real codes is known — length alone accepts codes that do not exist.
 5. Write one export query per bound role, selecting exactly the bound columns and nothing else.
 6. Write the prose. Every non-obvious binding gets a sentence saying why.
-7. Hash the named model blocks and record the fingerprint last, so it covers the schema the bindings were actually written against.
+7. Hash the named blocks — `model` and `enum` alike, in the order `models` lists them — and record the fingerprint last, so it covers the schema the bindings were actually written against.
 
 When the schema changes: re-read the affected bindings first, fix them, and only then rehash. Rehashing first turns the check into a rubber stamp — it will pass, and it will pass against bindings nobody re-read.
 

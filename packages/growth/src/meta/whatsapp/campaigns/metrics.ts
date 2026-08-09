@@ -140,13 +140,42 @@ export type MeasureOptions = {
   now?: Date;
 };
 
-/** Readings below this are never publishable, whatever the p-value says. */
+/** Readings below this are never publishable, whatever the p-value says. Seven days, because that
+ *  is longer than the tail of any response this engine has been pointed at: a shorter window has
+ *  not finished collecting the thing it is being asked about. */
 export const WINDOW_FLOOR_HOURS = 24 * 7;
 
 /** Below this many events in the control, one outlier flips the sign of the comparison. */
 export const MIN_CONTROL_EVENTS = 10;
 
+/** The conventional two-sided significance threshold. Exported rather than written inline so an
+ *  old reading can be re-checked against the number that produced it. */
 export const MAX_P = 0.05;
+
+/**
+ * The gate on a published comparison: significance, and the two conditions significance cannot
+ * speak for.
+ *
+ * The p read here is the unrounded one, because rounding first would let a value sitting just
+ * above the threshold cross it on presentation alone, and the comparison is `<` rather than `<=`
+ * — a reading exactly on the threshold has not cleared it. The other two are `>=`: a control
+ * carrying exactly `MIN_CONTROL_EVENTS`, and a window standing exactly on `WINDOW_FLOOR_HOURS`,
+ * are inside. Below the minimum one outlier in the control flips the sign of the comparison.
+ * Below the floor the window is younger than the tail of any response, and an early reading that
+ * clears p is the most confidently wrong number this engine can produce — so the floor outranks
+ * the p-value rather than qualifying it.
+ *
+ * A named export rather than an expression inside the record literal, because this is the one
+ * boolean deciding whether a number leaves the building, and it is the shape of the decision
+ * rather than a rename: three thresholds, one of them strict and two of them not. Inline it could
+ * only be exercised through data, and no arrangement of integer counts puts a p-value exactly on
+ * the threshold — whether that comparison was inclusive could not be pinned at all, and a
+ * mutation pass moved it with the suite still green. A caller holding a stored reading can also
+ * ask it directly whether a longer window would publish that reading.
+ */
+export function is_publishable(p: number | null, control_events: number, window_hours: number): boolean {
+  return p !== null && p < MAX_P && control_events >= MIN_CONTROL_EVENTS && window_hours >= WINDOW_FLOOR_HOURS;
+}
 
 /** More of the person export is unreadable than the map permits. */
 export class UnparseablePhonesError extends Error {
@@ -175,19 +204,22 @@ export class MissingExportError extends Error {
   }
 }
 
-/** A bound amount column is absent from the file, empty on a row, or holding something that is
- *  not a number. The three have different fixes, so the message names which one happened. */
+/** A bound amount column that is empty on a row, or holding something that is not a number. The
+ *  two have different fixes, so the message names which one happened.
+ *
+ *  A third case used to be named here — the column absent from the file — and it could not
+ *  happen. `read_export` asserts every column the map binds against the header before a single
+ *  row is indexed, and `read_rows` fills a short row's missing columns with an empty string
+ *  rather than leaving them off, so nothing reaching this class can be absent rather than blank.
+ *  An absent column is `ExportColumnError`, which says so with the header beside it. */
 export class ExportValueError extends Error {
-  constructor(path: string, column: string, raw: string | undefined) {
+  constructor(path: string, column: string, raw: string) {
     const found =
-      raw === undefined
-        ? "is not in this file at all, which makes the map's binding wrong rather than the data — " +
-          "correct the binding, or re-export with that column included"
-        : raw.trim() === ""
-          ? "is empty on one row, and an amount nobody wrote is not an amount of zero — fill the row " +
-            "at the source, or narrow the export to the rows that carry a value"
-          : `holds ${JSON.stringify(raw)}, which is not a number — look for a currency symbol, a ` +
-            "thousands separator, or a decimal comma the export left in";
+      raw.trim() === ""
+        ? "is empty on one row, and an amount nobody wrote is not an amount of zero — fill the row " +
+          "at the source, or narrow the export to the rows that carry a value"
+        : `holds ${JSON.stringify(raw)}, which is not a number — look for a currency symbol, a ` +
+          "thousands separator, or a decimal comma the export left in";
     super(
       `${path} column ${JSON.stringify(column)} ${found}. Treating it as zero would quietly shrink a ` +
         "total that someone will publish.",
@@ -403,8 +435,12 @@ function column_of(binding: RoleBinding, name: string, role: string): string {
   return column;
 }
 
-function amount_of(raw: string | undefined, path: string, column: string): number {
-  if (raw === undefined || raw.trim() === "") {
+/** A blank is refused rather than read as zero, and the caller hands the row's value through the
+ *  same `?? ""` every other bound column uses: a record built by `read_rows` carries every header
+ *  column, so a missing one and an empty one are the same string here and there is no third case
+ *  to distinguish. */
+function amount_of(raw: string, path: string, column: string): number {
+  if (raw.trim() === "") {
     throw new ExportValueError(path, column, raw);
   }
   const value = Number(raw);
@@ -503,7 +539,7 @@ async function money_index(
   let dated = 0;
   for (const row of rows) {
     const id = row[person] ?? "";
-    const event: MoneyEvent = { at: parse_ts(row[at]), amount: amount_of(row[amount], path, amount) };
+    const event: MoneyEvent = { at: parse_ts(row[at]), amount: amount_of(row[amount] ?? "", path, amount) };
     if (event.at !== null) {
       dated += 1;
     }
@@ -563,7 +599,7 @@ async function conversion_index(
     const when = primary !== "" || at_fallback === undefined ? primary : (row[at_fallback] ?? "");
     const event: ConversionEvent = {
       at: parse_ts(when),
-      amount: amount_of(row[amount], path, amount),
+      amount: amount_of(row[amount] ?? "", path, amount),
       status: row[status] ?? "",
     };
     if (event.at !== null) {
@@ -714,9 +750,9 @@ function resolve_outcome(record: CellRecord, path: string): number | undefined {
  * and the second contradicting the first. They were dropped rather than admitted, because there
  * is no reading they enable: `pre_existing` counts people who were already there before the cut,
  * so it is the same population in both arms of any pair and a difference in it is a difference in
- * how the two lists were drawn, not an effect of anything that was sent. This table is now the
- * only statement of the rule, and the flat allowlist below is its union, so the two checks in
- * `measure` cannot disagree about a path again.
+ * how the two lists were drawn, not an effect of anything that was sent. This table is the only
+ * statement of the rule, and `measure` reads nothing else: the union below is derived from it for
+ * callers, and checking against the union first only ever repeated this check or contradicted it.
  *
  * Why the shape of each entry. A cold list has no counterfactual: nobody who has never heard of
  * the brand arrives unprompted, so arrival is the effect. A list of people who already hold
@@ -735,7 +771,11 @@ const COUNTABLE_BY_AUDIENCE: Record<Cell["audience"], readonly string[]> = {
   own_base: ["conversions.count"],
 };
 
-/** Every path some audience can be read on. Derived, so it can never admit an unreachable one. */
+/** Every path some audience can be read on: the union of the table above, derived so it can never
+ *  admit a path no audience will read. Exported for a caller validating a declaration before it
+ *  measures. `measure` does not consult it — a check against the union can only refuse what the
+ *  per-audience check is about to refuse anyway, and refusing one mistake twice sent the reader a
+ *  first message naming four paths and a second one taking three of them back. */
 export const COUNTABLE_OUTCOMES: readonly string[] = [...new Set(Object.values(COUNTABLE_BY_AUDIENCE).flat())];
 
 /**
@@ -1136,30 +1176,41 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
 
-    // Countable first, then the audience. Both read the same table, so a path either belongs to
-    // some audience or to none, and the two can no longer refuse the same outcome for reasons
-    // that contradict each other.
-    if (!COUNTABLE_OUTCOMES.includes(control.outcome)) {
-      throw new ControlError(
-        `the pair ${JSON.stringify(control.treated)} against ${JSON.stringify(control.control)} reads ` +
-          `outcome ${JSON.stringify(control.outcome)}, which is not a countable field. The comparison is a ` +
-          "two-proportion test over the identifiers each cell listed, so the outcome has to be a count of " +
-          `people or events: ${COUNTABLE_OUTCOMES.join(", ")}. A sum of money divided by a headcount is ` +
-          "not a proportion, and the test would answer with a p-value that means nothing while reading as " +
-          "publishable. Compare the counts here and report the money beside them.",
-      );
-    }
-
+    // One check, not two. There was a countability check ahead of this one, reading the union of
+    // the same table, so every outcome it refused this one refuses too and the only thing it
+    // decided was which message the reader got: a first that named all four countable paths and a
+    // second that then took three of them back, for one mistake. What the reader needs is a single
+    // sentence naming what this pair can be read on and why the path asked for is not it.
     const treated_allows = COUNTABLE_BY_AUDIENCE[treated.cell.audience];
     const control_allows = COUNTABLE_BY_AUDIENCE[untouched.cell.audience];
     if (!treated_allows.includes(control.outcome) || !control_allows.includes(control.outcome)) {
+      // A pair whose cells share an audience is told the rule once instead of hearing the same
+      // list twice. The mixed case states that nothing can be read on both as a fact rather than
+      // intersecting the two lists to find out: they are disjoint, so a branch for the case where
+      // they overlapped would be a sentence no input could produce — the very thing this whole
+      // check was merged to stop shipping. Their disjointness is pinned by a test, which is what
+      // fires if it ever stops holding and this message starts lying.
+      const rule =
+        treated.cell.audience === untouched.cell.audience
+          ? `Both cells are ${treated.cell.audience}, and a ${treated.cell.audience} cell is read on ` +
+            `${treated_allows.join(", ")}.`
+          : `A ${treated.cell.audience} cell is read on ${treated_allows.join(", ")}, and a ` +
+            `${untouched.cell.audience} cell on ${control_allows.join(", ")}. No outcome can be read ` +
+            "on both, so a pair drawn across the two audiences cannot be compared at all: read each " +
+            "cell against an untouched cell drawn from its own audience.";
       throw new ControlError(
         `the pair ${JSON.stringify(control.treated)} (${treated.cell.audience}) against ` +
           `${JSON.stringify(control.control)} (${untouched.cell.audience}) reads outcome ` +
-          `${JSON.stringify(control.outcome)}, which contradicts the audience. A ` +
-          `${treated.cell.audience} cell is read on ${treated_allows.join(", ")} and a ` +
-          `${untouched.cell.audience} cell on ${control_allows.join(", ")}; the other way round is zero ` +
-          "against zero, which is not a null result but a question never asked.",
+          `${JSON.stringify(control.outcome)}, which is not one both of these cells can be read on. ` +
+          rule +
+          " Two rules land here. The outcome has to be a count of people or events, because the " +
+          "comparison is a two-proportion test over the identifiers each cell listed — a sum of money " +
+          "divided by a headcount is not a proportion, and the test would answer with a p-value that " +
+          "means nothing while reading as publishable, so report the money beside the counts instead. " +
+          "And it has to be a count this audience can produce: a cold list has no counterfactual, so " +
+          "arrival is the effect, while a list of people who already hold accounts cannot arrive at " +
+          "all and commitment is the effect. The other way round is zero against zero, which is not a " +
+          "null result but a question never asked.",
       );
     }
 
@@ -1188,18 +1239,10 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
           : round_half_even(treated_value / treated_listed / (control_value / control_listed), 2),
       control_events: control_value,
       p: round_or_null(test === null ? null : test.p, 3),
-      // Significance and two conditions it cannot speak for. The p read here is the unrounded one,
-      // because rounding first would let a value sitting just above the threshold cross it on
-      // presentation alone. Below MIN_CONTROL_EVENTS one outlier in the control flips the sign of
-      // the comparison. Below WINDOW_FLOOR_HOURS the window is younger than the tail of any
-      // response, and an early reading that clears p is the most confidently wrong number this
-      // engine can produce — the floor is read off the treated cell, which is the record this
-      // reading is attached to and published from.
-      publishable:
-        test !== null &&
-        test.p < MAX_P &&
-        control_value >= MIN_CONTROL_EVENTS &&
-        treated.record.window_hours >= WINDOW_FLOOR_HOURS,
+      // The unrounded p, and the window off the treated cell — which is the record this reading is
+      // attached to and published from. Why each threshold is where it is, and which of the three
+      // comparisons are inclusive, is on `is_publishable`.
+      publishable: is_publishable(test === null ? null : test.p, control_value, treated.record.window_hours),
     };
   }
 

@@ -16,6 +16,7 @@ import {
   ExportJoinError,
   ExportStatusError,
   ExportValueError,
+  is_publishable,
   MAX_P,
   MapStaleError,
   MIN_CONTROL_EVENTS,
@@ -562,13 +563,17 @@ describe("matching a list against the person index", () => {
   });
 
   test("a list that needs a real scanner is read as written, not split on commas", async () => {
-    // Four properties of the scanner at once, because each one is invisible in a well-behaved
+    // Three properties of the scanner at once, because each one is invisible in a well-behaved
     // file and each one quietly moves people between cells. The cohort label holds a comma, so a
     // split on commas would shift every column after it on those rows alone; it holds a doubled
-    // quote, which is how a CSV writes one inside a quoted field; the last row stops short of the
-    // header, which is what a writer that trims trailing empties produces; and the file opens
-    // with a byte-order mark, which a spreadsheet adds and which would otherwise be read as part
-    // of the first column's name, so a cell naming that column would not find it.
+    // quote, which is how a CSV writes one inside a quoted field; and the last row stops short of
+    // the header, which is what a writer that trims trailing empties produces.
+    //
+    // The file also opens with a byte-order mark, and that one is not a property of the scanner.
+    // `Bun.file().text()` decodes UTF-8 by the WHATWG rule, which strips a single leading mark
+    // before this package sees the text, so the scanner never meets it. The mark stays in the
+    // fixture because a spreadsheet writes one and this proves the whole path tolerates it. What
+    // exercises the strip in `read_rows` is the doubled mark in the case below.
     const fixture = await build("match-scanner", {
       person: people(
         ["a1", phone(1), from_cut(HOUR)],
@@ -612,6 +617,32 @@ describe("matching a list against the person index", () => {
 
     expect(records[0]?.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
     expect(records[1]?.audience).toEqual({ listed: 1, matched_phones: 1, matched_accounts: 1 });
+  });
+
+  test("a list whose byte-order mark was written twice still finds its first column", async () => {
+    // Why this fixture carries two marks and not one, stated here because the next mutation pass
+    // will find the strip in `read_rows` unexercised by every other case and reach for the delete.
+    // It is live code. The decoder removes one leading mark, so a file with one never reaches the
+    // strip — but a "prepend a byte-order mark so Excel opens it properly" script run against an
+    // export that already carried one writes two, which is exactly the sort of file this engine is
+    // pointed at. The decoder takes the first, the second arrives in the header, and it becomes
+    // part of the first column's name: without the strip this list fails with a MissingColumnError
+    // naming a column that is visibly right in the file.
+    const fixture = await build("match-double-bom", {
+      person: people(["a1", phone(1), from_cut(HOUR)], ["b1", phone(2), from_cut(HOUR)]),
+      lists: { "roster.csv": `\uFEFF\uFEFFhandset,cohort\n${phone(1)},evening\n${phone(2)},morning\n` },
+    });
+
+    const record = await one(fixture, {
+      name: "double-bom",
+      cut: CUT,
+      lists: [fixture.list("roster.csv")],
+      column: "handset",
+      filter: { column: "cohort", value: "evening" },
+      audience: "cold",
+    });
+
+    expect(record.audience).toEqual({ listed: 1, matched_phones: 1, matched_accounts: 1 });
   });
 
   test("an excluded identifier is subtracted however the number is written", async () => {
@@ -801,11 +832,18 @@ describe("the emitted record", () => {
     }
   });
 
-  test("every outcome the allowlist admits is readable by at least one audience", async () => {
+  test("every outcome the allowlist admits is readable by exactly one audience", async () => {
     // The allowlist and the audience rule were two lists once, and they disagreed: three of the
     // seven paths were admitted here and refused there, so no pair could ever be read on them
     // and the second error contradicted the first. This asks the engine rather than the table.
     // A path no audience will read is not permitted, whatever the allowlist says about it.
+    //
+    // The other half of that sentence is load-bearing elsewhere. The refusal a cold cell paired
+    // against an own_base one receives states as a fact that no outcome can be read on both, and
+    // it states it rather than intersecting the two lists to find out — a branch for the case
+    // where they overlapped would be a message no input could produce. This is the premise that
+    // sentence rests on: give a path to both audiences and this fails, pointing at the message
+    // that would otherwise have started lying.
     const fixture = await build("outcome-reachable", {
       person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
       revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5], ["existing", from_cut(3 * HOUR), 8]),
@@ -838,12 +876,19 @@ describe("the emitted record", () => {
     };
 
     const unreachable: string[] = [];
+    const both: string[] = [];
     for (const outcome of COUNTABLE_OUTCOMES) {
-      if (!(await readable_by(outcome, "cold")) && !(await readable_by(outcome, "own_base"))) {
+      const cold_reads = await readable_by(outcome, "cold");
+      const base_reads = await readable_by(outcome, "own_base");
+      if (!cold_reads && !base_reads) {
         unreachable.push(outcome);
+      }
+      if (cold_reads && base_reads) {
+        both.push(outcome);
       }
     }
     expect(unreachable).toEqual([]);
+    expect(both).toEqual([]);
   });
 
   test("reads several cells in one pass and keeps them apart", async () => {
@@ -1206,9 +1251,11 @@ describe("a control pair", () => {
   /**
    * Forty listed phones a side, twenty-eight arrivals against eighteen. The sizes are what make
    * the comparison significant with a control large enough to be worth reading, which is what a
-   * test of the publishability gate needs in order to isolate the one condition it is about.
+   * test of the publishability gate needs in order to isolate the one condition it is about. The
+   * control's arrivals are a parameter so a case about the minimum-events threshold can sit on it
+   * without a second fixture builder saying the same thing with one number changed.
    */
-  async function pair(name: string): Promise<Fixture> {
+  async function pair(name: string, control_arrivals = 18): Promise<Fixture> {
     const person_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
@@ -1218,7 +1265,7 @@ describe("a control pair", () => {
       treated_list.push(treated);
       control_list.push(control);
       person_rows.push([`t${i}`, treated, from_cut(i < 28 ? HOUR : -DAY)]);
-      person_rows.push([`c${i}`, control, from_cut(i < 18 ? HOUR : -DAY)]);
+      person_rows.push([`c${i}`, control, from_cut(i < control_arrivals ? HOUR : -DAY)]);
     }
     return build(name, {
       person: people(...person_rows),
@@ -1312,6 +1359,98 @@ describe("a control pair", () => {
     expect(treated?.control?.lift).toBeNull();
     // Two events on the control side is not a comparison, whatever the p-value says.
     expect(treated?.control?.publishable).toBe(false);
+  });
+
+  test("publishes a window standing exactly on the floor, and refuses one hour short of it", async () => {
+    // The floor is `at or above`. Every other gate is open on both readings and only the reading
+    // time moves, so the pair of them says where the boundary is rather than that a floor exists:
+    // a floor moved one hour in either direction changes one of these two answers.
+    const fixture = await pair("control-floor-boundary");
+
+    const [at_the_floor] = await read(fixture, new Date(CUT_MS + WINDOW_FLOOR_HOURS * HOUR));
+    expect(at_the_floor?.window_hours).toBe(WINDOW_FLOOR_HOURS);
+    expect(at_the_floor?.control?.publishable).toBe(true);
+
+    const [one_hour_short] = await read(fixture, new Date(CUT_MS + (WINDOW_FLOOR_HOURS - 1) * HOUR));
+    expect(one_hour_short?.window_hours).toBe(WINDOW_FLOOR_HOURS - 1);
+    expect(one_hour_short?.control?.p).toBe(0.024);
+    expect(one_hour_short?.control?.publishable).toBe(false);
+  });
+
+  test("publishes a control carrying exactly the minimum events, and refuses one short of it", async () => {
+    // The same boundary on the other threshold, and the same shape of proof. Both readings clear
+    // significance and both windows are well past the floor, so the only thing separating them is
+    // the one arrival, and the answer says which side of the minimum is inside it.
+    const at_the_minimum = await pair("control-events-boundary", MIN_CONTROL_EVENTS);
+    const [enough] = await read(at_the_minimum, new Date(CUT_MS + 200 * HOUR));
+    expect(enough?.control?.control_events).toBe(MIN_CONTROL_EVENTS);
+    expect(enough?.control?.p as number).toBeLessThan(MAX_P);
+    expect(enough?.control?.publishable).toBe(true);
+
+    const one_short = await pair("control-events-short", MIN_CONTROL_EVENTS - 1);
+    const [thin] = await read(one_short, new Date(CUT_MS + 200 * HOUR));
+    expect(thin?.control?.control_events).toBe(MIN_CONTROL_EVENTS - 1);
+    // Still significant. The refusal is about how few events the control carries, not about the
+    // comparison having failed to clear p, and a test where both moved would not say which.
+    expect(thin?.control?.p as number).toBeLessThan(MAX_P);
+    expect(thin?.control?.publishable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The publishability gate
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The two cases above ask the gate through `measure`, which is what proves it is wired to the
+ * numbers the record carries. They cannot ask it about the p-value: p comes out of a z-test over
+ * integer counts, and no arrangement of those counts lands a double exactly on `MAX_P`, so
+ * whether that comparison is `<` or `<=` is invisible from the outside. `is_publishable` is
+ * exported so the question can be asked at all, and these are the cases that ask it.
+ */
+describe("the publishability gate", () => {
+  test("holds its three thresholds at the values they were chosen for", () => {
+    // Pinned by value once, here, and read as constants everywhere else. Referencing the exports
+    // is right — a literal repeated through twenty assertions pins the literal in twenty places
+    // and the constant in none — but it leaves the constants themselves free to move under a
+    // suite that stays green, which is what a mutation pass found. So the numbers are stated in
+    // one place, with what each one is for beside it.
+    //
+    // Seven days, because that is longer than the tail of any response this engine has been
+    // pointed at: a window inside it has not finished collecting the thing it is measuring.
+    expect(WINDOW_FLOOR_HOURS).toBe(168);
+    // Ten events, because below that a single outlier in the control flips the sign of the
+    // comparison.
+    expect(MIN_CONTROL_EVENTS).toBe(10);
+    // The conventional two-sided significance threshold.
+    expect(MAX_P).toBe(0.05);
+  });
+
+  test("refuses a p-value sitting exactly on the threshold, and admits the value below it", () => {
+    // `<`, not `<=`: a reading exactly on 0.05 has not cleared 0.05. The other two gates are open
+    // in both calls, so the p is the only thing being asked about.
+    expect(is_publishable(MAX_P, MIN_CONTROL_EVENTS, WINDOW_FLOOR_HOURS)).toBe(false);
+
+    const just_below = MAX_P - Number.EPSILON;
+    expect(just_below).toBeLessThan(MAX_P);
+    expect(is_publishable(just_below, MIN_CONTROL_EVENTS, WINDOW_FLOOR_HOURS)).toBe(true);
+  });
+
+  test("admits a control carrying exactly the minimum events, and refuses the count below it", () => {
+    expect(is_publishable(0.01, MIN_CONTROL_EVENTS, WINDOW_FLOOR_HOURS)).toBe(true);
+    expect(is_publishable(0.01, MIN_CONTROL_EVENTS - 1, WINDOW_FLOOR_HOURS)).toBe(false);
+  });
+
+  test("admits a window standing exactly on the floor, and refuses the hour below it", () => {
+    expect(is_publishable(0.01, MIN_CONTROL_EVENTS, WINDOW_FLOOR_HOURS)).toBe(true);
+    expect(is_publishable(0.01, MIN_CONTROL_EVENTS, WINDOW_FLOOR_HOURS - 1)).toBe(false);
+  });
+
+  test("refuses a comparison the test had nothing to say about, however wide the other two are", () => {
+    // A null p is not a p that failed to clear the threshold; it is a test that was never able to
+    // run — an empty denominator, or two groups that were all-or-nothing. Reading it as anything
+    // but unpublishable would publish a comparison nobody made.
+    expect(is_publishable(null, MIN_CONTROL_EVENTS * 100, WINDOW_FLOOR_HOURS * 100)).toBe(false);
   });
 });
 
@@ -1500,6 +1639,28 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("amount");
   });
 
+  test("an amount column left empty on a row, which is not an amount of zero", async () => {
+    // The other arm of the same error, and the whole of it now. This class used to name a third
+    // case — the column absent from the file — which no input could produce: every bound column is
+    // asserted against the header before a row is indexed, and a short row's missing columns come
+    // back as empty strings rather than absent ones, so an absent value and a blank one are the
+    // same string by the time an amount is read. An absent column is `ExportColumnError`, two
+    // cases above.
+    const fixture = await build("refuse-amount-blank", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(["one", from_cut(HOUR), ""]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-amount-blank", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportValueError);
+    // Which of the two happened, because filling the row at the source and fixing a decimal comma
+    // are different jobs.
+    expect(error.message).toContain("is empty on one row");
+    expect(error.message).toContain("amount");
+  });
+
   test("more unreadable numbers than the map allows", async () => {
     // The map permits a quarter. Two rows in three is a dialling plan that does not describe
     // this market, and that produces the same zero as a list nobody on it ever registered.
@@ -1573,6 +1734,28 @@ describe("the run refuses what it cannot measure", () => {
     }
   });
 
+  test("and one mistyped entry out of one, which is the shape the fault actually arrives in", async () => {
+    // A declaration lists a handful of probes and somebody gets a digit wrong in one of them. The
+    // case above hands over three unreadable entries at once, which a refusal starting at the
+    // second would still pass — and the second is never the realistic number. One entry is, and
+    // under a refusal that missed it this cell measures with the probe still in the population and
+    // its conversion credited to the campaign.
+    const fixture = await build("refuse-exclude-one", {
+      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-exclude-one", fixture.list("reached.txt"), { exclude: ["48O000002"] })),
+    );
+
+    expect(error).toBeInstanceOf(CellExclusionError);
+    expect((error as CellExclusionError).entries).toEqual(["48O000002"]);
+    // Singular, because the sentence is an instruction to whoever fixes the declaration and "an
+    // exclusion" and "3 exclusions" send them to look for different amounts of work.
+    expect(error.message).toContain("lists an exclusion that cannot be read");
+  });
+
   test("two cells sharing one name, which would make every control join ambiguous", async () => {
     const fixture = await build("refuse-duplicate-cell", {
       person: people(["one", phone(1), from_cut(HOUR)]),
@@ -1612,7 +1795,7 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("imaginary");
   });
 
-  test("a control read on an outcome its audience cannot have", async () => {
+  test("a control read on a countable outcome its audience cannot have", async () => {
     // Nobody who has never heard of the brand can commit before arriving, so a cold pair read
     // on commitment is zero against zero: not a null result, a question never asked.
     const fixture = await build("refuse-control-audience", {
@@ -1632,11 +1815,19 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(ControlError);
     expect(error.message).toMatch(/audience/i);
+    expect(error.message).toContain("conversions.count");
+    // What this pair can be read on, in the same sentence that refuses what it asked for. One
+    // message, because a countability check ahead of this one used to refuse the same declaration
+    // first and name four paths, three of which this check was about to take back.
+    expect(error.message).toContain("Both cells are cold, and a cold cell is read on acquired.accounts");
+    expect(error.message).toContain("question never asked");
   });
 
   test("a control read on a sum of money rather than a count of people", async () => {
     // A money total fed to a two-proportion test produces a p-value and a `publishable: true`
-    // that mean nothing: the test counts successes out of trials, and currency is neither.
+    // that mean nothing: the test counts successes out of trials, and currency is neither. The
+    // same guard answers this, because a path no audience can be read on is refused by every
+    // audience — and one refusal that names what this pair can be read on is the whole answer.
     const fixture = await build("refuse-control-outcome", {
       person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
@@ -1655,6 +1846,33 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(ControlError);
     expect(error.message).toContain("acquired.revenue.value");
     expect(error.message).toContain("acquired.accounts");
+    expect(error.message).toContain("not a proportion");
+  });
+
+  test("a pair drawn across the two audiences, which has no outcome both sides can be read on", async () => {
+    // One side allows the outcome and the other does not, which is the case that says the check
+    // reads both cells rather than whichever it looked at first. It is also the whole of what a
+    // mixed pair can ever be: the two audiences share no countable path, so the message says so
+    // and sends the reader to draw a control from the treated cell's own audience instead of
+    // trying a third outcome.
+    const fixture = await build("refuse-control-mixed-audience", {
+      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(-DAY)]),
+      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("treated.txt")), base("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toContain('"treated" (cold) against "untouched" (own_base)');
+    expect(error.message).toContain("No outcome can be read on both");
   });
 
   test("two controls on one treated cell, where the last would silently win", async () => {
@@ -1939,6 +2157,34 @@ describe("the run refuses what it cannot measure", () => {
     // The count, because two shared out of forty and forty shared out of forty are different
     // conversations with whoever drew the lists.
     expect(error.message).toContain("shares 2");
+  });
+
+  test("and one whose arms share a single identifier, which is where the refusal starts", async () => {
+    // One person in both arms is already two samples that are not independent, and one is where
+    // this arrives: a control drawn by hand keeps a row somebody had already sent to. The case
+    // above shares two, so a refusal that began at the second would look correct there and let
+    // this one through with `publishable: true` on a comparison of a group against itself minus
+    // one member.
+    const fixture = await build("refuse-control-overlap-one", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
+      lists: {
+        "treated.txt": lines(phone(1), phone(2)),
+        "untouched.txt": lines(phone(2), phone(3)),
+      },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ControlError);
+    expect(error.message).toContain("shares 1 of the 2 identifiers");
   });
 
   test("a pair naming one cell on both sides, which compares a group against itself", async () => {
