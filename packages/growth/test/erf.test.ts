@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { erf, normal_cdf } from "../src/internal/erf.ts";
+import { python_lines, python_test } from "./python.ts";
 
 /**
  * `erf` is the only transcendental in the package and everything published as a p-value goes
@@ -13,29 +14,6 @@ const TOLERANCE = 1e-12;
 
 /** The 97.5th percentile of the standard normal, to full double precision. */
 const Z_975 = 1.959963984540054;
-
-/**
- * Runs a Python snippet and returns its stdout lines, or null when there is no usable `python3`.
- * A real spawn is the probe, because a `python3` on PATH that cannot run is the same problem as
- * one that is absent.
- */
-function python_lines(script: string): string[] | null {
-  let stdout: string;
-  try {
-    const proc = Bun.spawnSync(["python3", "-c", script]);
-    if (!proc.success) {
-      return null;
-    }
-    stdout = proc.stdout.toString();
-  } catch {
-    return null;
-  }
-  const trimmed = stdout.trim();
-  return trimmed === "" ? [] : trimmed.split("\n");
-}
-
-const PYTHON_AVAILABLE = python_lines("print(1 + 1)")?.[0] === "2";
-const python_test = PYTHON_AVAILABLE ? test : test.skip;
 
 /** The sweep used for the Python cross-check and for the monotonicity check. */
 const SWEEP: readonly number[] = [

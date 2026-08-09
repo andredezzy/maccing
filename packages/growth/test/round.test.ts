@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { round_half_even, round_or_null } from "../src/internal/round.ts";
+import { python_lines, python_test } from "./python.ts";
 
 /**
  * The rounding suite is the byte-identity gate. The published record has to be reproducible
@@ -111,30 +112,6 @@ const ROUND_CASES: readonly RoundCase[] = [
 function same_number(a: number, b: number): boolean {
   return a === b || (Number.isNaN(a) && Number.isNaN(b));
 }
-
-/**
- * Runs a Python snippet and returns its stdout lines, or null when there is no usable `python3`.
- * The probe is a real spawn rather than a PATH lookup, because a `python3` that exists and
- * cannot run is the same problem as one that is not there.
- */
-function python_lines(script: string): string[] | null {
-  let stdout: string;
-  try {
-    const proc = Bun.spawnSync(["python3", "-c", script]);
-    if (!proc.success) {
-      return null;
-    }
-    stdout = proc.stdout.toString();
-  } catch {
-    return null;
-  }
-  const trimmed = stdout.trim();
-  return trimmed === "" ? [] : trimmed.split("\n");
-}
-
-/** Attempted once, at load, so the choice between `test` and `test.skip` is made from facts. */
-const PYTHON_AVAILABLE = python_lines("print(1 + 1)")?.[0] === "2";
-const python_test = PYTHON_AVAILABLE ? test : test.skip;
 
 describe("round_half_even", () => {
   test("breaks an exact tie towards the even digit", () => {

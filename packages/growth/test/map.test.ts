@@ -457,6 +457,70 @@ describe("load_map refuses a document it cannot bind", () => {
     expect(error).toBeInstanceOf(MapSectionError);
     expect((error as MapSectionError).section).toBe("## Notes");
   });
+
+  test("rejects `split` declared with no value marking the recycled side", async () => {
+    // Half a binding: someone named the column and stopped before saying which of its values
+    // means recycled. Read as "no split at all", the record loses the breakdown entirely and
+    // the run publishes one lump conversion figure for a product this same document says has
+    // two sides to it — a total that reconciles against nothing, with no column named anywhere
+    // in the output as the one that went unread.
+    const split_only = `## Role: conversion
+
+| field | value |
+|---|---|
+| export | conversion.csv |
+| person | account_id |
+| at | committed_at |
+| at_fallback | created_at |
+| amount | amount_minor |
+| status | state |
+| valid_statuses | ACTIVE, COMPLETED |
+| split | origin |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "split-without-recycled-when",
+          compose(PHONE_SECTION, FINGERPRINT_SECTION, PERSON_SECTION, split_only),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("recycled_when");
+    expect((error as MapFieldError).section).toBe("## Role: conversion");
+  });
+
+  test("rejects `recycled_when` declared with no column to read it from", async () => {
+    // The mirror case, and the worse-looking one: a value naming the recycled side with no
+    // column carrying it. Accepted as "no split", the run drops the same breakdown while the
+    // map still reads, to anyone opening it, as though the recycled side were being counted.
+    const recycled_only = `## Role: conversion
+
+| field | value |
+|---|---|
+| export | conversion.csv |
+| person | account_id |
+| at | committed_at |
+| at_fallback | created_at |
+| amount | amount_minor |
+| status | state |
+| valid_statuses | ACTIVE, COMPLETED |
+| recycled_when | RECYCLED |
+`;
+    const error = await caught(
+      load_map(
+        await write_map(
+          "recycled-when-without-split",
+          compose(PHONE_SECTION, FINGERPRINT_SECTION, PERSON_SECTION, recycled_only),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapFieldError);
+    expect((error as MapFieldError).key).toBe("split");
+    expect((error as MapFieldError).section).toBe("## Role: conversion");
+  });
 });
 
 /**

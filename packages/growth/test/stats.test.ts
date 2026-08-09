@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { median, two_proportion } from "../src/internal/stats.ts";
+import { python_lines, python_test } from "./python.ts";
 
 /**
  * Two functions, and between them they decide whether a reading is publishable. `median` is the
@@ -11,29 +12,6 @@ import { median, two_proportion } from "../src/internal/stats.ts";
  *
  * Every figure below is invented.
  */
-
-/**
- * Runs a Python snippet and returns its stdout lines, or null when there is no usable `python3`.
- * A real spawn is the probe: a `python3` on PATH that cannot run is the same problem as one
- * that is not installed.
- */
-function python_lines(script: string): string[] | null {
-  let stdout: string;
-  try {
-    const proc = Bun.spawnSync(["python3", "-c", script]);
-    if (!proc.success) {
-      return null;
-    }
-    stdout = proc.stdout.toString();
-  } catch {
-    return null;
-  }
-  const trimmed = stdout.trim();
-  return trimmed === "" ? [] : trimmed.split("\n");
-}
-
-const PYTHON_AVAILABLE = python_lines("print(1 + 1)")?.[0] === "2";
-const python_test = PYTHON_AVAILABLE ? test : test.skip;
 
 /** One reading, unpacked from the nullable return so the assertions stay readable. */
 type Reading = { z: number; p: number };
@@ -137,6 +115,18 @@ describe("two_proportion", () => {
     expect(two_proportion(0, 0, 0, 0)).toBeNull();
   });
 
+  test("returns null when a success count exceeds its own denominator", () => {
+    // `acquired.accounts` counts matched accounts while `audience.listed` counts distinct keys,
+    // and one key legally answers for several accounts under `shared_account_ceiling`. A real
+    // measure run therefore reaches this function with 200 successes out of 100 — a treated rate
+    // of 200 percent — and this clause is the only thing standing between that and a published
+    // p-value on it. Both pairs keep the pooled proportion under 1 on purpose: at 1210/1100 the
+    // variance goes negative, the standard-error check refuses the pair for an unrelated reason,
+    // and the pair would pin nothing.
+    expect(two_proportion(200, 100, 5, 1000)).toBeNull();
+    expect(two_proportion(5, 1000, 200, 100)).toBeNull();
+  });
+
   test("returns null when the pooled standard error is zero", () => {
     // Both groups all-miss or both all-hit: the pooled proportion is 0 or 1, the standard
     // error is 0, and z would be a division by zero dressed up as infinity.
@@ -175,6 +165,30 @@ describe("two_proportion", () => {
     // this reading is the entire job.
     const { p } = reading(two_proportion(6, 10, 4, 10));
     expect(p).toBeGreaterThan(0.05);
+  });
+
+  test("pools the two groups by size rather than averaging their two rates", () => {
+    // Every other numeric case in this file either pairs equal denominators or pairs equal rates,
+    // and (a + b)/(na + nb) and (a/na + b/nb)/2 are the same number under both — so none of them
+    // can tell the pooled proportion apart from the unweighted average of the two rates. This
+    // pair, unequal on both counts, can, and the gate rides on it: the unweighted form lets a
+    // 100-person group pull the pooled rate as hard as a 1000-person one, which inflates the
+    // standard error and shrinks z until a real split reads as noise.
+    //
+    // Worked by hand from 10/100 against 5/1000, so this can be checked without running it:
+    //   pooled = (10 + 5) / (100 + 1000)              = 15/1100 = 3/220
+    //   var    = (3/220)(217/220)(1/100 + 1/1000)     = (651/48400)(11/1000)
+    //                                                 = 651/4400000 = 0.000147954545...
+    //   se     = sqrt(0.000147954545...)              = 0.01216365674682...
+    //   z      = (0.1 - 0.005) / 0.01216365674682...  = 7.81015133667...
+    // Under the unweighted average pooled is 0.0525, se is 0.02339190565..., and z comes out at
+    // 4.06123389..., barely half the true statistic.
+    const { z, p } = reading(two_proportion(10, 100, 5, 1000));
+    expect(z).toBeCloseTo(7.810151336670097, 10);
+    // p is 5.8e-15 pooled against 4.9e-5 unweighted, so the bound separates them by ten orders of
+    // magnitude. A bound rather than a value because 1 - Φ(7.81) is a couple of ULPs below 1, and
+    // the last digits there belong to erf, which has its own oracle.
+    expect(p).toBeLessThan(1e-10);
   });
 
   test("is symmetric in its two groups up to the sign of z", () => {

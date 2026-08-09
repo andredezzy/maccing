@@ -585,6 +585,52 @@ describe("matching a list against the person index", () => {
     expect(record.acquired.accounts).toBe(2);
   });
 
+  test("a declared column that is not the file's first one", async () => {
+    // Every other fixture that names a column puts it first, so the declaration and the fallback
+    // pick the same column and a reader that ignored the declaration would look correct. Here they
+    // disagree, and the disagreement is a different set of people: `ticket` holds numbers that
+    // belong to two accounts that already existed, `handset` the two that arrived. Read the wrong
+    // column and the cell reports two arrivals it never reached and none of the two it did, with
+    // no error anywhere — the counts are the same size, only the people are wrong.
+    const fixture = await build("match-second-column", {
+      person: people(
+        ["new-a", phone(31), from_cut(HOUR)],
+        ["new-b", phone(32), from_cut(HOUR)],
+        ["old-a", phone(33), from_cut(-DAY)],
+        ["old-b", phone(34), from_cut(-DAY)],
+      ),
+      lists: {
+        "roster.csv": `ticket,handset\n${phone(33)},${phone(31)}\n${phone(34)},${phone(32)}\n`,
+      },
+    });
+
+    const record = await one(fixture, cold("match-second-column", fixture.list("roster.csv"), { column: "handset" }));
+
+    expect(record.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
+    expect(record.acquired.accounts).toBe(2);
+    expect(record.pre_existing.accounts).toBe(0);
+  });
+
+  test("a list whose last line carries no terminator is still a row", async () => {
+    // Every other fixture ends with a newline, so the scanner's final flush — the row still in
+    // hand when the text runs out — is never the thing that emits a record. Plenty of writers omit
+    // that last newline, and without the flush their last identifier is simply not there: the cell
+    // is measured one person short, quietly, because a list of two that reads as one is a
+    // perfectly plausible list.
+    const fixture = await build("match-no-trailing-newline", {
+      person: people(["a1", phone(41), from_cut(HOUR)], ["a2", phone(42), from_cut(HOUR)]),
+      lists: { "roster.csv": `handset,cohort\n${phone(41)},evening\n${phone(42)},evening` },
+    });
+
+    const record = await one(
+      fixture,
+      cold("match-no-trailing-newline", fixture.list("roster.csv"), { column: "handset" }),
+    );
+
+    expect(record.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
+    expect(record.acquired.accounts).toBe(2);
+  });
+
   test("a list that needs a real scanner is read as written, not split on commas", async () => {
     // Three properties of the scanner at once, because each one is invisible in a well-behaved
     // file and each one quietly moves people between cells. The cohort label holds a comma, so a
@@ -1826,6 +1872,47 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("amount");
   });
 
+  test("an amount column holding only spaces, which Number reads as a finite zero", async () => {
+    // The blank case above spells the absence as nothing at all; an export that pads its columns
+    // spells the same absence as spaces. `Number("   ")` is 0 and finite, so a reader that asked
+    // only whether the string was empty would let this row through as a payment of zero — the
+    // silent shrunken total this class exists to stop, arriving from a file that looks fine in a
+    // spreadsheet because the padding is invisible there.
+    const fixture = await build("refuse-amount-spaces", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(["one", from_cut(HOUR), "   "]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-amount-spaces", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportValueError);
+    // The absence arm of the message, not the unparseable one: the fix is to fill the row at the
+    // source, and telling the reader to hunt for a decimal comma would send them looking at a cell
+    // that has nothing in it.
+    expect(error.message).toContain("is empty on one row");
+    expect(error.message).toContain("amount");
+  });
+
+  test("an amount that overflows to Infinity rather than failing to parse", async () => {
+    // `Number("1e999")` is not NaN; it is Infinity. Checked for NaN alone, this row is accepted,
+    // added into the total, and carried through `round_half_even`, which passes non-finite input
+    // straight through by design — so the cell publishes `Infinity` as money somebody collected.
+    const fixture = await build("refuse-amount-overflow", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      revenue: revenue(["one", from_cut(HOUR), "1e999"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-amount-overflow", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportValueError);
+    // The unparseable arm, quoting the cell: an overflowing literal is something written wrong in
+    // the export, not a row left empty.
+    expect(error.message).toContain("1e999");
+    expect(error.message).toContain("amount");
+  });
+
   test("more unreadable numbers than the map allows", async () => {
     // The map permits a quarter. Two rows in three is a dialling plan that does not describe
     // this market, and that produces the same zero as a list nobody on it ever registered.
@@ -2525,6 +2612,27 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("2 rows");
   });
 
+  test("and the same drift in an export carrying a single row", async () => {
+    // The count the guard is conditioned on is "any rows at all", and the case above has two — so
+    // a guard that started at the second row would look correct there and stay silent here. A
+    // one-row conversion export is what a small cell produces, and its single renamed status is
+    // the same migration: the row is dropped by the per-cell filter, the record says nobody
+    // committed, and the only thing that distinguishes it from a genuinely quiet cell is this
+    // refusal. The blank-timestamp guard beside it is written to the same shape and is exercised
+    // at one row, which is what makes the asymmetry a gap rather than a preference.
+    const fixture = await build("refuse-status-drift-one-row", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["one", from_cut(HOUR), 60, "RUNNING", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, base("refuse-status-drift-one-row", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportStatusError);
+    expect((error as ExportStatusError).found).toEqual(["RUNNING"]);
+    expect(error.message).toContain("the 1 rows in");
+  });
+
   test("but not a file where one row in three carries a status the map counts", async () => {
     // The same distinction the blank-column check draws. A file whose rows are mostly abandoned
     // or cancelled is an ordinary file; it is a file with nothing countable in it that is a
@@ -2733,6 +2841,27 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(TextListOptionError);
     expect((error as TextListOptionError).options).toEqual(['filter on "cell"']);
+  });
+
+  test("an identifier column the list does not carry, rather than a fall back to the first one", async () => {
+    // The declaration says `handset` and the export was written with `msisdn`. Falling back to the
+    // first column reads the ticket numbers as phones: none of them parses, the cell matches
+    // nobody, and what surfaces is either a dialling-plan complaint or an empty audience — both of
+    // which point the reader at the phone format instead of at the one word that is wrong in the
+    // declaration.
+    const fixture = await build("refuse-missing-identifier-column", {
+      person: people(["a1", phone(1), from_cut(HOUR)]),
+      lists: { "roster.csv": `ticket,msisdn\nT-1,${phone(1)}\n` },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-missing-identifier-column", fixture.list("roster.csv"), { column: "handset" })),
+    );
+
+    expect(error).toBeInstanceOf(MissingColumnError);
+    expect((error as MissingColumnError).column).toBe("handset");
+    // The header as scanned, so the reader can see the name the export actually used.
+    expect(error.message).toContain('"msisdn"');
   });
 
   test("a filter naming a column the list does not carry, named as itself", async () => {
