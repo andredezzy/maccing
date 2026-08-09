@@ -2382,8 +2382,14 @@ function report({
         "suppressed on their account. Not an error, and not a gap in coverage: an entry that resolves to " +
         "nothing makes this run report more, never less.",
     );
-    for (const failure of unresolved) {
-      console.log(`  ${failure}`);
+    // The summary above carries the count, which is all a gate needs. Each line below names the
+    // entry's own term and the path it points at, both of them the overlay's content, so they are
+    // held behind the same guard as the hit lines: a CI log on a public repository is not a place
+    // to print the dictionary, and this block was outside that guard while the hits were inside it.
+    if (!quiet) {
+      for (const failure of unresolved) {
+        console.log(`  ${failure}`);
+      }
     }
   }
 
@@ -2394,8 +2400,10 @@ function report({
   );
   if (rejected.length > 0) {
     console.log(`Exemption errors: ${rejected.length}.`);
-    for (const failure of rejected) {
-      console.log(`  ${failure}`);
+    if (!quiet) {
+      for (const failure of rejected) {
+        console.log(`  ${failure}`);
+      }
     }
   }
 
@@ -2461,7 +2469,13 @@ function report({
  * a field nobody can be compelled to write is worth more as a prompt than as a rejection. Neither
  * state is a judgement about meaning — no digest can be one.
  */
-function audit_allowlist(root: string, exemptions: Exemption[], rejected: string[], matchers: Matcher[]): number {
+function audit_allowlist(
+  root: string,
+  exemptions: Exemption[],
+  rejected: string[],
+  matchers: Matcher[],
+  quiet: boolean,
+): number {
   const by_key = new Map(
     matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
   );
@@ -2587,6 +2601,13 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
     } else if (status.startsWith("REWRITTEN")) {
       rewritten += 1;
     }
+    // Every line below names the entry's term, its category, the path it covers and the reason
+    // somebody wrote for it — the overlay's content, four ways. `--audit` is the mode whose whole
+    // output is the dictionary, so on a public repository's CI log it is the worst of the three to
+    // run loud. The counts and the verdict survive; read the reasons where the overlay lives.
+    if (quiet) {
+      continue;
+    }
     // The flag is the first word of the status, so a state cannot be added without one.
     const flag = status === "ok" ? "ok" : (status.split(" ")[0] as string);
     const indent = " ".repeat(13);
@@ -2600,8 +2621,10 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
       console.log(`${indent}${note}`);
     }
   }
-  for (const failure of rejected) {
-    console.log(`  REJECTED   ${failure}`);
+  if (!quiet) {
+    for (const failure of rejected) {
+      console.log(`  REJECTED   ${failure}`);
+    }
   }
   console.log("");
   const loose =
@@ -3792,7 +3815,7 @@ function main(): number {
     }
 
     if (options.mode === "audit") {
-      return audit_allowlist(repo_root(import.meta.dir), exemptions, rejected, matchers);
+      return audit_allowlist(repo_root(import.meta.dir), exemptions, rejected, matchers, options.quiet);
     }
 
     if (options.message !== null) {

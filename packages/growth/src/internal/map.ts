@@ -211,7 +211,7 @@ function cells_of(line: string): string[] | null {
 }
 
 /** The first `| field | value |` table under a heading, or null when the section has none. */
-function read_table_of(lines: string[]): Table | null {
+function read_table_of(lines: string[], heading: string): Table | null {
   for (let i = 0; i < lines.length; i++) {
     const header = cells_of(lines[i] as string);
     if (header === null || header.length !== 2) {
@@ -232,6 +232,22 @@ function read_table_of(lines: string[]): Table | null {
       if (/^:?-{1,}:?$/.test(key)) {
         continue;
       }
+      // A key written twice is refused rather than resolved, for the reason the duplicate-heading
+      // guard one level up already gives: a `Map` keeps the last write, and the reader looking at
+      // the document sees the first. So the binding that runs is the one nobody read. Measured
+      // before this refused: an `at` declared as `signed_at` and then again as `row_created_at`
+      // published `conversions {count: 0, value: 0}` where the visible first binding gives
+      // `{count: 1, value: 500}` — no error, and a row of zeros is this engine's cheapest wrong
+      // answer. Editing a map by copying a line and forgetting to change its key is how it arrives.
+      if (table.has(key)) {
+        throw new MapFieldError(
+          heading,
+          key,
+          "declared twice in this table. Only the second row would be read, while a person reading " +
+            "the document sees the first, so the binding that runs is the one nobody checked. " +
+            "Delete the row that does not belong.",
+        );
+      }
       table.set(key, row.slice(1).join("|").trim());
     }
     return table;
@@ -244,7 +260,7 @@ function section_table(sections: Map<string, string[]>, heading: string): Table 
   if (lines === undefined) {
     throw new MapSectionError(heading, "the map does not declare this section, and it is required");
   }
-  const table = read_table_of(lines);
+  const table = read_table_of(lines, heading);
   if (table === null) {
     throw new MapSectionError(heading, "no `| field | value |` table under this heading — only prose");
   }
