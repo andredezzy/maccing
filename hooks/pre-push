@@ -17,11 +17,12 @@
 # Install it with `git config core.hooksPath hooks`, the same one setting that installs the other
 # two; there is nothing to do per hook.
 #
-# The vocabulary lives in no repository, this one included. CI reads it from the LEAK_OVERLAY
-# secret; here it is `leak-protections.json` at the root of this repository, untracked and
-# git-ignored, holding exactly the bytes that secret holds. Set LEAK_PROTECTIONS to override it:
+# The vocabulary is committed nowhere. CI reads it from the LEAK_PROTECTIONS_JSON secret; here
+# it is an untracked, git-ignored file in the repository being guarded — `leak-protections.json`
+# at the root, or `.maccing/leak-protections.json`, whichever exists. Set LEAK_PROTECTIONS to
+# name a different one:
 #
-#   export LEAK_PROTECTIONS="$HOME/somewhere/else/leak-terms.json"
+#   export LEAK_PROTECTIONS="$HOME/somewhere/else/leak-protections.json"
 #
 # Naming a default rather than demanding the export is what stops this hook refusing every
 # `git push` on a machine where nobody remembered to set it.

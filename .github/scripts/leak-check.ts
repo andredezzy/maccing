@@ -8,7 +8,8 @@
  * precisely, so the list is itself the disclosure whether or not a client is ever named — and an
  * empty template naming the *kinds* of thing worth hiding says more than it looks like it does.
  * Every dictionary arrives at run time, through `--terms <path>` or the colon-separated
- * `LEAK_PROTECTIONS` variable, and on CI that means the `LEAK_OVERLAY` secret and nowhere else. An
+ * `LEAK_PROTECTIONS` variable, and on CI that means the `LEAK_PROTECTIONS_JSON` secret and nowhere
+ * else. An
  * overlay carries its own exemptions too, for the same reason: an exemption has to quote the term
  * it exempts, so a public allowlist would republish a subset of the very vocabulary being withheld.
  *
@@ -3204,7 +3205,7 @@ function overlay_inside_scan(root: string, files: string[], dictionary: string, 
  * `Refusal`.
  *
  * **An overlay's path is its content, not a coordinate.** It was read as diagnostic for as long as
- * the only path CI supplied was `$RUNNER_TEMP/leak-terms.json`, which holds no vocabulary. The
+ * the only path CI supplied was `$RUNNER_TEMP/leak-protections.json`, which holds no vocabulary. The
  * workflow's other documented way to supply an overlay is to check the private repository out and
  * point `--terms` at it, and the private repository's own name is a term the dictionary declares —
  * so the header put a declared term on a world-readable log on every run of every step, `--quiet`
@@ -5145,9 +5146,9 @@ function self_test(categories: TermCategory[]): number {
     // them exactly as the operator typed it — so an operator who followed the workflow's second
     // documented option, a checkout of the private repository, published its name on stdout on
     // every run of every step. The residue was read as benign because the option CI is wired to
-    // writes the secret to `$RUNNER_TEMP/leak-terms.json`, which holds no vocabulary; its sibling
-    // was never checked. Loud and quiet are both asserted, because stdout is the same log either
-    // way and this one is not a volume control.
+    // writes the secret to `$RUNNER_TEMP/leak-protections.json`, which holds no vocabulary; its
+    // sibling was never checked. Loud and quiet are both asserted, because stdout is the same log
+    // either way and this one is not a volume control.
     const named_path: Dictionary[] = [
       {
         label: dictionary_labels([join(faults, "checkout", "leak-terms.json")])[0] as string,
