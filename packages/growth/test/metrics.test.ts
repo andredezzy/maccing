@@ -436,6 +436,29 @@ describe("the cut separates who was already there from who arrived", () => {
     expect(record.conversions.value).toBe(10);
   });
 
+  test("an event with no time at all is dropped rather than read as sitting on the cut", async () => {
+    // The shape the two null guards exist for, and the only shape that reaches them: a file where
+    // every row is undated is stopped a layer up by the blank-column refusal, and every other
+    // fixture here dates all of its rows. Read as the cut instant instead of skipped, the undated
+    // revenue row lands on the countable side and this cell reports 124 earned where 25 was; drop
+    // the null half of the conversion filter and the 77 becomes a second commitment nobody can put
+    // a date on. Both hand the campaign money with no evidence it arrived after contact.
+    const fixture = await build("cut-mixed-dates", {
+      person: people(["mixed", phone(1), from_cut(-DAY)]),
+      revenue: revenue(["mixed", from_cut(HOUR), 25], ["mixed", "", 99]),
+      churn: churn(["mixed", from_cut(HOUR), 5], ["mixed", "", 88]),
+      conversion: conversions(["mixed", from_cut(HOUR), 10, "LIVE", "WIRE"], ["mixed", "", 77, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("cut-mixed-dates", fixture.list("reached.txt")));
+
+    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 25 });
+    expect(record.pre_existing.churn).toEqual({ people: 1, value: 5 });
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(10);
+  });
+
   test("a cut finer than a millisecond is refused rather than silently truncated", async () => {
     const fixture = await build("cut-precision", {
       person: people(["one", phone(1), from_cut(HOUR)]),
@@ -747,6 +770,19 @@ describe("top2_share puts concentration beside the total", () => {
     expect(record.acquired.revenue?.value).toBe(5);
     expect(record.acquired.revenue?.top2_share).toBeNull();
   });
+
+  test("is null when two people each contributed exactly zero, since zero is no whole to divide", async () => {
+    // Both transacted and both paid nothing: two contributors, and a denominator of nothing to
+    // divide between them. Relaxing the guard to strictly-negative walks this pair into `0 / 0`
+    // and the field comes back NaN, which serialises into the published file as `null` — so the
+    // reader cannot tell it from the honest null, and anything reading the field back and doing
+    // arithmetic on it turns every downstream figure to NaN too.
+    const record = await paid("top2-zero-total", [0, 0]);
+
+    expect(record.acquired.revenue?.people).toBe(2);
+    expect(record.acquired.revenue?.value).toBe(0);
+    expect(record.acquired.revenue?.top2_share).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -937,6 +973,23 @@ describe("the conversion split", () => {
     expect(record.conversions).toEqual({ count: 2, value: 100, new_money: 60, recycled: 40 });
   });
 
+  test("counts a blank funding cell as new money, which is the side the schema puts it on", async () => {
+    // The column is written only on rows paid out of a balance the business already held, so a
+    // blank is the ordinary payment rather than an unknown one. Widen the comparison to admit the
+    // empty string and every unmarked payment moves to `recycled`: the report then says the
+    // campaign brought in no money the business did not already have, which is the opposite of
+    // what happened and reads as a cell worth switching off.
+    const fixture = await build("split-blank-cell", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: conversions(["one", from_cut(HOUR), 50, "LIVE", ""]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-blank-cell", fixture.list("reached.txt")));
+
+    expect(record.conversions).toEqual({ count: 1, value: 50, new_money: 50, recycled: 0 });
+  });
+
   test("omits the split fields entirely when the map does not declare one", async () => {
     // A recycled balance is a property of one kind of product. Requiring every project to
     // declare the concept produced two fields of zeros wherever it does not exist, and a zero
@@ -1125,6 +1178,30 @@ describe("a provisional cut", () => {
     expect(record.cut_provisional).toBe(true);
   });
 
+  test("and does the same where the map binds no money role at all", async () => {
+    // The scan reads six counts off the record and four of them are branches a project without
+    // revenue or churn never emits. Read as anything but nothing to attribute, every provisional
+    // cell such a project declares is refused, and the refusal names a role its map never bound —
+    // sending the reader to find a revenue figure in a report that has no revenue in it.
+    const fixture = await build("provisional-quiet-unbound", {
+      map: { revenue: null, churn: null },
+      revenue: null,
+      churn: null,
+      person: people(["old", phone(1), from_cut(-DAY)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(
+      fixture,
+      cold("provisional-quiet-unbound", fixture.list("reached.txt"), { cut_provisional: true }),
+    );
+
+    expect(record.acquired.revenue).toBeUndefined();
+    expect(record.pre_existing.churn).toBeUndefined();
+    expect(record.acquired.accounts).toBe(0);
+    expect(record.cut_provisional).toBe(true);
+  });
+
   test("refuses once anybody has arrived, and names the cell and the count", async () => {
     // A placeholder cut is not a moment of contact, so arrivals after it cannot be attributed
     // to anything. This is the documented way a report once claimed arrivals that never
@@ -1150,20 +1227,20 @@ describe("a provisional cut", () => {
 
   test("refuses before any control is read", async () => {
     // The pair would otherwise be computed against a number the engine is about to refuse, and
-    // a ControlError here would send the reader after the wrong problem.
+    // a ControlError here would send the reader after the wrong problem. The pair names a control
+    // cell nobody declared, so the control loop has a fault of its own to raise and the ordering
+    // is what decides which one arrives: a valid pair here would leave the two checks free to
+    // swap places with nothing to show for it.
     const fixture = await build("provisional-control", {
-      person: people(["new", phone(1), from_cut(HOUR)], ["old", phone(2), from_cut(-DAY)]),
-      lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
+      person: people(["new", phone(1), from_cut(HOUR)]),
+      lists: { "treated.txt": lines(phone(1)) },
     });
 
     const error = await caught(
       measure({
         map: fixture.map,
         exports: fixture.exports,
-        cells: [
-          cold("treated", fixture.list("treated.txt"), { cut_provisional: true }),
-          cold("untouched", fixture.list("untouched.txt")),
-        ],
+        cells: [cold("treated", fixture.list("treated.txt"), { cut_provisional: true })],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
       }),
@@ -1404,6 +1481,19 @@ describe("a control pair", () => {
     expect(one_hour_short?.control?.publishable).toBe(false);
   });
 
+  test("reads a part-hour window down to the hour it has finished, not up to the one it has not", async () => {
+    // Half an hour short of the floor. Rounded up rather than truncated the window reads as 168
+    // and the reading publishes, so a comparison thirty minutes inside the floor goes out under a
+    // gate that was written to keep it in — and no other fixture can see it, because every one of
+    // them reads at a whole number of hours past the cut where the two agree.
+    const fixture = await pair("control-window-part-hour");
+
+    const [treated] = await read(fixture, new Date(CUT_MS + WINDOW_FLOOR_HOURS * HOUR - HOUR / 2));
+
+    expect(treated?.window_hours).toBe(WINDOW_FLOOR_HOURS - 1);
+    expect(treated?.control?.publishable).toBe(false);
+  });
+
   test("publishes a control carrying exactly the minimum events, and refuses one short of it", async () => {
     // The same boundary on the other threshold, and the same shape of proof. Both readings clear
     // significance and both windows are well past the floor, so the only thing separating them is
@@ -1421,6 +1511,49 @@ describe("a control pair", () => {
     // comparison having failed to clear p, and a test where both moved would not say which.
     expect(thin?.control?.p as number).toBeLessThan(MAX_P);
     expect(thin?.control?.publishable).toBe(false);
+  });
+
+  test("takes the window off the treated cell, not off a control cut twenty days earlier", async () => {
+    // The two arms were cut twenty days apart — a control drawn from a send that went out first —
+    // so the control's window is 580 hours while the treated reading is 100 hours old. Gated on
+    // the control's window this publishes four days after contact, backdating the floor to a
+    // moment the treated cell was never measured from and clearing it on time the treated cell
+    // never had. The floor outranks the p-value, and this is how it gets bypassed with the
+    // p-value left intact.
+    const person_rows: Row[] = [];
+    const treated_list: string[] = [];
+    const control_list: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      treated_list.push(phone(100 + i));
+      control_list.push(phone(200 + i));
+      person_rows.push([`t${i}`, phone(100 + i), from_cut(i < 28 ? HOUR : -DAY)]);
+      // Dated against the control's own cut rather than the treated one, so eighteen of them
+      // arrived after it and the pair carries the same counts every other case here reads.
+      person_rows.push([`c${i}`, phone(200 + i), from_cut(i < 18 ? -20 * DAY + HOUR : -25 * DAY)]);
+    }
+    const fixture = await build("control-split-cuts", {
+      person: people(...person_rows),
+      lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
+    });
+
+    const [treated, untouched] = await measure({
+      map: fixture.map,
+      exports: fixture.exports,
+      cells: [
+        cold("treated", fixture.list("treated.txt")),
+        cold("untouched", fixture.list("untouched.txt"), { cut: from_cut(-20 * DAY) }),
+      ],
+      controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+      now: new Date(CUT_MS + 100 * HOUR),
+    });
+
+    expect(treated?.window_hours).toBe(100);
+    expect(untouched?.window_hours).toBe(580);
+    // Significance and the control's event count are both wide open, so the window is the only
+    // thing left that can decide this reading.
+    expect(treated?.control?.p).toBe(0.024);
+    expect(treated?.control?.control_events).toBe(18);
+    expect(treated?.control?.publishable).toBe(false);
   });
 });
 
@@ -1951,6 +2084,32 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("(50.0%), above the 25.0%");
   });
 
+  test("and the rate measures the list as it was delivered, before exclusions are subtracted", async () => {
+    // One junk entry in four is exactly the quarter this map allows, and the probe subtracted
+    // below was on the list that was sent. Subtract exclusions first and the denominator drops to
+    // three, the same single junk entry reads as a third of the list, and this clean cell is
+    // refused for a dialling plan that fits it perfectly — one more probe named in a declaration
+    // deciding whether the map's phone format is called wrong for the market.
+    const fixture = await build("rate-before-exclusions", {
+      person: people(
+        ["probe", phone(1), from_cut(HOUR)],
+        ["a", phone(2), from_cut(HOUR)],
+        ["b", phone(3), from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+    });
+
+    const record = await one(
+      fixture,
+      cold("rate-before-exclusions", fixture.list("reached.txt"), { exclude: [phone(1)] }),
+    );
+
+    // The exclusion still does its work: two members are left, and the junk entry is not one of
+    // them. What it must not do is change the verdict on the file it was subtracted from.
+    expect(record.audience.listed).toBe(2);
+    expect(record.audience.matched_phones).toBe(2);
+  });
+
   test("a cell whose lists hold nothing but junk, named as junk and not as emptiness", async () => {
     // Both faults stop the run and they read alike, but they are fixed in different files: a list
     // of unreadable numbers sends the reader to the map's dialling plan or to the export that
@@ -2110,6 +2269,13 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(EmptyCellError);
     expect((error as EmptyCellError).cell).toBe("refuse-empty-excluded");
+    // The variant, not merely the class. Flipping the flag at this throw site swaps the entire
+    // message: a cell emptied by its own probes would be told to check that this is the file that
+    // was sent, sending whoever reads it to a file that is not the problem while the over-broad
+    // `exclude` that actually emptied the cell stays in the declaration untouched.
+    expect((error as EmptyCellError).after_exclusions).toBe(true);
+    expect(error.message).toContain("exclusions are subtracted");
+    expect(error.message).not.toContain("yielded no usable identifier");
   });
 
   test("an exclusion that cannot be read as a number, which would leave the probe in the cell", async () => {
@@ -2376,6 +2542,28 @@ describe("the run refuses what it cannot measure", () => {
     const record = await one(fixture, base("status-partial-is-legal", fixture.list("reached.txt")));
 
     expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(20);
+  });
+
+  test("and a blank status is not one of the statuses the map counts either", async () => {
+    // The second row carries no status at all, which is what a column half-written by a migration
+    // looks like. Let the empty string through the per-cell filter and that row is counted as a
+    // commitment: the cell publishes two conversions and five hundred and twenty of money
+    // somebody signed for, on the strength of a cell with nothing in it.
+    const fixture = await build("blank-status-is-not-committed", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      conversion: conversions(
+        ["one", from_cut(HOUR), 20, "LIVE", "WIRE"],
+        ["one", from_cut(2 * HOUR), 500, "", "WIRE"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, base("blank-status-is-not-committed", fixture.list("reached.txt")));
+
+    expect(record.conversions.count).toBe(1);
+    // The money beside the count, because they are two numbers: a value that carried the blank
+    // row's five hundred would publish it whatever the count said.
     expect(record.conversions.value).toBe(20);
   });
 
