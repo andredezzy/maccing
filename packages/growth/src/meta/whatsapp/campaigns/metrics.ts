@@ -2,8 +2,13 @@ import { load_map, MapFieldError, MapStaleError, type RoleBinding, verify_finger
 import { make_key } from "../../../internal/phone.ts";
 import { round_half_even, round_or_null } from "../../../internal/round.ts";
 import { median, two_proportion } from "../../../internal/stats.ts";
-import { read_identifiers, read_rows } from "../../../internal/table.ts";
-import { parse_ts, parse_ts_with_precision } from "../../../internal/timestamp.ts";
+import { assert_unshadowed, read_identifiers, read_rows } from "../../../internal/table.ts";
+import {
+  parse_ts,
+  parse_ts_with_precision,
+  TimestampError,
+  type TimestampReading,
+} from "../../../internal/timestamp.ts";
 
 export type { DatabaseMap, RoleBinding } from "../../../internal/map.ts";
 export {
@@ -339,8 +344,8 @@ export class ExportStatusError extends Error {
   }
 }
 
-/** A role's export that references nobody in the person export. Every row is well-formed and the
- *  join is against the wrong kind of identifier, so the whole file falls out of every cell. */
+/** A role's export that references nobody in the person export. Every row can be well-formed while
+ *  the join is against the wrong kind of identifier, so the whole file falls out of every cell. */
 export class ExportJoinError extends Error {
   readonly path: string;
   readonly role: string;
@@ -351,7 +356,7 @@ export class ExportJoinError extends Error {
       `the ${role} role binds ${JSON.stringify(column)} to reference a person, and not one of the ` +
         `${identifiers} distinct identifiers in ${path} appears in the person export. One of them reads ` +
         `${JSON.stringify(sample)}; the person export's first id is ${JSON.stringify(person_sample)}. ` +
-        "Both files are well-formed and they join on nothing, so every event in this one falls out " +
+        "Every row in it can be well-formed and still reference nobody, so every event here falls out " +
         "of every cell and the run reports a matched audience that did nothing. A column holding the " +
         "wrong kind of id — a wallet, an order, a row's own primary key where the person's was meant " +
         "— is what this looks like, and it is silent in every other check. Bind the column that " +
@@ -659,13 +664,19 @@ function published_total(total: number, cell: string, field: string): number {
 
 /**
  * Read a role's export, having first checked that every column the map binds for it is in the
- * header.
+ * header exactly once.
  *
  * The check is here because the two ways a binding can be wrong fail differently. A missing amount
  * column throws on the first row, because what it reads is not a number. A missing timestamp column
  * throws nothing at all: the read is `undefined`, the parse is null, the accumulator skips the
  * event, and a file of real events reports as none. Asserting the header once, before any row is
  * indexed, makes the silent half as loud as the other.
+ *
+ * A bound name the header carries twice is the same fault wearing the other face: the column is
+ * present, so the check above passes, and the record holds only the second of the two. It is
+ * asserted per bound column rather than over the whole header, so a `note` column the export
+ * happens to carry twice — bound by nothing, read by nobody — does not refuse a file this run
+ * would have measured correctly.
  */
 async function read_export(path: string, role: string, bound: readonly string[]): Promise<Record<string, string>[]> {
   if (!(await Bun.file(path).exists())) {
@@ -673,10 +684,12 @@ async function read_export(path: string, role: string, bound: readonly string[])
   }
   const { header, records } = await read_rows(path);
   const present = new Set(header);
+  const read_by = `The ${role} role binds it`;
   for (const column of bound) {
     if (!present.has(column)) {
       throw new ExportColumnError(path, role, column, header);
     }
+    assert_unshadowed(path, header, column, read_by);
   }
   return records;
 }
@@ -685,8 +698,8 @@ async function read_export(path: string, role: string, bound: readonly string[])
  * Refuse a role whose rows reference nobody in the person export.
  *
  * Every other check on a role's export asks whether it is well-formed, and a file joining on the
- * wrong kind of identifier passes all of them: the columns are bound, the timestamps parse, the
- * amounts are numbers. It then contributes nothing to any cell, because `accumulate` looks each
+ * wrong kind of identifier can pass every one of them: the columns are bound, the timestamps parse,
+ * the amounts are numbers. It then contributes nothing to any cell, because `accumulate` looks each
  * account's id up in this index and misses every time — a thousand matched accounts and no
  * revenue, no churn, no conversions, and not a word about why.
  *
@@ -694,6 +707,15 @@ async function read_export(path: string, role: string, bound: readonly string[])
  * exported over a narrower window than the person export legitimately references a fraction of it,
  * and a threshold on that fraction would refuse quiet months. Zero is the fault, because zero is
  * the only overlap that cannot happen while both files describe the same people.
+ *
+ * It runs before the blank-column and status checks in both index functions, and the order is the
+ * whole point of it. Those two describe a surface of the file, this one describes whether the file
+ * is the right file at all. A role bound to the wrong export usually carries an incidental fault as
+ * well — an orders extract has its own lifecycle in the status column and often no timestamp the
+ * map's name reaches — and reported as that fault it sends the reader to widen `valid_statuses` or
+ * re-export a column, neither of which can work, before the join error they needed first. The
+ * three checks all run after the indexing loop and share no state, so the order costs nothing:
+ * a right file with drifted statuses joins, passes here, and reports exactly as it did.
  *
  * The person side is every id in the person export, including accounts whose phone was unreadable
  * and switchboards evicted from the index. They are still people this role can reference, and
@@ -789,12 +811,16 @@ async function money_index(
       bucket.push(event);
     }
   }
+  // First, because it is the only check here that can say the export is the wrong file. A wallet
+  // extract bound to the revenue role often has no column the map's timestamp name reaches either,
+  // and reported as a blank timestamp it sends the reader to re-export a column in a file that was
+  // never this role's.
+  assert_joins(index, person_ids, path, role, person);
   // An export with no rows is a fact — a role that saw no activity in the window someone queried.
   // An export with rows and no times in any of them is a fault, and the two must not be confused.
   if (rows.length > 0 && dated === 0) {
     throw new ExportBlankColumnError(path, role, [at], rows.length, "timestamp");
   }
-  assert_joins(index, person_ids, path, role, person);
   return index;
 }
 
@@ -864,6 +890,11 @@ async function conversion_index(
       bucket.push(event);
     }
   }
+  // First, for the reason written over `assert_joins`. An orders extract bound to this role keeps
+  // the order's own lifecycle in its status column, so it fails the status check too — and that
+  // message asks the reader to correct `valid_statuses`, which cannot fix a file that describes
+  // different things than the one the role wanted.
+  assert_joins(index, person_ids, path, "conversion", person);
   // Both timestamp columns are named, because where a fallback is bound the pair is the binding:
   // reporting only the primary would send the reader to correct a column the map was already
   // prepared to do without.
@@ -879,7 +910,6 @@ async function conversion_index(
   if (rows.length > 0 && committed === 0) {
     throw new ExportStatusError(path, status, binding.valid_statuses ?? [], [...found].sort(), rows.length);
   }
-  assert_joins(index, person_ids, path, "conversion", person);
   return index;
 }
 
@@ -1217,7 +1247,27 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // event is compared against it, and the argument that no event can change side holds only
     // while the cut itself sits on a whole millisecond. A cut is typed by a person, once, so
     // refusing an unhonourable one costs nothing and closes the only case that could disagree.
-    const { at: cut, sub_millisecond } = parse_ts_with_precision(cell.cut);
+    //
+    // A cut nobody can read is caught here rather than left to rise as the parser wrote it. That
+    // error names the text and nothing else, and the four refusals below it all name the cell — so
+    // a run measuring several cells answered `not a readable timestamp: "03/02/2030 09:00"` and
+    // left the reader grepping the declaration for whichever cell was carrying that string.
+    let reading: TimestampReading;
+    try {
+      reading = parse_ts_with_precision(cell.cut);
+    } catch (error) {
+      if (!(error instanceof TimestampError)) {
+        throw error;
+      }
+      throw new CellDeclarationError(
+        cell.name,
+        `its cut ${JSON.stringify(cell.cut)} cannot be read as a moment, so there is nothing to ` +
+          "measure from and nothing to place an event either side of. A cut is an ISO instant — " +
+          `${JSON.stringify("2030-01-01T00:00:00Z")}, or the same with a space instead of the T and ` +
+          "no zone, which is read as UTC. Correct it to the moment the send went out",
+      );
+    }
+    const { at: cut, sub_millisecond } = reading;
     if (cut === null) {
       throw new CellDeclarationError(cell.name, "its cut is blank, so there is no moment to measure from");
     }

@@ -66,8 +66,16 @@ jobs:
       - name: Self-test
         run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --self-test
 
+      # `--quiet` on both scanning steps, and it is not about noise. On a hit the gate prints the
+      # matched term, its category and the overlay's own justification prose for that term — which
+      # is the private dictionary's content, verbatim. This repository is public, so its Actions
+      # logs are world-readable, and a red run would publish the vocabulary the overlay exists to
+      # keep out of it. Secret masking does not help: it matches the literal secret value, while
+      # the gate prints the terms reformatted one per line. Quiet keeps the verdict, the counts and
+      # the exit code, and drops every line that names a term. Read the detail locally, where the
+      # overlay already lives.
       - name: Audit the exemptions
-        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit
+        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit --quiet
 
       - name: Scan every tracked file and clear the whole history
-        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history
+        run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history --quiet

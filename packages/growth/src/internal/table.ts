@@ -44,21 +44,31 @@ export class MissingColumnError extends Error {
   }
 }
 
-/** A header carrying one name twice. Refused rather than resolved, because the record built from
- *  such a header holds only the last column of that name — so a caller checking that its bound
- *  columns are present passes, reads the wrong one of the two, and gets whatever the second query
- *  put there. A join column shadowed this way matches nothing and reads as a cell that never
- *  converted, which is the one wrong answer this engine spends everything to avoid. */
+/** A header carrying one name twice, where something in this run reads that name. Refused rather
+ *  than resolved, because the record built from such a header holds only the last column of that
+ *  name — so a caller checking that its bound columns are present passes, reads the wrong one of
+ *  the two, and gets whatever the second query put there. A join column shadowed this way matches
+ *  nothing and reads as a cell that never converted, which is the one wrong answer this engine
+ *  spends everything to avoid.
+ *
+ *  Only the names something reads. A person export headed `id,phone,created_at,note,note` under a
+ *  map that binds the first three loses nothing anybody was going to look at, and refusing it sent
+ *  the reader into the map to hunt for a binding on `note` that was never there. What reads the
+ *  column is carried in the message for that reason: it is what makes the sentence true of the
+ *  file that triggered it, and it points at the declaration the fix belongs in. */
 export class DuplicateColumnError extends Error {
   readonly path: string;
   readonly column: string;
 
-  constructor(path: string, column: string, header: readonly string[]) {
+  /** `read_by` opens a sentence and names what reads the column: the role whose binding names it,
+   *  or the part of a cell's declaration that does. */
+  constructor(path: string, column: string, header: readonly string[], read_by: string) {
     super(
       `${path} names the column ${JSON.stringify(column)} twice in its header, which reads ` +
-        `${header.map((name) => JSON.stringify(name)).join(", ")}. Only the second one survives into ` +
-        "each row, so a binding on that name silently reads the wrong column and the header check " +
-        "meant to catch exactly that passes. Re-export with the duplicate renamed or dropped.",
+        `${header.map((name) => JSON.stringify(name)).join(", ")}. ${read_by}, and only the second ` +
+        "column of that name survives into each row — so what it reads is the second one's values, " +
+        "while the check that the column is present passes on the first. Re-export with the " +
+        "duplicate renamed or dropped.",
     );
     this.name = "DuplicateColumnError";
     this.path = path;
@@ -184,6 +194,21 @@ function scan(text: string, path: string): string[][] {
 export type Rows = { header: string[]; records: Record<string, string>[] };
 
 /**
+ * Refuse a header that repeats a name this run is about to read out of it.
+ *
+ * Called with one column at a time, by whoever knows what it is for: `read_export` walks the
+ * columns its role binds, and a list is read on its own `column` and narrowed on its own
+ * `filter.column`. That set is the whole of what makes a repeat dangerous, and it is the one thing
+ * `read_rows` cannot see — which is why the check lives out here beside the callers rather than
+ * inside the reader, where it refused files whose duplicate nothing was ever going to read.
+ */
+export function assert_unshadowed(path: string, header: readonly string[], column: string, read_by: string): void {
+  if (header.indexOf(column) !== header.lastIndexOf(column)) {
+    throw new DuplicateColumnError(path, column, header, read_by);
+  }
+}
+
+/**
  * Read a CSV into its header and its records. A short row leaves the missing columns empty rather
  * than absent, because a caller reading a bound column should not have to distinguish "column not
  * in this row" from "column empty on this row".
@@ -195,6 +220,13 @@ export type Rows = { header: string[]; records: Record<string, string>[] };
  * reason: a caller holding a map's bound column names can only check that the file still carries
  * them against the header as scanned, and a header recovered from the records cannot be trusted to
  * be that.
+ *
+ * A repeated name is not refused here, and the loss it causes does happen here: the second column
+ * of that name overwrites the first as the record is built, so every later check asks whether the
+ * name is present, finds that it is, and reads the second column's values. What this function
+ * cannot know is whether anything reads that name at all, and a duplicate nobody reads costs
+ * nobody anything. So the refusal is `assert_unshadowed`, and whoever reads a record built here
+ * owes it one call for every column they read by name.
  */
 export async function read_rows(path: string): Promise<Rows> {
   const text = (await Bun.file(path).text()).replace(/^\uFEFF/, "");
@@ -202,16 +234,6 @@ export async function read_rows(path: string): Promise<Rows> {
   const header = rows[0];
   if (header === undefined) {
     return { header: [], records: [] };
-  }
-  // Checked here rather than by the caller comparing its bindings, because the loss happens here:
-  // the second column of a repeated name overwrites the first as the record is built, and every
-  // check downstream then asks whether the name is present, which it is.
-  const seen = new Set<string>();
-  for (const name of header) {
-    if (seen.has(name)) {
-      throw new DuplicateColumnError(path, name, header);
-    }
-    seen.add(name);
   }
 
   const records: Record<string, string>[] = [];
@@ -241,6 +263,9 @@ export async function read_rows(path: string): Promise<Rows> {
  * identifier to cell stays in the single frozen file the attribution depends on instead of being
  * copied into derived files free to drift from it; its column is checked against the header for
  * the same reason the identifier column is, and separately, so the error names the one that moved.
+ * Both are then checked for a twin, which is the same fault one step later: a header naming the
+ * identifier column twice reads the second of the two, and a list of the right people read on the
+ * wrong column of them matches nobody.
  */
 export async function read_identifiers(
   path: string,
@@ -290,6 +315,13 @@ export async function read_identifiers(
     return [];
   }
   const name = column ?? (header[0] as string);
+  // After the row count, and only for the two columns this read touches. A header-only file was
+  // read on neither of them, so a twin in it has misled nobody and the empty cell downstream is
+  // the honest report; a `note` column repeated beside them is not read here at all.
+  assert_unshadowed(path, header, name, "This cell reads its identifiers from it");
+  if (filter !== undefined) {
+    assert_unshadowed(path, header, filter.column, "This cell's filter matches on it");
+  }
 
   const out: string[] = [];
   for (const row of records) {

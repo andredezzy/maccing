@@ -3579,9 +3579,23 @@ function self_test(categories: TermCategory[]): number {
         `phrase separators cleared in ${elapsed}ms.`,
     );
     if (failures.length > 0) {
-      for (const failure of failures) {
-        console.log(`  ${failure}`);
-      }
+      // Counts and categories, never the terms themselves, and not conditional on `--quiet`.
+      //
+      // With an overlay merged the self-test plants every term of every loaded category, so a
+      // failure loop that printed each message would print the whole private vocabulary — 42 terms
+      // across four categories, measured. This repository is public and its CI logs are
+      // world-readable, so a broken matcher would publish the words the dictionary exists to keep
+      // out. Note which way that cuts: a secret rotated to `{}` is safe here and a *working*
+      // overlay is the dangerous one, which is the opposite of the intuition.
+      //
+      // Unconditional rather than behind the flag, because a flag can be dropped from a workflow
+      // by someone who does not know this, and because a failing self-test means the checker is
+      // broken — a fact that needs no vocabulary to state. Re-run locally, where the overlay
+      // already lives, to read which terms went missing.
+      console.log(
+        `  ${failures.length} self-test ${failures.length === 1 ? "check" : "checks"} failed. ` +
+          "Re-run locally with the overlay merged to read which.",
+      );
       console.log("Self-test FAILED — the checker does not do what it claims.");
       return 1;
     }

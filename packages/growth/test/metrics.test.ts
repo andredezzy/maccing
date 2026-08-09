@@ -495,8 +495,38 @@ describe("the cut separates who was already there from who arrived", () => {
     expect(error.message).toMatch(/blank/i);
   });
 
+  test("a cut nothing can read names the cell that declared it, not just the text", async () => {
+    // The parser names the value and stops there, which is all it can do: it is handed a string
+    // and knows nothing about cells. Left to surface as written, a run measuring several cells
+    // answers `not a readable timestamp: "03/02/2030 09:00"` and leaves the reader grepping the
+    // declaration for whichever cell is carrying that string — while every other refusal on a
+    // cut, the blank one above and the rolled and late ones below, names it outright. Two cells
+    // here, because one cell cannot tell a message that names the cell from one that does not.
+    const fixture = await build("cut-unreadable", {
+      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lists: { "first.txt": lines(phone(1)), "second.txt": lines(phone(2)) },
+    });
+
+    const error = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [
+          cold("list-a", fixture.list("first.txt")),
+          cold("list-b", fixture.list("second.txt"), { cut: "03/02/2030 09:00" }),
+        ],
+        now: NOW,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(CellDeclarationError);
+    expect((error as CellDeclarationError).cell).toBe("list-b");
+    // The text as typed, beside the cell: the pair is what makes the line actionable.
+    expect(error.message).toContain("03/02/2030 09:00");
+  });
+
   /**
-   * The fourth way a hand-typed cut goes wrong, and the only one the runtime answers by guessing:
+   * One more way a hand-typed cut goes wrong, and the only one the runtime answers by guessing:
    * `new Date` counts an impossible day past the end of its month instead of refusing it. Every
    * cut on disk is transcribed off a delivery report, where a slipped day is an ordinary typo, and
    * the roll moves arrivals across the cut in whichever direction the typo points while the record
@@ -3151,6 +3181,48 @@ describe("the run refuses what it cannot measure", () => {
     expect((error as ExportJoinError).path).toContain("revenue.csv");
   });
 
+  test("a role bound to the wrong export entirely, reported as the wrong file and not as a surface fault", async () => {
+    // An orders extract bound to the conversion role. It joins on the order's own key and keeps
+    // the order's lifecycle in the status column, so it fails the status check as well — and that
+    // check used to run first. Its remedy reads "Correct `valid_statuses`, or re-export from the
+    // query that produces them", which the reader can carry out in full and arrive exactly where
+    // they started: no status list makes this file describe people. The honest drift beside it,
+    // `refuse-status-drift` above, is a file that does join and still reports as a status fault.
+    const fixture = await build("wrong-file-status", {
+      person: people(["member-1", phone(1), from_cut(-DAY)], ["member-2", phone(2), from_cut(-DAY)]),
+      conversion: conversions(
+        ["ORD-1", from_cut(HOUR), 50, "DISPATCHED", "WIRE"],
+        ["ORD-2", from_cut(2 * HOUR), 70, "DISPATCHED", "WIRE"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const error = await caught(one(fixture, base("wrong-file-status", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportJoinError);
+    expect((error as ExportJoinError).role).toBe("conversion");
+    expect(error.message).toContain("ORD-1");
+  });
+
+  test("and the same, over the blank-column check the join used to run behind", async () => {
+    // The other order this could be reported in. A wallet extract that happens to carry the bound
+    // column names — which is how it came to be bound at all — references wallets and was written
+    // with its timestamp column empty. Both faults are real; only the join says which file is in
+    // the wrong place. `refuse-blank-revenue` above is the honest half: a revenue export that
+    // joins, with the same empty column, still reported as the blank column it is.
+    const fixture = await build("wrong-file-blank", {
+      person: people(["member-1", phone(1), from_cut(-DAY)]),
+      revenue: revenue(["WAL-1", "", 25], ["WAL-2", "", 40]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("wrong-file-blank", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportJoinError);
+    expect((error as ExportJoinError).role).toBe("revenue");
+    expect(error.message).toContain("WAL-1");
+  });
+
   test("but not a role that references only some of them, which is a narrower export", async () => {
     // One shared identifier is enough, and this must never become a coverage threshold: a role
     // exported over a shorter window than the person export legitimately references a fraction
@@ -3480,16 +3552,137 @@ describe("the run refuses what it cannot measure", () => {
     }
   });
 
-  test("an export whose header names one column twice", async () => {
+  test("an export whose header names one column twice, where the map binds that name", async () => {
     // The duplicate defeats the check that exists to catch a bad binding: `handset` is in the
     // header, so the binding passes, and only the second column of that name survives into each
-    // row — so the run reads whatever the second query put there and joins on nothing.
+    // row — so the run reads whatever the second column holds and joins on nothing. Measured
+    // against the reader as it stood at `08a5548`, before this guard existed, the same shape
+    // published `matched_phones: 0` and `conversions.value: 0` for two people who both held
+    // accounts and both converted — against a truth of 2 and 100, and no word of it anywhere.
     const fixture = await build("refuse-duplicate-column", {
       person: csv(["member_id", "handset", "enrolled_at", "handset"], [["one", phone(1), from_cut(HOUR), "480999999"]]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(one(fixture, cold("refuse-duplicate-column", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(DuplicateColumnError);
+    expect((error as DuplicateColumnError).column).toBe("handset");
+    // What reads the column, because the sentence used to assert a binding whatever had triggered
+    // it — and on a file where nothing bound the repeated name, that sent the reader into the map
+    // to hunt for one that was never there.
+    expect(error.message).toContain("The person role binds it");
+  });
+
+  test("but not a duplicate among the columns nothing reads", async () => {
+    // `note` is repeated and no role binds it. Nothing in the run ever looks that name up, the
+    // record loses only a column nobody wanted, and every number below is the one this export
+    // really carries. Refusing it stopped a correct reading over a sentence about a binding that
+    // did not exist.
+    const fixture = await build("duplicate-unread-column", {
+      person: csv(
+        ["member_id", "handset", "enrolled_at", "note", "note"],
+        [
+          ["one", phone(1), from_cut(-DAY), "called", "left a message"],
+          ["two", phone(2), from_cut(-DAY), "called", "no answer"],
+        ],
+      ),
+      conversion: conversions(["one", from_cut(HOUR), 50, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("duplicate-unread-column", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 2, matched_phones: 2, matched_accounts: 2 });
+    expect(record.conversions.count).toBe(1);
+  });
+
+  test("and not one in a list beside the column the cell reads", async () => {
+    // The same file shape on the list side: a CRM export of the people who were sent to, with a
+    // note column the spreadsheet duplicated on its way out. The cell names `phone`, so `note` is
+    // read by nothing here either.
+    const fixture = await build("duplicate-unread-list-column", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lists: {
+        "roster.csv": csv(
+          ["phone", "note", "note"],
+          [
+            [phone(1), "called", "left a message"],
+            [phone(2), "called", "no answer"],
+          ],
+        ),
+      },
+    });
+
+    const record = await one(
+      fixture,
+      cold("duplicate-unread-list-column", fixture.list("roster.csv"), { column: "phone" }),
+    );
+
+    expect(record.audience.matched_phones).toBe(2);
+  });
+
+  test("but a list read on the column its own header names twice is refused", async () => {
+    // The list-side core case, and the same silence. The second `handset` holds numbers this cell
+    // never reached; read from it, the cell is measured against strangers and publishes them
+    // under its own name.
+    const fixture = await build("refuse-duplicate-list-column", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lists: { "roster.csv": csv(["handset", "note", "handset"], [[phone(1), "called", phone(2)]]) },
+    });
+
+    const error = await caught(
+      one(fixture, cold("refuse-duplicate-list-column", fixture.list("roster.csv"), { column: "handset" })),
+    );
+
+    expect(error).toBeInstanceOf(DuplicateColumnError);
+    expect((error as DuplicateColumnError).column).toBe("handset");
+    expect(error.message).toContain("This cell reads its identifiers from it");
+  });
+
+  test("and so is a list whose filter matches on a column named twice", async () => {
+    // The filter decides which rows are this cell at all. Matched against the second column of
+    // the name, it selects a different slice of the same file and reports that slice here.
+    const fixture = await build("refuse-duplicate-filter-column", {
+      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lists: {
+        "roster.csv": csv(
+          ["handset", "cell", "cell"],
+          [
+            [phone(1), "alpha", "beta"],
+            [phone(2), "beta", "alpha"],
+          ],
+        ),
+      },
+    });
+
+    const error = await caught(
+      one(fixture, {
+        name: "refuse-duplicate-filter-column",
+        cut: CUT,
+        lists: [fixture.list("roster.csv")],
+        column: "handset",
+        filter: { column: "cell", value: "alpha" },
+        audience: "cold",
+      }),
+    );
+
+    expect(error).toBeInstanceOf(DuplicateColumnError);
+    expect((error as DuplicateColumnError).column).toBe("cell");
+    expect(error.message).toContain("This cell's filter matches on it");
+  });
+
+  test("and a list with no column declared, whose first column is the name repeated", async () => {
+    // Nothing names a column here, so the reader takes the first — and the header repeats it, so
+    // the record holds the second. The narrowing has to resolve that default before it can know
+    // the name is read at all, and a check that only looked at what the declaration spelled out
+    // would pass this file straight through.
+    const fixture = await build("refuse-duplicate-default-column", {
+      person: people(["one", phone(1), from_cut(-DAY)]),
+      lists: { "roster.csv": csv(["handset", "handset"], [[phone(1), phone(2)]]) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-duplicate-default-column", fixture.list("roster.csv"))));
 
     expect(error).toBeInstanceOf(DuplicateColumnError);
     expect((error as DuplicateColumnError).column).toBe("handset");
