@@ -10,10 +10,14 @@
 # commit will actually contain. A file staged clean and then dirtied passes; a file staged dirty
 # and then cleaned fails.
 #
-# The vocabulary is not in this repository. Export LEAK_TERMS in your shell profile so every
-# `git commit` inherits it:
+# The vocabulary lives in no repository, this one included. CI reads it from the LEAK_OVERLAY
+# secret; here it is an untracked file outside every checkout, defaulting to
+# ~/.config/maccing/leak-terms.json. Set LEAK_TERMS to override that if yours lives elsewhere:
 #
-#   export LEAK_TERMS="$HOME/path/to/private/leak-terms.json"
+#   export LEAK_TERMS="$HOME/somewhere/else/leak-terms.json"
+#
+# Naming a default rather than demanding the export is what stops this hook refusing every
+# `git commit` on a machine where nobody remembered to set it.
 #
 # --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
 # would match nothing, exit 0, and let every commit through while looking exactly like a clean
@@ -22,5 +26,8 @@
 
 set -eu
 
+: "${LEAK_TERMS:=$HOME/.config/maccing/leak-terms.json}"
+export LEAK_TERMS
+
 repository=$(git rev-parse --show-toplevel)
-exec bun "$repository/.github/leak-check.ts" --staged --require-overlay
+exec bun "$repository/.github/scripts/leak-check.ts" --staged --require-overlay

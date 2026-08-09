@@ -1,8 +1,8 @@
 # Hooks
 
-Four files live here, of two different kinds.
+Five files live here, of two different kinds.
 
-Two are agent-runtime hooks — `session-start.sh` and `pre-tool-use.sh` — registered in `hooks.json` and fired by a host that offers lifecycle hooks. The other two, `pre-commit` and `commit-msg`, are git hooks: git fires them, they are registered nowhere, and they do nothing at all until somebody installs them. `git config core.hooksPath hooks` installs both at once. They come as a pair because a pre-commit hook is never handed the commit message, so without the second one a message could carry what the files no longer do. What they run is in [`.github/leak-check.md`](../.github/leak-check.md), beside the checker they gate.
+Two are agent-runtime hooks — `session-start.sh` and `pre-tool-use.sh` — registered in `hooks.json` and fired by a host that offers lifecycle hooks. The other three, `pre-commit`, `commit-msg` and `pre-push`, are git hooks: git fires them, they are registered nowhere, and they do nothing at all until somebody installs them. `git config core.hooksPath hooks` installs all three at once. They cover three different ways the same vocabulary reaches a remote, and none of them stands in for another: a pre-commit hook is never handed the commit message, and neither of those two ever sees the history that a push is what actually publishes. What they run is in [`.github/scripts/leak-check.md`](../.github/scripts/leak-check.md), beside the checker they gate.
 
 Neither runtime hook is part of any skill. Nothing inside any `SKILL.md` names a file in this directory, and nothing in a skill's instructions depends on one having run. That separation is deliberate and is explained under [Adapters, not enforcement](#adapters-not-enforcement).
 

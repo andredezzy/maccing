@@ -12,8 +12,8 @@
  * overlay carries its own exemptions too, for the same reason: an exemption has to quote the term
  * it exempts, so a public allowlist would republish a subset of the very vocabulary being withheld.
  *
- * This file lives under `.github/` beside the workflow that runs it, because it is CI apparatus
- * rather than something the published package ships.
+ * This file lives under `.github/scripts/`, beside the workflow that runs it, because it is CI
+ * apparatus rather than something the published package ships.
  *
  * Because the mechanism on its own finds nothing, `--require-overlay` fails a run that loaded no
  * terms — not merely a run that merged no file, because an overlay of `{}` merges fine and matches
@@ -392,7 +392,7 @@ const COMBINING = /\p{M}/u;
  *
  * The fold is one-way and deliberately lossy: genuine Cyrillic or Greek text is folded too, so a
  * repository written in either would see false positives. That trade is documented in
- * `.github/leak-check.md` rather than hidden, and it is the right way round for a gate.
+ * `.github/scripts/leak-check.md` rather than hidden, and it is the right way round for a gate.
  */
 const CONFUSABLE: Record<string, string> = {
   // Cyrillic, uppercase
@@ -6334,7 +6334,7 @@ function staged_contents(root: string, files: string[]): Map<string, Uint8Array>
 function print_usage(): void {
   console.log(
     [
-      "Usage: bun .github/leak-check.ts [options]",
+      "Usage: bun .github/scripts/leak-check.ts [options]",
       "",
       "Scans this repository for vocabulary that belongs to private work. Exits 1 on any hit.",
       "The vocabulary itself is not in this repository: merge a project's overlay to load one.",

@@ -1,8 +1,8 @@
 # Leak check
 
-This repository is public. Some of the work that produced it was not. `.github/leak-check.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
+This repository is public. Some of the work that produced it was not. `.github/scripts/leak-check.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
 
-It lives under `.github/`, beside the workflow that runs it, because it is CI apparatus rather than anything the published package ships.
+It lives under `.github/scripts/`, beside the workflow that runs it, because it is CI apparatus rather than anything the published package ships.
 
 ### The vocabulary is not in this repository
 
@@ -13,8 +13,8 @@ An earlier version of this file kept the "generic" half of a dictionary in publi
 So the whole dictionary is private. This repository ships the mechanism; each project keeps its own terms and merges them at run time:
 
 ```sh
-bun .github/leak-check.ts --terms ~/private-work/leak-terms.json     # repeatable
-LEAK_TERMS=~/a.json:~/b.json bun .github/leak-check.ts               # colon-separated
+bun .github/scripts/leak-check.ts --terms ~/private-work/leak-terms.json     # repeatable
+LEAK_TERMS=~/a.json:~/b.json bun .github/scripts/leak-check.ts               # colon-separated
 ```
 
 There used to be an empty `leak-terms.json` beside the script, kept so that `0 terms in 0 categories` on every run said the public repository carries no vocabulary. It is gone. Keeping it meant shipping a template of which *kinds* of thing are worth hiding, which is a thinner disclosure than a word list but is still one, and the header says the same thing without it: a run that loaded nothing says so, and `--require-overlay` turns that into a failure wherever it matters.
@@ -162,14 +162,14 @@ A hit found across a line break reports the line the term starts on, marks how m
 ### Modes
 
 ```sh
-bun .github/leak-check.ts                       # every tracked file and path (the default)
-bun .github/leak-check.ts --staged              # staged content and paths, for a pre-commit gate
-bun .github/leak-check.ts --message <file>      # a commit message, for a commit-msg gate
-bun .github/leak-check.ts --path packages/      # one file or directory
-bun .github/leak-check.ts --history             # ALSO clear the whole history
-bun .github/leak-check.ts --history v1.0..HEAD  # ALSO clear a chosen range
-bun .github/leak-check.ts --audit               # read every exemption and flag the stale ones
-bun .github/leak-check.ts --self-test           # prove the checker against planted fixtures
+bun .github/scripts/leak-check.ts                       # every tracked file and path (the default)
+bun .github/scripts/leak-check.ts --staged              # staged content and paths, for a pre-commit gate
+bun .github/scripts/leak-check.ts --message <file>      # a commit message, for a commit-msg gate
+bun .github/scripts/leak-check.ts --path packages/      # one file or directory
+bun .github/scripts/leak-check.ts --history             # ALSO clear the whole history
+bun .github/scripts/leak-check.ts --history v1.0..HEAD  # ALSO clear a chosen range
+bun .github/scripts/leak-check.ts --audit               # read every exemption and flag the stale ones
+bun .github/scripts/leak-check.ts --self-test           # prove the checker against planted fixtures
 ```
 
 **`--history` is the clearance, and a run without it has not looked at the history at all.** It walks every object reachable from every ref: the content of every blob, every path any object was ever stored under, **every annotated tag's own message**, and every commit message. A tag is an object with a message of its own and `git push --follow-tags` publishes it beside the commits, so reading commit messages and stopping there left a release note — the one text nobody rewrites — unread. Blobs are deduplicated by object id, so a file unchanged across five hundred commits is one object, read once and reported once, and the report says how many were read, how many were skipped as bytes the tracked scan had already read, how many were read only for their runs of text, and how many were not read at all. **Everything skipped is named**, with its path, its object id and the reason; it used to be a number in the scope line, so a disclosure sitting in a blob too large to read left no trace in the report. Each hit names the path and at least one commit that contains it, as `history:<path> (commit <sha>)`. The path a hit belongs to travels **with the hit** rather than inside that label: a path may legally contain an `@`, and recovering it by cutting the label at the last `@` read `assets@2x/notes.md` as `assets`, so an exemption written for `assets` could suppress a hit belonging to a path nobody had judged. Nothing parses a label now.
@@ -195,7 +195,7 @@ Reads are batched — `git rev-list --objects` for the graph, `git cat-file --ba
 **Those are a measurement, not constants, and two of them only reproduce under a stated method.** Measured at `5e820a3` on an idle machine, over a *clean* checkout, running that checkout's own copy of the script:
 
 ```sh
-bun .github/leak-check.ts --history --require-overlay --quiet
+bun .github/scripts/leak-check.ts --history --require-overlay --quiet
 ```
 
 Three of those numbers are stable however you take them. The other two are not, and the earlier figures on this line — 274 files, 1,994 objects, 507 blobs, 307 messages, "about two seconds" — had drifted on every count before anybody re-ran them. **Superseded blobs needs a clean tree**: a modified tracked file's committed blob stops counting as already read and becomes superseded, so the figure rises by exactly one per dirty file, and the same repository measured with four modified files reports 629 rather than 625. **Ref names is not a property of the history at all** but of the checkout — 15 here, 16 in a single-branch clone, 17 in a full one, because a clone carries remote-tracking refs this repository does not. Timing needs an idle machine and an overlay: with none loaded the same run takes about 1.8 seconds, because nothing is matched. And run the repository's *own* copy of the script — invoking another checkout's copy without `--path` scans that checkout instead, which is the trap the `--path` section below describes, and it silently produces the wrong repository's numbers.
@@ -233,22 +233,24 @@ What it *does* cover, and what nothing else here does: every tracked file's cont
 
 `.github/workflows/leak.yml` runs the self-test, the audit and a full-history clearance on every push and pull request, all three with `--require-overlay`. The overlay reaches CI as the `LEAK_OVERLAY` secret, written to `$RUNNER_TEMP/leak-terms.json` — a path that holds no vocabulary, which is what makes it usable on a public repository. **Pointing `--terms` at a checkout of the private repository is not an equivalent option there**, and the workflow used to offer it as one: Actions echoes each step's `run:` line into a world-readable log and `actions/checkout` names the repository it clones, so the private repository's name is published before the checker starts and no flag on the checker reaches either of them. Use that form only where the log is private. When the overlay is absent, empty or malformed the job fails loudly rather than skipping, which is why a pull request from a fork cannot be cleared here.
 
-`hooks/pre-commit` runs `--staged --require-overlay`. `hooks/commit-msg` runs `--message "$1" --require-overlay`, because a pre-commit hook is never handed the message and until it was added a commit message was checked by nothing at all. Install both with:
+`hooks/pre-commit` runs `--staged --require-overlay`. `hooks/commit-msg` runs `--message "$1" --require-overlay`, because a pre-commit hook is never handed the message and until it was added a commit message was checked by nothing at all. `hooks/pre-push` runs `--history --require-overlay`, because neither of the other two ever sees what a push actually publishes: a push carries every object reachable from the refs it moves — every superseded blob, every historical path, every ref name and every message already in the history — so a tree scrubbed in the working copy and never rewritten passes both of the others on every commit and still publishes the leak the moment it is pushed. Install all three with:
 
 ```sh
 git config core.hooksPath hooks
 ```
 
-That points git at the tracked `hooks/` directory, so both hooks travel with the repository and one setting installs every hook in it. Export `LEAK_TERMS` in your shell profile and every `git commit` inherits it.
+That points git at the tracked `hooks/` directory, so every hook travels with the repository and one setting installs all of them. **No shell profile export is needed.** Each hook falls back to `$HOME/.config/maccing/leak-terms.json` — an untracked file outside every checkout — when `LEAK_TERMS` is unset, so the hooks can be switched on before anything is exported and a machine that forgot the export gets a working gate rather than exit 2 on every commit. Set `LEAK_TERMS` only to point somewhere else. When neither exists the hooks still refuse, naming the missing dictionary by label and not by path.
 
-Neither hook clears the history — nothing that runs per commit can afford to. **Before a force-push, run the chain below.**
+The push hook walks the whole object graph rather than the range being pushed, because the question a public repository has to answer is what the remote holds afterwards, not what this push adds; that costs about three and a half seconds. `git push --no-verify` skips it, which is worth knowing precisely because a force-push during a history rewrite is when somebody is most tempted to — the release runbook's clearance is the check with no off switch, and this is the net for the ordinary push nobody thought about.
+
+Neither *commit* hook clears the history — nothing that runs per commit can afford to, which is what the push hook is for. Run the chain below anyway before a publish or a force-push: it also proves the checker against its own fixtures and audits every exemption, neither of which any hook does.
 
 ### Before a publish, and before a force-push
 
 ```sh
-bun .github/leak-check.ts --terms <overlay> --require-overlay --self-test \
-  && bun .github/leak-check.ts --terms <overlay> --require-overlay --audit \
-  && bun .github/leak-check.ts --terms <overlay> --require-overlay --history
+bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --self-test \
+  && bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --audit \
+  && bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --history
 ```
 
 **`PASSED` and `PASSED WITH GAPS` both exit 0, so the `&&` above cannot tell them apart.** The chain proves that each step ran and that none of them found anything; it does not prove the clearance managed to read everything. A gap is a file or blob nothing could open or decode, and this repository always has some — the twelve historical images under `.claude/plugins/maccing/pictura/output/`. So read the three verdict lines rather than only the exit code. The `&&` is there to stop the chain on a failure, not to judge coverage, and a run that could not read half the tree still exits 0 and still says so in words.

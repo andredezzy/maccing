@@ -1,4 +1,4 @@
-# Runs .github/leak-check.ts as a gate, on every push and every pull request.
+# Runs .github/scripts/leak-check.ts as a gate, on every push and every pull request.
 #
 # The dictionary is not in this repository — not the terms, not the exemptions, and not a schema
 # describing either. `LEAK_OVERLAY` is the only way this job gets a vocabulary: its value is the
@@ -46,7 +46,7 @@ permissions:
   contents: read
 
 jobs:
-  leak:
+  leak-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
       # overlay makes it a stronger test, and --require-overlay here is what turns a secret rotated
       # to `{}` into a red job at the first step rather than a green one at the last.
       - name: Self-test
-        run: bun .github/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --self-test
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --self-test
 
       # `--quiet` on both scanning steps, and it is not about noise. On a hit the gate prints the
       # matched term, its category and the overlay's own justification prose for that term — which
@@ -98,7 +98,7 @@ jobs:
       # quotes the token it choked on, is never forwarded. `leak-check.ts` carries the full list of
       # print sites and the guard on each; keep it in step with any new output.
       - name: Audit the exemptions
-        run: bun .github/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit --quiet
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit --quiet
 
       - name: Scan every tracked file and clear the whole history
-        run: bun .github/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history --quiet
+        run: bun .github/scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --history --quiet

@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+# Git pre-push hook: refuses a push whose history still carries vocabulary belonging to private
+# work.
+#
+# This is the one gate that matches what a push actually does. `pre-commit` reads the index and
+# `commit-msg` reads one message, so between them they cover the commit being made and nothing
+# else — and a push publishes every object reachable from the refs it moves, including every
+# superseded blob, every historical path, every ref name and every message already sitting in the
+# history. A repository scrubbed in the working tree and never rewritten passes both of the other
+# hooks on every commit and still publishes the leak the moment it is pushed.
+#
+# So this runs `--history`, the clearance, not a tracked scan. It walks every object reachable
+# from every ref rather than only the range being pushed: a range is what this push adds, and the
+# question a public repository has to answer is what the remote will hold afterwards. About three
+# and a half seconds on this repository.
+#
+# Install it with `git config core.hooksPath hooks`, the same one setting that installs the other
+# two; there is nothing to do per hook.
+#
+# The vocabulary lives in no repository, this one included. CI reads it from the LEAK_OVERLAY
+# secret; here it is an untracked file outside every checkout, defaulting to
+# ~/.config/maccing/leak-terms.json. Set LEAK_TERMS to override that if yours lives elsewhere:
+#
+#   export LEAK_TERMS="$HOME/somewhere/else/leak-terms.json"
+#
+# Naming a default rather than demanding the export is what stops this hook refusing every
+# `git push` on a machine where nobody remembered to set it.
+#
+# --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
+# would match nothing, exit 0, and let every push through while looking exactly like a clean gate.
+#
+# It is not --quiet. A hit here prints the term, its category and the reason somebody wrote for
+# it, which is what an operator needs to act on and is safe on a terminal that is already trusted
+# with the overlay. The CI workflow is the one that runs quiet, because its log is public.
+#
+# A hook can be skipped with `git push --no-verify`, and a force-push during a history rewrite is
+# exactly when somebody is most tempted to. The release runbook's clearance is the check that does
+# not have an off switch; this one is the net that catches the ordinary push nobody thought about.
+
+set -eu
+
+: "${LEAK_TERMS:=$HOME/.config/maccing/leak-terms.json}"
+export LEAK_TERMS
+
+repository=$(git rev-parse --show-toplevel)
+exec bun "$repository/.github/scripts/leak-check.ts" --history --require-overlay
