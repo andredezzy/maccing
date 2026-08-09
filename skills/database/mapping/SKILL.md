@@ -245,7 +245,7 @@ Set `max_unparseable_rate` from what the data actually looks like, and write dow
 | `valid_statuses` naming no status | `MapFieldError` — nothing would ever count as committed and every cell would report zero |
 | `area_digits` or `subscriber_digits` < 1 | `PhoneFormatError` — states that a market with variable-length area codes cannot be expressed by fixed lengths, and that a second strategy is needed rather than different numbers |
 | `country_code` holding anything but digits | `PhoneFormatError` — empty for a market with no dialled prefix, and never a `+` |
-| `max_unparseable_rate` outside 0..1 | `PhoneFormatError` — it is a share of rows, not a count of them |
+| `max_unparseable_rate` outside 0..1 | `PhoneFormatError` — it is a share of a file's distinct identifiers, not a count of them, and absent identifiers count on neither side |
 | `shared_account_ceiling` < 2 | `PhoneFormatError` — a ceiling of 1 evicts every ordinary person, the index comes out empty, and every cell reports zero matches |
 | the schema file the fingerprint names is absent | `MapMissingError` — names the resolved schema path: a hash that cannot be checked is a written date |
 | a listed block that no `model` or `enum` in the schema declares | `MapSectionError` — names the block and the schema path |

@@ -67,7 +67,8 @@ export function make_key(fmt: PhoneFormat): (raw: unknown) => string | null {
   if (!(fmt.max_unparseable_rate >= 0 && fmt.max_unparseable_rate <= 1)) {
     throw new PhoneFormatError(
       `max_unparseable_rate must be between 0 and 1 inclusive, got ${fmt.max_unparseable_rate}. ` +
-        "It is the share of rows allowed to be unreadable, not a count of them.",
+        "It is the share of a file's distinct identifiers allowed to be unreadable, not a count " +
+        "of them, and identifiers that are simply absent are not counted on either side of it.",
     );
   }
   if (!(fmt.shared_account_ceiling >= 2)) {
