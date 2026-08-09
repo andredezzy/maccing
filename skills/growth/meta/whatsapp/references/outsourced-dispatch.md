@@ -254,7 +254,7 @@ A `.txt` list is read as one identifier per line and has nowhere to hold either 
 
 ### The guards the engine enforces
 
-Each of these was a rule held in prose, enforced by whoever remembered it. As mechanism — and this is the whole list, because a partial one reads as complete and leaves the reader believing the case they hit was allowed:
+Each of these was a rule held in prose, enforced by whoever remembered it. As mechanism — and this is the whole list of what the engine checks about a declaration and the exports it reads, because a partial one reads as complete and leaves the reader believing the case they hit was allowed. It is not the whole list of what a `measure()` call can raise: that call reads the map first, so `MapMissingError`, `MapSectionError`, `MapFieldError` and `PhoneFormatError` reach the same caller from the same line. Those are the map's own refusals, enumerated in `database-mapping` where the map's rules live, and the section below says why the map is a prerequisite rather than a parameter.
 
 | Guard | What the engine does |
 |---|---|
