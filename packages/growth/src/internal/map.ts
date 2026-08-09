@@ -193,6 +193,30 @@ const THEMATIC_BREAK = /(?:-[ \t]*){3,}\r?$|(?:\*[ \t]*){3,}\r?$/y;
 /** Nothing but whitespace. A blank line closes no list item, so the block scan leaves it alone. */
 const BLANK = /^[ \t]*\r?$/;
 
+/** A section heading, matched where its containing block's content begins rather than at the
+ *  margin. Anchoring it at column zero was the one rule in this reader that measured indentation
+ *  from the page instead of from the container, and CommonMark measures none of them there: one,
+ *  two or three spaces in front of a `##` is still a heading a renderer draws, and only a fourth
+ *  column makes the line the indented code `split_sections` has already dropped by the time this
+ *  pattern is reached. So the bound is not spelled here either — `CODE_INDENT` is checked once,
+ *  in columns, against the container, exactly as it is for a fence — and this pattern is matched
+ *  from the offset that scan returns. Adding a leading `\s*` instead would have read an
+ *  illustrated `## Role: revenue` indented four columns under a bullet as the live section.
+ *
+ *  What the margin anchor cost is a heading that is invisible here while being visible on the
+ *  page, and invisible is the expensive kind of wrong, because a section that failed to parse and
+ *  a section nobody wrote arrive at the same place: `event_role` finds no `## Role: revenue` and
+ *  reports a project that collects none, which reads as a fact rather than as a parse. Placed
+ *  after an existing section the same misindent is worse than silent — its rows are read as more
+ *  of the section above, and the author is refused by name for the *preceding* heading carrying a
+ *  second table, a true sentence about the wrong section that sends them to correct a part of the
+ *  file that is already right.
+ *
+ *  The `(?!#)` guard stays. `###` and deeper are the prose headings the explanation is written
+ *  under, and a reader that took them for sections would split that prose away from the bindings
+ *  it justifies. */
+const HEADING = /##(?!#)\s*(.+?)\s*$/y;
+
 /**
  * How far past its containing block's content column a line may sit and still be read at all.
  * Four columns is an indented code block in CommonMark, and this is the only place the number
@@ -441,7 +465,8 @@ function split_sections(text: string): Map<string, string[]> {
       continue;
     }
 
-    const heading = /^##(?!#)\s*(.+?)\s*$/.exec(line);
+    HEADING.lastIndex = at.offset;
+    const heading = HEADING.exec(line);
     if (heading !== null) {
       const name = `## ${heading[1] as string}`;
       if (sections.has(name)) {

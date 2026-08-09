@@ -1225,6 +1225,116 @@ describe("load_map reads the document the way a renderer draws it", () => {
   });
 });
 
+/**
+ * Where a heading is allowed to start, which is the same question the block above asks about
+ * fences and was answered differently for no reason anyone wrote down.
+ *
+ * `##` was matched at the left margin while every other construct in the reader measured its
+ * indent against the container holding it. CommonMark measures none of them at the margin: one,
+ * two or three columns in front of an ATX heading is still a heading, and a renderer draws it as
+ * one. So a section a person can see on the page was not a section here, and which way that
+ * failed was decided by where in the file it sat.
+ *
+ * Both ways are covered below, because they cost different things. Written before the first
+ * heading the misindent is silent: the rows underneath belong to no section, `## Role: revenue`
+ * is a heading nobody declared, and the record omits revenue — the same answer this reader gives
+ * a project that genuinely collects none, which is why nothing downstream can tell the two apart.
+ * Written after an existing section it is loud and wrong: the rows join the section above, and
+ * the author is refused by name for `## Phone format` carrying a second table, sent to correct a
+ * part of the file that is already right while the part that is wrong is not mentioned.
+ *
+ * The fourth column is the bound, and it is the same bound as everywhere else here: four columns
+ * past the container is the indented code a renderer draws inside `<pre><code>`, and a heading
+ * drawn as code is not a heading. That is why the fix is not a `\s*` in front of the pattern.
+ */
+describe("load_map reads a heading measured from its container", () => {
+  /** `REVENUE_SECTION` with its heading pushed `columns` off the margin and its table left where
+   *  it was, which is the shape a hand-indented section actually has: somebody indents the line
+   *  they are typing, not the block below it. */
+  function heading_indented(columns: number): string {
+    return `${" ".repeat(columns)}${REVENUE_SECTION}`;
+  }
+
+  /** The misindented section written first, where a heading that fails to parse takes its rows
+   *  with it and the document still loads. The silent half. */
+  async function before_everything(name: string, revenue: string): Promise<DatabaseMap> {
+    return load_map(
+      await write_map(name, compose(revenue, PHONE_SECTION, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION)),
+    );
+  }
+
+  test("reads a heading indented one, two and three columns, as a renderer draws it", async () => {
+    for (const columns of [1, 2, 3]) {
+      const map = await before_everything(`heading-indented-${columns}`, heading_indented(columns));
+
+      expect(map.revenue?.export).toBe("revenue.csv");
+      expect(map.revenue?.columns).toEqual({
+        person: "account_id",
+        at: "received_at",
+        amount: "amount_minor",
+      });
+      // The rest of the document is read from the same margin it always was, so an indent that
+      // moved one heading cannot be passing by having quietly moved the others.
+      expect(map.phone.country_code).toBe("997");
+      expect(map.person.export).toBe("person.csv");
+    }
+  });
+
+  test("does not read a heading indented four columns, because a renderer draws it as code", async () => {
+    // The bound. Four columns is an indented code block, the line is not a heading there, and the
+    // rows below it belong to no section — so the role is absent, which is the truthful reading of
+    // a document whose revenue section a renderer prints inside `<pre><code>`.
+    const map = await before_everything("heading-indented-four", heading_indented(4));
+
+    expect(map.revenue).toBeUndefined();
+    expect(map.phone.country_code).toBe("997");
+  });
+
+  test("still refuses `###` and deeper, at the margin and at an indent", async () => {
+    // The `(?!#)` guard has to survive moving the anchor. `###` is how the prose under a section
+    // is organised — the block above has one over the query an export was taken with — and a
+    // reader that took those for sections would cut the explanation away from the binding it
+    // justifies, and would read this one as a revenue section that is not there.
+    for (const columns of [0, 2]) {
+      const map = await before_everything(
+        `sub-heading-indented-${columns}`,
+        `${" ".repeat(columns)}#${REVENUE_SECTION}`,
+      );
+
+      expect(map.revenue).toBeUndefined();
+    }
+  });
+
+  test("reads a document written entirely at the margin exactly as it did", async () => {
+    // The behaviour that was already right, asked directly rather than left to the rest of the
+    // suite: nothing about measuring from the container changes a map nobody indented.
+    const map = await load_map(await write_map("heading-at-the-margin", COMPLETE));
+
+    expect(map.revenue?.export).toBe("revenue.csv");
+    expect(map.churn?.export).toBe("churn.csv");
+    expect(map.phone.country_code).toBe("997");
+  });
+
+  test("does not refuse the section above for a heading indented after it", async () => {
+    // The loud half, and the reason this is a regression test rather than a nicety. With the
+    // misindented section appended under `## Phone format`, its `| field | value |` rows read as
+    // more of the phone section, so the reader refused that section for carrying a second table:
+    // a true sentence about the wrong heading, pointing the author at the one part of the file
+    // that needed no correction. The section that needed one was never mentioned.
+    const map = await load_map(
+      await write_map(
+        "heading-indented-after-a-section",
+        compose(PHONE_SECTION, heading_indented(1), FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION),
+      ),
+    );
+
+    expect(map.revenue?.export).toBe("revenue.csv");
+    // The section that used to be blamed still binds its own table, unchanged and undivided.
+    expect(map.phone.country_code).toBe("997");
+    expect(map.phone.shared_account_ceiling).toBe(3);
+  });
+});
+
 describe("load_map refuses a document it cannot bind", () => {
   test("names the missing file", async () => {
     const path = join(root, "nowhere-at-all", "MAPPING.md");
