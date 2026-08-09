@@ -17,7 +17,8 @@ import { make_key, type PhoneFormat } from "./phone.ts";
  * Two rules here are stricter than markdown would need, and both come from the same failure. An
  * unknown key inside a table is an error rather than a warning, because a mistyped key parses as
  * silence and a binding goes missing with nothing to notice it. And a fenced block is skipped
- * outright, so an example table inside a code fence never reads as the real one.
+ * outright — either fence CommonMark defines, backticks or tildes — so an example table inside a
+ * code fence never reads as the real one.
  */
 
 /** Which file and which columns carry a role. `at_fallback` covers a nullable timestamp. */
@@ -148,9 +149,85 @@ export class MapStaleError extends Error {
 /** One read table: key to raw value, in declaration order. */
 type Table = Map<string, string>;
 
+/** Which character a fence is written with, and how long its run is. A closer has to match both,
+ *  so both travel together rather than as a bare depth. */
+type Fence = { char: string; width: number };
+
+/** Three or more backticks or three or more tildes, indented at most three spaces, and whatever
+ *  info string follows. A closer is the same run followed by nothing but whitespace — and by the
+ *  carriage return a map written on Windows leaves at the end of every line, which the rest of
+ *  this reader absorbs the same way: the heading pattern takes it as trailing whitespace and a
+ *  table cell is trimmed. It is spelled out in both patterns rather than assumed, because `.` does
+ *  not cross a carriage return and `$` does not sit before one, so an info string anchored the
+ *  obvious way makes every fence in a CRLF document invisible and every illustration in it a
+ *  binding. */
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/;
+
+/**
+ * The fence a line opens, or null where it opens none.
+ *
+ * Both spellings CommonMark defines are read here. A map written with tildes has to parse the same
+ * as one written with backticks, or the instruction to fence an illustration is true of half the
+ * fences a renderer honours: an author who tilde-fences a worked example is told to fence it and
+ * then refused for the second table anyway, and where the tilde-fenced example is the only table
+ * under its heading it is installed as the binding with nothing said.
+ *
+ * Up to three spaces of indent is still a fence. Four is an indented code block, which this parser
+ * does not implement and does not need to: a run indented that far hides nothing here, so an
+ * illustration written that way is a second table and refused by name. It is the one shape where
+ * this reader and a renderer disagree — rendered, the four spaces make a code block and no table is
+ * drawn there at all — and it disagrees out loud, which is the only direction a disagreement is
+ * allowed to go. Reading a deep enough indent as a fence would hide a table instead, which is the
+ * failure the whole guard exists to close.
+ *
+ * The info string is free text with one exception: a backtick fence's may not contain a backtick,
+ * because a line of prose carrying inline code is not the start of a block. A tilde fence has no
+ * such collision and its info string may hold backticks. That exception is not pedantry — the
+ * whole point of matching the spec here is that the parser reads the document the way the renderer
+ * draws it, so an author who checks the preview and sees a code block is not looking at something
+ * this reader treats as a binding, nor the reverse.
+ */
+function fence_opened_by(line: string): Fence | null {
+  const opener = FENCE_OPEN.exec(line);
+  if (opener === null) {
+    return null;
+  }
+  const run = opener[1] as string;
+  const char = run[0] as string;
+  if (char === "`" && (opener[2] as string).includes("`")) {
+    return null;
+  }
+  return { char, width: run.length };
+}
+
+/**
+ * Whether this line closes the fence that is open.
+ *
+ * Three conditions, and every one of them is a way a fence ends too early — which is the direction
+ * that costs something, because everything after a premature close reads as the document's own
+ * content and an illustrated table becomes a binding. The closer is written with the same
+ * character, so `~~~` inside a backtick block is content and ``` inside a tilde block is too. It
+ * is at least as long as the opener, so ``` does not close ````. And it carries nothing after the
+ * run but whitespace, so ````markdown inside a ``` block is content rather than a close.
+ *
+ * Its indent is its own business, up to the same three spaces: the opener's indent constrains
+ * nothing, so a fence opened flush can be closed by a closer indented two, and the other way
+ * round.
+ */
+function fence_closed_by(line: string, open: Fence): boolean {
+  const closer = FENCE_CLOSE.exec(line);
+  if (closer === null) {
+    return false;
+  }
+  const run = closer[1] as string;
+  return run[0] === open.char && run.length >= open.width;
+}
+
 /**
  * Split the document into the lines under each `##` heading, dropping everything inside a fenced
- * block. Fences are matched by length, so a fence demonstrating another fence closes correctly.
+ * block. Fences are matched by character and by length, so a fence demonstrating another fence
+ * closes where the renderer closes it and not before.
  *
  * A heading declared twice is refused rather than merged or overwritten. Two `## Role: person`
  * sections is what a map edited by two people, or copied from another project and half-adjusted,
@@ -161,20 +238,18 @@ type Table = Map<string, string>;
 function split_sections(text: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string[] | null = null;
-  let fence = 0;
+  let fence: Fence | null = null;
 
   for (const line of text.split("\n")) {
-    const ticks = /^\s*(`{3,})/.exec(line);
-    if (ticks !== null) {
-      const width = (ticks[1] as string).length;
-      if (fence === 0) {
-        fence = width;
-      } else if (width >= fence) {
-        fence = 0;
+    if (fence !== null) {
+      if (fence_closed_by(line, fence)) {
+        fence = null;
       }
       continue;
     }
-    if (fence !== 0) {
+    const opened = fence_opened_by(line);
+    if (opened !== null) {
+      fence = opened;
       continue;
     }
 
@@ -248,8 +323,9 @@ function read_table_of(lines: string[], heading: string): Table | null {
         "carries a second `| field | value |` table. Only one of them can be the binding and " +
           "neither end is safe to pick: an example above the real table wins if the first is " +
           "read, a correction below a superseded one wins if the last is, and either way somebody " +
-          "read the table that does not run. Fence whichever of them is illustration — nothing " +
-          "inside a fence is read here — or delete it",
+          "read the table that does not run. Fence whichever of them is illustration — three or " +
+          "more backticks or three or more tildes, and nothing inside one is read here — or " +
+          "delete it",
       );
     }
     start = i;

@@ -38,9 +38,19 @@
  *
  * Matching runs on a normalised copy of each text — percent-escapes decoded, invisible formatting
  * characters dropped, the rest folded to NFKC and a short table of Cyrillic and Greek Latin
- * lookalikes folded to Latin — and a phrase may cross one line break. Paths are matched as well as
- * contents: a filename can be the whole disclosure. Every reported position maps back to the
- * characters as written.
+ * lookalikes folded to Latin — and a phrase may cross one line break. A term is normalised the
+ * same way and by the same code, or it compiles into a matcher that cannot fire against text the
+ * same marks have just been taken out of, and is counted as a term loaded regardless. Paths are
+ * matched as well as contents: a filename can be the whole disclosure. Every reported position
+ * maps back to the characters as written.
+ *
+ * What this program prints is part of its threat model, because it runs as a gate in CI on a
+ * public repository and those logs are world-readable. `--quiet` holds back every line that
+ * carries a term, a category name or a reason, and holds back nothing else: the verdict, the
+ * counts and the coverage survive it. Errors are the case no flag can cover — they reach stderr
+ * before there is a report to silence — so a message about the dictionary names the fault by
+ * coordinate and never quotes the text at it. The full list of print sites and the guard on each
+ * is recorded above `report_dictionaries`; see `Refusal` for the error half.
  *
  * The gate matters most before a publish. A public registry blocks unpublishing after 72 hours and
  * already-resolved versions stay resolvable afterwards, so a leak that ships cannot be taken back
@@ -325,11 +335,12 @@ const TAG_NAME = /^tag (.+)$/m;
 
 const SKIPPED_DIRECTORIES: Record<string, true> = { ".git": true, node_modules: true };
 
-/** `git log --format=%B%n%H` terminates each message with its own SHA on a line of its own. */
-const SHA_LINE = /^[0-9a-f]{40}$/;
-
 /** A full object id, at either width git names objects with: forty hex for SHA-1, sixty-four for SHA-256. */
 const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** The same widths one at a time, for reading output a repository wrote in its own hash. */
+const SHA1_ID = /^[0-9a-f]{40}$/;
+const SHA256_ID = /^[0-9a-f]{64}$/;
 
 /** Everything from git's scissors line down is stripped from the message before it is recorded. */
 const SCISSORS = /^.\s*-{2,}\s*>8\s*-{2,}/;
@@ -353,6 +364,9 @@ const INVISIBLE =
   // they are being stripped before comparison, never read as text.
   // biome-ignore lint/suspicious/noMisleadingCharacterClass: stripping the marks is the intent
   /[\u00ad\u034f\u061c\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u206a-\u206f\ufe00-\ufe0f\ufeff]/u;
+
+/** The same marks, for taking every one of them out of a string at once rather than testing for one. */
+const INVISIBLE_RUN = new RegExp(INVISIBLE.source, "gu");
 
 /** A combining mark belongs to the character before it, and composition has to see them together. */
 const COMBINING = /\p{M}/u;
@@ -568,7 +582,9 @@ function load_dictionaries(paths: string[]): Loaded {
   const rejected: string[] = [];
   const dictionaries: Dictionary[] = [];
   const quoted = new Map<string, Set<string>>();
-  const first_entry = new Map<string, Exemption>();
+  // Every entry already applied at one line, because which of them a new entry collides with
+  // depends on the anchors, not on the line alone. See `same_occurrence`.
+  const first_entry = new Map<string, Exemption[]>();
   for (const path of paths) {
     if (!existsSync(path)) {
       throw new Error(`Dictionary not found: ${path}`);
@@ -606,10 +622,12 @@ function load_dictionaries(paths: string[]): Loaded {
       // Quoted whether or not the entry is applied: the file holds the word either way, and it is
       // the file's own text that must not be reported against itself.
       quotes.add(entry.term.toLowerCase());
-      const identity = exemption_identity(entry);
-      const first = first_entry.get(identity);
+      const key = exemption_identity(entry);
+      const siblings = first_entry.get(key) ?? [];
+      const first = siblings.find((candidate) => same_occurrence(candidate, entry));
       if (first === undefined) {
-        first_entry.set(identity, entry);
+        siblings.push(entry);
+        first_entry.set(key, siblings);
         exemptions.push(entry);
         applied += 1;
         continue;
@@ -635,28 +653,46 @@ function load_dictionaries(paths: string[]): Loaded {
 }
 
 /**
- * What makes two exemptions one suppression rather than two, and why it is these five fields.
+ * The line an entry was written against, which is as far as two entries can be told apart without
+ * reading the file: path, category, term and line.
  *
- * They are exactly the fields that decide which occurrences an entry suppresses. `partition_hits`
- * looks entries up by path, category and term, folding the term's case the way the matcher lookup
- * folds it, so two spellings differing only in case are already one entry to everything
- * downstream. `covers` then consults `line` — 0 names the path, anything else names content — and
- * the sentences `resolve_exemption_contexts` reads at that line, narrowed by `anchor`. Two entries
- * agreeing on all five suppress the same occurrences under every input, which is what makes the
- * second one nothing but a second copy.
+ * They are the fields `partition_hits` and `covers` look entries up by. `partition_hits` folds the
+ * term's case the way the matcher lookup folds it, so two spellings differing only in case are
+ * already one entry to everything downstream; `covers` then consults `line` — 0 names the path,
+ * anything else names content. Drop `line` and every entry for a path, category and term becomes
+ * one entry, which is precisely the key `covers` was moved off because it spent one person's
+ * judgement on text they never read.
  *
- * Nothing looser will do, and the file already paid for finding out. Drop `anchor` and two entries
- * naming two different clauses of one line collapse into one — the case `covered_contexts` exists
- * to keep apart. Drop `line` as well and every entry for a path, category and term becomes one
- * entry, which is precisely the key `covers` was moved off because it spent one person's judgement
- * on text they never read.
- *
- * `why` and `source` are deliberately absent. Neither changes what is suppressed, so neither can
- * make two entries into two suppressions — but a `why` that differs is a real disagreement rather
- * than a copy, and `conflicting_exemption` handles that rather than this.
+ * What this deliberately leaves out is `anchor`, because the anchor does not split a line into
+ * disjoint entries — see `same_occurrence`. `why` and `source` are left out too: neither changes
+ * what is suppressed, so neither can make two entries into two suppressions, but a `why` that
+ * differs is a real disagreement rather than a copy and `conflicting_exemption` handles that.
  */
 function exemption_identity(entry: Exemption): string {
-  return `${exemption_key(entry.path, entry.category, entry.term)}\u0000${entry.line}\u0000${entry.anchor}`;
+  return `${exemption_key(entry.path, entry.category, entry.term)}\u0000${entry.line}`;
+}
+
+/**
+ * Whether two entries already agreeing on `exemption_identity` suppress the same occurrence — the
+ * question that decides whether the second is a copy, a disagreement, or a second entry.
+ *
+ * Comparing the raw `anchor` field answered it wrongly, because an empty anchor is not a value
+ * alongside the digests: it means *every* clause at this line. `covered_contexts` resolves an
+ * unanchored entry to all of them and an anchored one to the single clause its digest names, so an
+ * unanchored entry covers everything any anchored entry at that line covers. Where a line carries
+ * one clause the two resolve to exactly the same context and suppress exactly the same hit, and
+ * with the raw field in the key they were two identities: a duplicate was never counted as one,
+ * and two contradictory reasons over that one occurrence were never refused.
+ *
+ * So the anchor is compared as what it resolves to. An empty one subsumes any anchor at its line;
+ * two digests are the same occurrence only when they are the same digest. That holds however many
+ * clauses the line has, and needs no file read: on a line with several clauses the unanchored
+ * entry still covers the anchored one's clause, so the two still speak about one occurrence and
+ * still may not disagree about it silently. Two *different* digests remain two entries, which is
+ * the case `covered_contexts` exists to keep apart.
+ */
+function same_occurrence(first: Exemption, second: Exemption): boolean {
+  return first.anchor === "" || second.anchor === "" || first.anchor === second.anchor;
 }
 
 /**
@@ -681,48 +717,332 @@ function conflicting_exemption(first: Exemption, second: Exemption): string {
 }
 
 /**
- * A dictionary that does not parse is louder than a dictionary that is missing, because a caller
- * who passed `--terms` believes a dictionary was loaded. Every shape check below names the file
- * and what was expected, so a malformed overlay is a two-second fix rather than a hunt.
+ * An error this file wrote, whose message is known to name the dictionary rather than quote it.
+ *
+ * The distinction is the whole of it. `main` prints a failure to stderr and returns 2, and stderr
+ * is the one stream `--quiet` was never able to reach — nor should it, because an operator whose
+ * overlay is broken has to be told so. That makes every message on this path a message published
+ * to whatever log the gate runs in, and on a public repository that log is world-readable. A
+ * message written here is safe there by construction. A message out of the runtime is not: a JSON
+ * parse error quotes the token it choked on, and the token is a fragment of the secret.
  */
-function parse_dictionary(path: string): TermFile {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch (failure) {
-    throw new Error(
-      `Dictionary is not valid JSON: ${shorten(path)}\n${failure instanceof Error ? failure.message : String(failure)}`,
+class Refusal extends Error {}
+
+/** Why every message about a dictionary carries a coordinate and never the text at it. */
+const WITHHELD =
+  "The text there is withheld: this goes to stderr, which --quiet does not reach and must not, so it " +
+  "has to be safe on a world-readable log.";
+
+/**
+ * A fault in a dictionary, named by where it is rather than by what it says.
+ *
+ * Everything a reader needs to find the entry, and nothing that reproduces it: the file, the
+ * category's position in it, the entry's position in the category, the field that is wrong, and
+ * the command that prints the entry where the overlay already lives. The hit lines have worked
+ * this way for as long as `--quiet` has existed; these did not, and no flag could have saved them.
+ */
+function dictionary_fault(path: string, category: number, term: number | null, wrong: string): Refusal {
+  const at = term === null ? `category ${category + 1}` : `category ${category + 1}, term ${term + 1}`;
+  const pointer = term === null ? `.categories[${category}]` : `.categories[${category}].terms[${term}]`;
+  return new Refusal(
+    `Dictionary ${at} ${wrong}.\n` +
+      `  In ${shorten(path)}. ${WITHHELD}\n` +
+      `  Read the entry where the overlay lives: jq '${pointer}' ${shorten(path)}`,
+  );
+}
+
+/**
+ * An error out of the runtime, reduced to the fact that there was one.
+ *
+ * Anything thrown while the dictionary is being read has the dictionary in reach, and a runtime
+ * error's message quotes whatever it choked on. Only messages this file wrote cross to stderr; the
+ * rest are named by their type and the files that were being merged, which is enough to reproduce
+ * the run locally and nothing that repeats what it was reading.
+ */
+function withheld(failure: unknown, paths: string[]): Refusal {
+  return new Refusal(
+    `Loading the dictionaries failed with an error this file did not write ` +
+      `(${failure instanceof Error ? failure.name : typeof failure}), so its message is withheld: a runtime ` +
+      "error quotes whatever it choked on, and here that is the dictionary. Merged in order: " +
+      `${paths.map((path) => shorten(path)).join(", ")}. Re-run locally, where the overlay lives, to read it.`,
+  );
+}
+
+/** What a JSON text was found to be wrong with, in this file's words rather than the engine's. */
+type JsonFault = { offset: number; note: string };
+
+const JSON_SPACE: Record<string, true> = { " ": true, "\t": true, "\n": true, "\r": true };
+/** The escapes JSON defines, `\u` excepted: it takes four hex digits and is checked on its own. */
+const JSON_ESCAPE: Record<string, true> = {
+  '"': true,
+  "\\": true,
+  "/": true,
+  b: true,
+  f: true,
+  n: true,
+  r: true,
+  t: true,
+};
+/** Sticky, so a number is read at an offset without slicing the rest of the file to get there. */
+const JSON_NUMBER = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
+/** Deeper than any dictionary and shallower than this recursion can safely go. */
+const JSON_DEPTH_LIMIT = 512;
+
+/**
+ * Where a JSON text first stops being JSON.
+ *
+ * `JSON.parse` already knows, and will not say: JavaScriptCore's `SyntaxError` carries the line
+ * and column of the `JSON.parse` call rather than of the text, and the only thing its message
+ * locates the fault by is a quotation of it — `Unexpected identifier "<token>"`. That token is a
+ * fragment of the dictionary. So the position is found here, and the engine's message is never
+ * forwarded at all, which also means a future engine cannot reopen this by rewording it.
+ *
+ * A validator rather than a parser: it walks the grammar and builds no value. It is only ever
+ * asked about a text `JSON.parse` has already rejected, and when the two disagree — it returns
+ * `null` for a text the engine refused — the caller says so rather than inventing a position.
+ */
+function json_fault(text: string): JsonFault | null {
+  let at = 0;
+  const fault = (note: string): JsonFault => ({ offset: at, note });
+  const space = (): void => {
+    while (at < text.length && JSON_SPACE[text.charAt(at)] === true) {
+      at += 1;
+    }
+  };
+  const string = (): JsonFault | null => {
+    const opened = at;
+    at += 1;
+    while (at < text.length) {
+      const character = text.charAt(at);
+      if (character === '"') {
+        at += 1;
+        return null;
+      }
+      if (character === "\\") {
+        if (text.charAt(at + 1) === "u") {
+          for (let digit = 2; digit < 6; digit += 1) {
+            if (hex_value(text.charAt(at + digit)) < 0) {
+              return fault("a `\\u` escape without four hexadecimal digits after it");
+            }
+          }
+          at += 6;
+          continue;
+        }
+        if (JSON_ESCAPE[text.charAt(at + 1)] !== true) {
+          return fault("a backslash that begins no escape JSON defines");
+        }
+        at += 2;
+        continue;
+      }
+      if (character.charCodeAt(0) < 0x20) {
+        return fault("a control character inside a string, which JSON requires written as an escape");
+      }
+      at += 1;
+    }
+    // The position that helps is where the string opened, not where the file ran out.
+    at = opened;
+    return fault("a string that is never closed");
+  };
+  const object = (depth: number): JsonFault | null => {
+    at += 1;
+    space();
+    if (text.charAt(at) === "}") {
+      at += 1;
+      return null;
+    }
+    for (;;) {
+      space();
+      if (at >= text.length) {
+        return fault("the end of the file inside an object");
+      }
+      if (text.charAt(at) !== '"') {
+        return fault("an object member whose name is not a quoted string");
+      }
+      const name = string();
+      if (name !== null) {
+        return name;
+      }
+      space();
+      if (text.charAt(at) !== ":") {
+        return fault("an object member with no `:` between its name and its value");
+      }
+      at += 1;
+      const held = value(depth + 1);
+      if (held !== null) {
+        return held;
+      }
+      space();
+      if (text.charAt(at) === ",") {
+        at += 1;
+        continue;
+      }
+      if (text.charAt(at) === "}") {
+        at += 1;
+        return null;
+      }
+      return fault(
+        at >= text.length ? "the end of the file inside an object" : "an object member followed by neither `,` nor `}`",
+      );
+    }
+  };
+  const array = (depth: number): JsonFault | null => {
+    at += 1;
+    space();
+    if (text.charAt(at) === "]") {
+      at += 1;
+      return null;
+    }
+    for (;;) {
+      const held = value(depth + 1);
+      if (held !== null) {
+        return held;
+      }
+      space();
+      if (text.charAt(at) === ",") {
+        at += 1;
+        continue;
+      }
+      if (text.charAt(at) === "]") {
+        at += 1;
+        return null;
+      }
+      return fault(
+        at >= text.length ? "the end of the file inside an array" : "an array element followed by neither `,` nor `]`",
+      );
+    }
+  };
+  const value = (depth: number): JsonFault | null => {
+    if (depth > JSON_DEPTH_LIMIT) {
+      return fault(`more than ${JSON_DEPTH_LIMIT} levels of nesting`);
+    }
+    space();
+    if (at >= text.length) {
+      return fault("the end of the file where a value was expected");
+    }
+    const character = text.charAt(at);
+    if (character === '"') {
+      return string();
+    }
+    if (character === "{") {
+      return object(depth);
+    }
+    if (character === "[") {
+      return array(depth);
+    }
+    for (const word of ["true", "false", "null"]) {
+      if (text.startsWith(word, at)) {
+        at += word.length;
+        return null;
+      }
+    }
+    JSON_NUMBER.lastIndex = at;
+    const digits = JSON_NUMBER.exec(text);
+    if (digits === null) {
+      return fault(
+        "something that begins no JSON value: not a string, number, object, array, `true`, `false` or `null`",
+      );
+    }
+    at += digits[0].length;
+    return null;
+  };
+
+  const document = value(0);
+  if (document !== null) {
+    return document;
+  }
+  space();
+  return at < text.length ? fault("more text after the value the file begins with") : null;
+}
+
+/** A text `JSON.parse` refused, turned into a refusal that names where and not what. */
+function json_refusal(path: string, text: string): Refusal {
+  const fault = json_fault(text);
+  const starts = line_starts(text);
+  if (fault === null) {
+    return new Refusal(
+      `Dictionary is not valid JSON: ${shorten(path)}\n` +
+        "  `JSON.parse` refused it and the scan for the fault found none, so the two disagree. The file is " +
+        `${text.length} characters over ${starts.length} lines. ${WITHHELD}\n` +
+        `  Read it where the overlay lives: jq . ${shorten(path)}`,
     );
   }
+  const line = line_of(starts, fault.offset);
+  return new Refusal(
+    `Dictionary is not valid JSON: ${shorten(path)}\n` +
+      `  The first fault is at line ${line + 1}, column ${fault.offset - (starts[line] ?? 0) + 1}: ${fault.note}. ` +
+      `${WITHHELD}\n` +
+      `  Read it where the overlay lives: sed -n '${line + 1}p' ${shorten(path)}`,
+  );
+}
+
+/**
+ * A dictionary that does not parse is louder than a dictionary that is missing, because a caller
+ * who passed `--terms` believes a dictionary was loaded. Every check below names the file and the
+ * coordinate of the entry that is wrong, so a malformed overlay is a two-second fix rather than a
+ * hunt — and names nothing else, because these messages go to stderr and stderr is published. See
+ * `Refusal`.
+ */
+function parse_dictionary(path: string): TermFile {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (failure) {
+    // Reading and parsing were one `try`, so a permission or device failure was reported as a
+    // syntax error and sent somebody hunting for a missing brace in a file they could not open.
+    throw new Refusal(
+      `Dictionary could not be read: ${shorten(path)}\n` +
+        `  The open failed (${failure instanceof Error && "code" in failure ? String(failure.code) : "no code given"}). ` +
+        "That is a permission or a device problem, not a syntax one, and no edit to the JSON will fix it.",
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw json_refusal(path, text);
+  }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error(
+    throw new Refusal(
       `Dictionary is not a JSON object: ${shorten(path)}\n` +
-        "A dictionary is an object with a `categories` array. Anything else would load as an empty " +
+        "  A dictionary is an object with a `categories` array. Anything else would load as an empty " +
         "dictionary and pass a gate that checked nothing.",
     );
   }
   const file = parsed as { categories?: unknown; exemptions?: unknown };
   if (file.categories !== undefined && !Array.isArray(file.categories)) {
-    throw new Error(`Dictionary \`categories\` is not an array: ${shorten(path)}`);
+    throw new Refusal(`Dictionary \`categories\` is not an array: ${shorten(path)}`);
   }
   if (file.exemptions !== undefined && !Array.isArray(file.exemptions)) {
-    throw new Error(`Dictionary \`exemptions\` is not an array: ${shorten(path)}`);
+    throw new Refusal(`Dictionary \`exemptions\` is not an array: ${shorten(path)}`);
   }
   const categories: TermCategory[] = [];
   for (const [index, raw] of ((file.categories ?? []) as unknown[]).entries()) {
     const candidate = raw as Partial<TermCategory>;
     if (typeof candidate?.name !== "string" || candidate.name.trim() === "") {
-      throw new Error(`Dictionary category ${index + 1} has no \`name\`: ${shorten(path)}`);
+      throw dictionary_fault(path, index, null, "has no `name`");
     }
     if (!Array.isArray(candidate.terms)) {
-      throw new Error(`Dictionary category \`${candidate.name}\` has no \`terms\` array: ${shorten(path)}`);
+      throw dictionary_fault(path, index, null, "has no `terms` array");
     }
     const terms: TermEntry[] = [];
     for (const [position, entry] of candidate.terms.entries()) {
       const term = typeof entry?.term === "string" ? entry.term.trim() : "";
       if (term === "") {
-        throw new Error(
-          `Dictionary category \`${candidate.name}\` term ${position + 1} has no \`term\`: ${shorten(path)}`,
+        throw dictionary_fault(path, index, position, "has no `term`");
+      }
+      // A term that survives normalisation with nothing left compiles into a matcher that can
+      // never fire, and is counted as a term loaded all the same — which is the number the header,
+      // the verdict line and `--require-overlay` all read. A dictionary of them reports PASSED
+      // while protecting nothing, so this is refused here rather than counted there.
+      if (term_body(term, false) === null) {
+        throw dictionary_fault(
+          path,
+          index,
+          position,
+          "is written entirely in characters that carry no glyph of their own — a zero-width space, a soft " +
+            "hyphen, a directional mark — so it normalises away to nothing and could never match anything. " +
+            "It would still count as a term loaded, which is what --require-overlay tests, so the gate would " +
+            "report PASSED while protecting nothing",
         );
       }
       terms.push({
@@ -840,19 +1160,29 @@ function literal_characters(word: string): string[] {
   return parts;
 }
 
-/** The pattern body for a term: each word case-insensitive, the words joined by the phrase rule. */
+/**
+ * The pattern body for a term: each word case-insensitive, the words joined by the phrase rule.
+ *
+ * A word that is nothing but invisible marks folds away to nothing and is dropped rather than
+ * emitted as an empty alternative, because an empty body matches at every position — one
+ * malformed entry would report a hit on every line of the repository. A term that is nothing but
+ * such words returns `null`, and `parse_dictionary` refuses it.
+ */
 function term_body(term: string, capitalised: boolean): string | null {
-  const words = term
+  const folded = term
     .trim()
     .split(/\s+/)
-    .filter((word) => word.length > 0)
-    .map((word) => literal_characters(fold(word)));
-  if (words.length === 0) {
+    .map((word) => fold(word))
+    .filter((word) => word.length > 0);
+  if (folded.length === 0) {
     return null;
   }
+  const words = folded.map((word) => literal_characters(word));
   if (capitalised) {
     const first = words[0] as string[];
-    const head = [...fold(term.trim())][0] ?? "";
+    // The first character of the first surviving word, not of the term as written: a term opening
+    // on a mark with no glyph has already lost it, and the letter after it is the one to capitalise.
+    const head = [...(folded[0] as string)][0] ?? "";
     const upper = head.toUpperCase();
     if (upper === head.toLowerCase() || [...upper].length !== 1) {
       return null;
@@ -883,7 +1213,15 @@ function build_matchers(categories: TermCategory[]): Matcher[] {
     for (const entry of category.terms) {
       const plain = term_body(entry.term, false);
       if (plain === null) {
-        continue;
+        // Unreachable for a dictionary that came through `parse_dictionary`, which refuses a term
+        // that normalises away with a coordinate into the file it came from. A skip here instead
+        // was how a term nothing could match still counted as a term loaded, so what is left is a
+        // refusal rather than a `continue`: no path may drop a term without saying so.
+        throw new Refusal(
+          "A term of the merged vocabulary normalises away to nothing, so it would compile into a matcher " +
+            "that can never fire. Every dictionary read from a file is checked for this as it is parsed, so " +
+            "reaching here means a category was built somewhere else and never checked.",
+        );
       }
       let source = plain;
       if (entry.word_boundary) {
@@ -1019,6 +1357,12 @@ function decode_percent(text: string): Normalised {
 /**
  * The one place a string is turned into what matching compares.
  *
+ * The marks with no glyph go first. `compose` already drops them from a scanned text before it
+ * folds, and for a long time nothing dropped them from a *term* — so a term carrying a zero-width
+ * space or a soft hyphen compiled into a matcher that could never fire against text the same
+ * marks had just been taken out of, and counted as a term loaded all the same. Both sides of the
+ * comparison normalise here now, which is the only way the two can be guaranteed to agree.
+ *
  * NFKC rather than NFC, because NFC leaves every compatibility form alone: a fullwidth `ａ`, a
  * mathematical `𝖺` and the `ﬁ` ligature all read as ordinary letters and all walk past an NFC
  * match, including one fullwidth letter dropped into an otherwise plain word. Then the confusable
@@ -1026,7 +1370,10 @@ function decode_percent(text: string): Normalised {
  * because they are genuinely different letters.
  */
 function fold(text: string): string {
-  const composed = text.normalize("NFKC");
+  // `compose` has already stripped the clusters it hands over, so on the hot path the test fails
+  // and nothing is rewritten; the terms, which are folded once at load time, are what this is for.
+  const visible = INVISIBLE.test(text) ? text.replace(INVISIBLE_RUN, "") : text;
+  const composed = visible.normalize("NFKC");
   if (!CONFUSABLE_BLOCKS.test(composed)) {
     return composed;
   }
@@ -1696,14 +2043,28 @@ function tree_names(root: string, trees: string[], prefixes: Map<string, string>
 }
 
 /**
- * A message line that is itself forty hex characters would be read as the terminator and split one
- * commit in two. The hits are still reported; only the SHA printed beside them would be wrong.
+ * The commit messages out of `git log --format=%B%n%H`, which terminates each one with the
+ * commit's own object id on a line of its own.
+ *
+ * That id is as wide as the repository names its objects, and a checker that only knows the
+ * narrow one finds no terminator at all in a SHA-256 repository: no commit is recorded, no
+ * message is ever scanned, and the run prints PASSED over the whole history. Measured — a
+ * SHA-256 repository holding a term in a commit message reported `0 commit messages` and passed,
+ * while the SHA-1 control found it.
+ *
+ * The width asked for is the repository's own rather than either width, so a message line that
+ * happens to be an object id at the *other* width stays body text. A line at the repository's own
+ * width is still read as the terminator and splits one commit in two; the hits are still
+ * reported, and only the id printed beside them is wrong. When git cannot say which hash names
+ * this repository's objects, either width is accepted, because reading the messages under a
+ * guessed id beats not reading them at all.
  */
-function parse_commit_messages(log: string): Array<{ sha: string; message: string }> {
+function parse_commit_messages(log: string, format: string | null): Array<{ sha: string; message: string }> {
+  const terminator = format === "sha256" ? SHA256_ID : format === "sha1" ? SHA1_ID : OBJECT_ID;
   const commits: Array<{ sha: string; message: string }> = [];
   let buffer: string[] = [];
   for (const line of log.split("\n")) {
-    if (SHA_LINE.test(line)) {
+    if (terminator.test(line)) {
       while (buffer.length > 0 && buffer[buffer.length - 1] === "") {
         buffer.pop();
       }
@@ -1744,6 +2105,29 @@ function resolve_specs(root: string, specs: string[]): Array<string | null> {
 }
 
 /**
+ * Where a blob entered the walk, and how much of that the walk can prove. A rewrite is planned off
+ * these commits, so the four kinds are four different claims and the label prints the one earned:
+ *
+ * - `added` — every commit whose tree holds the blob at this path where no parent's tree does.
+ *   These are the commits a cut has to be made at, and this is the only kind that says so.
+ * - `held` — no candidate adds it here, so this is the oldest one whose tree does hold it: the
+ *   blob was carried into the range from outside it, or the same bytes are also filed under a
+ *   name the walk resolved against a different path.
+ * - `touched` — the object has no path in this walk, so there is no tree entry to compare. This
+ *   is the oldest commit whose diff mentions it, and nothing further is known.
+ * - `none` — nothing the walk listed holds it, and `commits` is empty.
+ */
+type Attribution = { commits: string[]; kind: "added" | "held" | "touched" | "none" };
+
+/** The clause each kind earns, beside a hit, for somebody deciding where to cut. */
+const ORIGIN_CLAUSE: Record<Attribution["kind"], (named: string) => string> = {
+  added: (named) => `added in ${named}`,
+  held: (named) => `first held in ${named}, which inherited it`,
+  touched: (named) => `first touched in ${named}`,
+  none: () => "no commit in the scanned range adds it",
+};
+
+/**
  * The commits that put this blob at this path, oldest first — the commits a rewrite has to cut at.
  *
  * `--find-object` reports every commit whose diff *touches* the object, which is the commit that
@@ -1759,6 +2143,27 @@ function resolve_specs(root: string, specs: string[]): Array<string | null> {
  * when its own tree holds it there and no parent's tree does; a root commit has no parents and
  * qualifies on its own tree alone. That is exact, and it is the question a cleanup asks.
  *
+ * `-c` is what puts merges in front of that filter. `git log` does not diff a merge at all unless
+ * it is asked to, so a merge whose resolved content differs from every parent — which is what
+ * every hand-edited conflict resolution is — was never a candidate, and the only commit git did
+ * return was the later one whose diff takes the blob away again. Measured on a two-branch conflict
+ * resolved by hand: the resolution `30dc252f` is the one commit whose tree holds the secret, and
+ * the label read `added in 58914faeec09`, the commit that replaced it. Of the four spellings that
+ * make merges candidates, `-c` is the one whose question is this one: it diffs the merge against
+ * all of its parents at once, lists each merge once however many parents it has, and has no
+ * pruning pass between selecting an object and reporting it. `-m` lists a merge once per parent,
+ * so an octopus resolution would be named three times over. `--diff-merges=first-parent` asks a
+ * narrower question than the filter below answers. `--cc` is `-c` plus a hunk-pruning pass that
+ * exists to drop output, which is one pass too many to stand between a secret and its commit.
+ * `--no-patch` follows because `-c` implies `-p`, and it is cost rather than a guard: the combined
+ * diff of every merge in the walk is generated and printed for every blob queried, and nothing
+ * here reads a line of it. Measured on this repository's own README, one blob: 328 bytes with it,
+ * 2175 without. It is not a correctness guard, and no test below pretends otherwise. A bare
+ * context line the parse would take for a candidate can only be a line of the blob itself —
+ * `--find-object` shows the diff of the object's own path and no other — so for that candidate to
+ * be named it would have to be the id of a commit whose tree holds the blob that spells it out,
+ * which is a preimage rather than a bug.
+ *
  * The walk's own range is the range asked here, and that is the second half of the third case
  * above. `9368a954` moved the file elsewhere and is a *descendant* of the scanned tip, so asking
  * `--all` reached past everything the run was given and named a commit that holds neither that
@@ -1770,17 +2175,22 @@ function resolve_specs(root: string, specs: string[]): Array<string | null> {
  * separate point the history has to be cut at. Naming one of them silently would send somebody to
  * cut at one and stop.
  *
- * Two things fall back to the oldest commit git listed. With no path there is no tree entry to
- * compare against. With a path no candidate's tree holds, either the same bytes live under another
- * name or a merge git did not diff carried them, and the range may itself begin mid-history so
- * that every commit in it inherited the blob from a parent outside. The object is in those commits
- * either way, and the oldest is the earliest arrival there is evidence of, because an object has to
- * enter the graph before a diff can take it out again.
+ * What is left when no candidate adds it is not an addition and is not labelled as one. A
+ * candidate whose tree does not hold the blob at this path is a removal, and naming it sends an
+ * operator to cut at a commit the secret was never in — the walk has already resolved that tree
+ * and may not throw the answer away. So the fallback is the oldest candidate whose tree does hold
+ * it: the blob was carried in from outside the range, or the same bytes are also filed under a
+ * name this walk resolved against a different path, and either way that commit has it. With no
+ * path there is no tree entry to compare at all, so the oldest candidate is reported as touched
+ * rather than as added. When nothing listed holds it, the walk says nothing.
  */
-function introducing_commits(root: string, range: string | null, oid: string, path: string): string[] {
-  const touched = git_text(["log", "--format=%H %P", `--find-object=${oid}`, range ?? "--all"], root);
+function introducing_commits(root: string, range: string | null, oid: string, path: string): Attribution {
+  const touched = git_text(
+    ["log", "--format=%H %P", "-c", "--no-patch", `--find-object=${oid}`, range ?? "--all"],
+    root,
+  );
   if (!touched.ok) {
-    return [];
+    return { commits: [], kind: "none" };
   }
   const candidates: Array<{ sha: string; parents: string[] }> = [];
   for (const line of touched.stdout.split("\n")) {
@@ -1789,14 +2199,17 @@ function introducing_commits(root: string, range: string | null, oid: string, pa
     if (sha === undefined || !OBJECT_ID.test(sha)) {
       continue;
     }
-    candidates.push({ sha, parents: fields.slice(1).filter((parent) => OBJECT_ID.test(parent)) });
+    // Everything after the id is `%P`, which is ids and nothing else. The line already had to
+    // begin with one to be read at all, and git writes a blank line between records, which is the
+    // shape the test above is here to drop.
+    candidates.push({ sha, parents: fields.slice(1) });
   }
   const oldest = candidates[candidates.length - 1]?.sha;
   if (oldest === undefined) {
-    return [];
+    return { commits: [], kind: "none" };
   }
   if (path === "") {
-    return [oldest];
+    return { commits: [oldest], kind: "touched" };
   }
   // One request for the commit's own entry at the path, then one for each parent's, in that order,
   // so the answers can be read back off the same walk that wrote them.
@@ -1809,16 +2222,26 @@ function introducing_commits(root: string, range: string | null, oid: string, pa
   }
   const resolved = resolve_specs(root, specs);
   const introduced: string[] = [];
+  // Newest first, as git listed them, so the last of these is the oldest.
+  const holding: string[] = [];
   let at = 0;
   for (const candidate of candidates) {
     const here = resolved[at];
     const parents = resolved.slice(at + 1, at + 1 + candidate.parents.length);
     at += 1 + candidate.parents.length;
-    if (here === oid && !parents.includes(oid)) {
+    if (here !== oid) {
+      continue;
+    }
+    holding.push(candidate.sha);
+    if (!parents.includes(oid)) {
       introduced.push(candidate.sha);
     }
   }
-  return introduced.length === 0 ? [oldest] : introduced.reverse();
+  if (introduced.length > 0) {
+    return { commits: introduced.reverse(), kind: "added" };
+  }
+  const carried = holding[holding.length - 1];
+  return carried === undefined ? { commits: [], kind: "none" } : { commits: [carried], kind: "held" };
 }
 
 /**
@@ -2037,14 +2460,12 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
         continue;
       }
       // What the commit clause means is written into it. `commit X` beside a hit reads as "X
-      // introduced this" to anybody about to rewrite a history, so the label says `added in` and
-      // means it, and where a blob was added at more than one point it names every one of them
-      // rather than picking a home and keeping quiet about the others.
+      // introduced this" to anybody about to rewrite a history, so the label says `added in` only
+      // where the walk proved it, and where a blob was added at more than one point it names
+      // every one of them rather than picking a home and keeping quiet about the others. The
+      // other clauses claim less, in words, rather than claiming this one on weaker evidence.
       const introduced = introducing_commits(root, range, oid, path);
-      const origin =
-        introduced.length === 0
-          ? "no commit in the scanned range adds it"
-          : `added in ${introduced.map((sha) => sha.slice(0, 12)).join(", ")}`;
+      const origin = ORIGIN_CLAUSE[introduced.kind](introduced.commits.map((sha) => sha.slice(0, 12)).join(", "));
       // The commit clause is a clause of its own and the path travels on the hit, because a path
       // may contain an `@`. Recovering the path by cutting the label at its last `@` read
       // `node_modules/@scope/name` as `node_modules/`, so an exemption written for one path could
@@ -2084,7 +2505,8 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
   if (!logged.ok) {
     throw new Error(`Could not read commit messages.\n${logged.stderr.trim()}`);
   }
-  const commits = parse_commit_messages(logged.stdout);
+  // The terminator git writes is an id in this repository's own hash, so the parse is told which.
+  const commits = parse_commit_messages(logged.stdout, object_format(root));
   for (const commit of commits) {
     hits.push(...scan_text(`commit ${commit.sha.slice(0, 12)}`, commit.message, matchers, null).hits);
   }
@@ -2436,8 +2858,58 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
   );
 }
 
-/** Printed on every run, quiet included: a narrower dictionary must never look like a full pass. */
-function report_dictionaries(loaded: Dictionary[]): void {
+/**
+ * Every place this file writes a line, and what `--quiet` does to it.
+ *
+ * The rule, first, because the table is only an audit of it. The dictionary is a private secret
+ * and this gate runs in CI on a public repository, whose logs are world-readable. So nothing this
+ * program prints may carry the overlay's content — a term, a category name, a `why`, or the text
+ * of a line a term was found in — unless `--quiet` is off. Counts of those things are not those
+ * things and are printed always, because a gate whose output could be silenced into looking like
+ * a clean pass is worse than a loud one. Errors are the case the flag cannot cover at all: they go
+ * to stderr before there is a report to silence, so they carry a coordinate instead. See
+ * `Refusal`.
+ *
+ * The table exists because the recurring defect here is not an unguarded block, it is an unguarded
+ * block *beside a guarded one* — three separate rounds have now fixed one and left its neighbour.
+ * Add a print site, add its row.
+ *
+ *   report_dictionaries   dictionary and term counts, per-file counts     always
+ *                         the dictionary's own path, as the caller gave it always
+ *                         categories a later overlay extended                by name only when loud
+ *                         duplicate term and exemption counts               always
+ *                         "no vocabulary loaded" advisory                   always
+ *   report                one line per hit: term, category, why, the text   loud only
+ *                         hits by category                                  loud only
+ *                         not read / read in part, each named               always — repository paths
+ *                         "exemptions not resolved" count                   always
+ *                         each unresolved entry: its term and path          loud only
+ *                         active and suppressed counts                      always
+ *                         "exemption errors: N"                             always
+ *                         each rejected exemption, with its reason          loud only
+ *                         PASSED / PASSED WITH GAPS / FAILED and the scope   always — counts only
+ *   audit_allowlist       active and rejected counts, the overlay paths     always
+ *                         one entry per line: path, term, category, why     loud only
+ *                         each rejected exemption                           loud only
+ *                         Audit PASSED / FAILED and its counts              always
+ *   self_test             fixture counts, "N checks failed", the verdict    always — never which
+ *   print_usage           fixed text                                        always
+ *   main                  a bad argument, echoed                            always — from argv
+ *                         "not inside a git repository"                     always — repository paths
+ *                         the failure, on stderr, exit 2                    always — a `Refusal` or
+ *                                                                           an error raised after
+ *                                                                           the dictionary is closed
+ */
+
+/**
+ * Printed on every run, quiet included: a narrower dictionary must never look like a full pass.
+ *
+ * Every count here survives `--quiet`, because a count of a dictionary is not the dictionary. The
+ * one thing that does not is the list of category names a later file extended, which is overlay
+ * content and was printed unguarded beside four neighbouring lines that carry only numbers. Quiet
+ * keeps the fact that a merge extended rather than replaced, which is what the line is for.
+ */
+function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
   console.log(`Dictionaries: ${describe_dictionaries(loaded)}.`);
   for (const entry of loaded) {
     const terms = `${entry.terms} ${entry.terms === 1 ? "term" : "terms"}`;
@@ -2445,7 +2917,12 @@ function report_dictionaries(loaded: Dictionary[]): void {
     const exemptions = entry.exemptions === 0 ? "" : `, ${entry.exemptions} exemptions`;
     console.log(`  ${terms.padStart(9)} in ${categories}${exemptions}  ${shorten(entry.path)}`);
     if (entry.merged.length > 0) {
-      console.log(`    extended rather than replaced: ${entry.merged.join(", ")}`);
+      const extended = `${entry.merged.length} ${entry.merged.length === 1 ? "category" : "categories"}`;
+      console.log(
+        quiet
+          ? `    ${extended} extended rather than replaced`
+          : `    extended rather than replaced: ${entry.merged.join(", ")}`,
+      );
     }
     if (entry.duplicate_terms > 0) {
       console.log(
@@ -2525,7 +3002,12 @@ function report({
     by_category.set(hit.category, (by_category.get(hit.category) ?? 0) + 1);
   }
 
-  if (by_category.size > 0) {
+  // Category names are the overlay's own taxonomy, and this block has content exactly when the run
+  // is red — which on a public repository is exactly when a world-readable log gets written. It sat
+  // unguarded between the hit lines above and the unresolved entries below, both of which are held
+  // behind this same flag for this same reason. The count it carries is not lost: the verdict line
+  // below says how many categories the hits fall in.
+  if (by_category.size > 0 && !quiet) {
     const width = Math.max(...[...by_category.keys()].map((name) => name.length));
     console.log("");
     console.log("Hits by category:");
@@ -3053,6 +3535,240 @@ function plant_versions(directory: string): Versions {
   );
   commit("move the path away");
   return { repository, path, versions, restored, homes };
+}
+
+type Merges = {
+  repository: string;
+  /** The hand-resolved conflict whose blob a later commit replaces. */
+  resolved: { path: string; commit: string };
+  /** A hand-resolved conflict nothing ever removes, on a branch that is not checked out. */
+  kept: { path: string; commit: string };
+  /** A three-parent merge whose resolution matched none of the three. */
+  octopus: { path: string; commit: string };
+  /** A merge that took its second parent's file whole, and the commit that actually wrote it. */
+  inherited: { path: string; commit: string };
+  /** A commit id that names no object in this repository. */
+  absent: string;
+  /**
+   * A path holding exactly one space. `git cat-file --batch-check` echoes a request it cannot
+   * resolve and appends ` missing`, so the answer for the sibling name below has three
+   * space-separated fields exactly as a resolved answer does, and only the first field's shape
+   * tells them apart.
+   */
+  spaced: string;
+  /** The same name, one word changed, naming nothing this repository holds. */
+  spaced_absent: string;
+};
+
+/**
+ * Merges, which `git log` does not diff unless it is told to, and which is where a hand-edited
+ * conflict resolution lives.
+ *
+ * Four shapes, because they fail in four directions:
+ *
+ * - a two-parent conflict resolved by hand and replaced by a later commit. Without `-c` the
+ *   resolution is not a candidate at all, the later commit is rejected for not holding the blob,
+ *   and the fallback printed that rejected candidate anyway: `added in` naming the one commit in
+ *   the graph that never held the secret.
+ * - the same resolution with nothing removing it and its branch not checked out. There git lists
+ *   no candidate whatsoever, and the label read `no commit in the scanned range adds it` about a
+ *   commit sitting in the range adding it.
+ * - a three-parent resolution, because `-m` would name it once per parent and a reader would be
+ *   sent to cut three times at one commit.
+ * - a merge that took its second parent's file unchanged. Every spelling that diffs merges makes
+ *   this one a candidate, and only the parent comparison keeps the label off it: the commit that
+ *   wrote those bytes is on the branch, not at the merge.
+ *
+ * The octopus is built with `commit-tree` because `git merge` refuses to resolve a conflicting
+ * octopus at all; the two-parent cases are merged the way a person would hit them.
+ */
+function plant_merges(directory: string): Merges {
+  const repository = join(directory, "merge-fixture");
+  mkdirSync(repository, { recursive: true });
+  const git = (...args: string[]): string => {
+    const run = Bun.spawnSync(
+      ["git", "-c", "user.email=self-test@example.invalid", "-c", "user.name=self test", ...args],
+      { cwd: repository, stdout: "pipe", stderr: "pipe" },
+    );
+    return run.stdout.toString().trim();
+  };
+  // `git merge` stops on the conflict and leaves the index staged for a person to fix, which is
+  // the state every one of these resolutions is written into.
+  const resolve_conflict = (branch: string, path: string, body: string, message: string): string => {
+    git("merge", "--no-commit", "--no-ff", branch);
+    writeFileSync(join(repository, path), body);
+    git("add", "-A");
+    git("commit", "--no-verify", "--quiet", "-m", message);
+    return git("rev-parse", "HEAD");
+  };
+  const spaced = "notes/awkward name.md";
+  const spaced_absent = "notes/absent name.md";
+  mkdirSync(join(repository, "notes"), { recursive: true });
+  git("init", "--quiet", "-b", "main", ".");
+  writeFileSync(join(repository, "conflict.md"), "the base version\n");
+  writeFileSync(join(repository, "kept.md"), "the base version\n");
+  writeFileSync(join(repository, "octopus.md"), "the base version\n");
+  writeFileSync(join(repository, "inherited.md"), "the base version\n");
+  writeFileSync(join(repository, spaced), "an ordinary line under an awkward name\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "the common ancestor");
+  const base = git("rev-parse", "HEAD");
+  // One side branch per path, each holding a version the other side never saw.
+  for (const [branch, path, body] of [
+    ["side-conflict", "conflict.md", "the side version\n"],
+    ["side-kept", "kept.md", "the side version\n"],
+    ["side-inherited", "inherited.md", "the bytes the merge takes whole, carrying zarquilon\n"],
+    ["octopus-x", "octopus.md", "the x version\n"],
+    ["octopus-y", "octopus.md", "the y version\n"],
+  ] as Array<[string, string, string]>) {
+    git("checkout", "--quiet", base);
+    git("checkout", "--quiet", "-b", branch);
+    writeFileSync(join(repository, path), body);
+    git("add", "-A");
+    git("commit", "--no-verify", "--quiet", "-m", `${branch} writes its own version`);
+  }
+  const inherited_commit = git("rev-parse", "side-inherited");
+
+  // The resolution a later commit replaces. Its branch stays checked out for now.
+  git("checkout", "--quiet", "main");
+  writeFileSync(join(repository, "conflict.md"), "the main version\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "main writes its own version");
+  const resolved = resolve_conflict(
+    "side-conflict",
+    "conflict.md",
+    "neither side wrote this, and it carries zarquilon\n",
+    "resolve the conflict by hand",
+  );
+  writeFileSync(join(repository, "conflict.md"), "and now something else entirely\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "replace the resolved version");
+
+  // The resolution nothing removes, on a branch this repository does not check out.
+  git("checkout", "--quiet", base);
+  git("checkout", "--quiet", "-b", "keeps-it");
+  writeFileSync(join(repository, "kept.md"), "the other version\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "keeps-it writes its own version");
+  const kept = resolve_conflict(
+    "side-kept",
+    "kept.md",
+    "this resolution is never removed, and it carries zarquilon\n",
+    "resolve the second conflict by hand",
+  );
+
+  // The merge that takes its second parent's file whole: the bytes are the branch's, so the
+  // branch commit is the addition and the merge is not.
+  git("checkout", "--quiet", base);
+  git("checkout", "--quiet", "-b", "takes-theirs");
+  writeFileSync(join(repository, "inherited.md"), "the version the merge throws away\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "takes-theirs writes a version to discard");
+  git("merge", "--no-commit", "--no-ff", "side-inherited");
+  writeFileSync(join(repository, "inherited.md"), "the bytes the merge takes whole, carrying zarquilon\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "take the branch's file whole");
+
+  // The octopus, by plumbing, because `git merge` will not resolve a conflicting one.
+  git("checkout", "--quiet", "octopus-x");
+  writeFileSync(join(repository, "octopus.md"), "no parent wrote this, and it carries zarquilon\n");
+  git("add", "-A");
+  const octopus = git(
+    "commit-tree",
+    git("write-tree"),
+    "-p",
+    "octopus-x",
+    "-p",
+    "octopus-y",
+    "-p",
+    base,
+    "-m",
+    "resolve three parents at once",
+  );
+  git("checkout", "--quiet", "--detach", octopus);
+  git("checkout", "--quiet", "-b", "octopus-merge");
+  git("reset", "--quiet", "--hard", octopus);
+
+  // Nothing holding a term is in the checked-out tree, so every one of these is history.
+  git("checkout", "--quiet", "main");
+  return {
+    repository,
+    resolved: { path: "conflict.md", commit: resolved },
+    kept: { path: "kept.md", commit: kept },
+    octopus: { path: "octopus.md", commit: octopus },
+    inherited: { path: "inherited.md", commit: inherited_commit },
+    // A well-formed id of the right width for this repository that names nothing in it.
+    absent: `${base.slice(0, -1)}${base.endsWith("0") ? "1" : "0"}`,
+    spaced,
+    spaced_absent,
+  };
+}
+
+type Carried = {
+  repository: string;
+  path: string;
+  /** A range that starts after the blob arrived, spelled as one token the way `--history` takes it. */
+  range: string;
+  /** The one commit in that range whose tree holds the blob, which inherited it from outside. */
+  holder: string;
+  /** The oldest commit the range lists, whose diff takes the blob away and whose tree lacks it. */
+  removal: string;
+};
+
+/**
+ * A range that begins after the blob arrived, which is the case the fallback exists for and the
+ * case it used to get wrong.
+ *
+ * `--history` takes any rev-list spelling, and `A...B` drops the commits both sides share. So the
+ * commit that added the blob can sit outside the walk while commits that *hold* it sit inside it.
+ * Here one side replaces the file and the other copies its bytes to a second name: git lists the
+ * replacement, whose tree does not hold the blob at all, and the copy, whose tree does and whose
+ * parent's does too. Nothing in the range adds it, so nothing may be labelled as adding it — and
+ * the oldest commit git listed, which is what the old fallback printed, is the replacement.
+ *
+ * The dates are fixed because the whole point is which commit git lists last, and two commits
+ * written in one second are ordered by nothing this test should depend on.
+ */
+function plant_carried(directory: string): Carried {
+  const repository = join(directory, "carried-fixture");
+  mkdirSync(repository, { recursive: true });
+  const path = "carried.md";
+  let clock = 0;
+  const git = (...args: string[]): string => {
+    clock += 60;
+    const stamp = `${1700000000 + clock} +0000`;
+    const run = Bun.spawnSync(
+      ["git", "-c", "user.email=self-test@example.invalid", "-c", "user.name=self test", ...args],
+      {
+        cwd: repository,
+        env: { ...process.env, GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    return run.stdout.toString().trim();
+  };
+  git("init", "--quiet", "-b", "main", ".");
+  writeFileSync(join(repository, path), "the version carried in from outside, holding zarquilon\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "the arrival, which the range below leaves out");
+  const arrival = git("rev-parse", "HEAD");
+  // One side replaces the file, so its diff takes the blob away and its tree does not hold it.
+  writeFileSync(join(repository, path), "and now something else entirely\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "replace what arrived");
+  const removal = git("rev-parse", "HEAD");
+  // The other copies those bytes to a second name, so its diff touches the object while its tree
+  // goes on holding it at the original path — inherited, not added. Committed last, so git lists
+  // it first and the replacement is the oldest answer.
+  git("checkout", "--quiet", arrival);
+  git("checkout", "--quiet", "-b", "copies-it");
+  writeFileSync(join(repository, "second-name.md"), "the version carried in from outside, holding zarquilon\n");
+  git("add", "-A");
+  git("commit", "--no-verify", "--quiet", "-m", "file the same bytes under a second name");
+  const holder = git("rev-parse", "HEAD");
+  git("checkout", "--quiet", "main");
+  return { repository, path, range: "main...copies-it", holder, removal };
 }
 
 /**
@@ -3697,6 +4413,210 @@ function self_test(categories: TermCategory[]): number {
       }
     }
 
+    // Every message the dictionary path can fail with is published. `main` prints it to stderr and
+    // returns 2, `--quiet` has never reached stderr, and on a public repository the CI log is
+    // world-readable — so the assertion is that a coordinate comes out and the entry's own text
+    // does not. `unquotable` stands in for a term, a category name and a `why` at once: it is a
+    // bare identifier, so the not-JSON fixture is exactly the shape that made the engine's own
+    // message quote a fragment of the secret back at the log.
+    const unquotable = "vondrelmikashecoproprietor";
+    for (const [name, body, coordinate] of [
+      // Column 26 is where the bare identifier starts, which is exactly the fragment the engine's
+      // own message would have quoted back into the log.
+      ["fault-token.json", `{"categories": [{"name": ${unquotable}}]}`, "line 1, column 26"],
+      ["fault-no-name.json", '{"categories": [{"terms": []}]}', "category 1"],
+      ["fault-no-terms.json", `{"categories": [{"name": "${unquotable}"}]}`, "category 1"],
+      [
+        "fault-no-term.json",
+        `{"categories":[{"name":"${unquotable}","terms":[{"term":"ok","why":"${unquotable}"},` +
+          `{"term":"","why":"${unquotable}"}]}]}`,
+        "category 1, term 2",
+      ],
+      [
+        "fault-dead-term.json",
+        `{"categories":[{"name":"${unquotable}","terms":[{"term":"\u200b\u00ad","why":"${unquotable}"}]}]}`,
+        "category 1, term 1",
+      ],
+    ] as Array<[string, string, string]>) {
+      const path = join(directory, name);
+      writeFileSync(path, body);
+      let message: string | null = null;
+      try {
+        parse_dictionary(path);
+      } catch (failure) {
+        message = failure instanceof Error ? failure.message : String(failure);
+      }
+      if (message === null) {
+        failures.push(`a malformed overlay (${name}) loaded instead of failing the run`);
+        continue;
+      }
+      const quoted_back = message.split(unquotable).length - 1;
+      if (quoted_back !== 0) {
+        failures.push(
+          `the refusal for ${name} put the dictionary's own text on stderr ${quoted_back} times, and stderr is ` +
+            "the stream --quiet cannot reach",
+        );
+      }
+      if (!message.includes(coordinate)) {
+        failures.push(`the refusal for ${name} names no position, so it says something is wrong and never where`);
+      }
+    }
+
+    // An overlay nothing can open is an IO failure, not a syntax one. Reading and parsing shared a
+    // `try`, so a permission or device error was reported as invalid JSON and sent somebody hunting
+    // for a missing brace in a file they were never allowed to read. A directory is the portable
+    // way to make the open fail: `chmod 000` does not stop root, which is who CI often is.
+    const unopenable = join(directory, "fault-not-a-file");
+    mkdirSync(unopenable, { recursive: true });
+    let io_message = "";
+    try {
+      parse_dictionary(unopenable);
+    } catch (failure) {
+      io_message = failure instanceof Error ? failure.message : String(failure);
+    }
+    if (io_message.includes("not valid JSON") || !io_message.includes("could not be read")) {
+      failures.push("an overlay that could not be opened at all was reported as a syntax error");
+    }
+
+    // And an error the runtime raised, rather than one written here, never crosses at all.
+    if (withheld(new Error(`choked on "${unquotable}"`), [BUILT_IN_TERMS]).message.includes(unquotable)) {
+      failures.push("an error out of the runtime carried whatever it choked on to stderr, and that is the dictionary");
+    }
+
+    // What `--quiet` is actually for, asserted over both streams and by count. One guarded block
+    // beside an unguarded neighbour is how this keeps recurring, so the loud run has to leak and
+    // the quiet run has to leak nothing — a quiet report that prints nothing at all would pass the
+    // second test alone and prove nothing.
+    const streams = (act: () => void): { out: string; err: string } => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const log = console.log;
+      const error = console.error;
+      console.log = (...parts: unknown[]): void => {
+        out.push(parts.map(String).join(" "));
+      };
+      console.error = (...parts: unknown[]): void => {
+        err.push(parts.map(String).join(" "));
+      };
+      try {
+        act();
+      } finally {
+        console.log = log;
+        console.error = error;
+      }
+      return { out: out.join("\n"), err: err.join("\n") };
+    };
+    const named = (text: string): number => text.split(unquotable).length - 1;
+    const disclosing: Hit = {
+      source: "somewhere.md",
+      line: 4,
+      column: 7,
+      span: 1,
+      chars: unquotable.length,
+      term: unquotable,
+      category: `${unquotable}_category`,
+      why: `${unquotable}_reason`,
+      text: `a line carrying ${unquotable}`,
+    };
+    const verdict: Verdict = {
+      reported: [disclosing],
+      exempt: [],
+      exemptions: 0,
+      rejected: [`an exemption naming ${unquotable}`],
+      scope: "a fixture",
+      unread: [],
+      partial: [],
+      unresolved: [`an entry naming ${unquotable}`],
+      quiet: false,
+      dictionaries: [],
+    };
+    const loud_report = streams(() => {
+      report(verdict);
+    });
+    const quiet_report = streams(() => {
+      report({ ...verdict, quiet: true });
+    });
+    if (named(loud_report.out) + named(loud_report.err) === 0) {
+      failures.push("the loud report named no term, category or reason at all, so the quiet one proves nothing");
+    }
+    if (named(quiet_report.out) + named(quiet_report.err) !== 0) {
+      failures.push(
+        `a quiet report put the dictionary on stdout ${named(quiet_report.out)} times and on stderr ` +
+          `${named(quiet_report.err)} times; every one of them lands in a world-readable CI log`,
+      );
+    }
+    if (!quiet_report.out.includes("FAILED")) {
+      failures.push("a quiet report dropped the verdict along with the detail, and the verdict is the whole point");
+    }
+    // The same rule for the header, whose merge line names the categories a later file extended.
+    const extending: Dictionary[] = [
+      {
+        path: "/outside/leak-terms.json",
+        terms: 1,
+        categories: 1,
+        merged: [`${unquotable}_category`],
+        duplicate_terms: 0,
+        exemptions: 0,
+        duplicate_exemptions: 0,
+      },
+    ];
+    const loud_header = streams(() => {
+      report_dictionaries(extending, false);
+    });
+    const quiet_header = streams(() => {
+      report_dictionaries(extending, true);
+    });
+    if (named(loud_header.out) === 0) {
+      failures.push("the loud header named no category, so the quiet header proves nothing");
+    }
+    if (named(quiet_header.out) + named(quiet_header.err) !== 0) {
+      failures.push("a quiet header printed the categories a later overlay extended, which is the overlay's taxonomy");
+    }
+    if (!quiet_header.out.includes("extended rather than replaced")) {
+      failures.push("a quiet header dropped the fact of the merge, so a partial dictionary reads as a full one");
+    }
+
+    // A term carrying a mark with no glyph normalises the way the text it hunts normalises, or it
+    // compiles into a matcher that can never fire — and is counted as a term loaded regardless,
+    // which is the number the header, the verdict line and --require-overlay all read.
+    for (const [mark, spelling] of [
+      ["\u200b", "a zero-width space"],
+      ["\u00ad", "a soft hyphen"],
+      ["\u200e", "a directional mark"],
+    ] as Array<[string, string]>) {
+      const hidden = build_matchers([
+        {
+          name: "self_test_fixture",
+          why: "fixture",
+          terms: [{ term: `zar${mark}quilon`, word_boundary: true, why: "fixture" }],
+        },
+      ]);
+      if (scan_text("probe", "a line naming zarquilon plainly", hidden, null).hits.length !== 1) {
+        failures.push(`a term carrying ${spelling} compiled into a matcher that can never fire, and still counted`);
+      }
+    }
+    // And one that still normalises to nothing is refused rather than counted: an overlay of them
+    // satisfies --require-overlay, prints a term count and reports PASSED while protecting nothing.
+    const dead = join(directory, "overlay-dead-terms.json");
+    writeFileSync(
+      dead,
+      JSON.stringify({
+        categories: [{ name: "self_test_fixture", why: "f", terms: [{ term: "\u200b\u00ad", why: "f" }] }],
+      }),
+    );
+    let dead_refused = false;
+    try {
+      load_dictionaries([dead]);
+    } catch {
+      dead_refused = true;
+    }
+    if (!dead_refused) {
+      failures.push(
+        "an overlay whose every term normalises away loaded, satisfied --require-overlay and would have " +
+          "reported PASSED while protecting nothing",
+      );
+    }
+
     // The same overlay named twice — `LEAK_TERMS` exported and the same path passed again to
     // `--terms`, which is what following the release runbook verbatim used to do. Terms were
     // deduplicated and said so; exemptions were not, so eleven became twenty-two in silence and
@@ -3749,9 +4669,9 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a conflicting second reason displaced the first entry rather than being refused");
     }
 
-    // And the identity is the tuple that decides what an entry suppresses, not the path and term
-    // alone: a different line, or a different anchor on the same line, is a different occurrence
-    // and survives the merge as its own entry.
+    // And the identity is what decides what an entry suppresses, not the path and term alone: a
+    // different line is a different occurrence, and so are two clauses of one line named by two
+    // different digests. Both survive the merge as entries of their own.
     const distinct = join(directory, "overlay-distinct.json");
     writeFileSync(
       distinct,
@@ -3763,7 +4683,15 @@ function self_test(categories: TermCategory[]): number {
             path: "a.md",
             category: "self_test_fixture",
             term: "zarquilon",
-            line: 3,
+            line: 5,
+            why: "first reason",
+            anchor: anchor_digest("one clause on that line"),
+          },
+          {
+            path: "a.md",
+            category: "self_test_fixture",
+            term: "zarquilon",
+            line: 5,
             why: "first reason",
             anchor: anchor_digest("some other clause on that line"),
           },
@@ -3771,11 +4699,49 @@ function self_test(categories: TermCategory[]): number {
       }),
     );
     const separate = load_dictionaries([twice, distinct]);
-    if (separate.exemptions.length !== 4 || separate.rejected.length !== 0) {
+    if (separate.exemptions.length !== 5 || separate.rejected.length !== 0) {
       failures.push(
         "entries differing only in the line they name, or in the clause their anchor names, were " +
           "collapsed into one — which is one judgement spent on text nobody read",
       );
+    }
+
+    // An empty anchor is not one value among the digests: it means every clause at the line. So an
+    // unanchored entry and an anchored one at that line speak about the same occurrence — where
+    // the line carries a single clause they resolve to the identical context and suppress the
+    // identical hit — and comparing the raw field made them two identities. A repeat was never
+    // counted as one, and a contradicting reason over that one occurrence was never refused.
+    for (const [why, applied, refused, note] of [
+      ["first reason", 2, 0, "was applied a second time rather than counted as the repeat it is"],
+      ["a different reason", 2, 1, "was applied alongside the reason it contradicts rather than refused"],
+    ] as Array<[string, number, number, string]>) {
+      const subsumed = join(directory, `overlay-subsumed-${applied}-${refused}.json`);
+      writeFileSync(
+        subsumed,
+        JSON.stringify({
+          categories: [],
+          exemptions: [
+            {
+              path: "a.md",
+              category: "self_test_fixture",
+              term: "zarquilon",
+              line: 3,
+              why,
+              anchor: anchor_digest("the only clause line 3 carries"),
+            },
+          ],
+        }),
+      );
+      const merged = load_dictionaries([twice, subsumed]);
+      if (merged.exemptions.length !== applied || merged.rejected.length !== refused) {
+        failures.push(
+          `an entry anchored on a clause of a line an unanchored entry already covers ${note}: an empty ` +
+            "anchor covers every clause at its line, so the two are one occurrence",
+        );
+      }
+    }
+    if (load_dictionaries([twice, join(directory, "overlay-subsumed-2-0.json")]).dictionaries[1]?.exemptions !== 0) {
+      failures.push("an anchored repeat of an unanchored entry was counted as a suppression this overlay contributes");
     }
 
     // The clearance finds a blob that no ref's tree still points at.
@@ -3854,6 +4820,153 @@ function self_test(categories: TermCategory[]): number {
         `a blob with two homes is labelled "${two_homes.source}" and not "${several}": one of the commits it ` +
           "has to be cut out of is not named",
       );
+    }
+
+    // Merges. `git log --find-object` does not diff a merge unless it is told to, so a merge whose
+    // resolved content matched no parent — every hand-edited conflict resolution there is — was
+    // never a candidate. The one candidate git did return was the later commit whose diff takes
+    // the blob *away*, the tree check correctly threw it out, and the fallback printed it anyway:
+    // `added in` naming the one commit in the graph that never held the secret, and an operator
+    // cutting there leaves it behind. The last of the four is the parent comparison's own case,
+    // where the merge is a candidate and the commit that wrote the bytes is not it.
+    const planted_merges = plant_merges(directory);
+    const merged = scan_history(planted_merges.repository, null, matchers, nothing_covered);
+    for (const [shape, want, note] of [
+      [
+        planted_merges.resolved,
+        "added in",
+        "a hand-resolved conflict that a later commit replaced is not named as the commit that added it, so " +
+          "the label points at a tree the secret was never in",
+      ],
+      [
+        planted_merges.kept,
+        "added in",
+        "a hand-resolved conflict nothing ever removed is not named as the commit that added it, and with no " +
+          "candidate at all the label claimed no commit in the range adds it",
+      ],
+      [
+        planted_merges.octopus,
+        "added in",
+        "a three-parent resolution is not named exactly once as the commit that added it",
+      ],
+      [
+        planted_merges.inherited,
+        "added in",
+        "a merge that took its second parent's file whole was named over the branch commit that wrote those " +
+          "bytes, so the parent comparison is not narrowing the candidates",
+      ],
+    ] as Array<[{ path: string; commit: string }, string, string]>) {
+      const wanted = `history:${shape.path} (${want} ${shape.commit.slice(0, 12)})`;
+      const found = merged.hits.find((hit) => hit.path === shape.path);
+      if (found === undefined) {
+        failures.push(`a term introduced at ${shape.path} by a merge was not found in the history at all`);
+      } else if (found.source !== wanted) {
+        failures.push(`${note} — it reads "${found.source}" and not "${wanted}"`);
+      }
+    }
+
+    // What `resolve_specs` may read as an object id, which decides which trees are compared
+    // against which. `git cat-file --batch-check` answers `<id> <type> <size>` and echoes a
+    // request it could not resolve as `<request> missing`, so an unresolvable path holding one
+    // space answers in three fields like a resolved one, and an unresolvable bare id answers in
+    // two fields whose first *is* a well-formed id. Read either as an answer and a commit is
+    // compared against an object it does not have.
+    const spec_head = git_text(["rev-parse", "HEAD"], planted_merges.repository).stdout.trim();
+    const answers = resolve_specs(planted_merges.repository, [
+      `${spec_head}:${planted_merges.spaced}`,
+      `${spec_head}:${planted_merges.spaced_absent}`,
+      planted_merges.absent,
+      `${spec_head}:no-such-file.md`,
+    ]);
+    const spaced_blob = git_text(["rev-parse", `HEAD:${planted_merges.spaced}`], planted_merges.repository);
+    if (answers[0] !== spaced_blob.stdout.trim()) {
+      failures.push("a path holding a space did not resolve to its own blob, so the fixture proves nothing");
+    }
+    if (answers[1] !== null) {
+      failures.push(
+        `an unresolvable path holding a space was read as the object id "${answers[1]}": the answer has three ` +
+          "fields like a resolved one, and its first field is the head of the request rather than any object",
+      );
+    }
+    if (answers[2] !== null) {
+      failures.push(
+        `an object id naming nothing was read back as "${answers[2]}": \`<id> missing\` is two fields, and the ` +
+          "first of them is a well-formed id, so only the field count says the object is not there",
+      );
+    }
+    if (answers[3] !== null) {
+      failures.push(`an unresolvable path was read as the object id "${answers[3]}"`);
+    }
+
+    // A repository that names its objects with SHA-256. The terminator `--format=%B%n%H` writes is
+    // sixty-four hex there, a forty-hex terminator matches no line of it, and every commit message
+    // in the history went unread under a printed PASSED.
+    const wide = join(directory, "sha256-fixture");
+    mkdirSync(wide, { recursive: true });
+    Bun.spawnSync(["git", "init", "--quiet", "--object-format=sha256", "-b", "main", wide], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    writeFileSync(join(wide, "ordinary.txt"), "a line with nothing in it at all\n");
+    Bun.spawnSync(["git", "add", "-A"], { cwd: wide, stdout: "pipe", stderr: "pipe" });
+    Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.email=self-test@example.invalid",
+        "-c",
+        "user.name=self test",
+        "commit",
+        "--no-verify",
+        "--quiet",
+        "-m",
+        "a commit message carrying zarquilon",
+      ],
+      { cwd: wide, stdout: "pipe", stderr: "pipe" },
+    );
+    if (object_format(wide) !== "sha256") {
+      failures.push("this git could not make a sha256 repository, so the wide-hash fixture proves nothing");
+    } else {
+      const widely = scan_history(wide, null, matchers, nothing_covered);
+      if (widely.commits !== 1) {
+        failures.push(
+          `${widely.commits} commit messages were read out of a sha256 repository holding 1: the terminator git ` +
+            "writes is an id in the repository's own hash, and a narrower one matches no line of the log",
+        );
+      }
+      if (!widely.hits.some((hit) => hit.term === "zarquilon" && hit.source.startsWith("commit "))) {
+        failures.push("a term in a sha256 repository's commit message was not found, and the run would say PASSED");
+      }
+    }
+
+    // A range that begins after the blob arrived. Nothing in it adds the blob, so nothing in it
+    // may be labelled as adding the blob — and the answer may not be the commit whose diff took it
+    // away, which is what the old fallback printed: the oldest commit git listed, chosen on the
+    // reasoning that an object has to enter the graph before a diff can take it out again. It
+    // does, but not necessarily inside the range, and the walk has already resolved that this
+    // commit's tree does not hold the blob before throwing the answer away.
+    const planted_carried = plant_carried(directory);
+    const arrival = git_text(
+      ["rev-parse", `${planted_carried.holder}:${planted_carried.path}`],
+      planted_carried.repository,
+    );
+    const carried = introducing_commits(
+      planted_carried.repository,
+      planted_carried.range,
+      arrival.stdout.trim(),
+      planted_carried.path,
+    );
+    if (carried.kind !== "held" || carried.commits.join() !== planted_carried.holder) {
+      failures.push(
+        `a blob no commit in the range adds is attributed as ${carried.kind} to ` +
+          `${carried.commits.map((sha) => sha.slice(0, 12)).join(", ") || "nothing"}, and not held by ` +
+          `${planted_carried.holder.slice(0, 12)}: the only other answer git listed is ` +
+          `${planted_carried.removal.slice(0, 12)}, whose diff takes the blob away and whose tree does not ` +
+          "hold it, so naming it sends an operator to cut at a commit the secret was never in",
+      );
+    }
+    if (ORIGIN_CLAUSE[carried.kind]("abc123def456").startsWith("added in")) {
+      failures.push("a blob nothing in the range adds is labelled as added, which is the claim it cannot make");
     }
 
     // The two halves as `main` runs them: the tracked scan reads the working tree and hands the
@@ -4059,7 +5172,13 @@ function self_test(categories: TermCategory[]): number {
         "a deleted file's historical blob and a historical path whose blob another path already supplied are " +
         "all caught; a historical blob is labelled with the commit that added it at that path and not with " +
         "the one that replaced it, out of the range the walk was given rather than from past its tip, and " +
-        "with every commit that added it where a blob was added more than once; " +
+        "with every commit that added it where a blob was added more than once, and with the merge that " +
+        "resolved a conflict by hand — two parents or three, replaced later or never — rather than with the " +
+        "commit that replaced it or with nothing at all; a blob no commit in the range adds is not labelled " +
+        "as added by the oldest commit listed, which is the one whose diff took it away; an unresolvable " +
+        "object request is read as no object rather than as the head of its own request; a term in the " +
+        "commit message of a repository that names its objects with sha256 is read, where a forty-hex " +
+        "terminator read no message in it at all and printed PASSED; " +
         "the clearance skips only blobs whose bytes this run hashed as it read them, so the " +
         "committed version of a file carrying an unstaged edit and of one hidden behind a skip-worktree bit " +
         "are both read here rather than skipped, where the index rule they replaced skipped both; a run one " +
@@ -4073,7 +5192,16 @@ function self_test(categories: TermCategory[]): number {
         "unresolved rather than rewritten; a blob too large to read is named; a file that could not be read " +
         "at all is named and changes the verdict; an empty or malformed overlay fails --require-overlay; one " +
         "overlay loaded twice contributes its exemptions once and says so, while two reasons for the same " +
-        "occurrence fail the run rather than merging and two occurrences stay two entries; and a hit exits 1.",
+        "occurrence fail the run rather than merging and two occurrences stay two entries, while an entry " +
+        "anchored on a clause an unanchored entry at that line already covers is one of them and not a " +
+        "second; a term carrying a zero-width space, a soft hyphen or a directional mark still matches the " +
+        "text those marks are stripped out of, and one that normalises away to nothing is refused rather " +
+        "than counted as a term this run loaded; an overlay that cannot be opened is reported as an open " +
+        "failure and not as a syntax one; every refusal the dictionary path can raise names a coordinate — " +
+        "a category and term index, or a line and column — and quotes neither the entry nor the token the " +
+        "engine choked on, and an error raised anywhere else while the dictionary is open is withheld " +
+        "outright; a quiet report and a quiet header keep their verdict and their counts and put no term, " +
+        "no category name and no reason on either stream; and a hit exits 1.",
     );
     return 0;
   } finally {
@@ -4231,9 +5359,20 @@ function main(): number {
 
   try {
     const paths = [BUILT_IN_TERMS, ...options.terms.map((path) => resolve(path))];
-    const { categories, exemptions, rejected, dictionaries, quoted } = load_dictionaries(paths);
-    const matchers = build_matchers(categories);
-    report_dictionaries(dictionaries);
+    // Everything inside this fence has the dictionary open, so an error escaping it carries the
+    // dictionary unless this file wrote the message. The outer catch prints to stderr, which
+    // `--quiet` does not reach and must not — an operator whose overlay is broken has to be told
+    // — so what crosses the fence is a `Refusal` or nothing. See `Refusal` and `withheld`.
+    let loaded: Loaded;
+    let matchers: Matcher[];
+    try {
+      loaded = load_dictionaries(paths);
+      matchers = build_matchers(loaded.categories);
+    } catch (failure) {
+      throw failure instanceof Refusal ? failure : withheld(failure, paths);
+    }
+    const { categories, exemptions, rejected, dictionaries, quoted } = loaded;
+    report_dictionaries(dictionaries, options.quiet);
 
     if (options.require_overlay) {
       const shortfall = overlay_shortfall(dictionaries, matchers);

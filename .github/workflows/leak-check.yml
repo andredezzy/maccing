@@ -72,8 +72,17 @@ jobs:
       # logs are world-readable, and a red run would publish the vocabulary the overlay exists to
       # keep out of it. Secret masking does not help: it matches the literal secret value, while
       # the gate prints the terms reformatted one per line. Quiet keeps the verdict, the counts and
-      # the exit code, and drops every line that names a term. Read the detail locally, where the
-      # overlay already lives.
+      # the exit code, and drops every line that carries a term, a category name or a reason. Read
+      # the detail locally, where the overlay already lives.
+      #
+      # Quiet governs the report, and the report is not the only thing that reaches this log. A run
+      # that cannot load the overlay never reaches a report to silence: it prints to stderr and
+      # exits 2, and no flag has ever reached stderr — nor should one, because a broken overlay has
+      # to be said out loud. What makes those messages safe here is not a guard but their shape:
+      # each names the fault by coordinate — which file, which category index, which term index, or
+      # which line and column — and never the text at it, and the engine's own parse error, which
+      # quotes the token it choked on, is never forwarded. `leak-check.ts` carries the full list of
+      # print sites and the guard on each; keep it in step with any new output.
       - name: Audit the exemptions
         run: bun scripts/leak-check.ts --terms "$RUNNER_TEMP/leak-terms.json" --require-overlay --audit --quiet
 
