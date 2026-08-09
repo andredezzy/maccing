@@ -2,15 +2,29 @@
 #
 # The dictionary is not in this repository. Terms and exemptions live in a private overlay, and
 # without one the checker matches nothing, prints PASSED and exits 0 — which is why every step
-# below passes `--require-overlay`. Supply the overlay either way round:
+# below passes `--require-overlay`.
 #
-#   * as the `LEAK_OVERLAY` secret, whose value is the whole contents of the overlay JSON, or
-#   * by checking the private repository out into a path outside the workspace and pointing
-#     `--terms` at the file, if the overlay is large enough that a secret is unwieldy.
+# On this repository there is exactly one way to supply it: the `LEAK_OVERLAY` secret, whose value
+# is the whole contents of the overlay JSON, written by the first step to
+# `$RUNNER_TEMP/leak-terms.json`. That path holds no vocabulary, which is the property that makes
+# it usable here.
 #
-# It must land outside `$GITHUB_WORKSPACE`: a dictionary's own terms are suppressed inside it, so
-# an overlay written into the tree being scanned would be the one file its vocabulary could never
-# be reported in, and the checker refuses that run outright.
+# **Checking the private repository out and pointing `--terms` at it is not an equivalent option
+# here, and used to be offered as one.** The private repository's own name is a term the dictionary
+# declares, so that path *is* vocabulary, and this repository is public: its Actions logs are
+# world-readable. Two things publish the name before the gate has an opinion about it — Actions
+# echoes each step's `run:` line into the log verbatim, and `actions/checkout` names the repository
+# it clones. No flag on the checker reaches either of them. The checker itself no longer prints an
+# overlay's path at all; it says which of the `--terms` arguments each dictionary was, so the
+# residue is this file's own logging and not the gate's. Use the checkout form only where the log
+# is private — a private repository, or a self-hosted runner whose logs are not published.
+#
+# Wherever the overlay lands, it must land outside `$GITHUB_WORKSPACE`: a dictionary's own terms
+# are suppressed inside it, so an overlay written into the tree being scanned would be the one file
+# its vocabulary could never be reported in, and the checker refuses that run outright. That
+# refusal resolves both paths the same way before comparing them, so a symlinked spelling of one
+# directory — `/tmp` against `/private/tmp`, `$RUNNER_TEMP` against wherever the runner really put
+# it — no longer reads as "outside the repository" and no longer lets the run through.
 #
 # A missing overlay fails the job. It is never skipped and never downgraded to a warning: a pull
 # request from a fork gets no secrets, so it gets no clearance either, and the honest way to say
@@ -52,9 +66,9 @@ jobs:
           if [ -z "${LEAK_OVERLAY:-}" ]; then
             echo "::error::No overlay dictionary. The LEAK_OVERLAY secret is unset, so this run" \
                  "would check no name, no figure and no domain word and still pass. Set the secret" \
-                 "to the contents of the private overlay JSON, or check the private repository out" \
-                 "to a path outside the workspace and point --terms at it. Forks get no secrets and" \
-                 "so cannot be cleared here."
+                 "to the contents of the private overlay JSON. Do not substitute a checkout of the" \
+                 "private repository here: its name is a term the dictionary declares, and this" \
+                 "repository's logs are public. Forks get no secrets and so cannot be cleared here."
             exit 1
           fi
           printf '%s' "$LEAK_OVERLAY" > "$RUNNER_TEMP/leak-terms.json"

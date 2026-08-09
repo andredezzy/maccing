@@ -70,13 +70,14 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 type TermEntry = {
   term: string;
@@ -207,8 +208,21 @@ type HistoryResult = {
   note: string;
 };
 
+/**
+ * What a run may say out loud about one dictionary it merged.
+ *
+ * There is no path here, and that is the point. An overlay's path is supplied by the operator and
+ * the operator's own directory names are vocabulary — the private repository checked out into a
+ * path named after itself is the documented second way to supply this file. Every count below is
+ * printed on every run, `--quiet` included, so a path reaching this record reaches a
+ * world-readable log. `label` is what `dictionary_labels` allows to be said instead: which of the
+ * paths this run was given, and nothing about the path. `overlay` is the one question the path
+ * used to be re-read to answer — whether this is the schema shipped here or a file somebody
+ * passed in.
+ */
 type Dictionary = {
-  path: string;
+  label: string;
+  overlay: boolean;
   terms: number;
   categories: number;
   merged: string[];
@@ -239,7 +253,7 @@ type Options = {
 };
 
 /** Schema documentation and an empty category list. The vocabulary lives in a project's overlay. */
-const BUILT_IN_TERMS = join(import.meta.dir, "leak-terms.json");
+const BUILT_IN_TERMS = canonical(join(import.meta.dir, "leak-terms.json"));
 
 /** A NUL inside this window sends the bytes to the encoding sniffer rather than straight to UTF-8. */
 const BINARY_SNIFF_BYTES = 8192;
@@ -585,11 +599,23 @@ function load_dictionaries(paths: string[]): Loaded {
   // Every entry already applied at one line, because which of them a new entry collides with
   // depends on the anchors, not on the line alone. See `same_occurrence`.
   const first_entry = new Map<string, Exemption[]>();
-  for (const path of paths) {
+  // The path goes no further than this function and the `quoted` key. Everything a message, a
+  // header or an audit is allowed to say about a dictionary is the label; see `dictionary_labels`.
+  const labels = dictionary_labels(paths);
+  for (const [index, path] of paths.entries()) {
+    const label = labels[index] as string;
     if (!existsSync(path)) {
-      throw new Error(`Dictionary not found: ${path}`);
+      // A `Refusal`, because this file wrote the sentence and knows it names nothing. The plain
+      // `Error` it used to be was converted by `main`'s fence into `withheld`, which told the
+      // operator their message was suppressed because a runtime error quotes what it choked on —
+      // and nothing had quoted anything, the file was simply absent. See `Refusal` and the fence.
+      throw new Refusal(
+        `Dictionary not found: ${label}.\n` +
+          "  Nothing was read, so this run would have matched a narrower vocabulary than it was asked to. " +
+          "Check the path given to --terms (or LEAK_TERMS) exists and is readable from here.",
+      );
     }
-    const parsed = parse_dictionary(path);
+    const parsed = parse_dictionary(path, label);
     const quotes = new Set<string>();
     quoted.set(path, quotes);
     const merged: string[] = [];
@@ -615,7 +641,7 @@ function load_dictionaries(paths: string[]): Loaded {
         added += 1;
       }
     }
-    const parsed_exemptions = read_exemptions(path, parsed.exemptions ?? []);
+    const parsed_exemptions = read_exemptions(label, parsed.exemptions ?? []);
     let applied = 0;
     let duplicate_exemptions = 0;
     for (const entry of parsed_exemptions.exemptions) {
@@ -640,7 +666,8 @@ function load_dictionaries(paths: string[]): Loaded {
     }
     rejected.push(...parsed_exemptions.rejected);
     dictionaries.push({
-      path,
+      label,
+      overlay: path !== BUILT_IN_TERMS,
       terms: added,
       categories: parsed.categories.length,
       merged,
@@ -708,8 +735,8 @@ function same_occurrence(first: Exemption, second: Exemption): boolean {
  */
 function conflicting_exemption(first: Exemption, second: Exemption): string {
   return (
-    `${shorten(second.source)} (${second.path}:${second.line} — ${second.term}): the same occurrence is ` +
-    `already exempted for a different reason by ${shorten(first.source)}. First: "${first.why}". ` +
+    `${second.source} (${second.path}:${second.line} — ${second.term}): the same occurrence is ` +
+    `already exempted for a different reason by ${first.source}. First: "${first.why}". ` +
     `This one: "${second.why}". Two reasons for one occurrence is not a duplicate — one of them describes ` +
     "text that has changed, and this run cannot tell which. The first entry stands and this one is not " +
     "applied; correct or remove one of them."
@@ -736,18 +763,24 @@ const WITHHELD =
 /**
  * A fault in a dictionary, named by where it is rather than by what it says.
  *
- * Everything a reader needs to find the entry, and nothing that reproduces it: the file, the
- * category's position in it, the entry's position in the category, the field that is wrong, and
- * the command that prints the entry where the overlay already lives. The hit lines have worked
- * this way for as long as `--quiet` has existed; these did not, and no flag could have saved them.
+ * Everything a reader needs to find the entry, and nothing that reproduces it: which dictionary,
+ * the category's position in it, the entry's position in the category, the field that is wrong,
+ * and the command that prints the entry where the overlay already lives. The hit lines have
+ * worked this way for as long as `--quiet` has existed; these did not, and no flag could have
+ * saved them.
+ *
+ * `label` and not the path. The path is the operator's, and an operator who followed the
+ * workflow's second option is holding the private repository's own name — see
+ * `dictionary_labels`. The `jq` is still exact and the operator supplies the filename, which they
+ * have and this log must not.
  */
-function dictionary_fault(path: string, category: number, term: number | null, wrong: string): Refusal {
+function dictionary_fault(label: string, category: number, term: number | null, wrong: string): Refusal {
   const at = term === null ? `category ${category + 1}` : `category ${category + 1}, term ${term + 1}`;
   const pointer = term === null ? `.categories[${category}]` : `.categories[${category}].terms[${term}]`;
   return new Refusal(
     `Dictionary ${at} ${wrong}.\n` +
-      `  In ${shorten(path)}. ${WITHHELD}\n` +
-      `  Read the entry where the overlay lives: jq '${pointer}' ${shorten(path)}`,
+      `  In ${label}. ${WITHHELD}\n` +
+      `  Read the entry where the overlay lives: jq '${pointer}' <that file>`,
   );
 }
 
@@ -759,12 +792,12 @@ function dictionary_fault(path: string, category: number, term: number | null, w
  * rest are named by their type and the files that were being merged, which is enough to reproduce
  * the run locally and nothing that repeats what it was reading.
  */
-function withheld(failure: unknown, paths: string[]): Refusal {
+function withheld(failure: unknown, labels: string[]): Refusal {
   return new Refusal(
     `Loading the dictionaries failed with an error this file did not write ` +
       `(${failure instanceof Error ? failure.name : typeof failure}), so its message is withheld: a runtime ` +
       "error quotes whatever it choked on, and here that is the dictionary. Merged in order: " +
-      `${paths.map((path) => shorten(path)).join(", ")}. Re-run locally, where the overlay lives, to read it.`,
+      `${labels.join(", ")}. Re-run locally, where the overlay lives, to read it.`,
   );
 }
 
@@ -955,34 +988,37 @@ function json_fault(text: string): JsonFault | null {
 }
 
 /** A text `JSON.parse` refused, turned into a refusal that names where and not what. */
-function json_refusal(path: string, text: string): Refusal {
+function json_refusal(label: string, text: string): Refusal {
   const fault = json_fault(text);
   const starts = line_starts(text);
   if (fault === null) {
     return new Refusal(
-      `Dictionary is not valid JSON: ${shorten(path)}\n` +
+      `Dictionary is not valid JSON: ${label}\n` +
         "  `JSON.parse` refused it and the scan for the fault found none, so the two disagree. The file is " +
         `${text.length} characters over ${starts.length} lines. ${WITHHELD}\n` +
-        `  Read it where the overlay lives: jq . ${shorten(path)}`,
+        "  Read it where the overlay lives: jq . <that file>",
     );
   }
   const line = line_of(starts, fault.offset);
   return new Refusal(
-    `Dictionary is not valid JSON: ${shorten(path)}\n` +
+    `Dictionary is not valid JSON: ${label}\n` +
       `  The first fault is at line ${line + 1}, column ${fault.offset - (starts[line] ?? 0) + 1}: ${fault.note}. ` +
       `${WITHHELD}\n` +
-      `  Read it where the overlay lives: sed -n '${line + 1}p' ${shorten(path)}`,
+      `  Read it where the overlay lives: sed -n '${line + 1}p' <that file>`,
   );
 }
 
 /**
  * A dictionary that does not parse is louder than a dictionary that is missing, because a caller
- * who passed `--terms` believes a dictionary was loaded. Every check below names the file and the
- * coordinate of the entry that is wrong, so a malformed overlay is a two-second fix rather than a
- * hunt — and names nothing else, because these messages go to stderr and stderr is published. See
- * `Refusal`.
+ * who passed `--terms` believes a dictionary was loaded. Every check below names which dictionary
+ * and the coordinate of the entry that is wrong, so a malformed overlay is a two-second fix
+ * rather than a hunt — and names nothing else, because these messages go to stderr and stderr is
+ * published. See `Refusal`.
+ *
+ * `path` opens the file and `label` is the only part of it that may be said out loud; see
+ * `dictionary_labels` for why the two are not the same string.
  */
-function parse_dictionary(path: string): TermFile {
+function parse_dictionary(path: string, label: string): TermFile {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
@@ -990,7 +1026,7 @@ function parse_dictionary(path: string): TermFile {
     // Reading and parsing were one `try`, so a permission or device failure was reported as a
     // syntax error and sent somebody hunting for a missing brace in a file they could not open.
     throw new Refusal(
-      `Dictionary could not be read: ${shorten(path)}\n` +
+      `Dictionary could not be read: ${label}\n` +
         `  The open failed (${failure instanceof Error && "code" in failure ? String(failure.code) : "no code given"}). ` +
         "That is a permission or a device problem, not a syntax one, and no edit to the JSON will fix it.",
     );
@@ -999,36 +1035,36 @@ function parse_dictionary(path: string): TermFile {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw json_refusal(path, text);
+    throw json_refusal(label, text);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Refusal(
-      `Dictionary is not a JSON object: ${shorten(path)}\n` +
+      `Dictionary is not a JSON object: ${label}\n` +
         "  A dictionary is an object with a `categories` array. Anything else would load as an empty " +
         "dictionary and pass a gate that checked nothing.",
     );
   }
   const file = parsed as { categories?: unknown; exemptions?: unknown };
   if (file.categories !== undefined && !Array.isArray(file.categories)) {
-    throw new Refusal(`Dictionary \`categories\` is not an array: ${shorten(path)}`);
+    throw new Refusal(`Dictionary \`categories\` is not an array: ${label}`);
   }
   if (file.exemptions !== undefined && !Array.isArray(file.exemptions)) {
-    throw new Refusal(`Dictionary \`exemptions\` is not an array: ${shorten(path)}`);
+    throw new Refusal(`Dictionary \`exemptions\` is not an array: ${label}`);
   }
   const categories: TermCategory[] = [];
   for (const [index, raw] of ((file.categories ?? []) as unknown[]).entries()) {
     const candidate = raw as Partial<TermCategory>;
     if (typeof candidate?.name !== "string" || candidate.name.trim() === "") {
-      throw dictionary_fault(path, index, null, "has no `name`");
+      throw dictionary_fault(label, index, null, "has no `name`");
     }
     if (!Array.isArray(candidate.terms)) {
-      throw dictionary_fault(path, index, null, "has no `terms` array");
+      throw dictionary_fault(label, index, null, "has no `terms` array");
     }
     const terms: TermEntry[] = [];
     for (const [position, entry] of candidate.terms.entries()) {
       const term = typeof entry?.term === "string" ? entry.term.trim() : "";
       if (term === "") {
-        throw dictionary_fault(path, index, position, "has no `term`");
+        throw dictionary_fault(label, index, position, "has no `term`");
       }
       // A term that survives normalisation with nothing left compiles into a matcher that can
       // never fire, and is counted as a term loaded all the same — which is the number the header,
@@ -1036,7 +1072,7 @@ function parse_dictionary(path: string): TermFile {
       // while protecting nothing, so this is refused here rather than counted there.
       if (term_body(term, false) === null) {
         throw dictionary_fault(
-          path,
+          label,
           index,
           position,
           "is written entirely in characters that carry no glyph of their own — a zero-width space, a soft " +
@@ -1081,6 +1117,9 @@ function parse_dictionary(path: string): TermFile {
  * rewrite of that line stops the entry dead — it covers nothing, and the run says why — instead of
  * quietly re-pointing the same judgement at whatever the line says now. Leave it out and the entry
  * behaves as it always has, with that one drift unchecked and named as unchecked by `--audit`.
+ *
+ * `source` is the dictionary's label, never its path: it is copied onto every entry and read back
+ * out on the audit's own header, which is printed on every run. See `dictionary_labels`.
  */
 function read_exemptions(
   source: string,
@@ -1099,7 +1138,7 @@ function read_exemptions(
     const line = typeof entry.line === "number" && Number.isInteger(entry.line) && entry.line >= 0 ? entry.line : -1;
     const anchor = typeof entry.anchor === "string" ? entry.anchor.trim().toLowerCase() : "";
     const named = path === "" ? "" : ` (${path}${term === "" ? "" : ` — ${term}`})`;
-    const label = `${shorten(source)} entry ${index + 1}${named}`;
+    const label = `${source} entry ${index + 1}${named}`;
     if (path === "" || term === "" || category === "") {
       rejected.push(`${label}: \`path\`, \`category\` and \`term\` are all required, so the exemption is not applied.`);
       continue;
@@ -1762,14 +1801,21 @@ function scan_files(
       blobs.add(blob_id(object_hash, bytes));
     }
   };
+  // One spelling for the whole loop, and the same one on both sides of it. `root` reaches here
+  // from git in one mode and from the resolved `--path` in another; the paths beside it are built
+  // by joining or walking whichever of those it was. Canonicalising the root alone would break the
+  // pairing rather than fix it — the leaves have to be resolved the same way, and as leaves, so a
+  // symlink keeps its own name and is reported under it. The root is resolved once, outside the
+  // loop, because it is the same directory every time round.
+  const base = canonical_root(root);
   for (const path of paths) {
-    const absolute = resolve(path);
+    const absolute = canonical(path);
     if (absolute.split(sep).includes(".git")) {
       excluded += 1;
       continue;
     }
-    const here = relative(root, absolute);
-    const label = here === "" || here.startsWith("..") || isAbsolute(here) ? absolute : here.split(sep).join("/");
+    const here = under(base, absolute);
+    const label = here === null ? absolute : here.split(sep).join("/");
     relatives.push(label);
     let text: string | null = null;
     const staged = contents?.get(label);
@@ -1859,7 +1905,10 @@ function repo_root(cwd: string): string {
   if (!found.ok) {
     throw new Error(`Not inside a git repository: ${cwd}\n${found.stderr.trim()}`);
   }
-  return found.stdout.trim();
+  // Git answers with the directory the kernel resolved, and every caller compares this against a
+  // path that came from somewhere else. Saying so here rather than assuming it is what makes the
+  // comparisons downstream sound; see `canonical`.
+  return canonical_root(found.stdout.trim());
 }
 
 /** Tracked files only, so build output, caches and anything ignored never reach the scanner. */
@@ -2750,7 +2799,7 @@ function resolve_exemption_contexts(
     const occurrences = file_occurrences(root, entry.path, matcher, contents, cache);
     if (!occurrences.readable) {
       unresolved.push(
-        `${shorten(entry.source)} (${entry.path}:${entry.line} — ${entry.term}): this run could not read ` +
+        `${entry.source} (${entry.path}:${entry.line} — ${entry.term}): this run could not read ` +
           `${entry.path} under ${shorten(root)}, so it could not resolve the sentence the entry covers, and ` +
           "the entry suppresses nothing here. Not an error: a run that never saw the text has no opinion " +
           "about it. Run --audit from the repository the entry names to find out whether it is stale.",
@@ -2761,7 +2810,7 @@ function resolve_exemption_contexts(
     if (entry.anchor !== "" && covered.length === 0) {
       const digests = all.map(anchor_digest);
       mismatched.push(
-        `${shorten(entry.source)} (${entry.path}:${entry.line} — ${entry.term}): the sentence recorded as ` +
+        `${entry.source} (${entry.path}:${entry.line} — ${entry.term}): the sentence recorded as ` +
           `\`anchor\` ${entry.anchor} is not the one at that line ` +
           `${digests.length === 0 ? "any more" : `(it now reads ${digests.join(", ")})`}. The entry covers ` +
           "nothing until it is re-read: run --audit, read the sentence standing there now, and record its " +
@@ -2818,9 +2867,114 @@ function verdict_for(hits: Hit[], errors: number, gaps: number): string {
   return gaps > 0 ? "PASSED WITH GAPS" : "PASSED";
 }
 
+/**
+ * One spelling of a path, so that two of them can be compared.
+ *
+ * `resolve` is lexical: it makes a path absolute and leaves every symlink in it standing. Git is
+ * not — `rev-parse --show-toplevel` answers with the directory the kernel resolved, symlinks and
+ * all. On a machine where `/tmp` is a symlink to `/private/tmp`, one side of a comparison holds
+ * `/tmp/x/leak-terms.json` and the other `/private/tmp/x`, `relative` between them opens with
+ * `..`, and every test of the shape "is this inside that" answers no. That is how the refusal
+ * that keeps an overlay out of the tree being scanned was defeated by a spelling: the run
+ * proceeded, the overlay sat in the scan with its own terms muted inside it, and the gate printed
+ * PASSED over the one file holding the vocabulary.
+ *
+ * The last component is deliberately left alone. A symlink handed to `--path`, or listed by the
+ * walk, is content in its own right — what the repository stores for it is the target string — so
+ * resolving it would read something else under its name. Everything above it is resolved, which
+ * is where the disagreement lives. A path whose parents do not exist yet falls back to the
+ * deepest ancestor that does, so this answers for a file that is about to be written and for one
+ * that is simply missing.
+ */
+function canonical(target: string): string {
+  const absolute = resolve(target);
+  const tail = [basename(absolute)];
+  let head = dirname(absolute);
+  for (;;) {
+    try {
+      return join(realpathSync(head), ...tail);
+    } catch {
+      const up = dirname(head);
+      if (up === head) {
+        return absolute;
+      }
+      tail.unshift(basename(head));
+      head = up;
+    }
+  }
+}
+
+/**
+ * A directory resolved the whole way, its own last component included.
+ *
+ * A root is a place, not a name. Two runs pointed at one directory — one through a symlink to it,
+ * one at the directory itself — have to agree about what is inside it, so the thing a containment
+ * test measures *against* resolves completely. Contrast `canonical`, which keeps a symlink's own
+ * name because a symlink is content the scanner reads and reports under that name.
+ *
+ * A directory that is not there yet falls back to `canonical`, which resolves as much of it as
+ * exists. Nothing is inside a directory that does not exist, so the answer is the same either way
+ * and this only keeps the spelling stable.
+ */
+function canonical_root(target: string): string {
+  try {
+    return realpathSync(resolve(target));
+  } catch {
+    return canonical(target);
+  }
+}
+
+/**
+ * Where `path` sits under `root`, or `null` when it does not sit under it at all.
+ *
+ * Purely lexical, and every caller has to hand it two spellings that can be compared — see
+ * `canonical`, and see each call site for where its two came from.
+ *
+ * `..` is tested as a whole component. `startsWith("..")` also rejects `..notes`, which is a
+ * perfectly ordinary file at the root and was being reported as living outside it.
+ */
+function under(root: string, path: string): string | null {
+  const here = relative(root, path);
+  if (here === "" || isAbsolute(here) || here === ".." || here.startsWith(`..${sep}`)) {
+    return null;
+  }
+  return here;
+}
+
+/** Where this process is, resolved once, as the one thing `shorten` measures against. */
+const HERE = canonical_root(process.cwd());
+
 function shorten(path: string): string {
-  const here = relative(process.cwd(), path);
-  return here === "" || here.startsWith("..") || isAbsolute(here) ? path : here;
+  return under(HERE, canonical(path)) ?? path;
+}
+
+/**
+ * What may be said about each dictionary this run merged, in the order it merged them.
+ *
+ * An overlay's path is not a diagnostic, it is content. The workflow's second documented way to
+ * supply one is to check the private repository out and point `--terms` at it, and the private
+ * repository's own name is a term the dictionary declares — so printing the path as supplied put
+ * a declared term on a world-readable log on every run of every step, `--quiet` included, because
+ * the line it sat on is a count and counts are never silenced. A basename does not help; the file
+ * is as likely to be named after the engagement as the directory is. A digest of the path does
+ * not either: it is a confirmation oracle for anyone who can guess the path, and in CI the
+ * surrounding path is a published template.
+ *
+ * What the header actually needs is to tell one dictionary's counts from another's, and which of
+ * the paths the operator typed each one came from. An ordinal says both and carries nothing. The
+ * dictionary shipped here is named outright: it lives in this public repository, it declares no
+ * vocabulary, and it is the one whose absence would be worth noticing.
+ */
+function dictionary_labels(paths: string[]): string[] {
+  const overlays = paths.filter((path) => path !== BUILT_IN_TERMS).length;
+  let at = 0;
+  return paths.map((path) => {
+    if (path === BUILT_IN_TERMS) {
+      return shorten(path);
+    }
+    at += 1;
+    return overlays === 1 ? "the overlay given to --terms" : `overlay ${at} of ${overlays} given to --terms`;
+  });
 }
 
 /** How many dictionaries backed a run, for the header and again for the verdict line. */
@@ -2844,17 +2998,48 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
   if (matchers.length > 0) {
     return null;
   }
-  const overlays = dictionaries.filter((entry) => entry.path !== BUILT_IN_TERMS);
+  const overlays = dictionaries.filter((entry) => entry.overlay);
   const opening =
     overlays.length === 0
       ? "--require-overlay was given and no overlay dictionary was merged."
       : `--require-overlay was given and the ${overlays.length} merged ${overlays.length === 1 ? "overlay" : "overlays"} ` +
-        `(${overlays.map((entry) => shorten(entry.path)).join(", ")}) declared no terms at all.`;
+        `(${overlays.map((entry) => entry.label).join(", ")}) declared no terms at all.`;
   return (
     `${opening}\n` +
     "The dictionary shipped here declares no vocabulary, so this run would have checked no name, no " +
     "figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete run. " +
     "Merge an overlay that declares terms with --terms <path> or LEAK_TERMS."
+  );
+}
+
+/**
+ * Whether an overlay sits inside the tree this run is about to read, and why that is refused.
+ *
+ * A dictionary's own terms are muted inside it, so an overlay committed into the tree being
+ * scanned is the one file its vocabulary can never be reported in — the exact failure the split
+ * dictionary exists to prevent, and a run that reaches a verdict over it prints PASSED over the
+ * disclosure.
+ *
+ * The comparison is the whole of it, and it was wrong. `root` arrives from
+ * `git rev-parse --show-toplevel`, which answers with the directory the kernel resolved; the
+ * dictionary arrived from `resolve`, which is lexical and leaves symlinks standing. One spelling
+ * of `/tmp` against another of `/private/tmp` made `relative` open with `..`, the guard read that
+ * as "outside the repository", and the run it let through committed the overlay into the scan and
+ * exited 0. Both sides go through `canonical` here so that no caller can hand this a spelling that
+ * defeats it — see `canonical`, and see `under` for why a file called `..notes` is inside too.
+ *
+ * The refusal names the overlay by ordinal. The path is the operator's and may be vocabulary; the
+ * operator knows which of their own `--terms` arguments this was. See `dictionary_labels`.
+ */
+function overlay_inside_scan(root: string, dictionary: string, label: string): string | null {
+  if (under(canonical_root(root), canonical(dictionary)) === null) {
+    return null;
+  }
+  return (
+    `Overlay dictionary inside the tree being scanned: ${label}.\n` +
+    "A dictionary's own terms are suppressed inside it, so an overlay here would put its vocabulary in " +
+    "the single file the gate cannot report it in, and the run would pass over the disclosure. Keep the " +
+    "overlay outside this repository and merge it by path with --terms or LEAK_TERMS."
   );
 }
 
@@ -2870,12 +3055,22 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
  * to stderr before there is a report to silence, so they carry a coordinate instead. See
  * `Refusal`.
  *
+ * **An overlay's path is its content, not a coordinate.** It was read as diagnostic for as long as
+ * the only path CI supplied was `$RUNNER_TEMP/leak-terms.json`, which holds no vocabulary. The
+ * workflow's other documented way to supply an overlay is to check the private repository out and
+ * point `--terms` at it, and the private repository's own name is a term the dictionary declares —
+ * so the header put a declared term on a world-readable log on every run of every step, `--quiet`
+ * included, because the line it sat on is a count and counts are never silenced. No overlay path
+ * is printed anywhere now, on either stream, at either volume: `dictionary_labels` says which of
+ * the paths the operator gave, and `Dictionary` carries no path to print by accident. `shorten` is
+ * for repository paths, which are this public repository's own.
+ *
  * The table exists because the recurring defect here is not an unguarded block, it is an unguarded
  * block *beside a guarded one* — three separate rounds have now fixed one and left its neighbour.
  * Add a print site, add its row.
  *
  *   report_dictionaries   dictionary and term counts, per-file counts     always
- *                         the dictionary's own path, as the caller gave it always
+ *                         which of the --terms paths each one was          always — an ordinal
  *                         categories a later overlay extended                by name only when loud
  *                         duplicate term and exemption counts               always
  *                         "no vocabulary loaded" advisory                   always
@@ -2888,7 +3083,7 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
  *                         "exemption errors: N"                             always
  *                         each rejected exemption, with its reason          loud only
  *                         PASSED / PASSED WITH GAPS / FAILED and the scope   always — counts only
- *   audit_allowlist       active and rejected counts, the overlay paths     always
+ *   audit_allowlist       active and rejected counts, the overlay ordinals  always
  *                         one entry per line: path, term, category, why     loud only
  *                         each rejected exemption                           loud only
  *                         Audit PASSED / FAILED and its counts              always
@@ -2896,9 +3091,16 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
  *   print_usage           fixed text                                        always
  *   main                  a bad argument, echoed                            always — from argv
  *                         "not inside a git repository"                     always — repository paths
+ *                         the overlay-inside-the-scan refusal                always — an ordinal
  *                         the failure, on stderr, exit 2                    always — a `Refusal` or
  *                                                                           an error raised after
  *                                                                           the dictionary is closed
+ *
+ * The one path an operator supplies that is still echoed is `--path`, in the scope line and in the
+ * not-a-repository advisory. It names the tree this run was pointed at, which in every documented
+ * invocation is this public repository or a directory inside it; point it at a private checkout
+ * on a public runner and that name is published, as it would be by the `run:` line Actions echoes
+ * before this program starts. That is a property of the invocation, not of the dictionary.
  */
 
 /**
@@ -2908,6 +3110,8 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
  * one thing that does not is the list of category names a later file extended, which is overlay
  * content and was printed unguarded beside four neighbouring lines that carry only numbers. Quiet
  * keeps the fact that a merge extended rather than replaced, which is what the line is for.
+ *
+ * What names each row is an ordinal and never a path; see `dictionary_labels`.
  */
 function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
   console.log(`Dictionaries: ${describe_dictionaries(loaded)}.`);
@@ -2915,7 +3119,7 @@ function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
     const terms = `${entry.terms} ${entry.terms === 1 ? "term" : "terms"}`;
     const categories = `${entry.categories} ${entry.categories === 1 ? "category" : "categories"}`;
     const exemptions = entry.exemptions === 0 ? "" : `, ${entry.exemptions} exemptions`;
-    console.log(`  ${terms.padStart(9)} in ${categories}${exemptions}  ${shorten(entry.path)}`);
+    console.log(`  ${terms.padStart(9)} in ${categories}${exemptions}  ${entry.label}`);
     if (entry.merged.length > 0) {
       const extended = `${entry.merged.length} ${entry.merged.length === 1 ? "category" : "categories"}`;
       console.log(
@@ -3175,7 +3379,7 @@ function audit_allowlist(
   let rewritten = 0;
   let unanchored = 0;
   let uncovered = 0;
-  const sources = [...new Set(exemptions.map((entry) => shorten(entry.source)))];
+  const sources = [...new Set(exemptions.map((entry) => entry.source))];
   console.log("");
   console.log(
     `Exemptions: ${exemptions.length} active, ${rejected.length} rejected` +
@@ -4365,7 +4569,8 @@ function self_test(categories: TermCategory[]): number {
     // --require-overlay tests loaded vocabulary, not a merged file.
     const empty_overlay: Dictionary[] = [
       {
-        path: BUILT_IN_TERMS,
+        label: shorten(BUILT_IN_TERMS),
+        overlay: false,
         terms: 0,
         categories: 0,
         merged: [],
@@ -4374,7 +4579,8 @@ function self_test(categories: TermCategory[]): number {
         duplicate_exemptions: 0,
       },
       {
-        path: "/outside/leak-terms.json",
+        label: "the overlay given to --terms",
+        overlay: true,
         terms: 0,
         categories: 0,
         merged: [],
@@ -4393,6 +4599,31 @@ function self_test(categories: TermCategory[]): number {
       failures.push("--require-overlay rejected a run that did load vocabulary");
     }
 
+    // Every message the dictionary path can fail with is published. `main` prints it to stderr and
+    // returns 2, `--quiet` has never reached stderr, and on a public repository the CI log is
+    // world-readable — so the assertion is that a coordinate comes out and the entry's own text
+    // does not. `unquotable` stands in for a term, a category name and a `why` at once: it is a
+    // bare identifier, so the not-JSON fixture is exactly the shape that made the engine's own
+    // message quote a fragment of the secret back at the log.
+    //
+    // Every fixture below sits in a directory *named after* `unquotable`, because the path is the
+    // other half of the same rule and was the half nobody checked. The workflow's second way to
+    // supply an overlay is a checkout of the private repository, and the private repository's own
+    // name is a term the dictionary declares — so each assertion here reads twice now: the message
+    // may not quote the entry, and it may not quote the path the entry was read from.
+    const unquotable = "vondrelmikashecoproprietor";
+    const faults = join(directory, `${unquotable}-engagement`);
+    mkdirSync(faults, { recursive: true });
+    const overlay_terms = join(faults, "leak-terms.json");
+    const dictionary_names = dictionary_labels([BUILT_IN_TERMS, overlay_terms]);
+    const overlay_label = dictionary_names[1] as string;
+    if (overlay_label.includes(unquotable)) {
+      failures.push(
+        "the label standing in for an overlay's path was the path, so every message and every header " +
+          "carrying it publishes whatever the operator called their private checkout",
+      );
+    }
+
     // A malformed overlay fails the run rather than loading as an empty one.
     for (const [name, body] of [
       ["broken.json", "{ not json"],
@@ -4400,11 +4631,11 @@ function self_test(categories: TermCategory[]): number {
       ["scalar.json", "42"],
       ["bad-categories.json", '{"categories": {}}'],
     ] as Array<[string, string]>) {
-      const path = join(directory, name);
+      const path = join(faults, name);
       writeFileSync(path, body);
       let refused = false;
       try {
-        parse_dictionary(path);
+        parse_dictionary(path, overlay_label);
       } catch {
         refused = true;
       }
@@ -4413,13 +4644,6 @@ function self_test(categories: TermCategory[]): number {
       }
     }
 
-    // Every message the dictionary path can fail with is published. `main` prints it to stderr and
-    // returns 2, `--quiet` has never reached stderr, and on a public repository the CI log is
-    // world-readable — so the assertion is that a coordinate comes out and the entry's own text
-    // does not. `unquotable` stands in for a term, a category name and a `why` at once: it is a
-    // bare identifier, so the not-JSON fixture is exactly the shape that made the engine's own
-    // message quote a fragment of the secret back at the log.
-    const unquotable = "vondrelmikashecoproprietor";
     for (const [name, body, coordinate] of [
       // Column 26 is where the bare identifier starts, which is exactly the fragment the engine's
       // own message would have quoted back into the log.
@@ -4438,11 +4662,11 @@ function self_test(categories: TermCategory[]): number {
         "category 1, term 1",
       ],
     ] as Array<[string, string, string]>) {
-      const path = join(directory, name);
+      const path = join(faults, name);
       writeFileSync(path, body);
       let message: string | null = null;
       try {
-        parse_dictionary(path);
+        parse_dictionary(path, overlay_label);
       } catch (failure) {
         message = failure instanceof Error ? failure.message : String(failure);
       }
@@ -4453,8 +4677,8 @@ function self_test(categories: TermCategory[]): number {
       const quoted_back = message.split(unquotable).length - 1;
       if (quoted_back !== 0) {
         failures.push(
-          `the refusal for ${name} put the dictionary's own text on stderr ${quoted_back} times, and stderr is ` +
-            "the stream --quiet cannot reach",
+          `the refusal for ${name} put the dictionary's own text or its path on stderr ${quoted_back} times, ` +
+            "and stderr is the stream --quiet cannot reach",
         );
       }
       if (!message.includes(coordinate)) {
@@ -4466,20 +4690,49 @@ function self_test(categories: TermCategory[]): number {
     // `try`, so a permission or device error was reported as invalid JSON and sent somebody hunting
     // for a missing brace in a file they were never allowed to read. A directory is the portable
     // way to make the open fail: `chmod 000` does not stop root, which is who CI often is.
-    const unopenable = join(directory, "fault-not-a-file");
+    const unopenable = join(faults, "fault-not-a-file");
     mkdirSync(unopenable, { recursive: true });
     let io_message = "";
     try {
-      parse_dictionary(unopenable);
+      parse_dictionary(unopenable, overlay_label);
     } catch (failure) {
       io_message = failure instanceof Error ? failure.message : String(failure);
     }
     if (io_message.includes("not valid JSON") || !io_message.includes("could not be read")) {
       failures.push("an overlay that could not be opened at all was reported as a syntax error");
     }
+    if (io_message.includes(unquotable)) {
+      failures.push("the open failure named the path it could not open, and the path is the private checkout");
+    }
 
-    // And an error the runtime raised, rather than one written here, never crosses at all.
-    if (withheld(new Error(`choked on "${unquotable}"`), [BUILT_IN_TERMS]).message.includes(unquotable)) {
+    // A missing overlay is the one dictionary failure with nothing to withhold: this file wrote
+    // the sentence and the sentence names no file. It used to be a plain `Error`, which `main`'s
+    // fence converted into `withheld` — telling an operator their message was suppressed because a
+    // runtime error quotes what it choked on, when nothing had choked on anything and the file was
+    // simply absent. The assertion is that it crosses the fence as itself.
+    let missing: unknown = null;
+    try {
+      load_dictionaries([join(faults, "no-such-overlay.json")]);
+    } catch (failure) {
+      missing = failure;
+    }
+    if (!(missing instanceof Refusal)) {
+      failures.push(
+        "a missing overlay was not a Refusal, so main's fence discards the one message that says what is " +
+          "actually wrong and reports a withheld runtime error instead",
+      );
+    }
+    const missing_message = missing instanceof Error ? missing.message : String(missing);
+    if (!missing_message.includes("not found")) {
+      failures.push("a missing overlay was reported as something other than a missing overlay");
+    }
+    if (missing_message.includes(unquotable)) {
+      failures.push("the missing-overlay refusal echoed the path it could not find, and that path is the secret");
+    }
+
+    // And an error the runtime raised, rather than one written here, never crosses at all — nor
+    // does the list of what was being merged when it did.
+    if (withheld(new Error(`choked on "${unquotable}"`), dictionary_names).message.includes(unquotable)) {
       failures.push("an error out of the runtime carried whatever it choked on to stderr, and that is the dictionary");
     }
 
@@ -4551,7 +4804,8 @@ function self_test(categories: TermCategory[]): number {
     // The same rule for the header, whose merge line names the categories a later file extended.
     const extending: Dictionary[] = [
       {
-        path: "/outside/leak-terms.json",
+        label: overlay_label,
+        overlay: true,
         terms: 1,
         categories: 1,
         merged: [`${unquotable}_category`],
@@ -4574,6 +4828,134 @@ function self_test(categories: TermCategory[]): number {
     }
     if (!quiet_header.out.includes("extended rather than replaced")) {
       failures.push("a quiet header dropped the fact of the merge, so a partial dictionary reads as a full one");
+    }
+
+    // The header line the counts sit on, with an overlay whose *path* is the disclosure.
+    //
+    // This is the case `--quiet` was never able to cover and nobody had asked it to. The line
+    // carries a term count, counts are printed always by design, and the path was printed beside
+    // them exactly as the operator typed it — so an operator who followed the workflow's second
+    // documented option, a checkout of the private repository, published its name on stdout on
+    // every run of every step. The residue was read as benign because the option CI is wired to
+    // writes the secret to `$RUNNER_TEMP/leak-terms.json`, which holds no vocabulary; its sibling
+    // was never checked. Loud and quiet are both asserted, because stdout is the same log either
+    // way and this one is not a volume control.
+    const named_path: Dictionary[] = [
+      {
+        label: dictionary_labels([BUILT_IN_TERMS, join(faults, "checkout", "leak-terms.json")])[1] as string,
+        overlay: true,
+        terms: 3,
+        categories: 2,
+        merged: [],
+        duplicate_terms: 0,
+        exemptions: 4,
+        duplicate_exemptions: 0,
+      },
+    ];
+    const loud_path_header = streams(() => {
+      report_dictionaries(named_path, false);
+    });
+    const quiet_path_header = streams(() => {
+      report_dictionaries(named_path, true);
+    });
+    const echoed =
+      named(loud_path_header.out) +
+      named(loud_path_header.err) +
+      named(quiet_path_header.out) +
+      named(quiet_path_header.err);
+    if (echoed !== 0) {
+      failures.push(
+        `the header printed an overlay's own path ${echoed} times across the two volumes, and an overlay's ` +
+          "path is the private repository's name",
+      );
+    }
+    if (!quiet_path_header.out.includes("3 terms") || !quiet_path_header.out.includes("4 exemptions")) {
+      failures.push(
+        "the header dropped the counts along with the path, and the counts are why the line survives --quiet",
+      );
+    }
+
+    // The refusal that keeps an overlay out of the tree being scanned, against the one input that
+    // defeated it: two spellings of one directory.
+    //
+    // `git rev-parse --show-toplevel` answers with the path the kernel resolved and `resolve` does
+    // not resolve anything, so on this machine a repository under `/tmp` is `/private/tmp/...` to
+    // one side of the comparison and `/tmp/...` to the other. `relative` between them opens with
+    // `..`, the guard read that as "the overlay is outside the repository", and the run went ahead
+    // and scanned the overlay with its own vocabulary muted inside it — PASSED, exit 0, over the
+    // one file holding the dictionary. A symlink reproduces it exactly and everywhere.
+    const guarded = join(directory, "guard-real");
+    mkdirSync(guarded, { recursive: true });
+    const guard_terms = join(guarded, "leak-terms.json");
+    writeFileSync(guard_terms, '{"categories":[]}');
+    const spelt = join(directory, "guard-link");
+    symlinkSync(guarded, spelt);
+    if (overlay_inside_scan(guarded, join(spelt, "leak-terms.json"), overlay_label) === null) {
+      failures.push(
+        "an overlay inside the tree being scanned was let through because the root and the overlay were " +
+          "spelt differently, and the run it allows prints PASSED over the file holding the dictionary",
+      );
+    }
+    if (overlay_inside_scan(spelt, guard_terms, overlay_label) === null) {
+      failures.push("the same disagreement the other way round — a symlinked root against a resolved overlay");
+    }
+    if (overlay_inside_scan(guarded, guard_terms, overlay_label) === null) {
+      failures.push("an overlay plainly inside the tree being scanned was not refused at all");
+    }
+    // A file whose name merely opens with two dots is inside the root; `startsWith("..")` said it
+    // was outside, which is the same defect at one character's remove.
+    const dotted = join(guarded, "..leak-terms.json");
+    writeFileSync(dotted, '{"categories":[]}');
+    if (overlay_inside_scan(guarded, dotted, overlay_label) === null) {
+      failures.push("an overlay whose filename opens with two dots was read as living outside the tree");
+    }
+    if (overlay_inside_scan(guarded, join(directory, "outside-terms.json"), overlay_label) !== null) {
+      failures.push(
+        "an overlay genuinely outside the tree being scanned was refused, which forbids the only safe setup",
+      );
+    }
+    const guard_refusal = overlay_inside_scan(guarded, join(spelt, "leak-terms.json"), overlay_label) ?? "";
+    if (guard_refusal.includes(unquotable) || guard_refusal.includes(guarded)) {
+      failures.push("the overlay-inside-the-scan refusal echoed the overlay's path, and that path is the secret");
+    }
+
+    // The staged bytes have to be found under the name the scan will ask for them by, and the two
+    // are computed in different functions. They agree today because `main` hands both a root git
+    // resolved and paths joined onto it — an invariant nobody had written down, in a file that has
+    // now been bitten twice by two spellings of one directory. The root below is deliberately the
+    // unresolved spelling while the file list is the resolved one, which is the disagreement, and a
+    // key that misses does not fail loudly: the path is reported as "listed in the index and
+    // nothing readable is staged under it" and the staged disclosure is never matched at all.
+    const staged_repo = join(directory, "staged-fixture");
+    mkdirSync(staged_repo, { recursive: true });
+    const git_here = (...args: string[]): void => {
+      Bun.spawnSync(["git", "-c", "user.email=self-test@example.invalid", "-c", "user.name=self test", ...args], {
+        cwd: staged_repo,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    };
+    Bun.spawnSync(["git", "init", "--quiet", "-b", "main", staged_repo], { stdout: "pipe", stderr: "pipe" });
+    writeFileSync(join(staged_repo, "kept.md"), "an ordinary line\n");
+    git_here("add", "-A");
+    git_here("commit", "--no-verify", "--quiet", "-m", "baseline");
+    writeFileSync(join(staged_repo, "staged.md"), "the version being committed names zarquilon\n");
+    git_here("add", "staged.md");
+    // What is on disk after staging is clean, so a scan that reads the working tree finds nothing
+    // and a scan that reads the index finds the disclosure. Only one of those is what gets pushed.
+    writeFileSync(join(staged_repo, "staged.md"), "the working copy is clean and was never committed\n");
+    const staged_resolved = canonical_root(staged_repo);
+    const staged_files = list_repository_files(staged_resolved, true);
+    const staged_bytes = staged_contents(staged_repo, staged_files);
+    const staged_scan = scan_files(staged_files, matchers, staged_repo, new Map(), staged_bytes, null);
+    if (!staged_scan.hits.some((hit) => hit.term === "zarquilon" && hit.source === "staged.md")) {
+      failures.push(
+        "the staged bytes were not found under the name the scan looks them up by, so a disclosure that " +
+          "was about to be committed read as a path with nothing staged under it and was never matched",
+      );
+    }
+    if (staged_scan.unreadable.length !== 0) {
+      failures.push("a staged path was reported as having nothing staged under it while the index held its bytes");
     }
 
     // A term carrying a mark with no glyph normalises the way the text it hunts normalises, or it
@@ -4898,44 +5280,175 @@ function self_test(categories: TermCategory[]): number {
       failures.push(`an unresolvable path was read as the object id "${answers[3]}"`);
     }
 
-    // A repository that names its objects with SHA-256. The terminator `--format=%B%n%H` writes is
-    // sixty-four hex there, a forty-hex terminator matches no line of it, and every commit message
-    // in the history went unread under a printed PASSED.
+    // A repository that names its objects with SHA-256, carrying enough history to reach every
+    // reader whose answer depends on how wide an object id is.
+    //
+    // The terminator `--format=%B%n%H` writes is sixty-four hex here, a forty-hex terminator
+    // matches no line of it, and every commit message in such a history went unread under a
+    // printed PASSED. That is the repair this fixture was first built for, and it was the only
+    // reader it reached. Six others hand back an object id of their own, and all six are correct
+    // and were reachable by nothing, because a single-commit repository holding one file is too
+    // small to ask them anything: it supersedes no blob, so no history hit is ever attributed and
+    // neither `introducing_commits` nor `resolve_specs` runs at this width at all; nothing is
+    // inherited, so no candidate is ever compared against a parent; its root tree holds one entry,
+    // which any stride parses; and its index is never asked for a name, nor its bytes hashed,
+    // because the scan below is handed the object graph directly.
+    //
+    // So the fixture supersedes one blob, inherits another, hides a name behind a shared one, and
+    // has its own digest and its own index read back. Seven checks follow: two on the terminator,
+    // one on the pair of object-id parses the attribution runs through, one on the parent
+    // comparison those parses feed, one on the tree stride, one on the digest and one on the
+    // index. Between them they also put every reader that must take *no* width — the batch-check
+    // descriptions, the batch reads, the `rev-list --objects` split — in front of sixty-four-hex
+    // ids, so a fixed offset written into any of those dies here too.
     const wide = join(directory, "sha256-fixture");
     mkdirSync(wide, { recursive: true });
     Bun.spawnSync(["git", "init", "--quiet", "--object-format=sha256", "-b", "main", wide], {
       stdout: "pipe",
       stderr: "pipe",
     });
-    writeFileSync(join(wide, "ordinary.txt"), "a line with nothing in it at all\n");
-    Bun.spawnSync(["git", "add", "-A"], { cwd: wide, stdout: "pipe", stderr: "pipe" });
-    Bun.spawnSync(
-      [
-        "git",
-        "-c",
-        "user.email=self-test@example.invalid",
-        "-c",
-        "user.name=self test",
-        "commit",
-        "--no-verify",
-        "--quiet",
-        "-m",
-        "a commit message carrying zarquilon",
-      ],
-      { cwd: wide, stdout: "pipe", stderr: "pipe" },
-    );
+    const wide_commit = (message: string): string => {
+      Bun.spawnSync(["git", "add", "-A"], { cwd: wide, stdout: "pipe", stderr: "pipe" });
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.email=self-test@example.invalid",
+          "-c",
+          "user.name=self test",
+          "commit",
+          "--no-verify",
+          "--quiet",
+          "-m",
+          message,
+        ],
+        { cwd: wide, stdout: "pipe", stderr: "pipe" },
+      );
+      return git_text(["rev-parse", "HEAD"], wide).stdout.trim();
+    };
+    // Three ordinary lines above the shared one, because the id git gives these exact bytes is
+    // what decides whether the hidden name below can prove anything at all: see the precondition
+    // a few lines down.
+    const wide_shared = `${"an ordinary line\n".repeat(3)}a line with nothing in it at all\n`;
+    writeFileSync(join(wide, "ordinary.txt"), wide_shared);
+    // The same bytes under a second name. `rev-list --objects` prints a blob once, under whichever
+    // name it walked first, so this second name is carried by nothing but the tree object — and it
+    // sorts directly behind `ordinary.txt` there, which is the entry whose id a narrow stride
+    // walks into the middle of.
+    writeFileSync(join(wide, "shared-name-zarquilon.txt"), wide_shared);
+    writeFileSync(join(wide, "superseded.md"), "the first version carries zarquilon\n");
+    // A blob the second commit inherits rather than writes, and then files under a second name of
+    // its own. `--find-object` lists that second commit, because its diff does introduce the
+    // object — somewhere else — while its tree still holds it here and so does its parent's. That
+    // is the one shape in which the parent ids on the `%H %P` line decide anything: a candidate
+    // whose parent is not seen holding the blob is reported as having added it.
+    //
+    // Note what is and is not at risk there. The ids become `<parent>:<path>` requests, and git
+    // resolves any unambiguous abbreviation, so *truncating* a parent to forty hex changes nothing
+    // — measured: `cat-file --batch-check` answers a forty-character prefix of a sixty-four-hex
+    // commit id with the blob. What breaks is *rejecting* one for being too wide, which is the
+    // shape every repair in this file has taken, and a rejected parent reads as a parent that did
+    // not hold the blob. The SHA-1 fixtures cannot see it: at their width nothing is rejected.
+    const wide_inherited = "a version no commit ever replaces, holding zarquilon\n";
+    writeFileSync(join(wide, "inherited.md"), wide_inherited);
+    const wide_added = wide_commit("a commit message carrying zarquilon");
+    writeFileSync(join(wide, "superseded.md"), "the replacement line says nothing at all\n");
+    // `zz-` so it sorts behind `inherited.md`, which keeps the walked path — the one the label is
+    // built for, and the only one whose parent still holds the blob — the first of the two.
+    writeFileSync(join(wide, "zz-copy-of-inherited.md"), wide_inherited);
+    const wide_replaced = wide_commit("a second commit message with nothing in it");
+    const wide_shared_id = git_text(["rev-parse", "HEAD:ordinary.txt"], wide).stdout.trim();
     if (object_format(wide) !== "sha256") {
       failures.push("this git could not make a sha256 repository, so the wide-hash fixture proves nothing");
+    } else if (wide_added === "" || wide_replaced === "" || wide_added === wide_replaced) {
+      failures.push("the sha256 fixture did not record two commits, so its superseded blob proves nothing");
+    } else if (git_text(["rev-list", "--objects", "--all"], wide).stdout.includes("shared-name-zarquilon")) {
+      failures.push(
+        "`rev-list --objects` named the sha256 fixture's shared path itself, so finding that name no longer " +
+          "proves the walk read it out of a tree object",
+      );
+    } else if (!Buffer.from(wide_shared_id, "hex").subarray(20).includes(0x20)) {
+      // A tree walk that strides the narrow width lands twelve bytes short, inside the id it was
+      // supposed to step over, and then looks for the space that opens the next entry's mode — so
+      // it finds its place again, and loses nothing, unless one of those twelve bytes is itself a
+      // space. Which id this is depends on the bytes written above and on nothing else, so the
+      // content was chosen until git named it one that carries one.
+      failures.push(
+        "the sha256 fixture's shared blob is named by an id holding no space byte past the narrow width, so a " +
+          "walk striding that width would recover the hidden name anyway and the check below would pass " +
+          "against a stride that is wrong — the file contents above decide this, and these no longer do",
+      );
     } else {
       const widely = scan_history(wide, null, matchers, nothing_covered);
-      if (widely.commits !== 1) {
+      if (widely.commits !== 2) {
         failures.push(
-          `${widely.commits} commit messages were read out of a sha256 repository holding 1: the terminator git ` +
+          `${widely.commits} commit messages were read out of a sha256 repository holding 2: the terminator git ` +
             "writes is an id in the repository's own hash, and a narrower one matches no line of the log",
         );
       }
       if (!widely.hits.some((hit) => hit.term === "zarquilon" && hit.source.startsWith("commit "))) {
         failures.push("a term in a sha256 repository's commit message was not found, and the run would say PASSED");
+      }
+      // The commits `--find-object` lists and the trees `cat-file --batch-check` resolves are both
+      // named in this repository's hash. A reader that only knows the narrow one lists no
+      // candidate, or resolves no tree entry to compare against, and either way the attribution
+      // collapses to "no commit in the scanned range adds it" — an operator told there is nowhere
+      // to cut, about the one blob a rewrite exists to remove.
+      const wide_wanted = `history:superseded.md (added in ${wide_added.slice(0, 12)})`;
+      const wide_hit = widely.hits.find((hit) => hit.path === "superseded.md");
+      if (wide_hit === undefined) {
+        failures.push("a superseded blob in a sha256 repository was not found in the history at all");
+      } else if (wide_hit.source !== wide_wanted) {
+        failures.push(
+          `a superseded blob in a sha256 repository reads "${wide_hit.source}" and not "${wide_wanted}": the ` +
+            "commit that added it, and the trees compared to prove it added it, are both named sixty-four hex " +
+            "wide here",
+        );
+      }
+      // The blob the second commit inherited. Both commits are candidates and both trees hold it
+      // here, so the whole answer turns on comparing each candidate against its parents — which is
+      // the only thing the parent ids on the log line are ever used for.
+      const inherited_wanted = `history:inherited.md (added in ${wide_added.slice(0, 12)})`;
+      const inherited_hit = widely.hits.find((hit) => hit.path === "inherited.md");
+      if (inherited_hit === undefined) {
+        failures.push("a blob carried unchanged through a sha256 repository's second commit was not found at all");
+      } else if (inherited_hit.source !== inherited_wanted) {
+        failures.push(
+          `a blob a sha256 repository's second commit inherited reads "${inherited_hit.source}" and not ` +
+            `"${inherited_wanted}": a parent this walk did not keep reads as a parent that did not hold the ` +
+            "blob, and an operator is sent to cut at a commit that only carried it",
+        );
+      }
+      if (!widely.hits.some((hit) => hit.path === "shared-name-zarquilon.txt")) {
+        failures.push(
+          "a term in a sha256 repository's path that only a tree object carries was not found: a tree entry " +
+            "ends in a raw object id as wide as the repository's hash, and a walk striding the narrow width " +
+            "reads the entry behind it out of the middle of that id",
+        );
+      }
+      // The digest that decides what a clearance may skip is taken in the repository's own hash
+      // too. Computed in the narrow one it names nothing git ever wrote, so no tracked blob is
+      // ever recognised as read: every one of them is scanned a second time under a `history:`
+      // label, and the report's count of blobs the working-tree pass did not reproduce is the
+      // whole index.
+      const wide_digest = blob_id("sha256", new TextEncoder().encode(wide_shared));
+      if (wide_digest !== wide_shared_id) {
+        failures.push(
+          `a sha256 repository's blob is hashed to ${wide_digest.slice(0, 12)} where git names the same bytes ` +
+            `${wide_shared_id.slice(0, 12)}, so a clearance there would recognise nothing it had read`,
+        );
+      }
+      // And the other half of that comparison: the names the index lists, which is what the report
+      // counts a run's own digests against. Nothing is skipped on the strength of this set, so a
+      // wrong reading of it costs a number rather than a scan — but it is a number an operator
+      // reads as "this tree is dirty", and at this width nothing else in the self-test asks the
+      // index for a name at all.
+      if (!index_blobs(wide).has(wide_shared_id)) {
+        failures.push(
+          `the index of a sha256 repository does not list ${wide_shared_id.slice(0, 12)}, the name git gives a ` +
+            "blob it holds, so the count of committed blobs a run did not reproduce is taken against names " +
+            "that are not the repository's",
+        );
       }
     }
 
@@ -5178,7 +5691,12 @@ function self_test(categories: TermCategory[]): number {
         "as added by the oldest commit listed, which is the one whose diff took it away; an unresolvable " +
         "object request is read as no object rather than as the head of its own request; a term in the " +
         "commit message of a repository that names its objects with sha256 is read, where a forty-hex " +
-        "terminator read no message in it at all and printed PASSED; " +
+        "terminator read no message in it at all and printed PASSED, and in that same repository a " +
+        "superseded blob is still attributed to the commit that added it, a blob the second commit inherited " +
+        "is not attributed to that second commit, a path no `rev-list --objects` line carries is still read " +
+        "out of the tree object that holds it, and that repository's own bytes are still hashed to the name " +
+        "git gives them and found under that name in its index, all five of which take an object id at the " +
+        "width this repository names them; " +
         "the clearance skips only blobs whose bytes this run hashed as it read them, so the " +
         "committed version of a file carrying an unstaged edit and of one hidden behind a skip-worktree bit " +
         "are both read here rather than skipped, where the index rule they replaced skipped both; a run one " +
@@ -5197,10 +5715,15 @@ function self_test(categories: TermCategory[]): number {
         "second; a term carrying a zero-width space, a soft hyphen or a directional mark still matches the " +
         "text those marks are stripped out of, and one that normalises away to nothing is refused rather " +
         "than counted as a term this run loaded; an overlay that cannot be opened is reported as an open " +
-        "failure and not as a syntax one; every refusal the dictionary path can raise names a coordinate — " +
-        "a category and term index, or a line and column — and quotes neither the entry nor the token the " +
-        "engine choked on, and an error raised anywhere else while the dictionary is open is withheld " +
-        "outright; a quiet report and a quiet header keep their verdict and their counts and put no term, " +
+        "failure and not as a syntax one, and one that is not there at all is reported as not being there " +
+        "rather than as a withheld runtime error; every refusal the dictionary path can raise names a " +
+        "coordinate — a category and term index, or a line and column — and quotes neither the entry, nor " +
+        "the token the engine choked on, nor the path the file was read from, and an error raised anywhere " +
+        "else while the dictionary is open is withheld outright; the header prints an overlay's counts and " +
+        "never its path, at either volume, so an overlay under a directory named after the engagement " +
+        "publishes nothing; an overlay inside the tree about to be scanned is refused however the two are " +
+        "spelt, through a symlink or with a filename opening on two dots, and one genuinely outside it is " +
+        "not; a quiet report and a quiet header keep their verdict and their counts and put no term, " +
         "no category name and no reason on either stream; and a hit exits 1.",
     );
     return 0;
@@ -5236,9 +5759,20 @@ function walk_path(target: string): string[] {
  * The bytes a commit will actually contain. Reading the working tree instead let a clean staged
  * version pass while the dirty file on disk was the one read, and the reverse: `git add` a clean
  * file, edit it, and the gate reported on text that was never going to be committed.
+ *
+ * The keys are the labels `scan_files` will look these bytes up by, computed the same way and not
+ * merely in a way that happens to agree. They agree today because `root` is canonical and every
+ * path was joined onto it, but that is an invariant nobody states and this file has already been
+ * bitten twice by two spellings of one directory; see `canonical`. A key that misses reads as a
+ * path listed in the index with nothing staged under it, which is a sentence about a stale entry
+ * or a submodule and would be entirely untrue.
  */
 function staged_contents(root: string, files: string[]): Map<string, Uint8Array> {
-  const relatives = files.map((path) => relative(root, path).split(sep).join("/"));
+  const base = canonical_root(root);
+  const relatives = files.map((path) => {
+    const absolute = canonical(path);
+    return under(base, absolute)?.split(sep).join("/") ?? absolute;
+  });
   const readable = relatives.filter((path) => !path.includes("\n"));
   const bodies = read_objects(
     root,
@@ -5358,7 +5892,11 @@ function main(): number {
   }
 
   try {
-    const paths = [BUILT_IN_TERMS, ...options.terms.map((path) => resolve(path))];
+    // `canonical` and not `resolve`: these paths are compared against a repository root that git
+    // resolved, and a spelling that disagrees defeats `overlay_inside_scan`. `labels` is all any
+    // message may say about them; see `dictionary_labels`.
+    const paths = [BUILT_IN_TERMS, ...options.terms.map((path) => canonical(path))];
+    const labels = dictionary_labels(paths);
     // Everything inside this fence has the dictionary open, so an error escaping it carries the
     // dictionary unless this file wrote the message. The outer catch prints to stderr, which
     // `--quiet` does not reach and must not — an operator whose overlay is broken has to be told
@@ -5369,7 +5907,7 @@ function main(): number {
       loaded = load_dictionaries(paths);
       matchers = build_matchers(loaded.categories);
     } catch (failure) {
-      throw failure instanceof Refusal ? failure : withheld(failure, paths);
+      throw failure instanceof Refusal ? failure : withheld(failure, labels);
     }
     const { categories, exemptions, rejected, dictionaries, quoted } = loaded;
     report_dictionaries(dictionaries, options.quiet);
@@ -5377,7 +5915,7 @@ function main(): number {
     if (options.require_overlay) {
       const shortfall = overlay_shortfall(dictionaries, matchers);
       if (shortfall !== null) {
-        throw new Error(shortfall);
+        throw new Refusal(shortfall);
       }
     }
 
@@ -5413,12 +5951,12 @@ function main(): number {
     const scopes: string[] = [];
 
     if (options.path !== null) {
-      const target = resolve(options.path);
+      const target = canonical(options.path);
       const base = statSync(target).isDirectory() ? target : dirname(target);
       // Report paths relative to the repository, not to the scanned subtree, so an exemption
       // written once matches whether the run covered one directory or every tracked file.
       const found = git_text(["rev-parse", "--show-toplevel"], base);
-      root = found.ok ? found.stdout.trim() : base;
+      root = found.ok ? canonical_root(found.stdout.trim()) : base;
       files = walk_path(target);
       if (!found.ok) {
         // Said out loud, because every exemption in the overlay names a path inside a repository
@@ -5435,18 +5973,13 @@ function main(): number {
       files = list_repository_files(root, options.mode === "staged");
     }
 
-    // A dictionary mutes its own terms inside itself, so an overlay committed into the tree being
-    // scanned would be the one file its own vocabulary could never be reported in — which is the
-    // exact failure the split dictionary exists to prevent. Refuse the run rather than pass it.
-    for (const dictionary of paths) {
-      const here = relative(root, dictionary);
-      if (dictionary !== BUILT_IN_TERMS && here !== "" && !here.startsWith("..") && !isAbsolute(here)) {
-        throw new Error(
-          `Overlay dictionary inside the repository being scanned: ${here}\n` +
-            "A dictionary's own terms are suppressed inside it, so committing this one here would put its " +
-            "vocabulary in the single file the gate cannot report it in. Keep the overlay outside this " +
-            "repository and merge it by path with --terms or LEAK_TERMS.",
-        );
+    for (const [index, dictionary] of paths.entries()) {
+      if (dictionary === BUILT_IN_TERMS) {
+        continue;
+      }
+      const refusal = overlay_inside_scan(root, dictionary, labels[index] as string);
+      if (refusal !== null) {
+        throw new Refusal(refusal);
       }
     }
 

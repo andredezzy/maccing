@@ -149,37 +149,145 @@ export class MapStaleError extends Error {
 /** One read table: key to raw value, in declaration order. */
 type Table = Map<string, string>;
 
-/** Which character a fence is written with, and how long its run is. A closer has to match both,
- *  so both travel together rather than as a bare depth. */
-type Fence = { char: string; width: number };
+/** Which character a fence is written with, how long its run is, and the column its container's
+ *  content begins at. A closer has to match the character and the width, and is measured against
+ *  the same container its opener was, so all three travel together rather than as a bare depth. */
+type Fence = { char: string; width: number; base: number };
 
-/** Three or more backticks or three or more tildes, indented at most three spaces, and whatever
- *  info string follows. A closer is the same run followed by nothing but whitespace — and by the
- *  carriage return a map written on Windows leaves at the end of every line, which the rest of
- *  this reader absorbs the same way: the heading pattern takes it as trailing whitespace and a
- *  table cell is trimmed. It is spelled out in both patterns rather than assumed, because `.` does
- *  not cross a carriage return and `$` does not sit before one, so an info string anchored the
- *  obvious way makes every fence in a CRLF document invisible and every illustration in it a
- *  binding. */
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)/;
-const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/;
+/** Three or more backticks or three or more tildes and whatever info string follows, and the same
+ *  run followed by nothing but whitespace. Neither pattern carries an indent bound of its own,
+ *  because indentation is measured in columns against the containing block by `block_position`
+ *  below and a regular expression cannot count columns; both are matched from the offset that scan
+ *  returns. Both absorb the carriage return a map written on Windows leaves at the end of every
+ *  line, which the rest of this reader absorbs the same way: the heading pattern takes it as
+ *  trailing whitespace and a table cell is trimmed. It is spelled out rather than assumed, because
+ *  `.` does not cross a carriage return and `$` does not sit before one, so an info string
+ *  anchored the obvious way makes every fence in a CRLF document invisible and every illustration
+ *  in it a binding. */
+const FENCE_OPEN = /(`{3,}|~{3,})(.*)/y;
+const FENCE_CLOSE = /(`{3,}|~{3,})[ \t]*\r?$/y;
+
+/** A bullet or an ordered-list marker, matched where a container's content begins. The whitespace
+ *  after it is looked at rather than consumed, so `-` alone on a line is a marker and `---` is
+ *  not one. */
+const LIST_MARKER = /([-+*]|\d{1,9}[.)])(?=[ \t]|\r?$)/y;
+
+/** Nothing but whitespace. A blank line closes no list item, so the block scan leaves it alone. */
+const BLANK = /^[ \t]*\r?$/;
 
 /**
- * The fence a line opens, or null where it opens none.
+ * How far past its containing block's content column a line may sit and still be read at all.
+ * Four columns is an indented code block in CommonMark, and this is the only place the number
+ * appears. The three-space allowance a fence opener is usually quoted with is the same rule from
+ * the other side — a fourth column makes the run code rather than a fence — so spelling it a
+ * second time inside the opener pattern would leave one of the two spellings unreachable, and an
+ * unreachable bound is one nothing can test.
+ */
+const CODE_INDENT = 4;
+
+/** Where the text on a line begins, walking from `offset` at `column`: the character offset it
+ *  starts at and the column that offset sits at. A tab advances to the next four-column stop,
+ *  which is how CommonMark counts one. */
+function text_start(line: string, offset: number, column: number): { offset: number; column: number } {
+  let at = offset;
+  let col = column;
+  for (; at < line.length; at++) {
+    const char = line[at];
+    if (char === " ") {
+      col += 1;
+      continue;
+    }
+    if (char === "\t") {
+      col += 4 - (col % 4);
+      continue;
+    }
+    break;
+  }
+  return { offset: at, column: col };
+}
+
+/**
+ * Where a line sits in the document's block structure: the column its innermost open container's
+ * content begins at, and the offset and column its own text begins at. `open` is the stack of
+ * content columns of the list items still open, mutated in place as items close and start.
+ *
+ * CommonMark measures both of this reader's indent rules — the three-space allowance on a fence
+ * opener, and the four columns that make an indented code block — from the containing block's
+ * content column rather than from the left margin. A reader carrying no block structure has to
+ * substitute a constant, and both constants are wrong in a way that costs something:
+ *
+ *   - Bounded absolutely at three, a correctly written fence inside a list item is not a fence.
+ *     The illustration it holds is read as live content, and where it is the only
+ *     `| field | value |` table under its heading it is installed as the binding with nothing
+ *     said. Measured: an illustration declaring `999/2/8` with a `shared_account_ceiling` of 99,
+ *     fenced at column four under a nested bullet, bound over a live `997/3/6` plan of ceiling 3.
+ *   - Unbounded, a run of backticks that CommonMark says is indented code opens a fence instead,
+ *     and everything up to its closer — or to the end of the document, where an indented example
+ *     has none — is skipped. A table the reader can see is then not there for the parser, which
+ *     is the same silent bind wearing the other shoe: the live table is what gets swallowed, and
+ *     an illustration below it is what is left to bind.
+ *
+ * Neither direction is safe, so choosing between them is only a guess about which document is
+ * rarer. Tracking the container removes the guess for the price of the scan below: list items are
+ * the containers a map written by a person actually uses, and once their content columns are
+ * known both rules are measured where the spec measures them.
+ *
+ * Where this stays approximate it is approximate towards refusing, which is the direction that
+ * fails out loud. A paragraph continued lazily under a list item closes the item here where a
+ * renderer keeps it open, so a fence written after one is measured against the margin and can be
+ * read as content — a second table, refused by name, and an author told which section to correct.
+ * Block quotes are not containers here at all, and that is the one gap measured rather than
+ * argued. A differential of 288 generated documents — six containers, four fence spellings, six
+ * indents, with and without a live table — against markdown-it agreed on 276, and every one of the
+ * twelve disagreements is an *unfenced* table inside a quote. Not one fenced quoted document
+ * disagreed, in either spelling or at any indent: a `>`-prefixed opener is invisible to this scan,
+ * but so is everything it would have hidden, because `cells_of` refuses a `>`-prefixed line. What
+ * the twelve cost is the second-table refusal — a quoted illustration beside a live table is not a
+ * second table here, so the live one binds and nobody is told to fence the quote. Reading quoted
+ * content would mean making `>` a container in `cells_of` as well, which is a larger change than
+ * the fault it closes.
+ */
+function block_position(line: string, open: number[]): { base: number; offset: number; column: number } {
+  let at = text_start(line, 0, 0);
+  while (open.length > 0 && at.column < (open[open.length - 1] as number)) {
+    open.pop();
+  }
+  let base = open.length > 0 ? (open[open.length - 1] as number) : 0;
+
+  // Markers are walked off the front rather than stepped over, so a fence opened on the marker's
+  // own line — `- ~~~markdown`, which is how a short illustration gets written — is a fence, and
+  // so is the inner one in `- - ~~~`.
+  while (at.column - base < CODE_INDENT) {
+    LIST_MARKER.lastIndex = at.offset;
+    const marker = LIST_MARKER.exec(line);
+    if (marker === null) {
+      break;
+    }
+    const marker_end = at.column + (marker[0] as string).length;
+    const after = text_start(line, LIST_MARKER.lastIndex, marker_end);
+    // An item holding nothing, or holding something five or more columns along, starts its content
+    // one column past the marker: in the second case what follows is an indented code block, and
+    // measuring the item from it would turn that code into ordinary content.
+    const empty = after.offset >= line.length || line[after.offset] === "\r";
+    base = empty || after.column - marker_end > CODE_INDENT ? marker_end + 1 : after.column;
+    open.push(base);
+    if (empty) {
+      return { base, offset: after.offset, column: base };
+    }
+    at = after;
+  }
+  return { base, offset: at.offset, column: at.column };
+}
+
+/**
+ * The fence a line opens, or null where it opens none. `at` is the line's place in the block
+ * structure, already known to be content rather than code.
  *
  * Both spellings CommonMark defines are read here. A map written with tildes has to parse the same
  * as one written with backticks, or the instruction to fence an illustration is true of half the
  * fences a renderer honours: an author who tilde-fences a worked example is told to fence it and
  * then refused for the second table anyway, and where the tilde-fenced example is the only table
  * under its heading it is installed as the binding with nothing said.
- *
- * Up to three spaces of indent is still a fence. Four is an indented code block, which this parser
- * does not implement and does not need to: a run indented that far hides nothing here, so an
- * illustration written that way is a second table and refused by name. It is the one shape where
- * this reader and a renderer disagree — rendered, the four spaces make a code block and no table is
- * drawn there at all — and it disagrees out loud, which is the only direction a disagreement is
- * allowed to go. Reading a deep enough indent as a fence would hide a table instead, which is the
- * failure the whole guard exists to close.
  *
  * The info string is free text with one exception: a backtick fence's may not contain a backtick,
  * because a line of prose carrying inline code is not the start of a block. A tilde fence has no
@@ -188,7 +296,8 @@ const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/;
  * draws it, so an author who checks the preview and sees a code block is not looking at something
  * this reader treats as a binding, nor the reverse.
  */
-function fence_opened_by(line: string): Fence | null {
+function fence_opened_by(line: string, at: { base: number; offset: number }): Fence | null {
+  FENCE_OPEN.lastIndex = at.offset;
   const opener = FENCE_OPEN.exec(line);
   if (opener === null) {
     return null;
@@ -198,24 +307,32 @@ function fence_opened_by(line: string): Fence | null {
   if (char === "`" && (opener[2] as string).includes("`")) {
     return null;
   }
-  return { char, width: run.length };
+  return { char, width: run.length, base: at.base };
 }
 
 /**
  * Whether this line closes the fence that is open.
  *
- * Three conditions, and every one of them is a way a fence ends too early — which is the direction
+ * Four conditions, and every one of them is a way a fence ends too early — which is the direction
  * that costs something, because everything after a premature close reads as the document's own
  * content and an illustrated table becomes a binding. The closer is written with the same
  * character, so `~~~` inside a backtick block is content and ``` inside a tilde block is too. It
- * is at least as long as the opener, so ``` does not close ````. And it carries nothing after the
- * run but whitespace, so ````markdown inside a ``` block is content rather than a close.
+ * is at least as long as the opener, so ``` does not close ````. It carries nothing after the run
+ * but whitespace, so ````markdown inside a ``` block is content rather than a close. And it stands
+ * within three columns of the same container its opener was measured against, so a run indented
+ * into code inside the block is content.
  *
- * Its indent is its own business, up to the same three spaces: the opener's indent constrains
- * nothing, so a fence opened flush can be closed by a closer indented two, and the other way
- * round.
+ * Its indent is otherwise its own business: the opener's constrains nothing, so a fence opened at
+ * its container's content column can be closed by a closer two columns further in, and the other
+ * way round. A closer standing further out than the container closes, because a line that outdents
+ * past a list item ends the item, and the fenced block the item was holding ends with it.
  */
 function fence_closed_by(line: string, open: Fence): boolean {
+  const at = text_start(line, 0, 0);
+  if (at.column - open.base >= CODE_INDENT) {
+    return false;
+  }
+  FENCE_CLOSE.lastIndex = at.offset;
   const closer = FENCE_CLOSE.exec(line);
   if (closer === null) {
     return false;
@@ -225,9 +342,17 @@ function fence_closed_by(line: string, open: Fence): boolean {
 }
 
 /**
- * Split the document into the lines under each `##` heading, dropping everything inside a fenced
- * block. Fences are matched by character and by length, so a fence demonstrating another fence
- * closes where the renderer closes it and not before.
+ * Split the document into the lines under each `##` heading, dropping everything a renderer draws
+ * as code. Fences are matched by character and by length, so a fence demonstrating another fence
+ * closes where the renderer closes it and not before, and by indent against the containing block,
+ * so a fence nested under a list item is one.
+ *
+ * A line standing four or more columns past its container's content is dropped for the same
+ * reason: it is an indented code block, or the continuation of a paragraph, and a renderer draws
+ * no table out of either. Dropping rather than keeping is what makes the illustration somebody
+ * indented instead of fencing invisible here as well as on the page. It joins the table rows
+ * either side of it, which is what dropping a fenced block between two tables has always done in
+ * this reader.
  *
  * A heading declared twice is refused rather than merged or overwritten. Two `## Role: person`
  * sections is what a map edited by two people, or copied from another project and half-adjusted,
@@ -237,6 +362,7 @@ function fence_closed_by(line: string, open: Fence): boolean {
  */
 function split_sections(text: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
+  const open: number[] = [];
   let current: string[] | null = null;
   let fence: Fence | null = null;
 
@@ -247,7 +373,18 @@ function split_sections(text: string): Map<string, string[]> {
       }
       continue;
     }
-    const opened = fence_opened_by(line);
+    if (BLANK.test(line)) {
+      if (current !== null) {
+        current.push(line);
+      }
+      continue;
+    }
+
+    const at = block_position(line, open);
+    if (at.column - at.base >= CODE_INDENT) {
+      continue;
+    }
+    const opened = fence_opened_by(line, at);
     if (opened !== null) {
       fence = opened;
       continue;

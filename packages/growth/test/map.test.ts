@@ -325,7 +325,8 @@ It illustrates the shape and describes no database: nothing in it is a binding.
 });
 
 /**
- * What counts as a fence, one CommonMark rule at a time.
+ * What a renderer draws as code and what it draws as a table, one CommonMark rule at a time, and
+ * each rule asked twice.
  *
  * The case above proves a backtick-fenced illustration does not bind. Backticks are half the
  * fences CommonMark defines, and the other half was read as ordinary content: an author who tilde-
@@ -333,13 +334,17 @@ It illustrates the shape and describes no database: nothing in it is a binding.
  * where the tilde-fenced example was the only table under its heading it was installed as the
  * binding with nothing said. Both are measured on the cases that open this block.
  *
- * Every case here is one document: an illustration under `## Phone format`, the live table beneath
- * it, and one question about the fence around the illustration. A case that loads asserts the live
- * plan bound; a case that refuses asserts the section is named. Which way a case goes is not a
- * preference — the parser has to read the document the way a renderer draws it, because an author
- * who checks the preview and sees a code block has been told the parser skipped it.
+ * Most cases here are one illustration under `## Phone format` and one question about the fence
+ * around it, and `both_shapes` asks that question of two documents rather than one. The last two
+ * ask the opposite question of the same rule — whether a table a renderer does draw is still read
+ * — because the indent that decides a fence is the indent that decides a table, and a reader that
+ * gets it wrong in that direction drops the binding instead of the illustration.
+ *
+ * Which way a case goes is not a preference: the parser has to read the document the way a
+ * renderer draws it, because an author who checks the preview and sees a code block has been told
+ * the parser skipped it, and an author who sees a table has been told nothing of the kind.
  */
-describe("load_map on the two spellings of a fence", () => {
+describe("load_map reads the document the way a renderer draws it", () => {
   /** The live plan for this market, identical to `PHONE_SECTION`. The table every case must bind. */
   const LIVE_TABLE = `| field | value |
 |---|---|
@@ -373,6 +378,14 @@ describe("load_map on the two spellings of a fence", () => {
     );
   }
 
+  /** The same map with the live table taken away, so `block` is all the heading carries. */
+  async function alone(name: string, block: string): Promise<string> {
+    return write_map(
+      name,
+      compose(`## Phone format\n\n${block}\n`, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION),
+    );
+  }
+
   /** Asserts the live plan bound, both detectors named separately: `max_unparseable_rate` and
    *  `shared_account_ceiling` are the two guards whose job is to notice keys have gone wrong, the
    *  illustration opens both, and a run reading them from the wrong table cannot report that it
@@ -386,46 +399,62 @@ describe("load_map on the two spellings of a fence", () => {
     expect(map.phone.shared_account_ceiling).toBe(3);
   }
 
-  test("binds the live table, not one demonstrated inside a tilde fence", async () => {
-    // The first measured consequence. Before tildes were read, this exact document was refused for
-    // a second table — the author took the refusal's own advice, fenced the illustration, and was
-    // refused anyway, by a message that says nothing inside a fence is read here. Measured through
-    // `measure()` on three people and a list of the same three numbers, it now reports
-    // `acquired {"accounts":3,"within":{"h24":3,"d7":3,"d30":3}}` with
-    // `conversions {"count":3,"value":30}` — the same reading a map carrying no illustration gives.
-    const map = await load_map(await document("tilde-fenced-example", `~~~markdown\n${ILLUSTRATION}\n~~~`));
+  /**
+   * One fence question, asked of both documents that can carry it: `block` is skipped as something
+   * a renderer draws as code, so the live table binds where there is one and the heading is left
+   * carrying no table at all where there is not.
+   *
+   * The second document is the point. With the live table below, a fence this parser fails to see
+   * is loud — the illustration is a second table and the section is refused by name — and for
+   * thirteen documents that was the only shape the fence block built. Which is why the closer's
+   * indent bound was defended and the opener's could be widened to anything at all with the whole
+   * suite staying green.
+   *
+   * Take the live table away and a fence this parser fails to see is silent instead. The
+   * illustration is the only `| field | value |` table under the heading, so it is installed as the
+   * binding, and it is a complete `999/2/8` plan for a market this database has nothing to do with.
+   * Measured through `measure()` on three people whose numbers are the two spellings the live
+   * market uses, that binding reported `acquired {"accounts":1,"within":{"h24":1,"d7":1,"d30":1}}`
+   * and `conversions {"count":1,"value":10}` where the live plan gives 3 and
+   * `{"count":3,"value":30}`. A third of the truth, and no error anywhere — the illustration's own
+   * `max_unparseable_rate` of 0.9 is what let it through, because two of the three numbers are
+   * unreadable under a plan expecting ten digits and 66.7% is under its ceiling where it is far
+   * over the 0.25 the live table sets. The fault switched off the detector that would have caught
+   * it.
+   */
+  async function both_shapes(name: string, block: string): Promise<void> {
+    expect_live_plan(await load_map(await document(name, block)));
 
-    expect_live_plan(map);
-  });
-
-  test("refuses a section whose only `| field | value |` table sits inside a tilde fence", async () => {
-    // The second measured consequence, and the worse one: with no live table under the heading the
-    // tilde-fenced illustration was the only one there, so it was read as the binding and the run
-    // published. Measured on three people whose numbers are the two spellings this market uses —
-    // two of nine digits and one of ten, the reform digit at the head of the subscriber part —
-    // `measure()` reported `acquired {"accounts":1,"within":{"h24":1,"d7":1,"d30":1}}` and
-    // `conversions {"count":1,"value":10}` where the live plan gives 3 and `{"count":3,"value":30}`.
-    // A third of the truth, and the illustration's own `max_unparseable_rate` of 0.9 is what let it
-    // through: two of the three numbers are unreadable under a plan expecting ten digits, and 66.7%
-    // is under the illustration's ceiling where it is far over the 0.25 the live table sets. The
-    // fault switched off the detector that would have caught it.
-    const error = await caught(
-      load_map(
-        await write_map(
-          "tilde-fenced-only-table",
-          compose(
-            `## Phone format\n\nSomebody pasted the illustration and never wrote the live table under it.\n\n~~~markdown\n${ILLUSTRATION}\n~~~\n`,
-            FINGERPRINT_SECTION,
-            PERSON_SECTION,
-            CONVERSION_SECTION,
-          ),
-        ),
-      ),
-    );
-
+    const error = await caught(load_map(await alone(`${name}-alone`, block)));
     expect(error).toBeInstanceOf(MapSectionError);
     expect((error as MapSectionError).section).toBe("## Phone format");
     expect(error.message).toContain("## Phone format");
+  }
+
+  /** The illustration and a fence around it, pushed out to a column — the shape a list item leaves
+   *  them in, and the shape the parser has to measure against the item rather than the margin. */
+  function fenced_at(column: number): string {
+    const pad = " ".repeat(column);
+    const rows = ILLUSTRATION.split("\n")
+      .map((row) => `${pad}${row}`)
+      .join("\n");
+    return `${pad}~~~markdown\n${rows}\n${pad}~~~`;
+  }
+
+  test("binds the live table, not one demonstrated inside a tilde fence", async () => {
+    // The first measured consequence of reading tildes. Before they were read, this exact document
+    // was refused for a second table — the author took the refusal's own advice, fenced the
+    // illustration, and was refused anyway, by a message that says nothing inside a fence is read
+    // here. Measured through `measure()` on three people and a list of the same three numbers, it
+    // now reports `acquired {"accounts":3,"within":{"h24":3,"d7":3,"d30":3}}` with
+    // `conversions {"count":3,"value":30}` — the same reading a map carrying no illustration gives.
+    await both_shapes("tilde-fenced-example", `~~~markdown\n${ILLUSTRATION}\n~~~`);
+  });
+
+  test("binds the live table, not one demonstrated inside a backtick fence", async () => {
+    // The backtick half of the case above, in this block so that the two spellings are asked the
+    // same question by the same helper rather than one of them being asked a weaker one.
+    await both_shapes("backtick-fenced-example", `\`\`\`markdown\n${ILLUSTRATION}\n\`\`\``);
   });
 
   test("reads two tildes as prose and three as a fence", async () => {
@@ -433,16 +462,12 @@ describe("load_map on the two spellings of a fence", () => {
     // which is what a map correcting itself writes above the table that replaced the correction.
     // The strike sits between the fenced illustration and the live table on purpose: counted as a
     // fence it opens one there and swallows the live table, leaving the heading with no table at
-    // all, and not counted at all — as before this fix — the illustration above it is a second
-    // table and the document is refused. Both ends of the rule fail this one document.
-    const map = await load_map(
-      await document(
-        "tilde-pair-is-prose",
-        `~~~markdown\n${ILLUSTRATION}\n~~~\n\n~~The plan before the reform is struck through here, because the reform replaced it.~~`,
-      ),
+    // all, and not counted at all the illustration above it is a second table and the document is
+    // refused. Both ends of the rule fail this one document.
+    await both_shapes(
+      "tilde-pair-is-prose",
+      `~~~markdown\n${ILLUSTRATION}\n~~~\n\n~~The plan before the reform is struck through here, because the reform replaced it.~~`,
     );
-
-    expect_live_plan(map);
   });
 
   test("does not close a four-tilde fence on a three-tilde run", async () => {
@@ -450,135 +475,223 @@ describe("load_map on the two spellings of a fence", () => {
     // showing one. Close on the shorter run and the illustration's header escapes into the
     // document, where it is either a second table or, with no live table under the heading, the
     // binding itself.
-    const map = await load_map(
-      await document(
-        "tilde-closer-too-short",
-        `~~~~markdown\nWhere the illustration carries a fence of its own, the outer one has to be longer:\n\n~~~\n${ILLUSTRATION}\n~~~\n~~~~`,
-      ),
+    await both_shapes(
+      "tilde-closer-too-short",
+      `~~~~markdown\nWhere the illustration carries a fence of its own, the outer one has to be longer:\n\n~~~\n${ILLUSTRATION}\n~~~\n~~~~`,
     );
-
-    expect_live_plan(map);
   });
 
   test("does not close a four-backtick fence on a three-backtick run", async () => {
-    // The backtick spelling of the case above. This one was already right before the fix and is
-    // here because it was undefended: the rewrite that taught the parser tildes could have lost it
-    // in either spelling, and nothing in the suite would have said so.
-    const map = await load_map(
-      await document(
-        "backtick-closer-too-short",
-        "````markdown\nSome maps open the illustration with three backticks:\n\n```\n" + ILLUSTRATION + "\n```\n````",
-      ),
+    // The backtick spelling of the case above. This one was already right before tildes were read
+    // and is here because it was undefended: the rewrite that taught the parser tildes could have
+    // lost it in either spelling, and nothing in the suite would have said so.
+    await both_shapes(
+      "backtick-closer-too-short",
+      "````markdown\nSome maps open the illustration with three backticks:\n\n```\n" + ILLUSTRATION + "\n```\n````",
     );
-
-    expect_live_plan(map);
   });
 
   test("does not close a tilde fence on a backtick run", async () => {
     // The two characters do not answer for each other. A tilde-fenced illustration holding a sql
     // block is the ordinary shape of this: a map records the query beside the binding, so an
     // illustration of a map carries one too.
-    const map = await load_map(
-      await document(
-        "tilde-not-closed-by-backtick",
-        `~~~markdown\nThe map records the export query beside the binding, so an illustration carries one too:\n\n\`\`\`sql\n\\copy (select member_id, handset from accounts) to 'person.csv' csv header\n\`\`\`\n\n${ILLUSTRATION}\n~~~`,
-      ),
+    await both_shapes(
+      "tilde-not-closed-by-backtick",
+      `~~~markdown\nThe map records the export query beside the binding, so an illustration carries one too:\n\n\`\`\`sql\n\\copy (select member_id, handset from accounts) to 'person.csv' csv header\n\`\`\`\n\n${ILLUSTRATION}\n~~~`,
     );
-
-    expect_live_plan(map);
   });
 
   test("does not close a backtick fence on a tilde run", async () => {
-    // The mirror of the case above, and green before the fix for a reason worth writing down: a
-    // parser that cannot see tildes at all cannot be closed by one. It is here because a fix that
-    // reads both characters can confuse them, and this is the half of that mistake the other case
-    // cannot catch.
-    const map = await load_map(
-      await document(
-        "backtick-not-closed-by-tilde",
-        `\`\`\`markdown\nSome maps write the illustration with tildes instead:\n\n~~~\n${ILLUSTRATION}\n~~~\n\`\`\``,
-      ),
+    // The mirror of the case above, and green before tildes were read for a reason worth writing
+    // down: a parser that cannot see tildes at all cannot be closed by one. It is here because a
+    // parser that reads both characters can confuse them, and this is the half of that mistake the
+    // other case cannot catch.
+    await both_shapes(
+      "backtick-not-closed-by-tilde",
+      `\`\`\`markdown\nSome maps write the illustration with tildes instead:\n\n~~~\n${ILLUSTRATION}\n~~~\n\`\`\``,
     );
-
-    expect_live_plan(map);
   });
 
-  test("does not close a fence on a run indented four spaces", async () => {
-    // Three spaces of indent is the limit, for the closer as much as the opener. Four spaces is an
-    // indented code block in CommonMark and nothing this parser tracks, so the run inside the block
-    // below is content — which is exactly what it is to a reader, since the illustration is showing
-    // a fence nested under a list item.
-    const map = await load_map(
-      await document(
-        "closer-indented-four",
-        `~~~markdown\nAn illustration nested under a list item keeps its own fence indented with it:\n\n    ~~~\n    | field | value |\n    ~~~\n\nAnd the table that fence would hold, for the other market:\n\n${ILLUSTRATION}\n~~~`,
-      ),
+  test("does not close a fence on a run indented four columns past its container", async () => {
+    // Four columns past the container is an indented code block, for the closer as much as the
+    // opener, so the run inside the block below is content — which is exactly what it is to a
+    // reader, since the illustration is showing a fence nested under a list item.
+    await both_shapes(
+      "closer-indented-four",
+      `~~~markdown\nAn illustration nested under a list item keeps its own fence indented with it:\n\n    ~~~\n    | field | value |\n    ~~~\n\nAnd the table that fence would hold, for the other market:\n\n${ILLUSTRATION}\n~~~`,
     );
-
-    expect_live_plan(map);
   });
 
-  test("reads a fence indented up to three spaces, and closes it at an indent of its own", async () => {
-    // The opener's indent constrains nothing about the closer's. Both documents below are one
-    // fenced illustration written the way a nested list leaves it.
-    const indented_opener = await load_map(
-      await document("opener-indented-three", `   ~~~markdown\n${ILLUSTRATION}\n~~~`),
-    );
-    expect_live_plan(indented_opener);
-
-    const indented_closer = await load_map(
-      await document("closer-indented-two", `~~~markdown\n${ILLUSTRATION}\n  ~~~`),
-    );
-    expect_live_plan(indented_closer);
+  test("reads a fence indented up to three columns, and closes it at an indent of its own", async () => {
+    // The opener's indent constrains nothing about the closer's.
+    await both_shapes("opener-indented-three", `   ~~~markdown\n${ILLUSTRATION}\n~~~`);
+    await both_shapes("closer-indented-two", `~~~markdown\n${ILLUSTRATION}\n  ~~~`);
   });
 
-  test("refuses an illustration indented four spaces instead of fenced", async () => {
-    // Four spaces is not a fence, so the run hides nothing and the illustration is a second table.
-    // This is the one document in this block where the parser and a renderer disagree, and it is
-    // recorded rather than fixed. Rendered through a CommonMark implementation the four spaces make
-    // an indented code block, the illustration inside it is not a table, and one table is drawn —
-    // the live one. This parser has no indented-code-block reader and needs none: it refuses by
-    // name and the author is told which section to correct. Disagreeing out loud costs a document
-    // somebody has to re-indent; agreeing by treating a deep enough indent as a fence would hide a
-    // table, which is the failure this whole block exists to close.
-    const indented = ILLUSTRATION.split("\n")
-      .map((line) => `    ${line}`)
+  test("reads a fence nested under a list item, measured from the item and not from the margin", async () => {
+    // The regression this block was rebuilt around, and the ordinary way a map illustrates
+    // anything: the example goes under the bullet that introduces it, and a fence under a bullet
+    // is indented with it. CommonMark allows a fence three columns past its container's content,
+    // and a parser with no containers has to read that allowance from the left margin instead, so
+    // every fence below stopped being a fence. Measured before this was fixed, on the illustration
+    // alone under its heading: `LOADED country_code=999 ceiling=99` for all three, against a live
+    // `997/3/6` plan of ceiling 3. Both renderers draw the run as a code block, so an author who
+    // checked the preview saw code and got a binding.
+    await both_shapes(
+      "nested-bullet-fence-at-four",
+      `- The market this map does not describe:\n  - Its plan, for contrast:\n\n${fenced_at(4)}`,
+    );
+    await both_shapes("ordered-item-fence-at-four", `10. Its plan, for contrast:\n\n${fenced_at(4)}`);
+    // Content column two, fence two columns further in: inside the three CommonMark allows, and
+    // four from the margin, which is what the absolute bound refused.
+    await both_shapes("bullet-fence-at-four", `- Its plan, for contrast:\n\n${fenced_at(4)}`);
+    // The control that stayed correct throughout, kept because it is the half of the rule an
+    // over-eager fix could lose: at the item's own content column the fence is a fence.
+    await both_shapes("bullet-fence-at-two", `- Its plan, for contrast:\n\n${fenced_at(2)}`);
+  });
+
+  test("reads a fence opened on the list marker's own line", async () => {
+    // A one-line introduction and the fence on the same line as the bullet is how a short
+    // illustration gets written. The marker has to be walked off before the run is looked for, or
+    // the line is prose and everything under it is the document's own content.
+    const rows = ILLUSTRATION.split("\n")
+      .map((row) => `  ${row}`)
       .join("\n");
-    const error = await caught(
-      load_map(await document("opener-indented-four", `    ~~~markdown\n${indented}\n    ~~~`)),
-    );
+    await both_shapes("fence-on-the-marker-line", `- ~~~markdown\n${rows}\n  ~~~`);
+  });
 
-    expect(error).toBeInstanceOf(MapSectionError);
-    expect((error as MapSectionError).section).toBe("## Phone format");
+  test("reads an illustration indented four columns as the code block a renderer draws", async () => {
+    // Four spaces at the top level is an indented code block. A renderer draws no table there, so
+    // neither does this reader, and the heading below binds the live table with nothing said about
+    // the illustration — which is what the page shows.
+    //
+    // This document used to be refused for a second table, and the refusal was recorded as a
+    // deliberate disagreement with the renderer. Measured in the shape that has no live table, that
+    // disagreement was not loud at all: the indented illustration was the only table the parser
+    // could see and it bound `country_code=999 ceiling=99`, silently, out of a run a reader sees as
+    // code. Tracking the container closed it in the direction that agrees with the page.
+    const indented = ILLUSTRATION.split("\n")
+      .map((row) => `    ${row}`)
+      .join("\n");
+    await both_shapes("opener-indented-four", `    ~~~markdown\n${indented}\n    ~~~`);
+  });
+
+  test("reads a list item whose content starts five columns along as code", async () => {
+    // Five or more spaces after the marker put the item's first block into indented code rather
+    // than moving the item's content column out to meet it, so the run below is not a fence and
+    // the table under it is not a table. A renderer draws neither.
+    const rows = ILLUSTRATION.split("\n")
+      .map((row) => `      ${row}`)
+      .join("\n");
+    await both_shapes("marker-then-five-spaces", `-     ~~~markdown\n${rows}\n      ~~~`);
+
+    // With the run closed, moving the item's content out to meet it and leaving it where it belongs
+    // look identical — both hide the illustration. Unclosed, they separate: left where it belongs
+    // the run is code and the live table below survives, moved out it is an opener with nothing to
+    // end it and the table spends the rest of the document inside the block. A renderer draws the
+    // table.
+    expect_live_plan(await load_map(await document("marker-then-five-spaces-lone-run", "-     ~~~")));
   });
 
   test("reads a tilde fence whose info string holds a backtick", async () => {
     // An info string may say anything after a tilde opener, backticks included. The restriction
     // belongs to backticks alone and copying it across would refuse the most natural thing an
     // author writes here: naming the table the illustration is a copy of.
-    const map = await load_map(
-      await document(
-        "tilde-info-holds-a-backtick",
-        `~~~markdown \`| field | value |\` for another market\n${ILLUSTRATION}\n~~~`,
-      ),
+    await both_shapes(
+      "tilde-info-holds-a-backtick",
+      `~~~markdown \`| field | value |\` for another market\n${ILLUSTRATION}\n~~~`,
     );
-
-    expect_live_plan(map);
   });
 
   test("refuses a backtick opener whose info string holds a backtick, because it is prose", async () => {
     // A backtick fence's info string may not contain a backtick: the line is a paragraph carrying
-    // inline code, and a renderer draws the table under it as a table. Before the fix the line
-    // opened a fence, the illustration vanished, and the document loaded — the parser hiding a
-    // table its own reader can see. The illustration sits below the live table here so the
-    // disagreement is refused rather than resolved: read as prose it is a second table, which is
-    // what a reader sees.
+    // inline code, and a renderer draws the table under it as a table. Before this was read the
+    // line opened a fence, the illustration vanished, and the document loaded — the parser hiding
+    // a table its own reader can see.
+    //
+    // The one case in this block `both_shapes` cannot build, and the block's tail is why. With the
+    // opener demoted to prose the run that was meant to close it is an opener with nothing after
+    // it, so it swallows whatever follows the illustration — the live table in one shape, the next
+    // section in the other. Both documents below are laid out so that what it swallows is the end
+    // of the file, which leaves the question this case is actually about legible.
+    const illustration = `\`\`\`markdown \`| field | value |\` for another market\n${ILLUSTRATION}\n\`\`\``;
+
+    // Read as prose it is a second table, which is what a reader sees, so the live table above it
+    // is not the only one under the heading and the document is refused by name.
     const error = await caught(
       load_map(
         await write_map(
           "backtick-info-holds-a-backtick",
           compose(
-            `## Phone format\n\n${LIVE_TABLE}\n\n\`\`\`markdown \`| field | value |\` for another market\n${ILLUSTRATION}\n\`\`\`\n`,
+            `## Phone format\n\n${LIVE_TABLE}\n\n${illustration}\n`,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Phone format");
+
+    // The shape every other case is refused in, and the one case that binds instead — not a lapse.
+    // The document declares exactly one table, a renderer draws that table, and the parser reads
+    // it. Nothing is hidden from anybody. The assertion is here rather than absent because it is
+    // the sentence a parser that went back to opening a fence on this line would have to break.
+    const map = await load_map(
+      await write_map(
+        "backtick-info-holds-a-backtick-alone",
+        compose(FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION, `## Phone format\n\n${illustration}\n`),
+      ),
+    );
+
+    expect(map.phone.country_code).toBe("999");
+    expect(map.phone.shared_account_ceiling).toBe(99);
+  });
+
+  test("does not close a fence on a longer run carrying an info string", async () => {
+    // An info string follows an opener, never a closer, so a longer run naming a language is
+    // content. Before this was read any run of three or more closed a fence that was open, so the
+    // line below ended the block and the illustration's header landed in the document.
+    await both_shapes(
+      "closer-carries-an-info-string",
+      "```markdown\nSome maps open the illustration with four backticks and name the language:\n\n````markdown\n\n" +
+        ILLUSTRATION +
+        "\n```",
+    );
+  });
+
+  test("does not open a fence on a run standing in indented code, and does not swallow the table under it", async () => {
+    // The other direction, and the one an unbounded opener indent buys. A map that explains its own
+    // convention shows the fence marker by indenting it, which makes it code and not an opener. Read
+    // as an opener it has no closer, so everything after it — the live table included — is inside a
+    // block that never ends.
+    //
+    // The bullet above the run is not scenery. An item stays open only while the lines under it
+    // stay indented past its content, and the prose at the margin ends it — so the run is measured
+    // against the margin, four columns out, and is code. A reader that never closes the item
+    // measures it against the item's content column instead, two columns out, where it is a fence
+    // with no closer and the live table is gone.
+    expect_live_plan(
+      await load_map(
+        await document(
+          "indented-run-is-not-an-opener",
+          "- A note about this market's numbering.\n\nFence an illustration by writing:\n\n    ~~~",
+        ),
+      ),
+    );
+
+    // And where the indented runs bracket the live table, reading them as a fence hides the one
+    // table that binds and leaves the illustration below as the only one the parser can see —
+    // `country_code=999 ceiling=99`, from a document whose reader sees two ordinary tables. Refusing
+    // for the second table is the loud answer and the correct one.
+    const error = await caught(
+      load_map(
+        await write_map(
+          "indented-runs-do-not-swallow-a-table",
+          compose(
+            `## Phone format\n\nFence an illustration by writing:\n\n    ~~~\n\n${LIVE_TABLE}\n\n    ~~~\n\n${ILLUSTRATION}\n`,
             FINGERPRINT_SECTION,
             PERSON_SECTION,
             CONVERSION_SECTION,
@@ -591,41 +704,140 @@ describe("load_map on the two spellings of a fence", () => {
     expect((error as MapSectionError).section).toBe("## Phone format");
   });
 
-  test("does not close a fence on a longer run carrying an info string", async () => {
-    // An info string follows an opener, never a closer, so a longer run naming a language is
-    // content. Before the fix any run of three or more closed a fence that was open, so the line
-    // below ended the block and the illustration's header landed in the document.
+  test("measures a tab as four columns, the way CommonMark counts one", async () => {
+    // A map indented with tabs is a map somebody's editor wrote, and a tab is not one column: it
+    // advances to the next four-column stop, which puts a tab-indented run at the top level inside
+    // an indented code block. Counted as one column instead, the run below is an opener with no
+    // closer, and the live table under it spends the rest of the document inside a block that never
+    // ends. Measured against markdown-it, the run is code and the table beneath it is drawn.
+    expect_live_plan(await load_map(await document("tab-run-is-code", "Fence an illustration by writing:\n\n\t~~~")));
+
+    // And the tab that separates a marker from the fence it introduces counts the same way, which
+    // is what leaves the item's content at the column the run stands in.
+    const rows = ILLUSTRATION.split("\n")
+      .map((row) => `\t${row}`)
+      .join("\n");
+    await both_shapes("fence-after-a-tab-marker", `-\t~~~markdown\n${rows}\n\t~~~`);
+  });
+
+  test("leaves a fence inside a block quote alone, because nothing it hides was readable anyway", async () => {
+    // A `>`-prefixed opener is not an opener here, so the quoted illustration below is content
+    // rather than code — and it costs nothing, because `cells_of` refuses a `>`-prefixed line, so
+    // a quoted table was never a table here whether the fence was found or not. That was the
+    // argument; this is the measurement behind it. A differential of 288 generated documents
+    // against markdown-it — six containers, four fence spellings, six indents, both shapes —
+    // agreed on 276, and all twelve disagreements are *unfenced* tables inside a quote. No fenced
+    // quoted document disagreed at any indent in either spelling, which is the argument's actual
+    // content: the fence-level disagreement never reaches a table.
+    //
+    // What the twelve cost is the second-table refusal. A quoted illustration standing beside a
+    // live table is not a second table here, so the live one binds and nobody is told to fence the
+    // quote — a renderer draws two tables where this reader sees one. Closing that means teaching
+    // `cells_of` about `>`, which is a bigger change than the fault.
+    const quoted = `> Its plan, for contrast:\n>\n> ~~~markdown\n${ILLUSTRATION.split("\n")
+      .map((row) => `> ${row}`)
+      .join("\n")}\n> ~~~`;
+    await both_shapes("quoted-fence", quoted);
+
+    // The unfenced half of the same family, pinned so the measured cost is a fixture rather than a
+    // sentence: the quoted illustration is invisible and the live table below binds alone.
+    expect_live_plan(
+      await load_map(
+        await document(
+          "quoted-table-unfenced",
+          `> Its plan, for contrast:\n>\n${ILLUSTRATION.split("\n")
+            .map((row) => `> ${row}`)
+            .join("\n")}`,
+        ),
+      ),
+    );
+  });
+
+  test("finds both fences in a map written with carriage returns", async () => {
+    // A map written on Windows carries a CR at the end of every line, and the rest of this reader
+    // absorbs it — the heading pattern as trailing whitespace, a table cell by trimming. The fence
+    // patterns have to as well, and the first draft of the tilde fix did not: anchoring the info
+    // string with `$` made every fence in a CRLF document invisible, because `.` does not cross a
+    // carriage return and `$` does not sit before one, so the fenced illustration below became a
+    // second table and the document was refused. The backtick half of this case was green before
+    // that fix, which is what makes it worth writing down — the pattern it replaced matched no line
+    // ending at all, so reading tildes came within one anchor of costing every CRLF map both
+    // spellings.
+    const crlf = (body: string): string => body.replace(/\n/g, "\r\n");
+    for (const run of ["~~~", "```"]) {
+      const block = `${run}markdown\n${ILLUSTRATION}\n${run}`;
+      const beside = crlf(
+        compose(
+          `## Phone format\n\n${block}\n\n${LIVE_TABLE}\n`,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          CONVERSION_SECTION,
+        ),
+      );
+      expect_live_plan(await load_map(await write_map(`carriage-returns-${run[0]}`, beside)));
+
+      // The shape a CR can fail quietly in. A fence the pattern cannot see leaves the illustration
+      // as the only table under the heading, and every key of the binding comes out of it.
+      const only = crlf(
+        compose(`## Phone format\n\n${block}\n`, FINGERPRINT_SECTION, PERSON_SECTION, CONVERSION_SECTION),
+      );
+      const error = await caught(load_map(await write_map(`carriage-returns-${run[0]}-alone`, only)));
+      expect(error).toBeInstanceOf(MapSectionError);
+      expect((error as MapSectionError).section).toBe("## Phone format");
+    }
+  });
+
+  test("binds a live table written inside a nested list item", async () => {
+    // The sibling every one of the cases above would open if the rule that decides them were
+    // measured from the left margin. Four columns from the margin is code; four columns from a
+    // container whose content starts there is the container's first column, and both renderers
+    // draw the table below. Read absolutely, the binding itself disappears — the heading carries
+    // no table and a map nobody wrote anything wrong in is refused.
+    const nested = LIVE_TABLE.split("\n")
+      .map((row) => `    ${row}`)
+      .join("\n");
     const map = await load_map(
-      await document(
-        "closer-carries-an-info-string",
-        "```markdown\nSome maps open the illustration with four backticks and name the language:\n\n````markdown\n\n" +
-          ILLUSTRATION +
-          "\n```",
+      await write_map(
+        "live-table-nested-in-a-list",
+        compose(
+          `## Phone format\n\n- The market this map describes:\n  - Its live plan:\n\n${nested}\n`,
+          FINGERPRINT_SECTION,
+          PERSON_SECTION,
+          CONVERSION_SECTION,
+        ),
       ),
     );
 
     expect_live_plan(map);
   });
 
-  test("finds both fences in a map written with carriage returns", async () => {
-    // A map written on Windows carries a CR at the end of every line, and the rest of this reader
-    // absorbs it — the heading pattern as trailing whitespace, a table cell by trimming. The fence
-    // patterns have to as well, and the first draft of this fix did not: anchoring the info string
-    // with `$` made every fence in a CRLF document invisible, because `.` does not cross a carriage
-    // return and `$` does not sit before one, so the fenced illustration below became a second
-    // table and the document was refused. The backtick half of this case was green before the fix,
-    // which is what makes it worth writing down — the pattern it replaced matched no line ending at
-    // all, so reading tildes came within one anchor of costing every CRLF map both spellings.
-    const fenced_with = (run: string): string =>
-      compose(
-        `## Phone format\n\n${run}markdown\n${ILLUSTRATION}\n${run}\n\n${LIVE_TABLE}\n`,
-        FINGERPRINT_SECTION,
-        PERSON_SECTION,
-        CONVERSION_SECTION,
-      ).replace(/\n/g, "\r\n");
+  test("does not drop a nested live table and bind the illustration standing at the margin", async () => {
+    // The same mistake in the shape where it says nothing. With an illustration at the margin and
+    // the live table nested, a reader measuring indents absolutely drops the live table as code and
+    // is left with exactly one `| field | value |` table under the heading — the illustration — so
+    // the second-table guard never fires and `country_code=999 ceiling=99` binds out of a document
+    // whose reader, and both renderers, see two ordinary tables. Refusing for the second table is
+    // the answer that says so.
+    const nested = LIVE_TABLE.split("\n")
+      .map((row) => `    ${row}`)
+      .join("\n");
+    const error = await caught(
+      load_map(
+        await write_map(
+          "nested-live-table-under-an-illustration",
+          compose(
+            `## Phone format\n\n${ILLUSTRATION}\n\n- The market this map describes:\n  - Its live plan:\n\n${nested}\n`,
+            FINGERPRINT_SECTION,
+            PERSON_SECTION,
+            CONVERSION_SECTION,
+          ),
+        ),
+      ),
+    );
 
-    expect_live_plan(await load_map(await write_map("carriage-returns-tilde", fenced_with("~~~"))));
-    expect_live_plan(await load_map(await write_map("carriage-returns-backtick", fenced_with("```"))));
+    expect(error).toBeInstanceOf(MapSectionError);
+    expect((error as MapSectionError).section).toBe("## Phone format");
+    expect(error.message).toContain("second");
   });
 });
 
