@@ -969,6 +969,29 @@ describe("the conversion split", () => {
     expect(record.conversions.count).toBe(1);
     expect(record.conversions.value).toBe(30);
   });
+
+  test("but only where the primary is empty: with both columns filled the primary dates the event", async () => {
+    // The case above leaves the primary blank, so it says the fallback is read and nothing about
+    // which of the two wins when both hold an instant — and where a fallback is bound at all, both
+    // filled is the ordinary row rather than the exception. The two instants here straddle the cut
+    // by two hours each way, which is the only way the precedence is observable from the record:
+    // read in the declared order the commitment falls after the cut and is counted, and read the
+    // other way round it falls before and the cell reports a conversion it really has as none.
+    const fixture = await build("split-fallback-precedence", {
+      map: { conversion: { at_fallback: "opened_at" } },
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      conversion: csv(
+        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
+        [["one", from_cut(2 * HOUR), from_cut(-2 * HOUR), 30, "LIVE", "WIRE"]],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-fallback-precedence", fixture.list("reached.txt")));
+
+    expect(record.conversions.count).toBe(1);
+    expect(record.conversions.value).toBe(30);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1850,17 +1873,21 @@ describe("the run refuses what it cannot measure", () => {
   });
 
   test("a pair drawn across the two audiences, which has no outcome both sides can be read on", async () => {
-    // One side allows the outcome and the other does not, which is the case that says the check
-    // reads both cells rather than whichever it looked at first. It is also the whole of what a
-    // mixed pair can ever be: the two audiences share no countable path, so the message says so
-    // and sends the reader to draw a control from the treated cell's own audience instead of
-    // trying a third outcome.
+    // Read in both directions, because the guard is two conditions and either one alone refuses
+    // this pair. The outcome asked for is always one the treated cell allows and the control cell
+    // does not, or the reverse, so each reading fails if the check stops consulting one of the two
+    // cells — which is what "reads both cells rather than whichever it looked at first" has to
+    // mean to be worth asserting. It is also the whole of what a mixed pair can ever be: the two
+    // audiences share no countable path, so the message says so and sends the reader to draw a
+    // control from the treated cell's own audience instead of trying a third outcome.
     const fixture = await build("refuse-control-mixed-audience", {
       person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(-DAY)]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
     });
 
-    const error = await caught(
+    // The treated cell allows the outcome and the control cell does not: only the control side of
+    // the condition refuses this one.
+    const on_the_control = await caught(
       measure({
         map: fixture.map,
         exports: fixture.exports,
@@ -1870,9 +1897,28 @@ describe("the run refuses what it cannot measure", () => {
       }),
     );
 
-    expect(error).toBeInstanceOf(ControlError);
-    expect(error.message).toContain('"treated" (cold) against "untouched" (own_base)');
-    expect(error.message).toContain("No outcome can be read on both");
+    expect(on_the_control).toBeInstanceOf(ControlError);
+    expect(on_the_control.message).toContain('"treated" (cold) against "untouched" (own_base)');
+    expect(on_the_control.message).toContain("No outcome can be read on both");
+
+    // The audiences swapped and the outcome kept: now the control cell allows `acquired.accounts`
+    // and the treated one cannot be read on it, so only the treated side of the condition refuses.
+    const on_the_treated = await caught(
+      measure({
+        map: fixture.map,
+        exports: fixture.exports,
+        cells: [base("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
+        controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
+        now: NOW,
+      }),
+    );
+
+    expect(on_the_treated).toBeInstanceOf(ControlError);
+    expect(on_the_treated.message).toContain('"treated" (own_base) against "untouched" (cold)');
+    // The rule is stated in the pair's own order, so the reader is told what the cell they named
+    // first can be read on first.
+    expect(on_the_treated.message).toContain("A own_base cell is read on conversions.count");
+    expect(on_the_treated.message).toContain("No outcome can be read on both");
   });
 
   test("two controls on one treated cell, where the last would silently win", async () => {
@@ -2001,6 +2047,53 @@ describe("the run refuses what it cannot measure", () => {
     const record = await one(fixture, cold("join-partial-is-legal", fixture.list("reached.txt")));
 
     expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
+  });
+
+  test("and a blank on both sides is not the shared identifier that satisfies it", async () => {
+    // The check above is satisfied by one key the two files have in common, and the empty string
+    // used to be such a key. A person row whose id is blank and a revenue row whose person column
+    // is blank meet at `""`, the check returns satisfied on that pair, and the real row beside
+    // them — keyed on a wallet, referencing nobody — falls out of every cell in the silence this
+    // error exists to break. A consumer reaches it the ordinary way: a left join that matched
+    // nothing writes a null person, and a null reads as blank in an export.
+    const fixture = await build("refuse-join-blank", {
+      person: people(["", phone(1), from_cut(-DAY)]),
+      revenue: revenue(["", from_cut(HOUR), 5], ["wallet-7", from_cut(HOUR), 90]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-join-blank", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportJoinError);
+    expect((error as ExportJoinError).role).toBe("revenue");
+    // The sample quoted is the wallet rather than the blank, because a blank tells the reader
+    // nothing about which kind of id was bound by mistake.
+    expect(error.message).toContain("wallet-7");
+  });
+
+  test("money whose person column is blank is not credited to a person whose id is blank", async () => {
+    // The same two blanks, in a file that joins: one real row references a real person, so the
+    // check above passes on it and is right to. What is left is a bucket keyed on nothing, and an
+    // account keyed on nothing sitting in the audience, and reading one with the other credits
+    // every unattributable unit in the export to whichever listed person happens to carry the
+    // blank id. Ninety here, on a cell that really collected ten — and the conversion index is
+    // read by its own loop, so both lookups are asserted or one of them keeps the fault.
+    const fixture = await build("join-blank-not-credited", {
+      person: people(["", phone(1), from_cut(-DAY)], ["real", phone(2), from_cut(-DAY)]),
+      revenue: revenue(["", from_cut(HOUR), 90], ["real", from_cut(HOUR), 10]),
+      conversion: conversions(["", from_cut(HOUR), 70, "LIVE", "WIRE"], ["real", from_cut(HOUR), 20, "LIVE", "WIRE"]),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("join-blank-not-credited", fixture.list("reached.txt")));
+
+    // Both accounts stay in the audience. The one with no id was matched on a phone that was read
+    // and is a person this cell reached; only its join key is missing, so it collects nothing
+    // rather than disappearing from the denominator.
+    expect(record.audience.matched_accounts).toBe(2);
+    expect(record.pre_existing.accounts).toBe(2);
+    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
+    expect(record.conversions).toEqual({ count: 1, value: 20, new_money: 20, recycled: 0 });
   });
 
   test("an export whose header names one column twice", async () => {

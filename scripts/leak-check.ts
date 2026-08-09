@@ -25,15 +25,16 @@
  * is not the default and why the name says so.
  *
  * The clearance and the tracked scan divide the work between them: the tracked scan reads the
- * working tree, so `--history` skips the blobs it has already covered. That skip is only sound
- * where the working tree and the index agree, and where they do not the committed blob is read
- * here as well rather than assumed clean — see `scan_history` and `unstaged_paths`.
+ * working tree, so `--history` skips the blobs it has already read. Read, and proved read — every
+ * file the tracked scan opens is hashed the way git hashes it, and only those digests earn a skip.
+ * Asking the index instead cleared whatever the index merely listed: a file with an unstaged edit,
+ * a path left out of a sparse checkout, a path carrying a `skip-worktree` bit. See `blob_id`.
  *
  * Dictionaries are scanned like any other file. Only the exact term strings a dictionary declares
  * are suppressed inside it, never the whole file, so a client name typed into a `why` is still
- * found. What could not be read is named rather than counted, and a clean run over content nothing
- * could decode says `PASSED WITH GAPS` rather than `PASSED`, because a blind spot counted as
- * coverage is worse than no coverage report at all.
+ * found. What could not be read — undecodable, absent, or not a file — is named rather than
+ * counted, and a clean run over it says `PASSED WITH GAPS` rather than `PASSED`, because a blind
+ * spot counted as coverage is worse than no coverage report at all.
  *
  * Matching runs on a normalised copy of each text — percent-escapes decoded, invisible formatting
  * characters dropped, the rest folded to NFKC and a short table of Cyrillic and Greek Latin
@@ -147,12 +148,18 @@ type ScanResult = {
   scanned: number;
   /** Every distinct path component matched, so the history scan can skip the ones done here. */
   nodes: string[];
+  /**
+   * Git's own name for the content of every file this scan actually read, so the history scan can
+   * skip a blob on the evidence that these exact bytes went through the matcher rather than on the
+   * index's word that they should have. Empty unless the caller asked for the digests.
+   */
+  blobs: Set<string>;
   /** Not text, and holding no run of text either: named in the report, never counted as covered. */
   binary: string[];
   /** Not text, but holding runs that are: those runs were matched and the other bytes were not. */
   salvaged: string[];
-  /** Listed but absent, or not a readable file at all. */
-  missing: number;
+  /** Listed, and nothing here could be read: named with the reason, and a gap in the verdict. */
+  unreadable: string[];
   excluded: number;
   self_quoted: number;
 };
@@ -162,9 +169,13 @@ type ScanResult = {
  * not report it a second time under a source no exemption can name. Empty when the file scan
  * covered something narrower than the whole index, because then nothing can be assumed covered.
  *
- * `blobs` is what was *read*, never what the index merely lists. A tracked scan reads the working
- * tree, so the index blob of a file carrying an unstaged edit was not read by it and does not
- * belong here: see `unstaged_paths` and the note on `scan_history`.
+ * `blobs` is what was *read*, and it is proved rather than assumed: every file the scan opens is
+ * hashed the way git hashes it, and the digest of those bytes is what lands here. Nothing derived
+ * from the index may go in. The index says what a path *should* hold, and a tracked scan reads the
+ * working tree, which disagrees with the index whenever a file carries an unstaged edit, is left
+ * out of a sparse checkout, has a `skip-worktree` bit set, or cannot be opened at all. Each of
+ * those is a committed blob nothing opened; each was once skipped as covered, and each granted a
+ * clearance over bytes no run had looked at. See `blob_id`.
  */
 type Covered = { blobs: Set<string>; names: Set<string> };
 
@@ -1295,6 +1306,11 @@ function read_text(bytes: Uint8Array): { text: string; encoding: string; salvage
  * rather than the ones in the working tree. A symlink is read as the path it points at, which is
  * exactly what the repository stores for it and what a scan of the target's own contents would
  * miss when the target is outside the tree.
+ *
+ * `object_hash` asks for a receipt: the git name of every piece of content that reached the
+ * matcher, for the one caller allowed to skip work on the strength of it. Anything this scan did
+ * not read leaves no receipt and is therefore not covered — which is the whole rule, and the
+ * reason a path absent from a sparse checkout can no longer be mistaken for one that was scanned.
  */
 function scan_files(
   paths: string[],
@@ -1302,15 +1318,25 @@ function scan_files(
   root: string,
   quoted: Map<string, Set<string>>,
   contents: Map<string, Uint8Array> | null,
+  object_hash: string | null,
 ): ScanResult {
   const hits: Hit[] = [];
   const binary: string[] = [];
   const salvaged: string[] = [];
+  const unreadable: string[] = [];
+  const blobs = new Set<string>();
   const relatives: string[] = [];
   let scanned = 0;
-  let missing = 0;
   let excluded = 0;
   let self_quoted = 0;
+  // The receipt is written where the bytes are in hand, before anything decides what they are: a
+  // file that turns out not to be text was still read, and the history scan reading the same bytes
+  // would reach the same verdict and name it a second time.
+  const receipt = (bytes: Uint8Array): void => {
+    if (object_hash !== null) {
+      blobs.add(blob_id(object_hash, bytes));
+    }
+  };
   for (const path of paths) {
     const absolute = resolve(path);
     if (absolute.split(sep).includes(".git")) {
@@ -1323,6 +1349,7 @@ function scan_files(
     let text: string | null = null;
     const staged = contents?.get(label);
     if (staged !== undefined) {
+      receipt(staged);
       const read = read_text(staged);
       if (read === null) {
         binary.push(label);
@@ -1333,25 +1360,34 @@ function scan_files(
       }
       text = read.text;
     } else if (contents !== null) {
-      // Listed in the index but unreadable from it: a stale entry, or a submodule's gitlink.
-      missing += 1;
+      unreadable.push(
+        `${label} — listed in the index and nothing readable is staged under it: a stale entry, or a ` +
+          "submodule's gitlink",
+      );
       continue;
     } else {
       let stats: Stats;
       try {
         stats = lstatSync(absolute);
       } catch {
-        missing += 1;
+        unreadable.push(
+          `${label} — listed for this scan and not on disk: deleted without being staged, left out of a ` +
+            "sparse checkout, or carrying a skip-worktree bit",
+        );
         continue;
       }
       if (stats.isSymbolicLink()) {
         text = readlinkSync(absolute);
+        // What the repository stores for a symlink is the target string, so the target string is
+        // the content and its digest is the name the object graph knows that content by.
+        receipt(new TextEncoder().encode(text));
       } else if (!stats.isFile()) {
-        // A staged deletion, a stale index entry and a submodule directory all reach this list.
-        missing += 1;
+        unreadable.push(`${label} — not a readable file: a submodule's directory, a stale index entry, or a device`);
         continue;
       } else {
-        const read = read_text(readFileSync(absolute));
+        const bytes = readFileSync(absolute);
+        receipt(bytes);
+        const read = read_text(bytes);
         if (read === null) {
           binary.push(label);
           continue;
@@ -1375,7 +1411,7 @@ function scan_files(
   for (const leaf of new Set(relatives)) {
     hits.push(...scan_path(leaf, matchers));
   }
-  return { hits, scanned, nodes, binary, salvaged, missing, excluded, self_quoted };
+  return { hits, scanned, nodes, blobs, binary, salvaged, unreadable, excluded, self_quoted };
 }
 
 function run_git(args: string[], cwd: string, input?: Uint8Array): { ok: boolean; stdout: Buffer; stderr: string } {
@@ -1415,14 +1451,50 @@ function list_repository_files(root: string, staged: boolean): string[] {
 }
 
 /**
- * The object id of every file in the index whose working copy is the one the tracked scan read.
+ * Git's name for a piece of content: the hash of the header `blob <length>\0` and the bytes.
  *
- * `dirty` names the paths where the two disagree, and their blobs are deliberately left out. The
- * scan read the file on disk; the committed object beside it was never opened, so calling it
- * covered is how a clearance comes to be granted over content nothing looked at. See the note on
- * `scan_history`.
+ * Hashing what was read is the whole of the skip rule, and it replaced a rule that asked the index
+ * instead. The index answers for a *path*, and a tracked scan reads the working tree, so the two
+ * disagree in more ways than the obvious one. An unstaged edit was the first found: the scan read
+ * the edited copy, the committed blob beside it went unopened, and skipping it as covered cleared
+ * a version nobody had looked at. Narrowing the index answer by `git diff` fixed that one case and
+ * left its siblings standing — a path left out of a sparse checkout and a path carrying a
+ * `skip-worktree` bit are both absent from disk and both *clean* by `git diff`, so their blobs
+ * stayed covered while nothing on earth had read them, and the run still printed PASSED.
+ *
+ * A digest closes the family rather than the case. There is no list of reasons a file might not
+ * have been read, and no need for one: either these bytes went through the matcher or they did
+ * not, and only the first earns a skip.
+ *
+ * A working copy that differs from its blob for an innocent reason — a checkout filter, a CRLF
+ * conversion — simply does not match, so the committed blob is read in the history scan like any
+ * other object. That costs one read and is never wrong in the direction that matters.
  */
-function index_blobs(root: string, dirty: Set<string>): Set<string> {
+function blob_id(algorithm: string, bytes: Uint8Array): string {
+  return createHash(algorithm).update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+}
+
+/**
+ * Which hash this repository names its objects with. A repository initialised with `sha256` names
+ * the same bytes differently, so guessing would produce digests that match nothing and quietly
+ * cover nothing. `null` when git cannot say, or says something this does not know, and the caller
+ * then reads every reachable blob rather than assuming.
+ */
+function object_format(root: string): string | null {
+  const found = git_text(["rev-parse", "--show-object-format"], root);
+  const name = found.stdout.trim();
+  return found.ok && (name === "sha1" || name === "sha256") ? name : null;
+}
+
+/**
+ * The object id of every file the index lists — for the scope line, and for nothing else.
+ *
+ * Nothing is skipped on the strength of this set. What a clearance may skip is what it read, and
+ * what it read is hashed as it is read; see `blob_id` and `Covered`. This exists so the report can
+ * say how many committed blobs the working-tree pass did not reproduce, which is the number that
+ * tells a reader whether they are looking at a clean tree, a dirty one or a sparse one.
+ */
+function index_blobs(root: string): Set<string> {
   const listed = git_text(["ls-files", "-s", "-z"], root);
   const oids = new Set<string>();
   if (!listed.ok) {
@@ -1435,29 +1507,11 @@ function index_blobs(root: string, dirty: Set<string>): Set<string> {
       continue;
     }
     const object = entry.slice(0, tab).split(" ")[1];
-    if (object !== undefined && object.length > 0 && !dirty.has(entry.slice(tab + 1))) {
+    if (object !== undefined && object.length > 0) {
       oids.add(object);
     }
   }
   return oids;
-}
-
-/**
- * Tracked paths whose working copy is not what the index holds — edited, deleted, or replaced by
- * something that is not a file — or `null` when git could not say.
- *
- * `git diff --name-only` compares the working tree against the index, which is exactly the
- * question a tracked scan raises: it read the working tree, so these are the paths whose index
- * blob it did not read. A stale stat cache can name a path that turns out to be identical, which
- * costs one re-read and no correctness. A failure answers `null`, and the caller then assumes
- * nothing was covered rather than guessing.
- */
-function unstaged_paths(root: string): Set<string> | null {
-  const listed = git_text(["diff", "--name-only", "-z"], root);
-  if (!listed.ok) {
-    return null;
-  }
-  return new Set(listed.stdout.split("\0").filter((entry) => entry.length > 0));
 }
 
 /**
@@ -1514,6 +1568,53 @@ function describe_objects(root: string, oids: string[]): Map<string, { type: str
     }
   }
   return described;
+}
+
+/**
+ * Every path any object was ever stored under, read out of the tree objects themselves.
+ *
+ * `git rev-list --objects` prints each object once, with the first path it happened to walk it
+ * under. Two paths holding identical content are one blob and get one line between them, so the
+ * second name is never printed at all — and a file whose *name* is the disclosure escaped the
+ * moment its bytes matched something already seen. Deduplicating the printed paths, by path
+ * instead of by object, does not help: the line that would have carried the second name does not
+ * exist. A tree object, on the other hand, *contains* the names of its own entries, so reading the
+ * trees recovers every name in the graph whatever its content turned out to be shared with.
+ *
+ * The residue, because it is not nothing. Two directories whose contents are byte-identical are
+ * one tree object too, walked under one prefix. Every name inside them is still enumerated and
+ * every component of both prefixes is still scanned; what is missed is the second prefix's own
+ * full path, and with it a phrase that would have to cross the separator between that prefix and
+ * a name inside it.
+ *
+ * A tree entry is `<mode> <name>\0<raw object id>`, and the id is as wide as the repository's hash,
+ * which is half the width of the hexadecimal id the entry was requested by.
+ */
+function tree_names(root: string, trees: string[], prefixes: Map<string, string>): Set<string> {
+  const names = new Set<string>();
+  for (let start = 0; start < trees.length; start += BLOB_BATCH) {
+    const chunk = trees.slice(start, start + BLOB_BATCH);
+    for (const [index, body] of read_objects(root, chunk).entries()) {
+      const oid = chunk[index] as string;
+      if (body === null) {
+        continue;
+      }
+      const prefix = prefixes.get(oid) ?? "";
+      const id_bytes = oid.length / 2;
+      let at = 0;
+      while (at < body.length) {
+        const space = body.indexOf(0x20, at);
+        const end = space === -1 ? -1 : body.indexOf(0, space + 1);
+        if (end === -1) {
+          break;
+        }
+        const name = UTF8.decode(body.subarray(space + 1, end));
+        names.add(prefix === "" ? name : `${prefix}/${name}`);
+        at = end + 1 + id_bytes;
+      }
+    }
+  }
+  return names;
 }
 
 /**
@@ -1599,6 +1700,12 @@ function scan_refs(root: string, matchers: Matcher[]): { hits: Hit[]; refs: numb
  * object database, reachable and cloneable. Blobs are deduplicated by object id, so a file
  * unchanged across five hundred commits is one object, read once and reported once.
  *
+ * Paths are deduplicated by path, which is a different question with a different answer. Two paths
+ * holding identical content are one blob, and keying the path list on the object id therefore
+ * dropped the second name: a file whose *name* was the disclosure escaped the moment its bytes
+ * happened to match something already walked — rename a directory and commit both copies, and the
+ * new name was never scanned. Content is deduplicated by content and names by name.
+ *
  * An annotated tag is an object with a message of its own, and `git push --follow-tags` publishes
  * it beside the commits. Reading commit messages and stopping there left a release note — the one
  * text nobody rewrites — unread.
@@ -1612,18 +1719,22 @@ function scan_refs(root: string, matchers: Matcher[]): { hits: Hit[]; refs: numb
  * clearance forever — a gate nobody can ever get green is a gate people stop running. Skipping it
  * leaves exactly the question a clearance asks: what is in the object graph that is not in the tree.
  *
- * That skip is sound only while the working tree and the index agree, and keeping it sound is the
- * caller's job. A tracked scan reads the file on disk: with an unstaged edit, the committed blob
- * beside it was never opened, and skipping it as "already read" let the one version a push would
- * carry go unscanned under a plain PASSED. There were two ways out. Refusing to clear a dirty tree
- * is simpler and unambiguous, and it makes the clearance unusable during exactly the hours a
- * repository is dirty — mid-work, which is when somebody types a client's name — so it would be
- * run less, and a gate that is skipped clears nothing. Reading both versions costs one extra blob
- * per edited file and is always correct, so that is what happens: `main` drops the edited paths
- * from `covered`, their committed blobs arrive here like any other superseded object, and the
- * report tells the two apart by source — the working copy under its own path, the commit under a
- * `history:` label naming the commit. Nothing is left unscanned, so no run has to invent a verdict
- * for a clearance that stopped halfway.
+ * That skip is sound only for blobs the file scan genuinely read, and proving it is `main`'s job:
+ * every file it opens is hashed the way git hashes it, and only those digests arrive here. What
+ * this rules out is a family, not a case. A tracked scan reads the working tree, so an unstaged
+ * edit means the committed blob went unopened; a sparse checkout and a `skip-worktree` bit mean
+ * there was no file on disk to open at all, and — because both are *clean* by `git diff` — the
+ * earlier repair, which subtracted the edited paths from the index listing, waved both straight
+ * through. Each of them skipped the one version a push would carry, under a plain PASSED.
+ *
+ * Reading both versions costs one extra blob per unreproduced file and is always correct, so that
+ * is what happens: those blobs arrive here like any other superseded object, and the report tells
+ * the two apart by source — the working copy under its own path, the commit under a `history:`
+ * label naming the commit. Refusing to clear a dirty tree instead is simpler and unambiguous, and
+ * it makes the clearance unusable during exactly the hours a repository is dirty — mid-work, which
+ * is when somebody types a client's name — so it would be run less, and a gate that is skipped
+ * clears nothing. Nothing is left unscanned, so no run has to invent a verdict for a clearance
+ * that stopped halfway.
  *
  * A shallow clone holds only what was fetched, and an explicit range may not resolve in one. Both
  * still run, and both say so in the scope, because a partial history that prints PASSED is the
@@ -1648,21 +1759,38 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
 
   const oids: string[] = [];
   const paths = new Map<string, string>();
+  // Every distinct path, kept apart from the object dedupe above: see the note on this function.
+  // The label a blob is reported under still names the first path it was found at, because a
+  // reader needs one place to look and the content is the same wherever else it sits.
+  const walked = new Set<string>();
   for (const line of listed.stdout.split("\n")) {
     if (line.length === 0) {
       continue;
     }
     const space = line.indexOf(" ");
     const oid = space === -1 ? line : line.slice(0, space);
+    const path = space === -1 ? "" : line.slice(space + 1);
+    if (path !== "") {
+      walked.add(path);
+    }
     if (paths.has(oid)) {
       continue;
     }
-    paths.set(oid, space === -1 ? "" : line.slice(space + 1));
+    paths.set(oid, path);
     oids.push(oid);
   }
 
+  const described = describe_objects(root, oids);
+
   const hits: Hit[] = [];
-  const historical = [...new Set([...paths.values()].filter((entry) => entry !== ""))];
+  for (const path of tree_names(
+    root,
+    oids.filter((oid) => described.get(oid)?.type === "tree"),
+    paths,
+  )) {
+    walked.add(path);
+  }
+  const historical = [...walked];
   const nodes = path_nodes(historical).filter((node) => !covered.names.has(node));
   for (const node of nodes) {
     hits.push(...scan_name(`history:${node}`, matchers).map((hit) => ({ ...hit, path: node, text: node })));
@@ -1676,7 +1804,6 @@ function scan_history(root: string, requested: string | null, matchers: Matcher[
     );
   }
 
-  const described = describe_objects(root, oids);
   const wanted: string[] = [];
   const tag_oids: string[] = [];
   const unread: string[] = [];
@@ -1827,7 +1954,14 @@ function comment_character(root: string): string {
 }
 
 /**
- * Every occurrence of one term in one file of the tree, read once per path and term.
+ * Every occurrence of one term in one file of the tree, read once per path and term, and whether
+ * the file could be read at all.
+ *
+ * The second answer is not a detail. A run that cannot open the file an entry names has learnt
+ * nothing about that entry, and the two facts it must not confuse are "the sentence has changed"
+ * and "I never saw the sentence". Collapsing them made `--path` pointed outside a git repository
+ * report every healthy entry in the overlay as anchor-rewritten, because the paths resolved
+ * against a root that holds none of them. See `resolve_exemption_contexts`.
  *
  * `contents` is the index when the run is judging the index rather than the working tree, because
  * an exemption has to be resolved against the same bytes the run is reporting on. Reading the
@@ -1838,24 +1972,53 @@ function file_occurrences(
   path: string,
   matcher: Matcher,
   contents: Map<string, Uint8Array> | null,
-  cache: Map<string, Hit[]>,
-): Hit[] {
+  cache: Map<string, { hits: Hit[]; readable: boolean }>,
+): { hits: Hit[]; readable: boolean } {
   const key = exemption_key(path, matcher.category, matcher.term);
   const already = cache.get(key);
   if (already !== undefined) {
     return already;
   }
-  let hits: Hit[] = [];
+  let found: { hits: Hit[]; readable: boolean } = { hits: [], readable: false };
   try {
     const bytes = contents === null ? readFileSync(join(root, path)) : contents.get(path);
     const read = bytes === undefined ? null : read_text(bytes);
-    hits = read === null ? [] : scan_text(path, read.text, [matcher], null).hits;
+    // Not text and holding no readable run counts as unread here too: there is no sentence to
+    // resolve, and saying so is different from saying the sentence changed.
+    found = read === null ? found : { hits: scan_text(path, read.text, [matcher], null).hits, readable: true };
   } catch {
-    // Gone from the tree, or not a file at all: nothing to read a sentence out of, and `--audit`
-    // already calls such an entry stale.
+    // Absent from this root, or not a file at all: nothing to read a sentence out of.
   }
-  cache.set(key, hits);
-  return hits;
+  cache.set(key, found);
+  return found;
+}
+
+/**
+ * The clauses one entry covers, out of the occurrences its file holds at the line it names.
+ *
+ * A line can carry the same term more than once, and each occurrence brings its own clause — the
+ * forty-eight characters either side of it. Taking all of them let one entry authorise every
+ * occurrence on its line, including one nobody had read: the author judged a sentence, the entry
+ * quietly covered its neighbour, and no run said so. So an entry that records an `anchor` covers
+ * the clause its anchor names and no other, and a second occurrence far enough along the line to
+ * read differently needs a second entry with its own anchor. `--audit` prints every digest on the
+ * line for exactly that purpose.
+ *
+ * Two occurrences whose clauses read *identically* — near neighbours on a short line, where each
+ * window spans the whole of it — are one sentence twice over, and one judgement covers both. That
+ * is the same rule as two identical sentences in two places in the file, not an exception to it:
+ * there is nothing a second entry could say that the first does not, and nothing here could tell
+ * two identical clauses apart if there were.
+ *
+ * An entry that records no anchor still covers every clause at its line. It has said nothing about
+ * which one it read, so nothing here can narrow it, and narrowing it by guessing would silently
+ * drop coverage every overlay written before anchors existed depends on. That is the cost of
+ * leaving the field out, it is one more reason to record it, and `--audit` names each entry that
+ * has not.
+ */
+function covered_contexts(occurrences: Hit[], entry: Exemption): { covered: string[]; all: string[] } {
+  const all = [...new Set(occurrences.filter((hit) => hit.line === entry.line).map(occurrence_context))];
+  return { covered: entry.anchor === "" ? all : all.filter((text) => anchor_digest(text) === entry.anchor), all };
 }
 
 /**
@@ -1878,7 +2041,8 @@ function file_occurrences(
  * The same sentence twice in one file is covered once, by one entry, deliberately. There is
  * nothing a second entry could say that the first does not already say, and nothing in this
  * mechanism could tell two identical clauses apart if there were. Two occurrences in two
- * *different* sentences are two judgements and need two entries, however close together they sit.
+ * *different* sentences are two judgements and need two entries, however close together they sit —
+ * including two on one line, which is `covered_contexts`.
  *
  * A `line` of 0 names the path itself, which has no sentence and no line of its own, and matches
  * nothing inside the file; a positive `line` matches content and never the path.
@@ -1955,31 +2119,48 @@ function anchor_digest(context: string): string {
  * rewritten resolves to nothing rather than to the new sentence. The caller reports the mismatch as
  * an exemption error, because losing a suppression silently is how the next reader concludes the
  * entry was never needed.
+ *
+ * An entry whose file this run could not read at all is a third state, and it is not an error.
+ * `--path` pointed outside a git repository has no repository root to resolve against, so it
+ * resolved every entry against the scanned directory, found none of the files, and announced that
+ * all eleven healthy exemptions in the overlay had been rewritten — a false alarm on a legitimate
+ * invocation, and the wrong three words for a run that had simply never seen the text. A run that
+ * could not open the file has learnt nothing about the entry, so it says that instead, in a list
+ * of its own, and does not fail. The direction is safe on its own terms: an entry that resolves to
+ * nothing suppresses nothing, so the run reports more than it otherwise would, never less. Whether
+ * such an entry is stale is a question for `--audit`, run from the repository the entry names,
+ * which fails on exactly that.
  */
 function resolve_exemption_contexts(
   root: string,
   exemptions: Exemption[],
   matchers: Matcher[],
   contents: Map<string, Uint8Array> | null,
-): { exemptions: Exemption[]; mismatched: string[] } {
+): { exemptions: Exemption[]; mismatched: string[]; unresolved: string[] } {
   const by_term = new Map(
     matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
   );
-  const cache = new Map<string, Hit[]>();
+  const cache = new Map<string, { hits: Hit[]; readable: boolean }>();
   const mismatched: string[] = [];
+  const unresolved: string[] = [];
   const resolved = exemptions.map((entry) => {
     const matcher = by_term.get(`${entry.category}\u0000${entry.term.toLowerCase()}`);
     if (entry.line === 0 || matcher === undefined) {
       return entry;
     }
-    const contexts = new Set<string>();
-    for (const hit of file_occurrences(root, entry.path, matcher, contents, cache)) {
-      if (hit.line === entry.line) {
-        contexts.add(occurrence_context(hit));
-      }
+    const occurrences = file_occurrences(root, entry.path, matcher, contents, cache);
+    if (!occurrences.readable) {
+      unresolved.push(
+        `${shorten(entry.source)} (${entry.path}:${entry.line} — ${entry.term}): this run could not read ` +
+          `${entry.path} under ${shorten(root)}, so it could not resolve the sentence the entry covers, and ` +
+          "the entry suppresses nothing here. Not an error: a run that never saw the text has no opinion " +
+          "about it. Run --audit from the repository the entry names to find out whether it is stale.",
+      );
+      return { ...entry, contexts: [] };
     }
-    const digests = [...contexts].map(anchor_digest);
-    if (entry.anchor !== "" && !digests.includes(entry.anchor)) {
+    const { covered, all } = covered_contexts(occurrences.hits, entry);
+    if (entry.anchor !== "" && covered.length === 0) {
+      const digests = all.map(anchor_digest);
       mismatched.push(
         `${shorten(entry.source)} (${entry.path}:${entry.line} — ${entry.term}): the sentence recorded as ` +
           `\`anchor\` ${entry.anchor} is not the one at that line ` +
@@ -1989,9 +2170,9 @@ function resolve_exemption_contexts(
       );
       return { ...entry, contexts: [] };
     }
-    return { ...entry, contexts: [...contexts] };
+    return { ...entry, contexts: covered };
   });
-  return { exemptions: resolved, mismatched };
+  return { exemptions: resolved, mismatched, unresolved };
 }
 
 function exemption_key(path: string, category: string, term: string): string {
@@ -2110,10 +2291,16 @@ type Verdict = {
   exemptions: number;
   rejected: string[];
   scope: string;
-  /** Read, and not text at all: named here because a verdict over them is a verdict over nothing. */
+  /**
+   * Everything the run could not read: not text in any encoding, or absent, or not a file at all.
+   * Each entry names itself and says why, because a count leaves no trace of what was missed, and
+   * every one of them is a gap in the verdict.
+   */
   unread: string[];
   /** Not text, but holding runs that are: matched in part, so named as covered in part. */
   partial: string[];
+  /** Exemptions this run could not resolve, because it could not read the file they name. */
+  unresolved: string[];
   quiet: boolean;
   dictionaries: Dictionary[];
 };
@@ -2132,6 +2319,7 @@ function report({
   scope,
   unread,
   partial,
+  unresolved,
   quiet,
   dictionaries,
 }: Verdict): void {
@@ -2166,8 +2354,8 @@ function report({
     console.log("");
     console.log(
       `Not read — nothing was matched in ${unread.length} ` +
-        `${unread.length === 1 ? "file or blob" : "files and blobs"}: not text in any encoding this checker ` +
-        "knows, and holding no run of readable text either:",
+        `${unread.length === 1 ? "file or blob" : "files and blobs"}, each named here with the reason it ` +
+        "could not be read:",
     );
     for (const path of unread) {
       console.log(`  ${path}`);
@@ -2183,6 +2371,19 @@ function report({
     );
     for (const path of partial) {
       console.log(`  ${path}`);
+    }
+  }
+
+  if (unresolved.length > 0) {
+    console.log("");
+    const names = unresolved.length === 1 ? "entry names a file" : "entries name files";
+    console.log(
+      `Exemptions not resolved — ${unresolved.length} ${names} this run could not read, so nothing was ` +
+        "suppressed on their account. Not an error, and not a gap in coverage: an entry that resolves to " +
+        "nothing makes this run report more, never less.",
+    );
+    for (const failure of unresolved) {
+      console.log(`  ${failure}`);
     }
   }
 
@@ -2211,7 +2412,7 @@ function report({
       `PASSED WITH GAPS — no unexempted term found in what could be read across ${scope}, and ` +
         `${gaps} ${gaps === 1 ? "file or blob" : "files and blobs"} could not be read in full: ` +
         `${unread.length} not at all, ${partial.length} in part, each one named above. ${backing} ` +
-        "A term inside the bytes nothing could decode would not have been found.",
+        "A term inside what could not be read would not have been found.",
     );
     return;
   }
@@ -2242,7 +2443,10 @@ function report({
  * An `ok` entry also says what else it covers and what it does not. A sentence that appears twice
  * is covered twice by one entry, which is stated rather than left to be discovered; an occurrence
  * of the same term in a different sentence, which no entry covers, is named here as well, because
- * that is the entry a reader is about to assume exists.
+ * that is the entry a reader is about to assume exists. "A different sentence" is counted by
+ * clause and not by line: two occurrences on one line are two clauses unless they read the same,
+ * so an entry anchored on the first of them is told, here, that the second is uncovered. Counting
+ * by line hid exactly that, and hid it from the one report written to find it.
  *
  * The audit is also where the history side of an entry is kept honest. An entry whose file is gone,
  * or whose term has left it, no longer covers anything in the history either, because the sentence a
@@ -2261,32 +2465,29 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
   const by_key = new Map(
     matchers.map((matcher) => [`${matcher.category}\u0000${matcher.term.toLowerCase()}`, matcher]),
   );
-  const cache = new Map<string, Hit[]>();
+  const cache = new Map<string, { hits: Hit[]; readable: boolean }>();
   const matcher_for = (entry: Exemption): Matcher | undefined =>
     by_key.get(`${entry.category}\u0000${entry.term.toLowerCase()}`);
 
-  // Which lines the entries for one path, category and term cover between them, so an occurrence
+  // Which clauses the entries for one path, category and term cover between them, so an occurrence
   // no entry has judged is named once rather than once for every entry that does not cover it.
-  const judged = new Map<string, Set<number>>();
+  // Clauses rather than lines: an entry covers text, and a line may carry more of it than the
+  // entry ever read.
+  const judged = new Map<string, Set<string>>();
   for (const entry of exemptions) {
     const matcher = matcher_for(entry);
     if (matcher === undefined || entry.line === 0) {
       continue;
     }
     const key = exemption_key(entry.path, entry.category, entry.term);
-    const occurrences = file_occurrences(root, entry.path, matcher, null, cache);
-    const contexts = new Set(occurrences.filter((hit) => hit.line === entry.line).map(occurrence_context));
-    if (entry.anchor !== "" && ![...contexts].some((context) => anchor_digest(context) === entry.anchor)) {
-      // Anchored on a sentence that is no longer there: it covers nothing, so it judges nothing.
-      continue;
+    const { covered } = covered_contexts(file_occurrences(root, entry.path, matcher, null, cache).hits, entry);
+    // An entry anchored on a sentence that is no longer there resolves to no clause at all, so it
+    // judges nothing and contributes nothing here.
+    const clauses = judged.get(key) ?? new Set<string>();
+    for (const context of covered) {
+      clauses.add(context);
     }
-    const lines = judged.get(key) ?? new Set<number>();
-    for (const hit of occurrences) {
-      if (contexts.has(occurrence_context(hit))) {
-        lines.add(hit.line);
-      }
-    }
-    judged.set(key, lines);
+    judged.set(key, clauses);
   }
 
   let stale = 0;
@@ -2317,24 +2518,23 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
     } else if (!statSync(absolute).isFile()) {
       status = "STALE — the path is a directory, so it has no line to cover";
     } else {
-      const occurrences = file_occurrences(root, entry.path, matcher, null, cache);
-      const anchored = occurrences.filter((hit) => hit.line === entry.line);
+      const occurrences = file_occurrences(root, entry.path, matcher, null, cache).hits;
+      const { covered, all } = covered_contexts(occurrences, entry);
       const at = (hits: Hit[]): string => [...new Set(hits.map((hit) => hit.line))].sort((a, b) => a - b).join(", ");
       if (occurrences.length === 0) {
         status =
           read_text(readFileSync(absolute)) === null
             ? "STALE — the file is not text and holds no readable run, so nothing in it can be matched"
             : "STALE — the file no longer contains this term";
-      } else if (anchored.length === 0) {
+      } else if (all.length === 0) {
         status =
           `DRIFTED — written for line ${entry.line}, which no longer carries this term; it is now at ` +
           `${at(occurrences)}. This entry covers the sentence it was written for, and that sentence has ` +
           "gone, so it suppresses nothing and the hit is back. Read the occurrence above and move the " +
           "entry to it only if the same reason still holds.";
       } else {
-        const contexts = new Set(anchored.map(occurrence_context));
-        const digests = [...contexts].map(anchor_digest);
-        if (entry.anchor !== "" && !digests.includes(entry.anchor)) {
+        const digests = all.map(anchor_digest);
+        if (covered.length === 0) {
           status =
             `REWRITTEN — line ${entry.line} still carries this term, but not in the sentence this entry was ` +
             `written against: it records anchor ${entry.anchor} and the line now reads ${digests.join(", ")}. ` +
@@ -2349,12 +2549,27 @@ function audit_allowlist(root: string, exemptions: Exemption[], rejected: string
                 `"anchor": "${digests[0] ?? ""}"`,
             );
           }
-          const twins = occurrences.filter((hit) => hit.line !== entry.line && contexts.has(occurrence_context(hit)));
+          if (all.length > 1) {
+            // One line, more than one clause. Which of them an entry covers is the anchor's job,
+            // so an unanchored entry here is covering text nobody ever pointed it at.
+            const reach =
+              entry.anchor === ""
+                ? "with no `anchor` this entry covers all of them, which is one judgement spent on text it " +
+                  "never named — record the anchor of the one that was read and give the others entries of " +
+                  "their own"
+                : "this entry covers only the one it anchors, and each of the others needs an entry of its own";
+            notes.push(
+              `line ${entry.line} carries this term in ${all.length} clauses that read differently ` +
+                `(${digests.join(", ")}); ${reach}`,
+            );
+          }
+          const clauses = new Set(covered);
+          const twins = occurrences.filter((hit) => hit.line !== entry.line && clauses.has(occurrence_context(hit)));
           if (twins.length > 0) {
             notes.push(`covers the same sentence again at line ${at(twins)}; one judgement, one entry`);
           }
           const group = judged.get(exemption_key(entry.path, entry.category, entry.term));
-          const loose = occurrences.filter((hit) => !(group?.has(hit.line) ?? false));
+          const loose = occurrences.filter((hit) => !(group?.has(occurrence_context(hit)) ?? false));
           if (loose.length > 0) {
             uncovered += loose.length;
             notes.push(
@@ -2426,7 +2641,12 @@ type Fixture = { file: string; body: string | Uint8Array; expect: string[] };
  * - a branch whose name carries a term, and a lightweight tag whose name carries a phrase either
  *   side of a separator. Neither name is in any object, and both travel with a push.
  * - a file committed with a term in it and then edited on disk and left unstaged, which is the
- *   version a tracked scan reads standing beside the version a push would carry.
+ *   version a tracked scan reads standing beside the version a push would carry;
+ * - a file committed with a term in it, marked `skip-worktree` and removed from disk, which is
+ *   what a sparse checkout looks like from here: tracked, listed, absent, and *clean* by
+ *   `git diff`, so every rule that asked the index called its blob covered;
+ * - two paths holding byte-identical content, one of them named after a term. They are one blob,
+ *   so a path list keyed on the object id never reaches the second name.
  */
 function plant_history(directory: string): string {
   const repository = join(directory, "history-fixture");
@@ -2476,8 +2696,30 @@ function plant_history(directory: string): string {
   // Committed with a term in it, and edited on disk further down without being staged. A tracked
   // scan reads the working copy, so this file's committed blob is one that scan never opened.
   writeFileSync(join(repository, "unstaged.txt"), "a line the commit still carries: zarquilon\n");
+  // Two paths, one blob. The content is identical and innocuous; the second path's *name* is the
+  // disclosure, and it is the name that has to survive the object dedupe. Both are deleted below,
+  // so only the history walk can find them, and the clean name sorts first inside the tree.
+  mkdirSync(join(repository, "shared"), { recursive: true });
+  writeFileSync(join(repository, "shared", "dup-a-clean.txt"), "identical bytes under two names\n");
+  writeFileSync(join(repository, "shared", "dup-b-zarquilon.txt"), "identical bytes under two names\n");
+  // Committed with a term in it, then hidden the way a sparse checkout hides a path: the index
+  // entry stays, the file leaves the disk, and `git diff` reports nothing at all.
+  writeFileSync(join(repository, "sparse.txt"), "a line only the index still carries: zarquilon\n");
   Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
   commit("remove it again, the way a scrub would");
+  // Both duplicate names leave the tree, so only the object graph still holds either of them.
+  rmSync(join(repository, "shared"), { recursive: true });
+  Bun.spawnSync(["git", "add", "-A"], { cwd: repository, stdout: "pipe", stderr: "pipe" });
+  commit("drop the duplicate names");
+  const hidden = Bun.spawnSync(["git", "update-index", "--skip-worktree", "sparse.txt"], {
+    cwd: repository,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (hidden.exitCode !== 0) {
+    throw new Error(`self-test could not set skip-worktree: ${hidden.stderr.toString()}`);
+  }
+  rmSync(join(repository, "sparse.txt"));
   const tagged = Bun.spawnSync(
     [
       "git",
@@ -2693,6 +2935,20 @@ function self_test(categories: TermCategory[]): number {
       ].join("\n"),
     );
 
+    // One line, two occurrences of one term. On line 1 they are far enough apart that each brings
+    // its own clause, so they are two sentences and two judgements; on line 2 they are near
+    // enough that both clauses are the whole line, which is one sentence written twice.
+    const two_clauses = "two-clauses.md";
+    writeFileSync(
+      join(directory, two_clauses),
+      [
+        "the policy list names brulq as prohibited, and further along the very same line, past a good " +
+          "deal of intervening prose, an unrelated remark names brulq a second time",
+        "brulq beside brulq",
+        "",
+      ].join("\n"),
+    );
+
     // Binary in every encoding this checker knows: NULs at both parities, so it is not UTF-16, and
     // its one readable run is fifteen characters, a single character under the salvage threshold.
     // The term in it must NOT be reported: a short run inside entropy is where a three-letter term
@@ -2754,7 +3010,7 @@ function self_test(categories: TermCategory[]): number {
       ]),
     );
 
-    const result = scan_files(walk_path(directory), matchers, directory, new Map(), null);
+    const result = scan_files(walk_path(directory), matchers, directory, new Map(), null, null);
     const found = new Map<string, Set<string>>();
     for (const hit of result.hits) {
       const seen = found.get(hit.source) ?? new Set<string>();
@@ -2994,6 +3250,71 @@ function self_test(categories: TermCategory[]): number {
       failures.push("a malformed anchor, or one on a path exemption, was applied instead of rejected");
     }
 
+    // Two occurrences on one line. Each brings its own clause, so an entry anchored on the first
+    // covers the first and leaves the second reported: an anchor names a sentence, and nobody has
+    // read the other one. An entry that records no anchor cannot say which it read, so it keeps
+    // both — which is the cost of leaving the field out, stated rather than discovered.
+    const clause_entry: Exemption = {
+      path: two_clauses,
+      category: "self_test_fixture",
+      term: "brulq",
+      line: 1,
+      why: "fixture",
+      source: "self-test",
+      anchor: "",
+      contexts: [],
+    };
+    const clause_hits = result.hits.filter((hit) => hit.source === two_clauses && hit.term === "brulq");
+    const first_line = clause_hits.filter((hit) => hit.line === 1);
+    const unanchored_line = resolve_exemption_contexts(directory, [clause_entry], matchers, null);
+    if (first_line.length !== 2 || unanchored_line.exemptions[0]?.contexts.length !== 2) {
+      failures.push("two occurrences far apart on one line did not read as two clauses, so the fixture proves nothing");
+    }
+    if (partition_hits(first_line, unanchored_line.exemptions).reported.length !== 0) {
+      failures.push("an entry recording no anchor stopped covering the line it names");
+    }
+    const one_clause = resolve_exemption_contexts(
+      directory,
+      [{ ...clause_entry, anchor: anchor_digest(unanchored_line.exemptions[0]?.contexts[0] ?? "") }],
+      matchers,
+      null,
+    );
+    const by_clause = partition_hits(first_line, one_clause.exemptions);
+    if (one_clause.mismatched.length !== 0 || by_clause.exempt.length !== 1 || by_clause.reported.length !== 1) {
+      failures.push(
+        "an entry anchored on one clause of a line authorised the other occurrence as well, which is one " +
+          "judgement spent on a sentence nobody read",
+      );
+    }
+    // And the other way: two occurrences whose clauses read the same are one sentence twice over,
+    // covered by one entry, exactly as two identical sentences on two lines are.
+    const twin_clause = resolve_exemption_contexts(directory, [{ ...clause_entry, line: 2 }], matchers, null);
+    const second_line = clause_hits.filter((hit) => hit.line === 2);
+    if (second_line.length !== 2 || twin_clause.exemptions[0]?.contexts.length !== 1) {
+      failures.push("two occurrences sharing one clause on a short line read as two sentences");
+    }
+    if (partition_hits(second_line, twin_clause.exemptions).reported.length !== 0) {
+      failures.push("one entry did not cover both occurrences of the one clause its line carries");
+    }
+
+    // An entry whose file this run could not read at all is unresolved, and unresolved is not
+    // rewritten. `--path` pointed outside a git repository resolves every entry against a root
+    // that holds none of them, and used to announce that every healthy entry had been reworded.
+    const outside = join(directory, "not-a-repository");
+    mkdirSync(outside, { recursive: true });
+    const unreadable_here = resolve_exemption_contexts(
+      outside,
+      [{ ...clause_entry, anchor: anchor_digest(unanchored_line.exemptions[0]?.contexts[0] ?? "") }],
+      matchers,
+      null,
+    );
+    if (unreadable_here.unresolved.length !== 1 || unreadable_here.mismatched.length !== 0) {
+      failures.push("an entry naming a file this run could not read was reported as an anchor somebody rewrote");
+    }
+    if (unreadable_here.exemptions[0]?.contexts.length !== 0) {
+      failures.push("an entry resolved a sentence out of a file that was never read");
+    }
+
     // A historical path may contain an `@`. Recovering the path from the label by cutting at its
     // last `@` read `assets@2x/vondrel-mikashe.png` as `assets`, so an exemption written for one
     // path suppressed a hit belonging to another. The path travels on the hit instead.
@@ -3074,39 +3395,79 @@ function self_test(categories: TermCategory[]): number {
     if (history.blobs < 2) {
       failures.push(`the history scan read ${history.blobs} blobs, so it is not walking the object graph`);
     }
-    // Skipping what the tracked scan already read must not skip anything it did not.
-    const superseded = scan_history(repository, null, matchers, {
-      blobs: index_blobs(repository, new Set()),
-      names: new Set(),
+    // A historical path is scanned even when its blob is one another path already supplied. The
+    // two duplicates are one object; the second name is the disclosure, and deduplicating paths by
+    // object id meant it was never matched at all.
+    if (!history.hits.some((hit) => hit.path === "shared/dup-b-zarquilon.txt" && hit.line === 0)) {
+      failures.push(
+        "a historical path was never scanned because an earlier path held identical content: content is " +
+          "deduplicated by content, and a name is not content",
+      );
+    }
+
+    // The two halves as `main` runs them: the tracked scan reads the working tree and hands the
+    // clearance the digest of every byte it actually read, and the clearance skips on that
+    // evidence alone. The fixture disagrees with its own index in two ways at once — a file
+    // carrying an unstaged edit, and a file hidden behind a skip-worktree bit the way a sparse
+    // checkout hides one.
+    const object_hash = object_format(repository);
+    if (object_hash === null) {
+      failures.push("git could not say which hash names this repository's objects, so nothing could be proved read");
+    }
+    const tracked = scan_files(
+      list_repository_files(repository, false),
+      matchers,
+      repository,
+      new Map(),
+      null,
+      object_hash,
+    );
+    const proved = scan_history(repository, null, matchers, {
+      blobs: tracked.blobs,
+      names: new Set(tracked.nodes),
     });
-    if (superseded.current === 0) {
-      failures.push("the history scan re-read the version the tracked scan had already covered");
+    if (proved.current === 0) {
+      failures.push("nothing was skipped as already read, so the receipt covers nothing and the scope line lies");
     }
-    if (!superseded.hits.some((hit) => hit.path === "was-here.txt")) {
-      failures.push("skipping the current version also hid a superseded blob, which is the clearance itself");
+    if (!proved.hits.some((hit) => hit.path === "was-here.txt")) {
+      failures.push("skipping what was read also hid a superseded blob, which is the clearance itself");
     }
-    // And the skip is keyed on what the tracked scan actually read, never on what the index lists.
-    // A file edited and left unstaged was read from disk, so its committed blob is unread — and
-    // leaving that blob in `covered` cleared a history nobody had looked at, under a plain PASSED.
-    if (superseded.hits.some((hit) => hit.path === "unstaged.txt")) {
-      failures.push("the unstaged fixture proves nothing: its committed blob was read even with its path covered");
-    }
-    const edited = unstaged_paths(repository);
-    if (edited === null || !edited.has("unstaged.txt")) {
-      failures.push("an unstaged edit was not detected, so a dirty tree cannot be told from a clean one");
-    }
-    if (index_blobs(repository, edited ?? new Set()).size >= index_blobs(repository, new Set()).size) {
-      failures.push("the index blob of an edited file was still counted as read by the tracked scan");
-    }
-    const dirty_tree = scan_history(repository, null, matchers, {
-      blobs: index_blobs(repository, edited ?? new Set()),
-      names: new Set(),
-    });
-    if (!dirty_tree.hits.some((hit) => hit.path === "unstaged.txt" && hit.term === "zarquilon")) {
+    if (!proved.hits.some((hit) => hit.path === "unstaged.txt" && hit.term === "zarquilon")) {
       failures.push("the committed version of an unstaged edit went unscanned, so a dirty tree cleared nothing");
     }
-    if (dirty_tree.current === 0) {
-      failures.push("dropping the edited paths also dropped the skip for every file that was not edited");
+    // The one this rule was rewritten for. `sparse.txt` is tracked, listed, absent from disk, and
+    // clean by `git diff`, so nothing read it and nothing ever could — and it was skipped anyway.
+    if (!proved.hits.some((hit) => hit.path === "sparse.txt" && hit.term === "zarquilon")) {
+      failures.push(
+        "a tracked file absent under a skip-worktree bit was skipped as already read, so its committed " +
+          "version cleared a disclosure nothing had opened",
+      );
+    }
+    // The rule this replaced, over the same fixture, so the fixture is known to prove something:
+    // asking the index covered both files, and both went unread under a plain PASSED.
+    const by_the_index = scan_history(repository, null, matchers, {
+      blobs: index_blobs(repository),
+      names: new Set(),
+    });
+    if (by_the_index.hits.some((hit) => hit.path === "sparse.txt" || hit.path === "unstaged.txt")) {
+      failures.push("the sparse and unstaged fixtures prove nothing: the index rule caught them too");
+    }
+    if (!by_the_index.hits.some((hit) => hit.path === "was-here.txt")) {
+      failures.push("the index comparison read nothing at all, so it is not the rule this replaced");
+    }
+    // What could not be read is named, not counted, and it is a gap in the verdict — the same
+    // treatment a file read only in part already had, for the stronger of the two cases.
+    if (!tracked.unreadable.some((entry) => entry.startsWith("sparse.txt "))) {
+      failures.push("a tracked file nothing could read was counted without being named");
+    }
+    if (verdict_for([], 0, tracked.unreadable.length) !== "PASSED WITH GAPS") {
+      failures.push("a file that could not be read at all left the verdict word unchanged");
+    }
+    // And a file that was read leaves a receipt git agrees with, or every skip above is a
+    // coincidence: the digest of the bytes on disk is the object id the index lists for them.
+    const clean_blob = blob_id(object_hash ?? "sha1", readFileSync(join(repository, "clean.txt")));
+    if (!index_blobs(repository).has(clean_blob)) {
+      failures.push("the digest of a file this scan read is not the name git gives that content");
     }
     const staged_only = scan_history(repository, null, build_matchers([]), nothing_covered);
     if (staged_only.hits.length !== 0) {
@@ -3210,8 +3571,9 @@ function self_test(categories: TermCategory[]): number {
         `${controls.length} controls, ${bounded.length} whole-word ${bounded.length === 1 ? "term" : "terms"} ` +
         `buried in the boundary control, ${result.scanned} files and ${result.nodes.length} path components ` +
         `scanned, ${result.salvaged.length} read only for the runs of text in them, ${result.binary.length} ` +
-        `unread, ${history.blobs} historical blobs, ${history.refs} ref ` +
-        `${history.refs === 1 ? "name" : "names"}, ${history.tags} tag ` +
+        `unread, ${tracked.blobs.size} tracked ${tracked.blobs.size === 1 ? "blob" : "blobs"} proved read and ` +
+        `${tracked.unreadable.length} named unreadable in the fixture repository, ${history.blobs} historical ` +
+        `blobs, ${history.refs} ref ${history.refs === 1 ? "name" : "names"}, ${history.tags} tag ` +
         `${history.tags === 1 ? "message" : "messages"} and ${history.unread.length} named ` +
         `${history.unread.length === 1 ? "skip" : "skips"} across ${history.commits} commits, ` +
         `phrase separators cleared in ${elapsed}ms.`,
@@ -3228,16 +3590,21 @@ function self_test(categories: TermCategory[]): number {
         "percent-encoded, fullwidth, mathematical, ligatured, Cyrillic or Greek spelling is caught; a term in a " +
         "filename, a directory name, a phrase split across a directory separator, a symlink target, a UTF-16 " +
         "file, the readable runs of a file with one stray NUL, a short plaintext run behind NULs, a phrase " +
-        "either side of one damaged byte, a branch name, a lightweight tag name, an annotated tag's message " +
-        "and a deleted file's historical blob are all caught; the committed version of a file carrying an " +
-        "unstaged edit is read here rather than skipped as already scanned; a run one character under the " +
-        "salvage threshold, a phrase either side of dropped bytes, and every control are not; an exemption " +
-        "covers the sentence at the line it names — both copies of it, wherever an edit has moved them, in the " +
-        "tree and in every version the history holds — and covers neither a different sentence three lines " +
-        "away, nor anything at all once its own line has lost the term or has been rewritten out from under a " +
-        "recorded anchor, nor a hit whose historical path merely shares a prefix with its own up to an @; a " +
-        "blob too large to read is named; an unread file changes the verdict; an empty or malformed overlay " +
-        "fails --require-overlay; and a hit exits 1.",
+        "either side of one damaged byte, a branch name, a lightweight tag name, an annotated tag's message, " +
+        "a deleted file's historical blob and a historical path whose blob another path already supplied are " +
+        "all caught; the clearance skips only blobs whose bytes this run hashed as it read them, so the " +
+        "committed version of a file carrying an unstaged edit and of one hidden behind a skip-worktree bit " +
+        "are both read here rather than skipped, where the index rule they replaced skipped both; a run one " +
+        "character under the salvage threshold, a phrase either side of dropped bytes, and every control are " +
+        "not; an exemption covers the sentence at the line it names — both copies of it, wherever an edit has " +
+        "moved them, in the tree and in every version the history holds, and both occurrences of it where one " +
+        "line carries the clause twice — and covers neither a different sentence three lines away, nor the " +
+        "second clause of its own line once it anchors the first, nor anything at all once its own line has " +
+        "lost the term or has been rewritten out from under a recorded anchor, nor a hit whose historical path " +
+        "merely shares a prefix with its own up to an @; an entry whose file this run could not read is " +
+        "unresolved rather than rewritten; a blob too large to read is named; a file that could not be read " +
+        "at all is named and changes the verdict; an empty or malformed overlay fails --require-overlay; and " +
+        "a hit exits 1.",
     );
     return 0;
   } finally {
@@ -3426,6 +3793,7 @@ function main(): number {
         scope: "the commit message, with its comments and any verbose diff stripped as git strips them",
         unread: [],
         partial: [],
+        unresolved: [],
         quiet: options.quiet,
         dictionaries,
       });
@@ -3444,6 +3812,16 @@ function main(): number {
       const found = git_text(["rev-parse", "--show-toplevel"], base);
       root = found.ok ? found.stdout.trim() : base;
       files = walk_path(target);
+      if (!found.ok) {
+        // Said out loud, because every exemption in the overlay names a path inside a repository
+        // and there is no repository here to name it inside. They will not resolve, the run will
+        // list them as unresolved, and a reader who has not been told why reads eleven healthy
+        // entries reported as broken.
+        console.log(
+          `  ${shorten(target)} is not inside a git repository, so paths are reported relative to ` +
+            `${shorten(root)} and any exemption naming a repository path cannot be resolved here.`,
+        );
+      }
     } else {
       root = repo_root(import.meta.dir);
       files = list_repository_files(root, options.mode === "staged");
@@ -3464,10 +3842,20 @@ function main(): number {
       }
     }
 
+    // Only a full tracked scan can promise that the current version of every file was already read
+    // with its exemptions applied, so only that run asks for the digests that let the clearance
+    // skip a blob. Anything narrower assumes nothing and re-reads it all.
+    const full = options.history && options.mode === "tracked" && options.path === null;
+    const object_hash = full ? object_format(root) : null;
     const contents = options.mode === "staged" ? staged_contents(root, files) : null;
-    const result = scan_files(files, matchers, root, quoted, contents);
+    const result = scan_files(files, matchers, root, quoted, contents, object_hash);
     const hits = [...result.hits];
-    const unread = [...result.binary];
+    const unread = [
+      ...result.binary.map(
+        (path) => `${path} — not text in any encoding this checker knows, and holding no readable run`,
+      ),
+      ...result.unreadable,
+    ];
     const partial = [...result.salvaged];
     // Coverage is part of the verdict, and a deliberate suppression is not the same fact as a file
     // that could not be read: one is a measured blind spot, the other is a gap nobody chose.
@@ -3475,7 +3863,7 @@ function main(): number {
       `${result.nodes.length} path components, ` +
       `${result.binary.length} not text and named above, ` +
       `${result.salvaged.length} not text but read for the runs that are, and named above, ` +
-      `${result.missing} absent or not a readable file, ` +
+      `${result.unreadable.length} absent or not a readable file, and named above, ` +
       `${result.excluded} excluded by path, ` +
       `${result.self_quoted} ${result.self_quoted === 1 ? "occurrence" : "occurrences"} suppressed inside the ` +
       "dictionary that declares them";
@@ -3487,34 +3875,31 @@ function main(): number {
     scopes.push(`${result.scanned} ${where} (${coverage})`);
 
     if (options.history) {
-      // Only a full tracked scan can promise that the current version of every file was already
-      // read with its exemptions applied. Anything narrower assumes nothing and re-reads it all.
-      const full = options.mode === "tracked" && options.path === null;
-      // And even a full tracked scan read the working tree. Where the working tree and the index
-      // disagree, what it read was the edited copy and the committed blob beside it went unopened,
-      // so those paths lose their skip and their blobs are cleared below like any other superseded
-      // object. See `scan_history` for why both versions are read rather than the run refused.
-      const edited = full ? unstaged_paths(root) : null;
-      const covered: Covered = {
-        blobs: full && edited !== null ? index_blobs(root, edited) : new Set(),
-        names: full ? new Set(result.nodes) : new Set(),
-      };
+      // What the clearance may skip is what this run proved it read: the digest of the bytes that
+      // went through the matcher, never the index's word for a path. See `blob_id` and `Covered`.
+      const covered: Covered = { blobs: result.blobs, names: full ? new Set(result.nodes) : new Set() };
       const scanned = scan_history(repo_root(root), options.history_range, matchers, covered);
       hits.push(...scanned.hits);
       unread.push(...scanned.unread);
       partial.push(...scanned.salvaged);
       const note = scanned.note === "" ? "" : `, ${scanned.note}`;
       // What was skipped is part of the verdict: a reader has to be able to tell a blob that was
-      // read upstairs from one that was merely assumed read.
+      // read upstairs from one that was merely assumed read, and a clean tree from a dirty or a
+      // sparse one. The index is asked here and nowhere else, and only to count.
       let dirt = "";
-      if (full && edited === null) {
-        dirt = "; git could not compare the working tree with the index, so no blob was assumed already read";
-      } else if (edited !== null && edited.size === 1) {
-        dirt = "; the committed version of 1 tracked file carrying an unstaged edit was read here rather than skipped";
-      } else if (edited !== null && edited.size > 1) {
+      if (full && object_hash === null) {
+        dirt = "; git could not say which hash names its objects, so no blob was assumed already read";
+      } else if (full) {
+        const missed = [...index_blobs(root)].filter((oid) => !covered.blobs.has(oid)).length;
+        const blobs = missed === 1 ? "blob" : "blobs";
+        const read = missed === 1 ? "it was" : "they were";
         dirt =
-          `; the committed versions of ${edited.size} tracked files carrying unstaged edits were read here ` +
-          "rather than skipped";
+          missed === 0
+            ? "; every blob the index lists was read from the working tree above"
+            : `; ${missed} committed ${blobs} the index lists ${missed === 1 ? "was" : "were"} not among the ` +
+              "bytes read from the working tree — an unstaged edit, a path left out of a sparse checkout or " +
+              `carrying a skip-worktree bit, a file that could not be opened — so ${read} read here rather ` +
+              "than skipped";
       }
       scopes.push(
         `${scanned.blobs} superseded ${scanned.blobs === 1 ? "blob" : "blobs"} of ${scanned.objects} reachable ` +
@@ -3534,16 +3919,19 @@ function main(): number {
     const resolved = resolve_exemption_contexts(root, exemptions, matchers, contents);
     const { reported, exempt } = partition_hits(hits, resolved.exemptions);
     // An entry whose recorded anchor no longer matches the line it names is not applied, and that
-    // is an error rather than a quiet loss of coverage: it fails the run and prints the reason.
+    // is an error rather than a quiet loss of coverage: it fails the run and prints the reason. An
+    // entry whose file this run could not read at all is neither applied nor an error — see
+    // `resolve_exemption_contexts` — so it is subtracted from the active count and named on its own.
     const failed_exemptions = [...rejected, ...resolved.mismatched];
     report({
       reported,
       exempt,
-      exemptions: exemptions.length - resolved.mismatched.length,
+      exemptions: exemptions.length - resolved.mismatched.length - resolved.unresolved.length,
       rejected: failed_exemptions,
       scope: scopes.join(" and "),
       unread,
       partial,
+      unresolved: resolved.unresolved,
       quiet: options.quiet,
       dictionaries,
     });

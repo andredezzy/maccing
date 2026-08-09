@@ -492,6 +492,18 @@ async function read_export(path: string, role: string, bound: readonly string[])
  * and switchboards evicted from the index. They are still people this role can reference, and
  * measuring the overlap against the surviving subset would turn a phone-format problem into a
  * join error and send the reader to the wrong file.
+ *
+ * The empty string is not an identifier and is skipped on both sides. A blank person column is
+ * what a left join that matched nothing leaves behind, and it reads as `""` here exactly as a
+ * blank id column does — so one blank row on each side used to satisfy this check on a key that
+ * names nobody, and the real rows beside it could then reference no one at all in silence, which
+ * is the whole of what this error exists to catch. Skipped at the comparison rather than dropped
+ * when either index is built: a role whose person column is blank on every row keeps its bucket
+ * and is still refused for referencing nobody, where an index built without blanks would come
+ * back empty and be read two lines below as "no rows, nothing to say". The count in the message
+ * stays the number of distinct values in the column, blanks included, because that is what the
+ * reader will find in the file; the quoted sample skips them, because a blank tells them nothing
+ * about which kind of id was bound by mistake.
  */
 function assert_joins(
   index: ReadonlyMap<string, unknown>,
@@ -503,14 +515,26 @@ function assert_joins(
   if (index.size === 0 || person_ids.size === 0) {
     return;
   }
+  let sample = "";
   for (const id of index.keys()) {
+    if (id === "") {
+      continue;
+    }
     if (person_ids.has(id)) {
       return;
     }
+    if (sample === "") {
+      sample = id;
+    }
   }
-  const [sample] = index.keys();
-  const [person_sample] = person_ids;
-  throw new ExportJoinError(path, role, column, sample as string, person_sample as string, index.size);
+  let person_sample = "";
+  for (const id of person_ids) {
+    if (id !== "") {
+      person_sample = id;
+      break;
+    }
+  }
+  throw new ExportJoinError(path, role, column, sample, person_sample, index.size);
 }
 
 /**
@@ -662,6 +686,14 @@ function accumulate(
   const per_person: number[] = [];
 
   for (const account of group) {
+    // An account whose id is blank joins nothing, by the same rule `assert_joins` applies. The
+    // bucket a blank keys holds every row whose person column was empty — money that belongs to
+    // nobody — and looking it up here would credit all of it to whichever listed person happens
+    // to carry the blank. The account stays in the audience it was matched into: its phone was
+    // read and it is a person this cell reached, and only its join key is missing.
+    if (account.id === "") {
+      continue;
+    }
     const events = index.get(account.id);
     if (events === undefined) {
       continue;
@@ -1035,6 +1067,10 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     let new_money = 0;
     let recycled = 0;
     for (const account of matched_accounts) {
+      // Blank joins nothing here for the reason it joins nothing in `accumulate`.
+      if (account.id === "") {
+        continue;
+      }
       const events = conversions.get(account.id);
       if (events === undefined) {
         continue;
