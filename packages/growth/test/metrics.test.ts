@@ -1594,6 +1594,11 @@ describe("the run refuses what it cannot measure", () => {
     expect((error as ExportBlankColumnError).role).toBe("person");
     expect((error as ExportBlankColumnError).columns).toEqual(["enrolled_at"]);
     expect(error.message).toContain("2 rows");
+    // The kind, not just the column. Three of the four throw sites once inherited this word from a
+    // default that no test read, so flipping the default made this message say the person role
+    // binds its enrolment time "for its phone number" and the suite stayed green.
+    expect(error.message).toContain('"enrolled_at" for its timestamp');
+    expect(error.message).toContain("falls out of the accumulator");
   });
 
   test("a bound timestamp column blank on every row of a money role too", async () => {
@@ -1767,6 +1772,9 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(UnparseablePhonesError);
     expect(error.message).toContain("1 of 2");
+    // Ordered, like the cell side: swapping the two arguments leaves both numbers present and
+    // every loose assertion passing while the sentence reports the observed rate as the ceiling.
+    expect(error.message).toContain("(50.0%), above the 25.0%");
   });
 
   test("and one sentinel repeated down the export's phone column is one unknown", async () => {
@@ -1932,7 +1940,11 @@ describe("the run refuses what it cannot measure", () => {
     // The percentage too, not just the two counts. Asserting only the counts leaves the division
     // that turns them into a rate unchecked, and a fixture this far clear of the ceiling still
     // throws under a divisor loosened by one.
-    expect(error.message).toContain("50.0%");
+    // Rate and ceiling in one ordered phrase, not as two loose substrings. Swapping the two
+    // arguments leaves both numbers in the sentence and every separate assertion still passing,
+    // while it reads "(25.0%), above the 50.0%" — an observed rate reported as the limit, sending
+    // whoever reads it to change the map to a number the map does not hold.
+    expect(error.message).toContain("(50.0%), above the 25.0%");
   });
 
   test("a cell whose lists hold nothing but junk, named as junk and not as emptiness", async () => {
@@ -1951,10 +1963,102 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("2 of 2");
   });
 
+  test("and a list holding exactly one identifier, which is junk", async () => {
+    // The smallest file the rate can see, and the boundary the guard above it is written against.
+    // `possible` is 1 here, so a check reading `possible > 1` instead of `possible > 0` skips the
+    // rate entirely and the cell falls through to being called empty — the same misnaming the
+    // reorder exists to prevent, reachable again through the off-by-one.
+    const fixture = await build("one-identifier-and-it-is-junk", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines("not a number") },
+    });
+
+    const error = await caught(one(fixture, cold("one-identifier-and-it-is-junk", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    // The noun, because it has drifted from the quantity twice. Both numbers counted rows once,
+    // then counted rows on one side only, and now count distinct identifiers on both — and the
+    // word stayed "rows" through all three, sending a reader to look for rows that do not exist.
+    expect(error.message).toContain("1 of 1 distinct identifiers");
+    expect(error.message).toContain("100.0%");
+  });
+
+  test("and a person export of one repeated junk spelling, at the same boundary", async () => {
+    // The export side of the `possible === 1` case, and the export side of the ordering question
+    // with it. Two rows of one spelling make one unknown and no keys, so `possible` is 1: reading
+    // the guard as `possible > 1` skips the rate, and hoisting the blank-column refusal above it
+    // does the same, and both then blame an empty column for a file that is not empty but junk.
+    const fixture = await build("one-junk-spelling-in-the-export", {
+      person: people(["a", "junk", from_cut(HOUR)], ["b", "junk", from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("one-junk-spelling-in-the-export", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("1 of 1 distinct identifiers");
+    expect(error.message).toContain("the person export");
+  });
+
+  test("and a sentinel is trimmed before it is counted, on both sides", async () => {
+    // An export that pads its columns writes the same absence two ways. Adding the untrimmed text
+    // to the set makes `N/A` and `N/A   ` two unknowns instead of one, which is the padding
+    // deciding the verdict — the same fault as counting rows, reached through whitespace. Three
+    // keys and one sentinel is the quarter this map allows; two sentinels is forty percent.
+    const fixture = await build("padding-is-not-a-second-unknown", {
+      person: people(
+        ["a", phone(1), from_cut(HOUR)],
+        ["b", phone(2), from_cut(HOUR)],
+        ["c", phone(3), from_cut(HOUR)],
+        ["s1", "SEM TEL", from_cut(HOUR)],
+        ["s2", "SEM TEL  ", from_cut(HOUR)],
+      ),
+      lists: {
+        "reached.csv": csv(
+          ["phone", "note"],
+          [
+            [phone(1), "a"],
+            [phone(2), "b"],
+            [phone(3), "c"],
+            ["N/A", "one spelling"],
+            ["N/A   ", "the same one, padded"],
+          ],
+        ),
+      },
+    });
+
+    const record = await one(
+      fixture,
+      cold("padding-is-not-a-second-unknown", fixture.list("reached.csv"), { column: "phone" }),
+    );
+
+    expect(record.audience.listed).toBe(3);
+    expect(record.audience.matched_phones).toBe(3);
+  });
+
+  test("and skipping a blank phone does not excuse its row from the rest of the file", async () => {
+    // Where the skip sits in the loop is two decisions, and both are load-bearing. The `dated`
+    // tally runs first, so it describes the file rather than the part of it this market's plan
+    // happened to read — here the only dated account is the one with no phone, and hoisting the
+    // skip above the tally would report a file with no times in it. `person_ids` is added first
+    // for the same kind of reason: it answers the join, which is a question about the id column,
+    // so the revenue row belonging to that account must still land.
+    const fixture = await build("a-blank-phone-is-still-a-row", {
+      person: people(["dated-no-phone", "", from_cut(HOUR)], ["undated", phone(1), ""]),
+      revenue: revenue(["dated-no-phone", from_cut(HOUR), 10]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("a-blank-phone-is-still-a-row", fixture.list("reached.txt")));
+
+    expect(record.audience.matched_phones).toBe(1);
+  });
+
   test("a cell whose lists yielded no usable identifier", async () => {
     // Nothing unreadable to report and nothing readable either: the file has rows, and the filter
-    // this cell declared kept none of them. This is the case the rate cannot see, and the one the
-    // `possible > 0` guard above it exists for — without the reorder it would divide zero by zero.
+    // this cell declared kept none of them. The rate above cannot see this one — `possible` is 0,
+    // and its guard is there to say so out loud rather than to lean on `0 / 0` being `NaN` and
+    // `NaN > ceiling` being false, which is true but is not a thing the next reader should need.
     const fixture = await build("refuse-empty", {
       person: people(["one", phone(1), from_cut(HOUR)]),
       lists: {
@@ -1980,6 +2084,12 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(EmptyCellError);
     expect((error as EmptyCellError).cell).toBe("refuse-empty");
+    // The variant, not just the class. Deleting the refusal this commit reordered leaves the
+    // second one downstream to catch the same input and blame `exclude` — on a cell that declares
+    // no exclusions — so the class alone cannot tell the two apart.
+    expect((error as EmptyCellError).after_exclusions).toBe(false);
+    expect(error.message).not.toContain("exclusions are subtracted");
+    expect(error.message).toContain("yielded no usable identifier");
   });
 
   test("a cell left empty by its own exclusions", async () => {

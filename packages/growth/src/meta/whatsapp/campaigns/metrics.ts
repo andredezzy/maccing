@@ -190,7 +190,8 @@ export class UnparseablePhonesError extends Error {
 
   constructor(unreadable: number, total: number, rate: number, ceiling: number, source = "the person export") {
     super(
-      `${unreadable} of ${total} rows in ${source} carry no readable number (${(rate * 100).toFixed(1)}%), ` +
+      `${unreadable} of ${total} distinct identifiers in ${source} could not be read ` +
+        `(${(rate * 100).toFixed(1)}%), ` +
         `above the ${(ceiling * 100).toFixed(1)}% the map allows. A dialling plan that does not match this ` +
         "market and a list of people who genuinely never registered produce the same zero, and only one of " +
         "them is a result — so the run stops instead of reporting it. Either the map's phone format is wrong " +
@@ -261,12 +262,17 @@ export class ExportColumnError extends Error {
 }
 
 /** What a blanked-out column was bound for, and the silence that follows when nothing reads. */
-const BLANK_COLUMN_CONSEQUENCE: Record<string, string> = {
+const BLANK_COLUMN_CONSEQUENCE = {
   timestamp: "every event then falls out of the accumulator silently: a full file of real events reports as none",
   "phone number":
     "every row then fails to reach the index silently: a full base of real accounts matches nobody, " +
     "and every cell reports an audience that was never there",
 };
+
+/** What a bound column holds. Spelled out at every throw site rather than defaulted: the wording
+ *  fault this exists to prevent is a message describing the wrong kind of column, and a default is
+ *  how three of four call sites would inherit the wrong one without a test able to see it. */
+type BlankColumnKind = keyof typeof BLANK_COLUMN_CONSEQUENCE;
 
 /** A bound column that is in the header and empty, or unreadable, on every row. */
 export class ExportBlankColumnError extends Error {
@@ -274,12 +280,12 @@ export class ExportBlankColumnError extends Error {
   readonly role: string;
   readonly columns: readonly string[];
 
-  constructor(path: string, role: string, columns: readonly string[], rows: number, what = "timestamp") {
+  constructor(path: string, role: string, columns: readonly string[], rows: number, what: BlankColumnKind) {
     const named = columns.map((name) => JSON.stringify(name)).join(" or ");
     super(
       `the ${role} role binds ${named} for its ${what}, and not one of the ${rows} rows in ${path} ` +
         `carries a readable one. The column is in the header, so the binding passes and ` +
-        `${BLANK_COLUMN_CONSEQUENCE[what] ?? "the value is then missing everywhere it is read"}. A ` +
+        `${BLANK_COLUMN_CONSEQUENCE[what]}. A ` +
         "column renamed at the source often leaves the old one behind, present and blank on every row, " +
         `which is exactly this. Re-export with the column populated, or bind the one that now holds the ` +
         `${what}. A file with no rows at all is a fact and passes here — this is a file with rows and ` +
@@ -389,6 +395,10 @@ export class CellExclusionError extends Error {
 /** A cell's lists yielded nothing usable, either as read or after its exclusions were subtracted. */
 export class EmptyCellError extends Error {
   readonly cell: string;
+  /** Which of the two emptinesses this is, for the same reason `UnparseablePhonesError` carries
+   *  `source`: one class covers two faults with different remedies, and a caller should not have
+   *  to match on the sentence to tell an over-narrow filter from an over-broad `exclude`. */
+  readonly after_exclusions: boolean;
 
   constructor(cell: string, lists: readonly string[], column: string | undefined, after_exclusions: boolean) {
     const where = `${lists.join(", ")}${column === undefined ? "" : ` (column ${JSON.stringify(column)})`}`;
@@ -406,6 +416,7 @@ export class EmptyCellError extends Error {
     );
     this.name = "EmptyCellError";
     this.cell = cell;
+    this.after_exclusions = after_exclusions;
   }
 }
 
@@ -596,7 +607,7 @@ async function money_index(
   // An export with no rows is a fact — a role that saw no activity in the window someone queried.
   // An export with rows and no times in any of them is a fault, and the two must not be confused.
   if (rows.length > 0 && dated === 0) {
-    throw new ExportBlankColumnError(path, role, [at], rows.length);
+    throw new ExportBlankColumnError(path, role, [at], rows.length, "timestamp");
   }
   assert_joins(index, person_ids, path, role, person);
   return index;
@@ -677,6 +688,7 @@ async function conversion_index(
       "conversion",
       at_fallback === undefined ? [at] : [at, at_fallback],
       rows.length,
+      "timestamp",
     );
   }
   if (rows.length > 0 && committed === 0) {
@@ -975,7 +987,7 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // where every account is undated places nobody, and the run then reports an audience that
     // arrived at nothing and was already there for nothing.
     if (dated === 0) {
-      throw new ExportBlankColumnError(person_path, "person", [person_created], person_rows.length);
+      throw new ExportBlankColumnError(person_path, "person", [person_created], person_rows.length, "timestamp");
     }
   }
 
