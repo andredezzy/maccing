@@ -90,7 +90,7 @@ Everything above is invented, including the numbering plan: `997` is not a diall
 A few keys are worth explaining rather than listing:
 
 - **`shared_account_ceiling`** — a number answering for this many accounts is a switchboard, a placeholder or a support desk, not a person. It is dropped from the index before any list is matched, so a cell containing it does not inherit all of them.
-- **`max_unparseable_rate`** — the share of person rows allowed to carry no readable number. Above it the run stops, because a dialling plan that does not describe your market and a list of people who genuinely never registered produce the same zero.
+- **`max_unparseable_rate`** — the share of the identifiers present that may be unreadable before the run stops, because a dialling plan that does not describe your market and a list of people who genuinely never registered produce the same zero. It is checked twice against the same ceiling: once on the person export, once on each cell's own lists. Present is the operative word — a row whose identifier column is empty is an account that never gave a number or a line of somebody's export that was never dispatched to, and neither is a number the plan failed on. Both sides of the fraction count distinct things: distinct people against distinct unreadable spellings, so one sentinel repeated down a column is one unknown rather than a file of them, and a file's duplication cannot decide the verdict.
 - **`at_fallback`** (conversion only, optional) — a second timestamp column to read when the primary one is empty.
 - **`split`** and **`recycled_when`** (conversion only, optional, declared together or not at all) — a column and the value on it that means money already inside the system rather than new money. Products without a recycled balance leave both out and the record omits the breakdown instead of inventing one made of zeros.
 - **`## Fingerprint`** — the schema file and the blocks in it the map claims to describe, plus their hash. It is checked on every run, never on request. A hash nobody checks is a written date, and a written date cannot notice that a column was renamed under the binding that names it.
@@ -197,7 +197,7 @@ So the pass refuses at every point where the two are indistinguishable, and each
 | `MapFieldError` | A key is missing, unreadable, or not one the section defines; a `models` or `valid_statuses` list with nothing in it; half of the `split`/`recycled_when` pair |
 | `MapStaleError` | The schema has changed since the map recorded its hash |
 | `PhoneFormatError` | A declared numbering plan this engine cannot honour |
-| `UnparseablePhonesError` | More of the person export is unreadable than the map permits |
+| `UnparseablePhonesError` | More of the person export — or of one cell's own lists — is unreadable than the map permits. `source` says which, so a caller does not have to read the sentence to know which file to open |
 | `MissingExportError` | A bound export, or a file a cell lists, is not where it was said to be |
 | `ExportColumnError` | A column the map binds is absent from that export's header |
 | `MissingColumnError` | A column a cell names by hand — its phone `column`, or its `filter.column` — is absent from its list file's header |
@@ -206,7 +206,7 @@ So the pass refuses at every point where the two are indistinguishable, and each
 | `TextListOptionError` | A `.txt` list declared with a `column` or a `filter`, which a file of one identifier per line has nowhere to hold |
 | `UnsupportedListFormatError` | A list in a format the reader will not guess at |
 | `ExportValueError` | A bound amount column is empty on a row, or holding something that is not a number — the message says which of the two. A column absent from the file is `ExportColumnError`, checked against the header before any row is read |
-| `ExportBlankColumnError` | A bound timestamp column is in the header but empty or unreadable on every row of an export that has rows. An export with no rows at all is a fact and passes |
+| `ExportBlankColumnError` | A bound column is in the header but empty or unreadable on every row of an export that has rows — a timestamp nothing can be placed by, or a person export whose phone column indexes nobody. The message names which, because the consequence differs: events that never accumulate, or an audience that never matches. An export with no rows at all is a fact and passes |
 | `ExportStatusError` | A conversion export with rows, not one of which carries a status the map counts as committed — every row is dropped by the status filter and the cell reads as a campaign nobody committed to |
 | `ExportJoinError` | A role's export whose rows are all well-formed and reference nobody in the person export, so the join lands on nothing and the whole file falls out of every cell |
 | `TimestampError` | A timestamp reached the parser and could not be read as a moment |

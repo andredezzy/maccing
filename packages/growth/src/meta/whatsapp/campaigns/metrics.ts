@@ -260,22 +260,30 @@ export class ExportColumnError extends Error {
   }
 }
 
-/** A bound timestamp column that is in the header and empty, or unreadable, on every row. */
+/** What a blanked-out column was bound for, and the silence that follows when nothing reads. */
+const BLANK_COLUMN_CONSEQUENCE: Record<string, string> = {
+  timestamp: "every event then falls out of the accumulator silently: a full file of real events reports as none",
+  "phone number":
+    "every row then fails to reach the index silently: a full base of real accounts matches nobody, " +
+    "and every cell reports an audience that was never there",
+};
+
+/** A bound column that is in the header and empty, or unreadable, on every row. */
 export class ExportBlankColumnError extends Error {
   readonly path: string;
   readonly role: string;
   readonly columns: readonly string[];
 
-  constructor(path: string, role: string, columns: readonly string[], rows: number) {
+  constructor(path: string, role: string, columns: readonly string[], rows: number, what = "timestamp") {
     const named = columns.map((name) => JSON.stringify(name)).join(" or ");
     super(
-      `the ${role} role binds ${named} for its timestamp, and not one of the ${rows} rows in ${path} ` +
-        "carries a readable one. The column is in the header, so the binding passes and every event " +
-        "then falls out of the accumulator silently: a full file of real events reports as none. A " +
+      `the ${role} role binds ${named} for its ${what}, and not one of the ${rows} rows in ${path} ` +
+        `carries a readable one. The column is in the header, so the binding passes and ` +
+        `${BLANK_COLUMN_CONSEQUENCE[what] ?? "the value is then missing everywhere it is read"}. A ` +
         "column renamed at the source often leaves the old one behind, present and blank on every row, " +
-        "which is exactly this. Re-export with the column populated, or bind the one that now holds the " +
-        "timestamp. A file with no rows at all is a fact and passes here — this is a file with rows and " +
-        "no times in them, which is a fault.",
+        `which is exactly this. Re-export with the column populated, or bind the one that now holds the ` +
+        `${what}. A file with no rows at all is a fact and passes here — this is a file with rows and ` +
+        "nothing readable in them, which is a fault.",
     );
     this.name = "ExportBlankColumnError";
     this.path = path;
@@ -908,7 +916,9 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   // survives the switchboard eviction below. It is what the other roles are asked to join
   // against, and that question is about the id column, not about the dialling plan.
   const person_ids = new Set<string>();
-  let unreadable = 0;
+  // Distinct spellings, not rows, so both sides of the rate below count the same kind of thing.
+  // One sentinel repeated down a column is a single unknown, and it can hide at most one person.
+  const unknowns = new Set<string>();
   let dated = 0;
   for (const row of person_rows) {
     person_ids.add(row[person_id] ?? "");
@@ -918,9 +928,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     if (created !== null) {
       dated += 1;
     }
-    const key = key_of(row[person_phone]);
+    // The same distinction the cell lists are read with, for the same reason. This role's export
+    // writes `coalesce(u.phone, '')`, so an account with no number recorded arrives as an empty
+    // cell — an absent identifier, not one the dialling plan failed on. Counting it here would
+    // charge the plan for a person who never gave a number, and it would do so at a rate that
+    // grows with the account base: the ceiling is spent on absences until a genuine format fault
+    // has almost no room left below it.
+    const written = (row[person_phone] ?? "").trim();
+    if (written === "") {
+      continue;
+    }
+    const key = key_of(written);
     if (key === null) {
-      unreadable++;
+      unknowns.add(written);
       continue;
     }
     const account: Account = { id: row[person_id] ?? "", created };
@@ -932,9 +952,22 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
   }
   if (person_rows.length > 0) {
-    const rate = unreadable / person_rows.length;
-    if (rate > map.phone.max_unparseable_rate) {
-      throw new UnparseablePhonesError(unreadable, person_rows.length, rate, map.phone.max_unparseable_rate);
+    // Divided by the index this protects rather than by the file, so the reading survives an
+    // export where one number answers for several accounts. Each distinct unknown could have added
+    // at most one more key, so the sum is the largest index the file could have produced.
+    const possible = by_key.size + unknowns.size;
+    if (possible > 0) {
+      const rate = unknowns.size / possible;
+      if (rate > map.phone.max_unparseable_rate) {
+        throw new UnparseablePhonesError(unknowns.size, possible, rate, map.phone.max_unparseable_rate);
+      }
+    }
+    // Skipping blanks above means an export whose phone column is entirely empty now reaches this
+    // point with nothing unreadable to report, so the rate can no longer catch it. It is the same
+    // fault as an undated file one line down, and it reads the same way if it passes: every cell
+    // matches nobody, and the run publishes an audience that was never there.
+    if (by_key.size === 0) {
+      throw new ExportBlankColumnError(person_path, "person", [person_phone], person_rows.length, "phone number");
     }
     // Checked after the phone rate, because an export whose numbers are unreadable is the larger
     // fault and the one whose message the reader wants first. An account with no creation time is
@@ -994,7 +1027,14 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
 
     const keys = new Set<string>();
-    let unreadable = 0;
+    // Distinct spellings, not rows, for the same reason `keys` is a set: both sides of this
+    // fraction have to count the same kind of thing. Twenty rows reading `SEM TELEFONE` are one
+    // unknown repeated, and can hide at most one person between them; twenty different junk
+    // strings can hide twenty. Counting rows scores those two identically and lets a file's
+    // duplication decide the verdict — most sharply when a cell names the same list twice, which
+    // deduplicates on the readable side and accumulated on the other, so repeating a filename
+    // changed a cell's audience.
+    const unknowns = new Set<string>();
     for (const list of cell.lists) {
       if (!(await Bun.file(list).exists())) {
         throw new MissingExportError(list, `cell ${JSON.stringify(cell.name)}`);
@@ -1007,19 +1047,17 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         // correct reading, which is the opposite of the fault this guard exists for. A `.txt`
         // list already drops blank lines, so this also stops the same identifiers passing or
         // failing on nothing but the file's extension.
-        if (raw.trim() === "") {
+        const written = raw.trim();
+        if (written === "") {
           continue;
         }
-        const key = key_of(raw);
+        const key = key_of(written);
         if (key === null) {
-          unreadable += 1;
+          unknowns.add(written);
           continue;
         }
         keys.add(key);
       }
-    }
-    if (keys.size === 0) {
-      throw new EmptyCellError(cell.name, cell.lists, cell.column, false);
     }
     // The same ceiling the person export is held to, for the same reason and with the opposite
     // sign. An entry nobody can key never matches an account, so it can never reach a numerator —
@@ -1030,22 +1068,32 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // above; leaving the lists unchecked guarded the side that empties and left the side that
     // inflates open, and of the two it is the inflated reading that gets published.
     //
-    // The denominator is what `listed` could have been, not how many rows were read. Each
-    // unreadable entry could have contributed at most one distinct key, so `keys.size +
-    // unreadable` is the largest audience this cell could have had, and the share lost is the
-    // distortion of the one number the guard protects. Dividing by rows instead would understate
-    // it wherever readable entries repeat: a list of eighty rows resolving to twenty people reads
-    // as five percent junk while a fifth of its audience is missing.
-    const possible = keys.size + unreadable;
-    const rate = unreadable / possible;
-    if (rate > map.phone.max_unparseable_rate) {
-      throw new UnparseablePhonesError(
-        unreadable,
-        possible,
-        rate,
-        map.phone.max_unparseable_rate,
-        `cell ${JSON.stringify(cell.name)}`,
-      );
+    // The denominator is what `listed` could have been, not how many rows were read. Each distinct
+    // unknown could have contributed at most one key, so the sum is the largest audience this cell
+    // could have had, and the share lost is the distortion of the one number the guard protects.
+    // Dividing by rows instead would understate it wherever readable entries repeat: a list of
+    // eighty rows resolving to twenty people reads as five percent junk while a fifth of its
+    // audience is missing.
+    //
+    // Checked before the empty cell below, so a list of nothing but junk is refused for being junk
+    // rather than for being empty. The two faults read alike and are fixed in different files —
+    // one sends the reader to the map's dialling plan, the other to a wrong column or an
+    // over-narrow filter — and this order is also what leaves `possible` provably non-zero.
+    const possible = keys.size + unknowns.size;
+    if (possible > 0) {
+      const rate = unknowns.size / possible;
+      if (rate > map.phone.max_unparseable_rate) {
+        throw new UnparseablePhonesError(
+          unknowns.size,
+          possible,
+          rate,
+          map.phone.max_unparseable_rate,
+          `cell ${JSON.stringify(cell.name)}`,
+        );
+      }
+    }
+    if (keys.size === 0) {
+      throw new EmptyCellError(cell.name, cell.lists, cell.column, false);
     }
 
     // Probes and internal numbers are subtracted after that first check so the two ways a cell can

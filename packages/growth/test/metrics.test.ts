@@ -1702,6 +1702,96 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("2 of 3");
   });
 
+  test("but an account that never gave a number is not an unreadable one either", async () => {
+    // This role's export writes `coalesce(u.phone, '')`, so every account without a number lands
+    // here as an empty cell. Charging the dialling plan for them spends the ceiling on absences:
+    // three of these five rows are blank, which under a row count is 60% and a refusal, while the
+    // only thing the map got wrong is nothing at all.
+    const fixture = await build("blank-accounts-are-not-junk", {
+      person: people(
+        ["a", phone(1), from_cut(HOUR)],
+        ["no-phone-1", "", from_cut(HOUR)],
+        ["b", phone(2), from_cut(HOUR)],
+        ["no-phone-2", "", from_cut(HOUR)],
+        ["no-phone-3", "", from_cut(HOUR)],
+        // A space rather than nothing: the same absence, spelled by an export that pads its
+        // columns. Read as an unreadable number it would put this file over the ceiling alone.
+        ["no-phone-4", "   ", from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("blank-accounts-are-not-junk", fixture.list("reached.txt")));
+
+    expect(record.audience.matched_phones).toBe(2);
+  });
+
+  test("and an export whose phone column is empty throughout, which the rate can no longer catch", async () => {
+    // The hole skipping blanks opens. Nothing is unreadable, so the rate is zero and says the file
+    // is perfect; the index is empty, so every cell matches nobody and the run publishes an
+    // audience that was never there. Same fault as an undated file, and it has to fail the same way.
+    const fixture = await build("every-account-without-a-number", {
+      person: people(["a", "", from_cut(HOUR)], ["b", "", from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("every-account-without-a-number", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportBlankColumnError);
+    // Names the column and what it was bound for, in one phrase. Asserting the column alone passed
+    // happily while the sentence read "binds "handset" for its timestamp" — the message was wrong
+    // in the only word that tells the reader which fault they have.
+    expect(error.message).toContain('"handset" for its phone number');
+    // And the consequence is the phone one, not the accumulator sentence the timestamp case uses.
+    expect(error.message).toContain("matches nobody");
+  });
+
+  test("and the export's rate is measured against the index, not the row count", async () => {
+    // One row per account, not per person, so a file is free to repeat a number — and the thing
+    // the ceiling protects is the index those rows collapse into. Five of these six rows are
+    // readable and they build an index of one, so the honest reading is one key missing of two
+    // and a refusal. Counting rows calls the same file 17% junk and lets it through.
+    const fixture = await build("rate-against-the-index", {
+      person: people(
+        ["a1", phone(1), from_cut(HOUR)],
+        ["a2", phone(1), from_cut(HOUR)],
+        ["a3", phone(1), from_cut(HOUR)],
+        ["a4", phone(1), from_cut(HOUR)],
+        ["a5", phone(1), from_cut(HOUR)],
+        ["junk", "not a number", from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("rate-against-the-index", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("1 of 2");
+  });
+
+  test("and one sentinel repeated down the export's phone column is one unknown", async () => {
+    // The export side of the same spelling problem. A base whose phone column says `SEM TELEFONE`
+    // on every account that never gave one is describing a single thing it could not read, and
+    // charging the dialling plan once per row would refuse a file at four times its real rate.
+    // Three keys and one sentinel is one missing of four — the quarter this map allows.
+    const fixture = await build("one-sentinel-in-the-export", {
+      person: people(
+        ["a", phone(1), from_cut(HOUR)],
+        ["b", phone(2), from_cut(HOUR)],
+        ["c", phone(3), from_cut(HOUR)],
+        ["s1", "SEM TELEFONE", from_cut(HOUR)],
+        ["s2", "SEM TELEFONE", from_cut(HOUR)],
+        ["s3", "SEM TELEFONE", from_cut(HOUR)],
+        ["s4", "SEM TELEFONE", from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+    });
+
+    const record = await one(fixture, cold("one-sentinel-in-the-export", fixture.list("reached.txt")));
+
+    expect(record.audience.matched_phones).toBe(3);
+  });
+
   test("and more unreadable numbers in a cell's own list than the map allows", async () => {
     // The same ceiling, the other side of the join, and the opposite sign. An entry nobody can key
     // never reaches a numerator, so dropping it quietly only shrinks `listed` — the denominator
@@ -1739,6 +1829,10 @@ describe("the run refuses what it cannot measure", () => {
             ["", ""],
             [phone(2), "b"],
             ["", "nor this one"],
+            // Whitespace, not emptiness. An export writing a space instead of nothing is the same
+            // absence spelled differently, and reading it as an unreadable number would put this
+            // file straight back at the rate the guard refuses.
+            ["   ", "a space, which is also no phone"],
           ],
         ),
       },
@@ -1774,6 +1868,51 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.audience.matched_phones).toBe(3);
   });
 
+  test("and one unknown repeated down a column is one unknown, not a file of them", async () => {
+    // A sentinel is how an export spells absence when its author did not leave the cell empty:
+    // `N/A`, `-`, `SEM TELEFONE`. Counting the rows it appears on charges the dialling plan once
+    // per row for a single thing it could not read, and twenty rows of one sentinel can hide at
+    // most one person between them. Three keys and one sentinel is one missing of four, which is
+    // exactly the quarter this map allows, however many rows carry it.
+    const fixture = await build("one-sentinel-is-one-unknown", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(HOUR)]),
+      lists: {
+        "reached.txt": lines(
+          phone(1),
+          phone(2),
+          phone(3),
+          "SEM TELEFONE",
+          "SEM TELEFONE",
+          "SEM TELEFONE",
+          "SEM TELEFONE",
+        ),
+      },
+    });
+
+    const record = await one(fixture, cold("one-sentinel-is-one-unknown", fixture.list("reached.txt")));
+
+    expect(record.audience.listed).toBe(3);
+  });
+
+  test("and naming the same list twice cannot change what the cell measured", async () => {
+    // The readable side deduplicates across lists and the unreadable side did not, so repeating a
+    // filename used to move the rate on one arm of the fraction only — a cell that passed as one
+    // list was refused as two copies of itself. A declaration is a statement about which people
+    // the cell covers, and saying it twice says the same thing.
+    const fixture = await build("the-same-list-twice", {
+      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+    });
+
+    const once = await one(fixture, cold("the-same-list-twice", fixture.list("reached.txt")));
+    const twice = await one(fixture, {
+      ...cold("the-same-list-twice", fixture.list("reached.txt")),
+      lists: [fixture.list("reached.txt"), fixture.list("reached.txt")],
+    });
+
+    expect(twice.audience).toEqual(once.audience);
+  });
+
   test("and the rate is measured against the audience, not the row count", async () => {
     // `listed` is a count of distinct people, so the guard has to bound how far that number was
     // shrunk. Dividing by rows understates it wherever readable entries repeat: five of these six
@@ -1790,15 +1929,54 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(UnparseablePhonesError);
     expect(error.message).toContain("1 of 2");
+    // The percentage too, not just the two counts. Asserting only the counts leaves the division
+    // that turns them into a rate unchecked, and a fixture this far clear of the ceiling still
+    // throws under a divisor loosened by one.
+    expect(error.message).toContain("50.0%");
   });
 
-  test("a cell whose lists yielded no usable identifier", async () => {
-    const fixture = await build("refuse-empty", {
+  test("a cell whose lists hold nothing but junk, named as junk and not as emptiness", async () => {
+    // Both faults stop the run and they read alike, but they are fixed in different files: a list
+    // of unreadable numbers sends the reader to the map's dialling plan or to the export that
+    // produced them, while an empty cell sends them to a wrong column or an over-narrow filter.
+    // The rate is therefore checked first, so the more specific of the two gets to speak.
+    const fixture = await build("refuse-all-junk", {
       person: people(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines("not a number", "also not one") },
     });
 
-    const error = await caught(one(fixture, cold("refuse-empty", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-all-junk", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("2 of 2");
+  });
+
+  test("a cell whose lists yielded no usable identifier", async () => {
+    // Nothing unreadable to report and nothing readable either: the file has rows, and the filter
+    // this cell declared kept none of them. This is the case the rate cannot see, and the one the
+    // `possible > 0` guard above it exists for — without the reorder it would divide zero by zero.
+    const fixture = await build("refuse-empty", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: {
+        "reached.csv": csv(
+          ["phone", "cohort"],
+          [
+            [phone(1), "morning"],
+            [phone(2), "morning"],
+          ],
+        ),
+      },
+    });
+
+    const error = await caught(
+      one(
+        fixture,
+        cold("refuse-empty", fixture.list("reached.csv"), {
+          column: "phone",
+          filter: { column: "cohort", value: "evening" },
+        }),
+      ),
+    );
 
     expect(error).toBeInstanceOf(EmptyCellError);
     expect((error as EmptyCellError).cell).toBe("refuse-empty");
