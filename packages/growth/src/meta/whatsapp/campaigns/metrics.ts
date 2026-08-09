@@ -271,7 +271,12 @@ const BLANK_COLUMN_CONSEQUENCE = {
 
 /** What a bound column holds. Spelled out at every throw site rather than defaulted: the wording
  *  fault this exists to prevent is a message describing the wrong kind of column, and a default is
- *  how three of four call sites would inherit the wrong one without a test able to see it. */
+ *  how three of four call sites would inherit the wrong one without a test able to see it.
+ *
+ *  A kind must read as a singular noun phrase — the message interpolates it twice, as "binds X for
+ *  its <kind>" and "bind the one that now holds the <kind>". The type catches a kind with no
+ *  sentence and a sentence with no kind; that a sentence describes its kind truthfully is the one
+ *  thing left to a reader, and the reachability test each kind carries is where it gets read. */
 type BlankColumnKind = keyof typeof BLANK_COLUMN_CONSEQUENCE;
 
 /** A bound column that is in the header and empty, or unreadable, on every row. */
