@@ -3,13 +3,17 @@
 /**
  * Leak check — refuses to let a private engagement's vocabulary reach this public repository.
  *
- * The vocabulary is not here. `leak-terms.json`, next to this file, documents the schema and
- * declares nothing: a curated list of one sector's words identifies that sector precisely, so the
- * list is itself the disclosure whether or not a client is ever named. This repository ships the
- * mechanism. Each project keeps its own dictionary outside this tree and merges it at run time
- * with `--terms <path>` or the colon-separated `LEAK_TERMS` variable. An overlay carries its own
- * exemptions too, for the same reason: an exemption has to quote the term it exempts, so a public
- * allowlist would republish a subset of the very vocabulary being withheld.
+ * The vocabulary is not here, and neither is a schema describing it. This repository ships the
+ * mechanism and nothing else: a curated list of one sector's words identifies that sector
+ * precisely, so the list is itself the disclosure whether or not a client is ever named — and an
+ * empty template naming the *kinds* of thing worth hiding says more than it looks like it does.
+ * Every dictionary arrives at run time, through `--terms <path>` or the colon-separated
+ * `LEAK_TERMS` variable, and on CI that means the `LEAK_OVERLAY` secret and nowhere else. An
+ * overlay carries its own exemptions too, for the same reason: an exemption has to quote the term
+ * it exempts, so a public allowlist would republish a subset of the very vocabulary being withheld.
+ *
+ * This file lives under `.github/` beside the workflow that runs it, because it is CI apparatus
+ * rather than something the published package ships.
  *
  * Because the mechanism on its own finds nothing, `--require-overlay` fails a run that loaded no
  * terms — not merely a run that merged no file, because an overlay of `{}` merges fine and matches
@@ -61,7 +65,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { Stats } from "node:fs";
+import type { Dirent, Stats } from "node:fs";
 import {
   chmodSync,
   existsSync,
@@ -77,7 +81,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 type TermEntry = {
@@ -217,13 +221,10 @@ type HistoryResult = {
  * path named after itself is the documented second way to supply this file. Every count below is
  * printed on every run, `--quiet` included, so a path reaching this record reaches a
  * world-readable log. `label` is what `dictionary_labels` allows to be said instead: which of the
- * paths this run was given, and nothing about the path. `overlay` is the one question the path
- * used to be re-read to answer — whether this is the schema shipped here or a file somebody
- * passed in.
+ * paths this run was given, and nothing about the path.
  */
 type Dictionary = {
   label: string;
-  overlay: boolean;
   terms: number;
   categories: number;
   merged: string[];
@@ -252,9 +253,6 @@ type Options = {
   quiet: boolean;
   help: boolean;
 };
-
-/** Schema documentation and an empty category list. The vocabulary lives in a project's overlay. */
-const BUILT_IN_TERMS = canonical(join(import.meta.dir, "leak-terms.json"));
 
 /** A NUL inside this window sends the bytes to the encoding sniffer rather than straight to UTF-8. */
 const BINARY_SNIFF_BYTES = 8192;
@@ -394,7 +392,7 @@ const COMBINING = /\p{M}/u;
  *
  * The fold is one-way and deliberately lossy: genuine Cyrillic or Greek text is folded too, so a
  * repository written in either would see false positives. That trade is documented in
- * `scripts/README.md` rather than hidden, and it is the right way round for a gate.
+ * `.github/leak-check.md` rather than hidden, and it is the right way round for a gate.
  */
 const CONFUSABLE: Record<string, string> = {
   // Cyrillic, uppercase
@@ -668,7 +666,6 @@ function load_dictionaries(paths: string[]): Loaded {
     rejected.push(...parsed_exemptions.rejected);
     dictionaries.push({
       label,
-      overlay: path !== BUILT_IN_TERMS,
       terms: added,
       categories: parsed.categories.length,
       merged,
@@ -1841,15 +1838,41 @@ function scan_files(
       let stats: Stats;
       try {
         stats = lstatSync(absolute);
-      } catch {
+      } catch (failure) {
+        // Absent and unreachable are different facts. `ENOENT` is the path being gone; `EACCES`
+        // is a directory on the way to it refusing this user, and the file is still there. One
+        // sentence covered both, so a file behind a locked directory was reported as deleted
+        // without being staged, left out of a sparse checkout, or carrying a skip-worktree bit —
+        // three claims that are all false at once, and each of them sends somebody looking
+        // through git for a change nobody made.
+        const code = (failure as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "EACCES" && code !== "EPERM") {
+          throw failure;
+        }
         unreadable.push(
-          `${label} — listed for this scan and not on disk: deleted without being staged, left out of a ` +
-            "sparse checkout, or carrying a skip-worktree bit",
+          code === "EACCES" || code === "EPERM"
+            ? `${label} — a directory on the way to it refuses this user, so the file could not be reached ` +
+                "and nothing in it was read"
+            : `${label} — listed for this scan and not on disk: deleted without being staged, left out of a ` +
+                "sparse checkout, or carrying a skip-worktree bit",
         );
         continue;
       }
       if (stats.isSymbolicLink()) {
-        text = readlinkSync(absolute);
+        // `lstat` answering does not mean `readlink` will — a link's own mode can refuse it, and
+        // on a tracked scan that escaped as an exception and took the whole run with it: exit 2,
+        // no verdict, and nothing said about the files that were read. It is the same kind of gap
+        // as a file whose mode refuses the read, and the report already has a place to name it.
+        try {
+          text = readlinkSync(absolute);
+        } catch (failure) {
+          const code = (failure as NodeJS.ErrnoException).code;
+          if (code !== "EACCES" && code !== "EPERM") {
+            throw failure;
+          }
+          unreadable.push(`${label} — a symlink whose own mode refuses the read of the target it stores`);
+          continue;
+        }
         // What the repository stores for a symlink is the target string, so the target string is
         // the content and its digest is the name the object graph knows that content by.
         receipt(new TextEncoder().encode(text));
@@ -1924,6 +1947,25 @@ function repo_root(cwd: string): string {
   // path that came from somewhere else. Saying so here rather than assuming it is what makes the
   // comparisons downstream sound; see `canonical`.
   return canonical_root(found.stdout.trim());
+}
+
+/**
+ * The repository a scope-less run is about.
+ *
+ * The script's own directory answers first, and that is deliberate: it is what makes a copy
+ * invoked from inside a clone scan the clone rather than wherever the caller happened to be
+ * standing, which is the hazard the `--path` section of the README describes.
+ *
+ * That question has no answer when the script does not live in a repository at all — which is how
+ * it runs from a scratch directory, deliberately kept out of every checkout so that gating a
+ * repository never means committing the gate to it. Every mode but `--self-test` and `--path`
+ * then died on `Not inside a git repository` before reading a byte. The working directory is the
+ * only other thing that can be meant, so it is asked second, and a run from outside any
+ * repository still fails — on the caller's own directory, which is the one they can act on.
+ */
+function gated_root(): string {
+  const found = git_text(["rev-parse", "--show-toplevel"], import.meta.dir);
+  return found.ok ? canonical_root(found.stdout.trim()) : repo_root(process.cwd());
 }
 
 /** Tracked files only, so build output, caches and anything ignored never reach the scanner. */
@@ -2956,11 +2998,26 @@ function under(root: string, path: string): string | null {
   return here;
 }
 
-/** Where this process is, resolved once, as the one thing `shorten` measures against. */
+/** Where this process is, resolved once, as the first thing `shorten` measures against. */
 const HERE = canonical_root(process.cwd());
 
+/** The account's own directory, as the second. */
+const HOME = canonical_root(homedir());
+
+/**
+ * A path said as briefly as it can be said without naming something else.
+ *
+ * Relative to the working directory when it sits under it. When it does not — which is every run
+ * started from anywhere but the repository, and that includes a git hook, a CI step and a scan of
+ * a clone in `/tmp` — the fallback used to be the absolute path, so the operator's home directory
+ * went into the header beside the built-in dictionary, into every unresolved-exemption line, and
+ * onto a public repository's build log. `~` says the same thing about a place without naming the
+ * account it belongs to, and the absolute spelling is kept only for a path that is under neither.
+ */
 function shorten(path: string): string {
-  return under(HERE, canonical(path)) ?? path;
+  const absolute = canonical(path);
+  const home = under(HOME, absolute);
+  return under(HERE, absolute) ?? (home === null ? absolute : `~/${home}`);
 }
 
 /**
@@ -2976,20 +3033,18 @@ function shorten(path: string): string {
  * surrounding path is a published template.
  *
  * What the header actually needs is to tell one dictionary's counts from another's, and which of
- * the paths the operator typed each one came from. An ordinal says both and carries nothing. The
- * dictionary shipped here is named outright: it lives in this public repository, it declares no
- * vocabulary, and it is the one whose absence would be worth noticing.
+ * the paths the operator typed each one came from. An ordinal says both and carries nothing.
+ *
+ * There is no dictionary shipped beside this file to name. This repository holds the mechanism and
+ * nothing else — no terms, no categories, not even the empty schema that used to sit here, because
+ * a schema documenting which kinds of thing are worth hiding is itself a description of the work
+ * being hidden. Every dictionary this run sees arrived through `--terms` or `LEAK_TERMS`, which on
+ * CI means the secret and nowhere else.
  */
 function dictionary_labels(paths: string[]): string[] {
-  const overlays = paths.filter((path) => path !== BUILT_IN_TERMS).length;
-  let at = 0;
-  return paths.map((path) => {
-    if (path === BUILT_IN_TERMS) {
-      return shorten(path);
-    }
-    at += 1;
-    return overlays === 1 ? "the overlay given to --terms" : `overlay ${at} of ${overlays} given to --terms`;
-  });
+  return paths.map((_, at) =>
+    paths.length === 1 ? "the overlay given to --terms" : `overlay ${at + 1} of ${paths.length} given to --terms`,
+  );
 }
 
 /** How many dictionaries backed a run, for the header and again for the verdict line. */
@@ -3013,15 +3068,15 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
   if (matchers.length > 0) {
     return null;
   }
-  const overlays = dictionaries.filter((entry) => entry.overlay);
   const opening =
-    overlays.length === 0
+    dictionaries.length === 0
       ? "--require-overlay was given and no overlay dictionary was merged."
-      : `--require-overlay was given and the ${overlays.length} merged ${overlays.length === 1 ? "overlay" : "overlays"} ` +
-        `(${overlays.map((entry) => entry.label).join(", ")}) declared no terms at all.`;
+      : `--require-overlay was given and the ${dictionaries.length} merged ` +
+        `${dictionaries.length === 1 ? "overlay" : "overlays"} ` +
+        `(${dictionaries.map((entry) => entry.label).join(", ")}) declared no terms at all.`;
   return (
     `${opening}\n` +
-    "The dictionary shipped here declares no vocabulary, so this run would have checked no name, no " +
+    "This repository ships no dictionary of its own, so this run would have checked no name, no " +
     "figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete run. " +
     "Merge an overlay that declares terms with --terms <path> or LEAK_TERMS."
   );
@@ -3215,8 +3270,8 @@ function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
   }
   if (loaded.reduce((sum, entry) => sum + entry.terms, 0) === 0) {
     console.log(
-      "  No vocabulary loaded (--terms <path>, LEAK_TERMS). The dictionary shipped here declares none of " +
-        "its own, so this run can find nothing. Pass --require-overlay wherever this runs as a gate.",
+      "  No vocabulary loaded (--terms <path>, LEAK_TERMS). This repository ships no dictionary of its " +
+        "own, so this run can find nothing. Pass --require-overlay wherever this runs as a gate.",
     );
   }
 }
@@ -3446,6 +3501,7 @@ function audit_allowlist(
   }
 
   let stale = 0;
+  let unread = 0;
   let drifted = 0;
   let rewritten = 0;
   let unanchored = 0;
@@ -3477,10 +3533,30 @@ function audit_allowlist(
       const { covered, all } = covered_contexts(occurrences, entry);
       const at = (hits: Hit[]): string => [...new Set(hits.map((hit) => hit.line))].sort((a, b) => a - b).join(", ");
       if (occurrences.length === 0) {
-        status =
-          read_text(readFileSync(absolute)) === null
-            ? "STALE — the file is not text and holds no readable run, so nothing in it can be matched"
-            : "STALE — the file no longer contains this term";
+        // `file_occurrences` guards its own read and answers "no occurrences" for a file it could
+        // not open, so this read is the one place an unreadable path surfaced — and it was bare,
+        // which aborted the whole audit at exit 2 on a raw errno, with no verdict for this entry
+        // or any of the ones after it. An entry whose file could not be read is not thereby
+        // stale: nothing was checked, and "STALE" would accuse it of something this run never
+        // established.
+        let bytes: Buffer | null = null;
+        try {
+          bytes = readFileSync(absolute);
+        } catch (failure) {
+          const code = (failure as NodeJS.ErrnoException).code;
+          if (code !== "EACCES" && code !== "EPERM") {
+            throw failure;
+          }
+        }
+        if (bytes === null) {
+          unread += 1;
+          status = "UNREAD — the file is there and its mode refuses the read, so this entry could not be checked";
+        } else {
+          status =
+            read_text(bytes) === null
+              ? "STALE — the file is not text and holds no readable run, so nothing in it can be matched"
+              : "STALE — the file no longer contains this term";
+        }
       } else if (all.length === 0) {
         status =
           `DRIFTED — written for line ${entry.line}, which no longer carries this term; it is now at ` +
@@ -3579,14 +3655,25 @@ function audit_allowlist(
       : ` ${unanchored} ${unanchored === 1 ? "entry records" : "entries record"} no \`anchor\`, so a rewrite of ` +
         `${unanchored === 1 ? "that line" : "those lines"} into a different sentence carrying the same term is ` +
         "the one drift this audit cannot see; the digest to record is printed beside each of them.";
+  const gaps =
+    unread === 0
+      ? ""
+      : ` ${unread} ${unread === 1 ? "entry names a file" : "entries name files"} this run may not read, so ` +
+        `${unread === 1 ? "it was" : "they were"} not checked at all and nothing here is known about ` +
+        `${unread === 1 ? "it" : "them"}; each is named above.`;
   if (stale === 0 && drifted === 0 && rewritten === 0 && rejected.length === 0) {
-    console.log(`Audit PASSED — every exemption still covers the occurrence it was written for.${loose}${unchecked}`);
+    console.log(
+      unread === 0
+        ? `Audit PASSED — every exemption still covers the occurrence it was written for.${loose}${unchecked}`
+        : "Audit PASSED WITH GAPS — every exemption that could be read still covers the occurrence it was " +
+            `written for.${gaps}${loose}${unchecked}`,
+    );
     return 0;
   }
   console.log(
     `Audit FAILED — ${drifted} drifted onto a different occurrence, ${rewritten} anchored on a sentence that has ` +
-      `since been rewritten, ${stale} stale, ${rejected.length} rejected.${loose}${unchecked} Delete what no ` +
-      "longer applies, re-read what has drifted or changed before moving it, and give every remaining entry a " +
+      `since been rewritten, ${stale} stale, ${rejected.length} rejected.${gaps}${loose}${unchecked} Delete what ` +
+      "no longer applies, re-read what has drifted or changed before moving it, and give every remaining entry a " +
       "reason.",
   );
   return 1;
@@ -4102,6 +4189,12 @@ function self_test(categories: TermCategory[]): number {
   const directory = mkdtempSync(join(tmpdir(), "maccing-leak-self-test-"));
   try {
     const failures: string[] = [];
+    // Checks this environment could not exercise at all. A skipped check is not a passing one, and
+    // the verdict has to be able to tell them apart: the mode-000 fixture below is skipped for any
+    // user who reads a mode-000 file regardless — root, which is the ordinary shape of a CI
+    // container — so on that machine the guard it exists for went untested while the harness still
+    // printed a flat PASSED. Deleting the guard outright would not have changed a thing it said.
+    const skipped: string[] = [];
     const planted: Fixture[] = [];
 
     let index = 0;
@@ -4721,18 +4814,7 @@ function self_test(categories: TermCategory[]): number {
     // --require-overlay tests loaded vocabulary, not a merged file.
     const empty_overlay: Dictionary[] = [
       {
-        label: shorten(BUILT_IN_TERMS),
-        overlay: false,
-        terms: 0,
-        categories: 0,
-        merged: [],
-        duplicate_terms: 0,
-        exemptions: 0,
-        duplicate_exemptions: 0,
-      },
-      {
         label: "the overlay given to --terms",
-        overlay: true,
         terms: 0,
         categories: 0,
         merged: [],
@@ -4767,8 +4849,8 @@ function self_test(categories: TermCategory[]): number {
     const faults = join(directory, `${unquotable}-engagement`);
     mkdirSync(faults, { recursive: true });
     const overlay_terms = join(faults, "leak-terms.json");
-    const dictionary_names = dictionary_labels([BUILT_IN_TERMS, overlay_terms]);
-    const overlay_label = dictionary_names[1] as string;
+    const dictionary_names = dictionary_labels([overlay_terms]);
+    const overlay_label = dictionary_names[0] as string;
     if (overlay_label.includes(unquotable)) {
       failures.push(
         "the label standing in for an overlay's path was the path, so every message and every header " +
@@ -4957,7 +5039,6 @@ function self_test(categories: TermCategory[]): number {
     const extending: Dictionary[] = [
       {
         label: overlay_label,
-        overlay: true,
         terms: 1,
         categories: 1,
         merged: [`${unquotable}_category`],
@@ -5047,8 +5128,7 @@ function self_test(categories: TermCategory[]): number {
     // way and this one is not a volume control.
     const named_path: Dictionary[] = [
       {
-        label: dictionary_labels([BUILT_IN_TERMS, join(faults, "checkout", "leak-terms.json")])[1] as string,
-        overlay: true,
+        label: dictionary_labels([join(faults, "checkout", "leak-terms.json")])[0] as string,
         terms: 3,
         categories: 2,
         merged: [],
@@ -5453,17 +5533,17 @@ function self_test(categories: TermCategory[]): number {
       );
       overlays.push(path);
     }
-    const pair_labels = dictionary_labels([BUILT_IN_TERMS, ...overlays]);
-    if (pair_labels[1] === pair_labels[2]) {
+    const pair_labels = dictionary_labels(overlays);
+    if (pair_labels[0] === pair_labels[1]) {
       failures.push(
-        `both overlays of a two-overlay run are labelled "${pair_labels[1]}", and that ordinal is the only ` +
+        `both overlays of a two-overlay run are labelled "${pair_labels[0]}", and that ordinal is the only ` +
           "handle an operator has on a dictionary whose path is never printed — so the header, " +
           "--require-overlay's list and every refusal name a dictionary that cannot be told from the other",
       );
     }
-    if (pair_labels[1] !== "overlay 1 of 2 given to --terms" || pair_labels[2] !== "overlay 2 of 2 given to --terms") {
+    if (pair_labels[0] !== "overlay 1 of 2 given to --terms" || pair_labels[1] !== "overlay 2 of 2 given to --terms") {
       failures.push(
-        `two overlays were labelled "${pair_labels[1]}" and "${pair_labels[2]}", which do not count the ` +
+        `two overlays were labelled "${pair_labels[0]}" and "${pair_labels[1]}", which do not count the ` +
           "--terms arguments in the order they were given",
       );
     }
@@ -5962,6 +6042,12 @@ function self_test(categories: TermCategory[]): number {
       if (with_barred.hits.some((hit) => hit.path === "barred.txt")) {
         failures.push("a file that could not be opened reported a hit, so something read bytes nothing could read");
       }
+    } else {
+      skipped.push(
+        "a tracked file whose mode refuses the read: this user opened a mode-000 file anyway, which is what " +
+          "root does, so the check that a refused read is named as a gap rather than aborting the run could " +
+          "not be exercised here. Run the self-test as a non-root user to cover it.",
+      );
     }
     chmodSync(barred, 0o644);
     rmSync(barred);
@@ -6072,7 +6158,8 @@ function self_test(categories: TermCategory[]): number {
       `Self-test: ${terms} ${terms === 1 ? "term" : "terms"} planted one file each across ${all.length} ` +
         `${all.length === 1 ? "category" : "categories"}, ${planted.length - terms} evasion fixtures, ` +
         `${controls.length} controls, ${bounded.length} whole-word ${bounded.length === 1 ? "term" : "terms"} ` +
-        `buried in the boundary control, ${result.scanned} files and ${result.nodes.length} path components ` +
+        `buried in the boundary control, ${result.scanned} files and ${result.nodes.length} paths and parent ` +
+        "directories " +
         `scanned, ${result.salvaged.length} read only for the runs of text in them, ${result.binary.length} ` +
         `unread, ${tracked.blobs.size} tracked ${tracked.blobs.size === 1 ? "blob" : "blobs"} proved read and ` +
         `${tracked.unreadable.length} named unreadable in the fixture repository, ${history.blobs} historical ` +
@@ -6090,8 +6177,15 @@ function self_test(categories: TermCategory[]): number {
       console.log("Self-test FAILED — the checker does not do what it claims.");
       return 1;
     }
+    for (const line of skipped) {
+      console.log(`  SKIPPED — ${line}`);
+    }
+    const headline =
+      skipped.length === 0
+        ? "Self-test PASSED"
+        : `Self-test PASSED WITH ${skipped.length} ${skipped.length === 1 ? "CHECK" : "CHECKS"} SKIPPED`;
     console.log(
-      "Self-test PASSED — every term is found where it was planted; a decomposed, wrapped, zero-width-broken, " +
+      `${headline} — every term is found where it was planted; a decomposed, wrapped, zero-width-broken, ` +
         "percent-encoded, fullwidth, mathematical, ligatured, Cyrillic or Greek spelling is caught; a term in a " +
         "filename, a directory name, a phrase split across a directory separator, a symlink target, a UTF-16 " +
         "file, the readable runs of a file with one stray NUL, a short plaintext run behind NULs, a phrase " +
@@ -6160,16 +6254,43 @@ function self_test(categories: TermCategory[]): number {
  * scanner decides what each one is. Recursing only into real directories is what keeps a symlink
  * loop from turning the walk into an infinite one, and listing the symlink itself is what keeps it
  * from being dropped from the scan and from the count at the same time.
+ *
+ * A directory this user may not list is collected into `unlistable` instead of thrown. One of
+ * them anywhere under the target used to abort the whole run at exit 2, which suppressed the
+ * verdict for every file that had already been read — the run said nothing at all about a tree it
+ * had mostly finished scanning. It is a gap like any other, and the report has a place to name it.
  */
-function walk_path(target: string): string[] {
-  if (!lstatSync(target).isDirectory()) {
+function walk_path(target: string, unlistable: string[]): string[] {
+  let stats: Stats;
+  try {
+    stats = lstatSync(target);
+  } catch (failure) {
+    const code = (failure as NodeJS.ErrnoException).code;
+    if (code !== "EACCES" && code !== "EPERM") {
+      throw failure;
+    }
+    unlistable.push(target);
+    return [];
+  }
+  if (!stats.isDirectory()) {
     return [target];
   }
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(target, { withFileTypes: true });
+  } catch (failure) {
+    const code = (failure as NodeJS.ErrnoException).code;
+    if (code !== "EACCES" && code !== "EPERM") {
+      throw failure;
+    }
+    unlistable.push(target);
+    return [];
+  }
   const found: string[] = [];
-  for (const entry of readdirSync(target, { withFileTypes: true })) {
+  for (const entry of entries) {
     if (entry.isDirectory()) {
       if (SKIPPED_DIRECTORIES[entry.name] === undefined) {
-        found.push(...walk_path(join(target, entry.name)));
+        found.push(...walk_path(join(target, entry.name), unlistable));
       }
       continue;
     }
@@ -6213,7 +6334,7 @@ function staged_contents(root: string, files: string[]): Map<string, Uint8Array>
 function print_usage(): void {
   console.log(
     [
-      "Usage: bun scripts/leak-check.ts [options]",
+      "Usage: bun .github/leak-check.ts [options]",
       "",
       "Scans this repository for vocabulary that belongs to private work. Exits 1 on any hit.",
       "The vocabulary itself is not in this repository: merge a project's overlay to load one.",
@@ -6318,7 +6439,7 @@ function main(): number {
     // `canonical` and not `resolve`: these paths are compared against a repository root that git
     // resolved, and a spelling that disagrees defeats `overlay_inside_scan`. `labels` is all any
     // message may say about them; see `dictionary_labels`.
-    const paths = [BUILT_IN_TERMS, ...options.terms.map((path) => canonical(path))];
+    const paths = options.terms.map((path) => canonical(path));
     const labels = dictionary_labels(paths);
     // Everything inside this fence has the dictionary open, so an error escaping it carries the
     // dictionary unless this file wrote the message. The outer catch prints to stderr, which
@@ -6347,12 +6468,30 @@ function main(): number {
     }
 
     if (options.mode === "audit") {
-      return audit_allowlist(repo_root(import.meta.dir), exemptions, rejected, matchers, options.quiet);
+      return audit_allowlist(gated_root(), exemptions, rejected, matchers, options.quiet);
     }
 
     if (options.message !== null) {
-      const root = repo_root(import.meta.dir);
-      const text = strip_commit_message(readFileSync(options.message, "utf8"), comment_character(root));
+      const root = gated_root();
+      let raw: string;
+      try {
+        raw = readFileSync(options.message, "utf8");
+      } catch (failure) {
+        const code = (failure as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "EACCES" && code !== "EPERM") {
+          throw failure;
+        }
+        // A `Refusal`, for the reason spelled out above `Dictionary not found`: the fence turns a
+        // plain error into `withheld`, which would tell the operator their message was suppressed
+        // because a runtime error quotes what it choked on. Nothing quoted anything here — the
+        // file was simply not readable, and saying so names only a path.
+        throw new Refusal(
+          `Commit message not readable: ${shorten(canonical(options.message))}.\n` +
+            "  Nothing was read, so this run has no verdict to give about the message. Check the path given " +
+            "to --message exists and is readable from here.",
+        );
+      }
+      const text = strip_commit_message(raw, comment_character(root));
       const { reported, exempt } = partition_hits(scan_text("commit message", text, matchers, null).hits, exemptions);
       report({
         reported,
@@ -6371,16 +6510,45 @@ function main(): number {
 
     let root: string;
     let files: string[];
+    // Directories the walk was refused. Collected rather than thrown for the reason given above
+    // `walk_path`, and named in the report so a partial scan cannot read as a whole one.
+    const unlistable: string[] = [];
     const scopes: string[] = [];
 
     if (options.path !== null) {
-      const target = canonical(options.path);
-      const base = statSync(target).isDirectory() ? target : dirname(target);
+      const named = canonical(options.path);
+      let stats: Stats;
+      try {
+        // Follows the link deliberately: the question is what the operator pointed at, and a
+        // symlink to a directory is a directory to them.
+        stats = statSync(named);
+      } catch (failure) {
+        const code = (failure as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "EACCES" && code !== "EPERM") {
+          throw failure;
+        }
+        throw new Refusal(
+          `--path names ${shorten(named)}, which this run cannot open: ` +
+            (code === "EACCES" || code === "EPERM"
+              ? "its mode, or that of a directory on the way to it, refuses this user."
+              : "there is nothing there.") +
+            "\n  Nothing was read, so this run has no verdict to give about it.",
+        );
+      }
+      // A root is a place, not a name. This `stat` follows a symlink and the walk's `lstat` does
+      // not, so the two disagreed about the same argument: `stat` adopted the link's target as the
+      // root, the walk returned the link itself as a single leaf, and `--path` at a symlinked
+      // directory printed PASSED over a directory it never opened — while the identical directory
+      // named directly came back FAILED. Resolving the argument when it points at a directory is
+      // what makes them agree. A symlink the walk *finds* still keeps its own name and is read as
+      // content in its own right; see `canonical`.
+      const target = stats.isDirectory() ? canonical_root(named) : named;
+      const base = stats.isDirectory() ? target : dirname(target);
       // Report paths relative to the repository, not to the scanned subtree, so an exemption
       // written once matches whether the run covered one directory or every tracked file.
       const found = git_text(["rev-parse", "--show-toplevel"], base);
       root = found.ok ? canonical_root(found.stdout.trim()) : base;
-      files = walk_path(target);
+      files = walk_path(target, unlistable);
       if (!found.ok) {
         // Said out loud, because every exemption in the overlay names a path inside a repository
         // and there is no repository here to name it inside. They will not resolve, the run will
@@ -6392,14 +6560,11 @@ function main(): number {
         );
       }
     } else {
-      root = repo_root(import.meta.dir);
+      root = gated_root();
       files = list_repository_files(root, options.mode === "staged");
     }
 
     for (const [index, dictionary] of paths.entries()) {
-      if (dictionary === BUILT_IN_TERMS) {
-        continue;
-      }
       const refusal = overlay_inside_scan(root, dictionary, labels[index] as string);
       if (refusal !== null) {
         throw new Refusal(refusal);
@@ -6414,20 +6579,30 @@ function main(): number {
     const contents = options.mode === "staged" ? staged_contents(root, files) : null;
     const result = scan_files(files, matchers, root, quoted, contents, object_hash);
     const hits = [...result.hits];
+    // A directory nobody could list is a gap in exactly the sense the report already means by one:
+    // nothing under it went through the matcher. It is counted beside the verdict as well as named
+    // here, because a run that skipped a whole subtree must not read as one that covered it.
+    const scan_root = canonical_root(root);
+    const refused = unlistable.map(
+      (path) =>
+        `${under(scan_root, path) ?? shorten(path)} — a directory this user may not list, so nothing under it ` +
+        "was read",
+    );
     const unread = [
       ...result.binary.map(
         (path) => `${path} — not text in any encoding this checker knows, and holding no readable run`,
       ),
       ...result.unreadable,
+      ...refused,
     ];
     const partial = [...result.salvaged];
     // Coverage is part of the verdict, and a deliberate suppression is not the same fact as a file
     // that could not be read: one is a measured blind spot, the other is a gap nobody chose.
     const coverage =
-      `${result.nodes.length} path components, ` +
+      `${result.nodes.length} paths and parent directories matched by name, ` +
       `${result.binary.length} not text and named above, ` +
       `${result.salvaged.length} not text but read for the runs that are, and named above, ` +
-      `${result.unreadable.length} absent or not a readable file, and named above, ` +
+      `${result.unreadable.length + refused.length} absent, unreadable or not a file, and named above, ` +
       `${result.excluded} excluded by path, ` +
       `${result.self_quoted} ${result.self_quoted === 1 ? "occurrence" : "occurrences"} suppressed inside the ` +
       "dictionary that declares them";
@@ -6467,7 +6642,7 @@ function main(): number {
       }
       scopes.push(
         `${scanned.blobs} superseded ${scanned.blobs === 1 ? "blob" : "blobs"} of ${scanned.objects} reachable ` +
-          `objects, ${scanned.names} historical path components, ${scanned.refs} ref ` +
+          `objects, ${scanned.names} historical paths and parent directories, ${scanned.refs} ref ` +
           `${scanned.refs === 1 ? "name" : "names"}, ${scanned.tags} annotated tag ` +
           `${scanned.tags === 1 ? "message" : "messages"} and ${scanned.commits} commit ` +
           `${scanned.commits === 1 ? "message" : "messages"} (${scanned.current} blobs already read above as ` +

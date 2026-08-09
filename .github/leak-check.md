@@ -1,31 +1,67 @@
-# Repository scripts
+# Leak check
 
-## `leak-check.ts`
+This repository is public. Some of the work that produced it was not. `.github/leak-check.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
 
-This repository is public. Some of the work that produced it was not. `leak-check.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
+It lives under `.github/`, beside the workflow that runs it, because it is CI apparatus rather than anything the published package ships.
 
 ### The vocabulary is not in this repository
 
-`leak-terms.json`, next to the script, documents the dictionary schema and declares no terms at all. That is not an oversight and it is not a stub waiting to be filled in.
+**No dictionary ships here at all** — not the terms, not the exemptions, and not a schema file describing either. Nothing under version control in this repository names a term, a category or a client.
 
 An earlier version of this file kept the "generic" half of a dictionary in public and moved only names and figures to a private overlay. The half that stayed was a curated list of one domain's words, and a curated list of a domain's words identifies that domain precisely — which is what a list of that shape is for. Nobody needs the client's name once they have the vocabulary. The list was the disclosure.
 
 So the whole dictionary is private. This repository ships the mechanism; each project keeps its own terms and merges them at run time:
 
 ```sh
-bun scripts/leak-check.ts --terms ~/private-work/leak-terms.json     # repeatable
-LEAK_TERMS=~/a.json:~/b.json bun scripts/leak-check.ts               # colon-separated
+bun .github/leak-check.ts --terms ~/private-work/leak-terms.json     # repeatable
+LEAK_TERMS=~/a.json:~/b.json bun .github/leak-check.ts               # colon-separated
 ```
 
-The empty file is kept rather than deleted, and the tool still loads it, for two reasons. It documents the schema — every field, every rule, and why each one exists — where somebody writing an overlay will look for it, and a schema is not a disclosure. And it makes the emptiness a positive statement: `0 terms in 0 categories` on the header of every run says the public repository carries no vocabulary, where a missing file would only say the tool could not find one.
+There used to be an empty `leak-terms.json` beside the script, kept so that `0 terms in 0 categories` on every run said the public repository carries no vocabulary. It is gone. Keeping it meant shipping a template of which *kinds* of thing are worth hiding, which is a thinner disclosure than a word list but is still one, and the header says the same thing without it: a run that loaded nothing says so, and `--require-overlay` turns that into a failure wherever it matters.
 
-An overlay uses the schema documented in that file. Categories with the same name pool their terms and a term already defined keeps its first definition, and the run names both so a merge can never be read as a replacement. An overlay that is itself inside this repository is refused outright: a dictionary's own terms are suppressed inside it, so a committed overlay would be the one file its vocabulary could never be reported in. **That refusal resolves both paths the same way before comparing them**, because it did not and a spelling defeated it: `git rev-parse --show-toplevel` answers with the directory the kernel resolved and `resolve` leaves symlinks standing, so a repository under `/tmp` was `/private/tmp/...` to one side of the comparison and `/tmp/...` to the other, the relative path between them opened with `..`, and the guard concluded the overlay was outside the repository. The run it let through scanned the overlay with its own vocabulary muted inside it and printed `PASSED` over the one file holding the dictionary.
+An overlay is a JSON file in the shape given under [Overlay format](#overlay-format) below. Categories with the same name pool their terms and a term already defined keeps its first definition, and the run names both so a merge can never be read as a replacement. An overlay that is itself inside this repository is refused outright: a dictionary's own terms are suppressed inside it, so a committed overlay would be the one file its vocabulary could never be reported in. **That refusal resolves both paths the same way before comparing them**, because it did not and a spelling defeated it: `git rev-parse --show-toplevel` answers with the directory the kernel resolved and `resolve` leaves symlinks standing, so a repository under `/tmp` was `/private/tmp/...` to one side of the comparison and `/tmp/...` to the other, the relative path between them opened with `..`, and the guard concluded the overlay was outside the repository. The run it let through scanned the overlay with its own vocabulary muted inside it and printed `PASSED` over the one file holding the dictionary.
 
 Short or ambiguous terms match as whole words only, so a three-letter term does not fire on every hash in the repository and a four-letter one does not fire on ordinary English that happens to contain it. Longer, unambiguous terms match anywhere, including glued inside a slug, an identifier or a URL. Multi-word terms tolerate spaces, underscores or hyphens between the words, and one line break. Each term's entry records which rule it uses and why.
 
+### Overlay format
+
+The schema used to ship as an empty `leak-terms.json`. It lives here instead, as prose, because a description of the fields is mechanism and a file the tool loads is a template.
+
+```jsonc
+{
+  "categories": [
+    {
+      "name": "short machine-readable label, printed beside every hit and part of an exemption's key",
+      "why": "why this whole category is banned; read by whoever maintains the list",
+      "terms": [
+        {
+          "term": "the string to ban",
+          "word_boundary": true,
+          "why": "why this term is banned and why it uses that boundary rule; printed beside every hit"
+        }
+      ]
+    }
+  ],
+  "exemptions": [
+    {
+      "path": "repository-relative path, in the repository being scanned",
+      "category": "the category whose term is exempted here — required",
+      "term": "the term exempted at that path",
+      "line": 12,
+      "anchor": "digest of the sentence the entry was written against",
+      "why": "required and non-empty; an entry without a reason is rejected, not honoured"
+    }
+  ]
+}
+```
+
+`word_boundary` true matches the term only as a whole word and still catches an English plural and a `snake_case` or `CamelCase` junction; false matches it anywhere. Use true for anything short or ambiguous, because an unbounded four-letter term fires inside ordinary English and a check that cries wolf gets switched off.
+
+An exemption's `line` names the occurrence, but the *sentence* found at that line is what it actually matches on, so an edit that moves the line still matches and an edit that puts a different sentence there does not. `line: 0` is special: it names the file's path rather than its content. `--audit` reports an entry whose line has stopped carrying its sentence as drifted, and fails.
+
 ### A run without vocabulary is not a pass
 
-Because the shipped dictionary matches nothing, a run with no overlay checks no name and no figure, prints `PASSED` and exits 0 — the same exit code as a complete run. The header says an overlay is missing, which protects a human reading the output, but a hook and a CI step read only the exit code.
+Because no dictionary ships here, a run with no overlay checks no name and no figure, prints `PASSED` and exits 0 — the same exit code as a complete run. The header says an overlay is missing, which protects a human reading the output, but a hook and a CI step read only the exit code.
 
 `--require-overlay` closes that. It fails, with exit code 2, any run that loaded **no terms** — 2 rather than 1, because the gate could not be run as asked rather than having found something. **Pass it everywhere the checker is invoked as a gate**, which is what the workflow and both hooks below do.
 
@@ -126,14 +162,14 @@ A hit found across a line break reports the line the term starts on, marks how m
 ### Modes
 
 ```sh
-bun scripts/leak-check.ts                       # every tracked file and path (the default)
-bun scripts/leak-check.ts --staged              # staged content and paths, for a pre-commit gate
-bun scripts/leak-check.ts --message <file>      # a commit message, for a commit-msg gate
-bun scripts/leak-check.ts --path packages/      # one file or directory
-bun scripts/leak-check.ts --history             # ALSO clear the whole history
-bun scripts/leak-check.ts --history v1.0..HEAD  # ALSO clear a chosen range
-bun scripts/leak-check.ts --audit               # read every exemption and flag the stale ones
-bun scripts/leak-check.ts --self-test           # prove the checker against planted fixtures
+bun .github/leak-check.ts                       # every tracked file and path (the default)
+bun .github/leak-check.ts --staged              # staged content and paths, for a pre-commit gate
+bun .github/leak-check.ts --message <file>      # a commit message, for a commit-msg gate
+bun .github/leak-check.ts --path packages/      # one file or directory
+bun .github/leak-check.ts --history             # ALSO clear the whole history
+bun .github/leak-check.ts --history v1.0..HEAD  # ALSO clear a chosen range
+bun .github/leak-check.ts --audit               # read every exemption and flag the stale ones
+bun .github/leak-check.ts --self-test           # prove the checker against planted fixtures
 ```
 
 **`--history` is the clearance, and a run without it has not looked at the history at all.** It walks every object reachable from every ref: the content of every blob, every path any object was ever stored under, **every annotated tag's own message**, and every commit message. A tag is an object with a message of its own and `git push --follow-tags` publishes it beside the commits, so reading commit messages and stopping there left a release note — the one text nobody rewrites — unread. Blobs are deduplicated by object id, so a file unchanged across five hundred commits is one object, read once and reported once, and the report says how many were read, how many were skipped as bytes the tracked scan had already read, how many were read only for their runs of text, and how many were not read at all. **Everything skipped is named**, with its path, its object id and the reason; it used to be a number in the scope line, so a disclosure sitting in a blob too large to read left no trace in the report. Each hit names the path and at least one commit that contains it, as `history:<path> (commit <sha>)`. The path a hit belongs to travels **with the hit** rather than inside that label: a path may legally contain an `@`, and recovering it by cutting the label at the last `@` read `assets@2x/notes.md` as `assets`, so an exemption written for `assets` could suppress a hit belonging to a path nobody had judged. Nothing parses a label now.
@@ -154,7 +190,15 @@ So the rule stopped asking the index and started keeping a receipt. Every file t
 
 The flag replaced an earlier `--commits`, which read commit messages and nothing else. That is the one part of the history a scrub never touches, so it reported a rewritten history clean while every superseded version of every file still sat in the object database, reachable and cloneable. Passing `--commits` now fails with an error rather than doing something narrower than its name.
 
-Reads are batched — `git rev-list --objects` for the graph, `git cat-file --batch-check` for the types and sizes, `git cat-file --batch` in chunks for the contents, and one chunk of bodies resident at a time — so the cost is a handful of processes rather than one per object. On this repository the whole clearance — 274 tracked files, 1,994 reachable objects, 507 superseded blobs, 6 tag messages and 307 commit messages, including extracting the text out of a dozen multi-megabyte images — takes about two seconds. Matching each blob is screened by a plain lowercase substring search before any pattern runs, because a forty-way alternation of character classes over sixty megabytes is seconds and the screen is milliseconds.
+Reads are batched — `git rev-list --objects` for the graph, `git cat-file --batch-check` for the types and sizes, `git cat-file --batch` in chunks for the contents, and one chunk of bodies resident at a time — so the cost is a handful of processes rather than one per object. On this repository the whole clearance — 277 tracked files, 2,407 reachable objects, 625 superseded blobs, 6 tag messages and 336 commit messages, including extracting the text out of a dozen multi-megabyte images — takes about three and a half seconds.
+
+**Those are a measurement, not constants, and two of them only reproduce under a stated method.** Measured at `5e820a3` on an idle machine, over a *clean* checkout, running that checkout's own copy of the script:
+
+```sh
+bun .github/leak-check.ts --history --require-overlay --quiet
+```
+
+Three of those numbers are stable however you take them. The other two are not, and the earlier figures on this line — 274 files, 1,994 objects, 507 blobs, 307 messages, "about two seconds" — had drifted on every count before anybody re-ran them. **Superseded blobs needs a clean tree**: a modified tracked file's committed blob stops counting as already read and becomes superseded, so the figure rises by exactly one per dirty file, and the same repository measured with four modified files reports 629 rather than 625. **Ref names is not a property of the history at all** but of the checkout — 15 here, 16 in a single-branch clone, 17 in a full one, because a clone carries remote-tracking refs this repository does not. Timing needs an idle machine and an overlay: with none loaded the same run takes about 1.8 seconds, because nothing is matched. And run the repository's *own* copy of the script — invoking another checkout's copy without `--path` scans that checkout instead, which is the trap the `--path` section below describes, and it silently produces the wrong repository's numbers.
 
 A shallow clone holds only what was fetched and an explicit range may not resolve in one; both still run, and both say so in the scope line, for the same reason a missing overlay does.
 
@@ -187,7 +231,7 @@ What it *does* cover, and what nothing else here does: every tracked file's cont
 
 ### Wiring
 
-`.github/workflows/leak-check.yml` runs the self-test, the audit and a full-history clearance on every push and pull request, all three with `--require-overlay`. The overlay reaches CI as the `LEAK_OVERLAY` secret, written to `$RUNNER_TEMP/leak-terms.json` — a path that holds no vocabulary, which is what makes it usable on a public repository. **Pointing `--terms` at a checkout of the private repository is not an equivalent option there**, and the workflow used to offer it as one: Actions echoes each step's `run:` line into a world-readable log and `actions/checkout` names the repository it clones, so the private repository's name is published before the checker starts and no flag on the checker reaches either of them. Use that form only where the log is private. When the overlay is absent, empty or malformed the job fails loudly rather than skipping, which is why a pull request from a fork cannot be cleared here.
+`.github/workflows/leak.yml` runs the self-test, the audit and a full-history clearance on every push and pull request, all three with `--require-overlay`. The overlay reaches CI as the `LEAK_OVERLAY` secret, written to `$RUNNER_TEMP/leak-terms.json` — a path that holds no vocabulary, which is what makes it usable on a public repository. **Pointing `--terms` at a checkout of the private repository is not an equivalent option there**, and the workflow used to offer it as one: Actions echoes each step's `run:` line into a world-readable log and `actions/checkout` names the repository it clones, so the private repository's name is published before the checker starts and no flag on the checker reaches either of them. Use that form only where the log is private. When the overlay is absent, empty or malformed the job fails loudly rather than skipping, which is why a pull request from a fork cannot be cleared here.
 
 `hooks/pre-commit` runs `--staged --require-overlay`. `hooks/commit-msg` runs `--message "$1" --require-overlay`, because a pre-commit hook is never handed the message and until it was added a commit message was checked by nothing at all. Install both with:
 
@@ -202,10 +246,12 @@ Neither hook clears the history — nothing that runs per commit can afford to. 
 ### Before a publish, and before a force-push
 
 ```sh
-bun scripts/leak-check.ts --terms <overlay> --require-overlay --self-test \
-  && bun scripts/leak-check.ts --terms <overlay> --require-overlay --audit \
-  && bun scripts/leak-check.ts --terms <overlay> --require-overlay --history
+bun .github/leak-check.ts --terms <overlay> --require-overlay --self-test \
+  && bun .github/leak-check.ts --terms <overlay> --require-overlay --audit \
+  && bun .github/leak-check.ts --terms <overlay> --require-overlay --history
 ```
+
+**`PASSED` and `PASSED WITH GAPS` both exit 0, so the `&&` above cannot tell them apart.** The chain proves that each step ran and that none of them found anything; it does not prove the clearance managed to read everything. A gap is a file or blob nothing could open or decode, and this repository always has some — the twelve historical images under `.claude/plugins/maccing/pictura/output/`. So read the three verdict lines rather than only the exit code. The `&&` is there to stop the chain on a failure, not to judge coverage, and a run that could not read half the tree still exits 0 and still says so in words.
 
 Run this before every publish, not only the first, and after every history rewrite. **A public registry blocks unpublishing after 72 hours, and versions that were already resolved stay resolvable regardless.** A leaked commit can be rewritten and force-pushed; a leaked published version cannot be taken back at all. That asymmetry is the whole reason this gate runs before the registry, and not only before the push.
 

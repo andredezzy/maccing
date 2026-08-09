@@ -26,4 +26,4 @@
 set -eu
 
 repository=$(git rev-parse --show-toplevel)
-exec bun "$repository/scripts/leak-check.ts" --message "$1" --require-overlay
+exec bun "$repository/.github/leak-check.ts" --message "$1" --require-overlay
