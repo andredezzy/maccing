@@ -1721,6 +1721,77 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("refuse-unparseable-list");
   });
 
+  test("but a row carrying no identifier at all is not an unreadable one", async () => {
+    // The distinction this rate turns on. A malformed number is a person who was reached and is
+    // now missing from the denominator; an empty cell is a row of somebody's export that was never
+    // part of the dispatch. Counting the second as the first refuses correct readings — a CRM dump
+    // is mostly such rows, and the audience such a campaign publishes has always been the phones it
+    // held rather than the lines the file ran to.
+    const fixture = await build("blank-rows-are-not-junk", {
+      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lists: {
+        // Two phones among a majority of empty cells, which is the shape of a real export.
+        "reached.csv": csv(
+          ["phone", "name"],
+          [
+            [phone(1), "a"],
+            ["", "no phone on this row"],
+            ["", ""],
+            [phone(2), "b"],
+            ["", "nor this one"],
+          ],
+        ),
+      },
+    });
+
+    const record = await one(
+      fixture,
+      cold("blank-rows-are-not-junk", fixture.list("reached.csv"), { column: "phone" }),
+    );
+
+    expect(record.audience.listed).toBe(2);
+  });
+
+  test("and a rate sitting exactly on the ceiling is allowed, on both sides of the join", async () => {
+    // The map permits a quarter, and "above this share" means above it. Whether the comparison is
+    // strict decides what a map saying 0.25 actually licenses, and neither side pinned it — so a
+    // change from `>` to `>=` would silently start refusing every file measured at exactly its
+    // declared ceiling, which is the one value an author picked on purpose.
+    const fixture = await build("ceiling-is-inclusive", {
+      // One unreadable of four accounts, and one of four possible list identifiers: 0.25 both ways.
+      person: people(
+        ["a", phone(1), from_cut(HOUR)],
+        ["b", phone(2), from_cut(HOUR)],
+        ["c", phone(3), from_cut(HOUR)],
+        ["junk", "not a number", from_cut(HOUR)],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+    });
+
+    const record = await one(fixture, cold("ceiling-is-inclusive", fixture.list("reached.txt")));
+
+    expect(record.audience.listed).toBe(3);
+    expect(record.audience.matched_phones).toBe(3);
+  });
+
+  test("and the rate is measured against the audience, not the row count", async () => {
+    // `listed` is a count of distinct people, so the guard has to bound how far that number was
+    // shrunk. Dividing by rows understates it wherever readable entries repeat: five of these six
+    // rows are readable but resolve to one person, so the row reading is one junk entry in six and
+    // the honest one is one in two — half the audience missing, which the ceiling must catch.
+    const fixture = await build("rate-against-the-audience", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: {
+        "reached.txt": lines(phone(1), phone(1), phone(1), phone(1), phone(1), "not a number"),
+      },
+    });
+
+    const error = await caught(one(fixture, cold("rate-against-the-audience", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("1 of 2");
+  });
+
   test("a cell whose lists yielded no usable identifier", async () => {
     const fixture = await build("refuse-empty", {
       person: people(["one", phone(1), from_cut(HOUR)]),

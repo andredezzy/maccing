@@ -994,17 +994,25 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
 
     const keys = new Set<string>();
-    let listed_rows = 0;
-    let listed_unreadable = 0;
+    let unreadable = 0;
     for (const list of cell.lists) {
       if (!(await Bun.file(list).exists())) {
         throw new MissingExportError(list, `cell ${JSON.stringify(cell.name)}`);
       }
       for (const raw of await read_identifiers(list, cell.column, cell.filter)) {
-        listed_rows += 1;
+        // A row carrying nothing in its identifier column is not a member this cell failed to
+        // read; it is a row of somebody's export that was never part of the dispatch. A CRM dump
+        // is mostly such rows, and the count the campaign publishes has always been the phones it
+        // held rather than the lines it ran to. Counting them as unreadable would refuse a
+        // correct reading, which is the opposite of the fault this guard exists for. A `.txt`
+        // list already drops blank lines, so this also stops the same identifiers passing or
+        // failing on nothing but the file's extension.
+        if (raw.trim() === "") {
+          continue;
+        }
         const key = key_of(raw);
         if (key === null) {
-          listed_unreadable += 1;
+          unreadable += 1;
           continue;
         }
         keys.add(key);
@@ -1021,17 +1029,23 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // comparison whose difference is the junk. The person export is rate-checked a few dozen lines
     // above; leaving the lists unchecked guarded the side that empties and left the side that
     // inflates open, and of the two it is the inflated reading that gets published.
-    if (listed_rows > 0) {
-      const rate = listed_unreadable / listed_rows;
-      if (rate > map.phone.max_unparseable_rate) {
-        throw new UnparseablePhonesError(
-          listed_unreadable,
-          listed_rows,
-          rate,
-          map.phone.max_unparseable_rate,
-          `cell ${JSON.stringify(cell.name)}`,
-        );
-      }
+    //
+    // The denominator is what `listed` could have been, not how many rows were read. Each
+    // unreadable entry could have contributed at most one distinct key, so `keys.size +
+    // unreadable` is the largest audience this cell could have had, and the share lost is the
+    // distortion of the one number the guard protects. Dividing by rows instead would understate
+    // it wherever readable entries repeat: a list of eighty rows resolving to twenty people reads
+    // as five percent junk while a fifth of its audience is missing.
+    const possible = keys.size + unreadable;
+    const rate = unreadable / possible;
+    if (rate > map.phone.max_unparseable_rate) {
+      throw new UnparseablePhonesError(
+        unreadable,
+        possible,
+        rate,
+        map.phone.max_unparseable_rate,
+        `cell ${JSON.stringify(cell.name)}`,
+      );
     }
 
     // Probes and internal numbers are subtracted after that first check so the two ways a cell can
