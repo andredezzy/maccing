@@ -28,10 +28,21 @@
 set -eu
 
 repository=$(git rev-parse --show-toplevel)
-# Two conventional homes, first one found wins: the repository root, and `.maccing/` for a
-# repository that already keeps its maccing-related files there. Neither is tracked. When
-# neither exists nothing is set, the checker loads no vocabulary, and --require-overlay turns
-# that into a refusal that says so rather than a pass over an unchecked tree.
+# Three ways to find the dictionary, in order. LEAK_PROTECTIONS wins. Then `leak.protections`
+# out of git config, which `git config leak.protections <path>` writes to .git/config — never
+# committed, never pushed, and excluded from every scan this checker runs. That is the one
+# place a path may be recorded when the dictionary lives somewhere the tracked tree must not
+# name: the private repository's own directory name is a term the dictionary declares, so
+# writing it into a tracked hook would publish, in this public repository, the exact string
+# the hook exists to keep out of it.
+#
+# Then two conventional homes for a repository that simply keeps its own: the root, and
+# `.maccing/`. When none of the three answers, nothing is set, the checker loads no
+# vocabulary, and --require-overlay turns that into a refusal that says so rather than a pass
+# over an unchecked tree.
+if [ -z "${LEAK_PROTECTIONS:-}" ]; then
+  LEAK_PROTECTIONS=$(git config --get leak.protections || true)
+fi
 if [ -z "${LEAK_PROTECTIONS:-}" ]; then
   for candidate in "$repository/leak-protections.json" "$repository/.maccing/leak-protections.json"; do
     if [ -f "$candidate" ]; then

@@ -8,9 +8,11 @@ It lives under `.github/scripts/`, beside the workflow that runs it, because it 
 
 **No dictionary is committed here** — not the terms, not the exemptions, and not a schema file describing either. Nothing under version control in this repository names a term, a category or a client, and `git ls-files` lists no dictionary at all.
 
-The working copy is a different question. The gate needs a dictionary to be worth running, so each repository that wants protecting keeps its own, untracked. Two conventional homes are searched, first one found wins: `leak-protections.json` at the repository root, and `.maccing/leak-protections.json` for a repository that already keeps its maccing-related files there. Both are git-ignored, along with editor swap and backup files beside them, because a `.leak-protections.json.swp` carries the same bytes under a name a single entry would miss. Each repository's list is its own; they are not copies of one file and are free to differ.
+The working copy is a different question: the gate needs a dictionary to be worth running. **No dictionary is in this repository at all** — not tracked, not untracked, not ignored-but-present. It lives in the private repository whose vocabulary it is, and this checkout is told where by a path recorded per clone.
 
-**Ignoring a file is not the same as making it unpublishable, and it is worth knowing the two ways out.** `git add -f` bypasses `.gitignore` outright — but the guard above catches it, because a forced-add puts the dictionary in the staged scan set and the pre-commit hook then refuses at exit 2. That protection is only as real as the hooks being installed. The other way out is packaging: `npm pack`, a docker build context and a tarball of the working tree read their own include rules and not `.gitignore`. The published package is unaffected, because `npm pack` runs inside `packages/growth` and both dictionary homes sit above it — verified, zero files named `leak-protections` in the tarball — but a tool pointed at the repository root would carry it, and nothing in this gate would stop that.
+Three ways to find it, in order. `LEAK_PROTECTIONS` wins. Then `leak.protections` from git config, written by `git config leak.protections <path>` into `.git/config` — never committed, never pushed, and excluded from every scan this checker runs. **That is the only place the path may be recorded here**, because the private repository's own directory name is a term the dictionary declares: writing it into a tracked hook or into this file would publish, in a public repository, the exact string the gate exists to keep out of it. Then two conventional homes for a repository that simply keeps its own beside it — `leak-protections.json` at the root and `.maccing/leak-protections.json` — both git-ignored here along with editor swap and backup siblings, so that a dictionary put there by hand still cannot be committed. Each repository's list is its own and they are free to differ.
+
+**Ignoring a file is not the same as making it unpublishable, and both escapes are worth knowing even now that nothing sits here.** `git add -f` bypasses `.gitignore` outright — the guard above catches it, because a forced add puts the dictionary in the staged scan set and the pre-commit hook then refuses at exit 2, but that is only as real as the hooks being installed. Packaging is the other: `npm pack`, a docker build context and a tarball of the working tree read their own include rules, not `.gitignore`. The published package is unaffected — `npm pack` runs inside `packages/growth`, verified zero files named `leak-protections` in the tarball — but a tool pointed at the repository root would carry whatever is there. Keeping the dictionary out of this tree entirely is what makes both of those moot rather than merely guarded against.
 
 An earlier version of this file kept the "generic" half of a dictionary in public and moved only names and figures to a private overlay. The half that stayed was a curated list of one domain's words, and a curated list of a domain's words identifies that domain precisely — which is what a list of that shape is for. Nobody needs the client's name once they have the vocabulary. The list was the disclosure.
 
@@ -21,14 +23,16 @@ bun .github/scripts/leak-check.ts --terms ~/elsewhere/leak-protections.json   # 
 LEAK_PROTECTIONS=~/a.json:~/b.json bun .github/scripts/leak-check.ts          # colon-separated
 ```
 
-The three git hooks default to `<repository root>/leak-protections.json` when `LEAK_PROTECTIONS` is unset, so the ordinary case needs no configuration at all.
+The three git hooks resolve the dictionary as above, so the ordinary case needs no environment at all — one `git config leak.protections <path>` per clone and nothing else.
 
-**That file and the CI secret are one thing in two places, so keep them in step:**
+**The dictionary and the CI secret are one thing in two places, so keep them in step:**
 
 ```sh
-gh secret set LEAK_PROTECTIONS_JSON < leak-protections.json    # after every edit to the dictionary
-gh secret list | grep LEAK_PROTECTIONS_JSON                    # updated timestamp is the only readback there is
+gh secret set LEAK_PROTECTIONS_JSON < "$(git config --get leak.protections)"
+gh secret list | grep LEAK_PROTECTIONS_JSON   # the updated timestamp is the only readback there is
 ```
+
+The command reads the path out of config rather than spelling it, for the same reason the hooks do.
 
 A secret cannot be read back, so nothing can diff the two for you. An overlay edited locally and not pushed to the secret gives a stricter local gate than CI, which fails safe; the reverse — a term added to the secret and not to the file — gives a local gate that passes what CI will reject, which is merely annoying. Neither is silent: both print their term counts in the header of every run, and a mismatch shows up there.
 
