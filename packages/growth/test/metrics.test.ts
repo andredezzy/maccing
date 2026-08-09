@@ -1702,6 +1702,25 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("2 of 3");
   });
 
+  test("and more unreadable numbers in a cell's own list than the map allows", async () => {
+    // The same ceiling, the other side of the join, and the opposite sign. An entry nobody can key
+    // never reaches a numerator, so dropping it quietly only shrinks `listed` — the denominator
+    // under every rate this cell publishes. Left unguarded, a list of junk reads as a tiny audience
+    // that converted brilliantly, which is the direction that gets published.
+    const fixture = await build("refuse-unparseable-list", {
+      person: people(["one", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1), "not a number", "12", "also not one") },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-unparseable-list", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(UnparseablePhonesError);
+    expect(error.message).toContain("3 of 4");
+    // Named, because the remedy differs: the map's plan is wrong for this market, or this one file
+    // is junk. Saying "the person export" here would send the reader to the wrong file entirely.
+    expect(error.message).toContain("refuse-unparseable-list");
+  });
+
   test("a cell whose lists yielded no usable identifier", async () => {
     const fixture = await build("refuse-empty", {
       person: people(["one", phone(1), from_cut(HOUR)]),

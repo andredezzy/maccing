@@ -177,16 +177,27 @@ export function is_publishable(p: number | null, control_events: number, window_
   return p !== null && p < MAX_P && control_events >= MIN_CONTROL_EVENTS && window_hours >= WINDOW_FLOOR_HOURS;
 }
 
-/** More of the person export is unreadable than the map permits. */
+/**
+ * More of a file's identifiers are unreadable than the map permits.
+ *
+ * Raised against the person export and against a cell's own lists, because the fault has opposite
+ * signs on the two sides and both mislead. Unreadable people shrink the index, so the audience
+ * looks like it never registered; unreadable list entries shrink the denominator every rate is
+ * divided by, so the audience looks like it converted brilliantly.
+ */
 export class UnparseablePhonesError extends Error {
-  constructor(unreadable: number, total: number, rate: number, ceiling: number) {
+  readonly source: string;
+
+  constructor(unreadable: number, total: number, rate: number, ceiling: number, source = "the person export") {
     super(
-      `${unreadable} of ${total} rows in the person export carry no readable number (${(rate * 100).toFixed(1)}%), ` +
+      `${unreadable} of ${total} rows in ${source} carry no readable number (${(rate * 100).toFixed(1)}%), ` +
         `above the ${(ceiling * 100).toFixed(1)}% the map allows. A dialling plan that does not match this ` +
         "market and a list of people who genuinely never registered produce the same zero, and only one of " +
-        "them is a result — so the run stops instead of reporting it.",
+        "them is a result — so the run stops instead of reporting it. Either the map's phone format is wrong " +
+        "for this data, or the file is.",
     );
     this.name = "UnparseablePhonesError";
+    this.source = source;
   }
 }
 
@@ -983,19 +994,44 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
 
     const keys = new Set<string>();
+    let listed_rows = 0;
+    let listed_unreadable = 0;
     for (const list of cell.lists) {
       if (!(await Bun.file(list).exists())) {
         throw new MissingExportError(list, `cell ${JSON.stringify(cell.name)}`);
       }
       for (const raw of await read_identifiers(list, cell.column, cell.filter)) {
+        listed_rows += 1;
         const key = key_of(raw);
-        if (key !== null) {
-          keys.add(key);
+        if (key === null) {
+          listed_unreadable += 1;
+          continue;
         }
+        keys.add(key);
       }
     }
     if (keys.size === 0) {
       throw new EmptyCellError(cell.name, cell.lists, cell.column, false);
+    }
+    // The same ceiling the person export is held to, for the same reason and with the opposite
+    // sign. An entry nobody can key never matches an account, so it can never reach a numerator —
+    // dropping it quietly shrinks `listed`, which is the denominator under every rate this cell
+    // publishes and under both arms of its comparison. A file of junk therefore reads as a small
+    // audience that converted brilliantly, and two lists carrying different amounts of junk make a
+    // comparison whose difference is the junk. The person export is rate-checked a few dozen lines
+    // above; leaving the lists unchecked guarded the side that empties and left the side that
+    // inflates open, and of the two it is the inflated reading that gets published.
+    if (listed_rows > 0) {
+      const rate = listed_unreadable / listed_rows;
+      if (rate > map.phone.max_unparseable_rate) {
+        throw new UnparseablePhonesError(
+          listed_unreadable,
+          listed_rows,
+          rate,
+          map.phone.max_unparseable_rate,
+          `cell ${JSON.stringify(cell.name)}`,
+        );
+      }
     }
 
     // Probes and internal numbers are subtracted after that first check so the two ways a cell can
