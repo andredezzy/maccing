@@ -718,6 +718,14 @@ function assert_joins(
   role: string,
   column: string,
 ): void {
+  // PRECONDITION, and the rule every reader of the person export owes an answer to: **say what you
+  // do when it has no rows.** An export of a header and nothing else is measured rather than
+  // refused — a recorded judgment, in the release runbook's open list — and that decision has now
+  // produced three defects, each from a guard that was correct in isolation and silent about this
+  // case. This one returns, because a join against nobody is unprovable rather than wrong: with no
+  // ids on the other side, a key that would never have matched is indistinguishable from one that
+  // simply has nothing to match yet. Whoever writes the next check here answers the same question
+  // in their own comment, or becomes the fourth.
   if (index.size === 0 || person_ids.size === 0) {
     return;
   }
@@ -1364,7 +1372,15 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     // that these people already hold accounts, so nothing matched contradicts it; the same zeros on
     // a cold cell are the finding that send was run to get, and refusing them would refuse every
     // honest cold reading this engine takes.
-    if (cell.audience === "own_base" && matched_keys.length === 0) {
+    //
+    // And only where there is an index to match against. Two files leave none: an export of a
+    // header and no rows, which this pass measures rather than refuses on purpose, and a populated
+    // one whose every key sat at the switchboard ceiling and was evicted a few dozen lines above.
+    // In both, no cell of any audience can match one identifier, so naming the cell would send the
+    // reader to check their column and their list file over a fault in the other file. This error
+    // means there is a base and this list does not intersect it; where there is no base the fault
+    // is upstream of the declaration, and both worlds read the same whichever audience is declared.
+    if (cell.audience === "own_base" && by_key.size > 0 && matched_keys.length === 0) {
       throw new UnmatchedBaseError(cell.name, keys.size, person_path);
     }
 

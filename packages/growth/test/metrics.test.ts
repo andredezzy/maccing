@@ -3240,6 +3240,22 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.conversions.count).toBe(0);
   });
 
+  test("and an own_base cell against a person export with no rows, which is not the cell's fault", async () => {
+    // The mis-blame the guard above opens if it only counts matches. A person export of a header and
+    // nothing else builds an empty index, so no cell of any audience can match — and a refusal
+    // naming the cell sends the reader to check their column and their list file while the fault is
+    // in the other file entirely. An export with no rows is deliberately left publishing here, so
+    // this reads through as zeros; what must not happen is an error blaming the declaration.
+    const fixture = await build("own-base-no-base-to-match", {
+      person: people(),
+      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
+    });
+
+    const record = await one(fixture, base("own-base-no-base-to-match", fixture.list("reached.txt")));
+
+    expect(record.audience).toEqual({ listed: 4, matched_phones: 0, matched_accounts: 0 });
+  });
+
   test("a total that overflows the range, on every one of the seven money fields", async () => {
     // The per-row check cannot see any of these: every amount below is a finite number that passes
     // it, and the sum is what leaves the range. `round_half_even` then hands a non-finite value
