@@ -12,7 +12,12 @@ import {
 import type { RoleName, Source } from "./source.ts";
 import { SourceError } from "./source.ts";
 
-export { PhoneFormatError } from "../../../internal/phone.ts";
+export type { CountryCode, Placed } from "../../../internal/phone.ts";
+// The key itself, not only the error. Anything analysing a campaign beside the engine — an ad-hoc
+// query, a case file, a one-off split — has to join phones to accounts the same way the engine
+// does, and the only alternative to exporting this is every caller hand-rolling a second key that
+// agrees until the day it does not.
+export { dominant_market, market_divergence, PhoneFormatError, place } from "../../../internal/phone.ts";
 export {
   DuplicateColumnError,
   MissingColumnError,
