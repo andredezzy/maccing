@@ -2,7 +2,7 @@
   "name": "@maccing/growth",
   "version": "0.1.0",
   "type": "module",
-  "description": "Campaign measurement for Bun. Exported CSVs plus a map of your own database in, one record per measured group out. Every ambiguity throws; nothing degrades to zero.",
+  "description": "Campaign measurement for Bun. Point it at your database or a directory of exports, declare the groups you sent to, and get one record per group out. Every ambiguity throws; nothing degrades to zero.",
   "keywords": [
     "campaign",
     "measurement",
@@ -35,6 +35,7 @@
   },
   "exports": {
     "./meta/whatsapp/campaigns/metrics": "./src/meta/whatsapp/campaigns/metrics.ts",
+    "./meta/whatsapp/campaigns/source": "./src/meta/whatsapp/campaigns/source.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -49,5 +50,8 @@
   "devDependencies": {
     "@types/bun": "^1.3.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "libphonenumber-js": "^1.13.10"
   }
 }

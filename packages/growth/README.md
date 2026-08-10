@@ -1,12 +1,12 @@
 # @maccing/growth
 
-*Campaign measurement. Exported CSVs plus a map of your own database in, one record per measured group out.*
+*Campaign measurement. Your database or a directory of exports in, one record per measured group out.*
 
 > **Runs on Bun 1.0 or newer, and on nothing else.** There is no Node build, and there will not be one while the engine reads files through `Bun.file`. The reasoning is under [Install](#install).
 
 A campaign reaches a list of people at a known moment. Afterwards someone has to say what happened, and the honest version of that sentence needs numbers: how many of the people reached already had an account, how many arrived after the send, how fast they arrived, how much of the money came from two of them, and whether the difference against a group nobody touched survives the sample sizes that produced it.
 
-This package computes that. It knows four roles — a **person**, **revenue** arriving, **churn** leaving, a **conversion** committing — and nothing else. It does not know your schema, your product, your market's dialling plan, or what the campaign was for. All of that lives in a map file inside your project, which the engine reads and never writes.
+This package computes that. It knows four roles — a **person**, **revenue** arriving, **churn** leaving, a **conversion** committing — and nothing else. It does not know your schema, your product, your market's dialling plan, or what the campaign was for. All of that lives in your project: you hand it a source of rows and a declaration of the groups you sent to, and it hands back what happened.
 
 ## Install
 
@@ -20,7 +20,7 @@ bun add @maccing/growth
 
 Pinning is most of why the measurement lives in a package at all. A folder with its own manifest names an exact version and holds it, so the arithmetic behind an old reading stops moving: re-running that reading reproduces it instead of re-deriving it under today's code. A consumer inside this repository depends on it by path instead — `"@maccing/growth": "file:../relative/path/to/packages/growth"` — and every caller resolving through that one manifest gets the same working copy. That is one shared version for a whole tree of callers, not a pin per caller: editing `src/` changes what a script written months ago measures the next time it runs.
 
-While the version is `0.x` the record shape and the map format can change on a minor bump, so pin exactly wherever a stored reading has to keep reproducing.
+While the version is `0.x` the record shape and the row contract can change on a minor bump, so pin exactly wherever a stored reading has to keep reproducing.
 
 ## The one import
 
@@ -28,76 +28,83 @@ While the version is `0.x` the record shape and the map format can change on a m
 import { measure } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
 ```
 
-`measure` is the entry point and the only one most callers need. Alongside it the module exports `load_map` and `verify_fingerprint`, for a script that wants to read or drift-check a map without measuring anything; the thresholds `WINDOW_FLOOR_HOURS`, `MIN_CONTROL_EVENTS` and `MAX_P`, and `is_publishable`, the gate that reads them; the `COUNTABLE_OUTCOMES` table; every type below; and every named error, so a caller can catch by class instead of matching on a message.
+`measure` is the entry point and the only one most callers need. Alongside it the module re-exports `postgres`, `files` and the `Source` type, so a caller can build a source without a second import; the thresholds `WINDOW_FLOOR_HOURS`, `MIN_CONTROL_EVENTS` and `MAX_P`, and `is_publishable`, the gate that reads them; the `COUNTABLE_OUTCOMES` table; every type below; and every named error, so a caller can catch by class instead of matching on a message.
 
-## What the map must declare
+## Where the rows come from
 
-The map is a markdown file that lives with your project, not with this package. Most of it is prose — why a join goes through one table rather than another, why one status means money actually arrived — and the parser ignores all of it, reading only the `| field | value |` tables under headings it recognises. That is deliberate: the prose is the half of the document that keeps the bindings honest, so the format puts it first.
+`measure` never opens a database and never reads a schema. It asks a `Source` for rows, four times,
+by role:
 
-One table per heading, and one row per key inside it. A section carrying two such tables is refused rather than read from either end, and so is a key written twice in one table: a `Map` keeps the last write and a reader sees the first, so either way the binding that runs is the one nobody checked. Nothing inside a fence is read, which is how a map documents a worked example of the very table it is explaining — fence it, and it illustrates instead of binding. A fence is three or more backticks or three or more tildes: both spellings CommonMark defines are read, so which one you fence with is your choice, and the closing run has to be the same character and at least as long as the opener, the way a renderer matches them.
-
-Four sections are required (`## Phone format`, `## Fingerprint`, `## Role: person`, `## Role: conversion`) and two are optional (`## Role: revenue`, `## Role: churn`). A role you leave out is a role the record omits — not one it reports as zero. Bind the two optional roles to one export through the same person, timestamp and amount columns and the map is refused: money arriving and money leaving are not the same rows, so a copied section is the only way to write that.
-
-```markdown
-## Phone format
-
-| field | value |
-|---|---|
-| country_code | 997 |
-| area_digits | 3 |
-| subscriber_digits | 6 |
-| max_unparseable_rate | 0.05 |
-| shared_account_ceiling | 6 |
-
-## Fingerprint
-
-| field | value |
-|---|---|
-| schema | ../db/schema.prisma |
-| models | Member, Movement |
-| sha256 | 9f0c… |
-
-## Role: person
-
-| field | value |
-|---|---|
-| export | member.csv |
-| id | member_id |
-| phone | handset |
-| created_at | enrolled_at |
-
-## Role: revenue
-
-| field | value |
-|---|---|
-| export | inflow.csv |
-| person | member_id |
-| at | arrived_at |
-| amount | amount |
-
-## Role: conversion
-
-| field | value |
-|---|---|
-| export | commitment.csv |
-| person | member_id |
-| at | signed_at |
-| amount | amount |
-| status | state |
-| valid_statuses | LIVE, SETTLED |
+```ts
+type Source = { rows(role: RoleName): Promise<{ header: string[]; records: Record<string, string>[] }> };
 ```
 
-Everything above is invented, including the numbering plan: `997` is not a dialling code any country answers on. Fill in your own.
+Two adapters ship with the package:
 
-A few keys are worth explaining rather than listing:
+```ts
+import { postgres, files } from "@maccing/growth/meta/whatsapp/campaigns/source";
 
-- **`shared_account_ceiling`** — a number answering for this many accounts is a switchboard, a placeholder or a support desk, not a person. It is dropped from the index before any list is matched, so a cell containing it does not inherit all of them.
-- **`max_unparseable_rate`** — the share of the identifiers present that may be unreadable before the run stops, because a dialling plan that does not describe your market and a list of people who genuinely never registered produce the same zero. It is checked twice against the same ceiling: once on the person export, once on each cell's own lists. Present is the operative word — a row whose identifier column is empty is an account that never gave a number or a line of somebody's export that was never dispatched to, and neither is a number the plan failed on. Both sides of the fraction count distinct things: distinct unreadable spellings over distinct join keys plus those spellings, so one sentinel repeated down a column is one unknown rather than a file of them, and a file's duplication cannot decide the verdict. Keys, not people: one number answering for two accounts is one unit of that denominator, the same unit the index it protects is built from.
-- **`at_fallback`** (conversion only, optional) — a second timestamp column to read when the primary one is empty.
-- **`split`** and **`recycled_when`** (conversion only, optional, declared together or not at all) — a column and the value on it that means money already inside the system rather than new money. Products without a recycled balance leave both out and the record omits the breakdown instead of inventing one made of zeros.
-- **`## Fingerprint`** — the schema file and the blocks in it the map claims to describe, plus their hash. It is checked on every run, never on request. A hash nobody checks is a written date, and a written date cannot notice that a column was renamed under the binding that names it.
+postgres(process.env.DATABASE_URL!, { queries: { lead: "select …", conversion: "select …" } });
+files("campaigns/exports"); // lead.csv, revenue.csv, churn.csv, conversion.csv
+```
 
-An unknown key inside any of these tables is an error, not a warning. A mistyped key parses as silence, and a binding that goes missing takes a whole role's numbers with it.
+`postgres` uses `Bun.sql`, which is built into the runtime this package already targets, so it costs
+no dependency. `files` reads what `psql \copy` writes, which keeps the manual path open for anyone
+who wants to inspect the rows a reading was built from. Anything else answering `rows` works too —
+an API client, a warehouse, a fixture — and that is the point of the interface being one method.
+
+Values are strings on the way in. That is deliberate rather than lazy: every guard in the engine
+parses text, so a Postgres source cannot bypass a check a CSV source still runs, and two sources
+cannot disagree about identical data.
+
+## The row contract
+
+Columns are named by the contract, not by your database. A query aliases to them, a CSV header
+spells them.
+
+| Role | Required columns | Optional |
+|---|---|---|
+| `lead` | `id`, `phone`, `created_at` | — |
+| `revenue` | `lead`, `at`, `amount` | — |
+| `churn` | `lead`, `at`, `amount` | — |
+| `conversion` | `lead`, `at`, `amount`, `committed` | `at_fallback`, `recycled` |
+
+`committed` and `recycled` cross the boundary as the literal strings `true` or `false`; anything
+else is an error rather than being quietly read as false. This is the one place the old design lost
+numbers silently — it named your product's status values, so renaming an enum member in a migration
+left every reading at zero with nothing to say about it. A predicate belongs in the query that knows
+the vocabulary, and its answer is a boolean.
+
+`at_fallback` is read only where `at` is blank. Omitting `recycled` declares that the product has no
+recycled-balance concept, and the record omits the breakdown rather than publishing two zeros.
+
+**A role can be unbound.** A source that answers with neither a header nor a row is saying it does
+not carry that role at all, which the record distinguishes from a role that carries nothing: a
+product with no withdrawals reports a churn of zero, a product with no concept of churn reports no
+churn at all. `files` does this for an absent `revenue.csv` or `churn.csv`, and `postgres` for a
+role its `queries` never names. Only those two may be unbound — `lead` is the index everything else
+joins against, and `conversion` is the campaign.
+
+## Phone numbers
+
+There is nothing to configure. The key is `country:stable_national`, the market is inferred from the
+numbers themselves, and reform handling is per-market: Brazil drops the `9` inserted at the head of
+a mobile subscriber part, and elsewhere the national number is already stable.
+
+This matters more than it sounds. A key that dropped the market would merge `PT:912345678` and
+`BR:912345678`, and the only way to avoid that without the market is to refuse foreign numbers
+outright — which silently loses every non-local lead in a multi-country campaign. Inference costs
+one dependency, `libphonenumber-js`, and the measurement that justified it is in the design note:
+on a real base of 10,858 accounts a hand-rolled prefix table and the library agree 99.96% of the
+time, and the 0.04% is where bare 10- and 11-digit numbers live, which is exactly the population a
+prefix table cannot resolve.
+
+Two guards come with it. A list whose market distribution diverges from the lead index's beyond
+`max_market_divergence` (total-variation distance, default `0.5`) is refused as
+`MarketDivergenceError` — a wrong-market list parses perfectly and joins against nothing, which on
+a cold list is indistinguishable from a campaign nobody answered. And a base where more than 5% of
+the identifiers present cannot be keyed stops the run, because a plan that does not describe your
+market and a list of people who never registered produce the same zero.
 
 ## A worked example
 
@@ -105,10 +112,10 @@ Two cells: one that was messaged, one held back untouched. Both lists are plain 
 
 ```ts
 import { measure } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
+import { postgres } from "@maccing/growth/meta/whatsapp/campaigns/source";
 
 const records = await measure({
-  map: "campaigns/MAPPING.md",
-  exports: "campaigns/exports",
+  source: postgres(process.env.DATABASE_URL!, { queries }),
   cells: [
     {
       name: "evening-send",

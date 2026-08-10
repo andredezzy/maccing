@@ -13,17 +13,15 @@ import {
   EmptyCellError,
   ExportBlankColumnError,
   ExportColumnError,
+  ExportFlagError,
   ExportJoinError,
   ExportRepeatedPersonError,
   ExportStatusError,
   ExportValueError,
+  files,
   is_publishable,
   MAX_P,
-  MapDuplicateBindingError,
-  MapFieldError,
-  MapMissingError,
-  MapSectionError,
-  MapStaleError,
+  MarketDivergenceError,
   MIN_CONTROL_EVENTS,
   MissingColumnError,
   MissingExportError,
@@ -31,6 +29,7 @@ import {
   OverflowedTotalError,
   PhoneFormatError,
   ProvisionalCutError,
+  SourceError,
   TextListOptionError,
   TimestampError,
   UnmatchedBaseError,
@@ -53,9 +52,18 @@ import {
  * named error and every named error gets a test proving it is reachable from the public call. An
  * unreachable guard is prose.
  *
- * Nothing in the fixtures is borrowed. `997` is not a dialling code any country answers on, no
- * market pairs a three-digit area code with a six-digit subscriber tail, and every table, column,
- * status and amount below was made up to exercise a branch.
+ * Rows arrive through the `files` adapter, because a fixture is a directory: four files named for
+ * the four roles, each headed with the contract's own column names. The database adapter is the
+ * other implementation of the same one-method interface and everything below sits downstream of
+ * both — the boundary carries strings precisely so a directory and a database inherit identical
+ * validation.
+ *
+ * The numbering plan is Brazil's, which is a change from the fixtures this file used to carry.
+ * Those named an impossible market on purpose, so that nothing here could be mistaken for a
+ * description of a real one or quietly reused as such. The market is now derived from the base
+ * rather than declared, and an impossible market derives nothing: every case would measure an
+ * audience of nobody. So the plan is real and everything written inside it — every subscriber, id,
+ * amount and label below — is still invented to exercise a branch.
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -79,162 +87,28 @@ function from_cut(offset: number): string {
 const NOW = new Date(CUT_MS + 30 * DAY);
 
 /**
- * Under this fixture's plan a nine-digit number is its own join key — three area digits plus six
- * subscriber digits, with no reform digit in play — so a list row and a person row join with
- * nothing in between for the reader to work out.
+ * One invented subscriber per `n`, written the way a base that keeps calling codes writes it:
+ * thirteen digits, `+55 11 9XXXX-XXXX`. It keys to `BR:11` followed by the eight digits under the
+ * reform nine, so a list row and a person row join with nothing in between for the reader to work
+ * out, and two different `n` are always two different people.
  */
 function phone(n: number): string {
-  return `480${String(n).padStart(6, "0")}`;
+  return `55119${String(n).padStart(8, "0")}`;
 }
 
-const SCHEMA = `// An invented schema. Two of these blocks are the ones the map lists by default.
-
-model Member {
-  id           String   @id
-  handset      String
-  enrolled_at  DateTime
+/** The same subscriber as a base that keeps no calling code writes it: eleven digits, read against
+ *  the market inferred from the corpus around it. It keys identically to `phone`. */
+function national(n: number): string {
+  return `119${String(n).padStart(8, "0")}`;
 }
 
-model Movement {
-  id         String   @id
-  member_id  String
-  amount     Int
-}
-
-model Unlisted {
-  id String @id
-}
-
-enum Standing {
-  LIVE
-  SETTLED
-  LAPSED
-}
-
-enum Funding {
-  WIRE
-  CREDIT
-}
-`;
-
-const MODELS = ["Member", "Movement"] as const;
-
-/**
- * The fingerprint rule, restated here rather than imported. Recomputing the digest by the same
- * rule is what makes the fresh-map case mean something; a literal copied from the implementation
- * would only prove that two files can hold the same string.
- *
- * A listed name is a model or an enum, and the rule does not care which — which is the whole
- * point of hashing enums: the statuses a map counts as committed and the marker that separates
- * recycled money from new one are enum values, and a rename there is invisible in every model.
- */
-function digest_of(schema: string, blocks: readonly string[]): string {
-  const lines = schema.split("\n");
-  const hashed = blocks.map((name) => {
-    const opener = new RegExp(`^\\s*(?:model|enum)\\s+${name}\\s*\\{`);
-    const start = lines.findIndex((line) => opener.test(line));
-    if (start === -1) {
-      throw new Error(`the fixture has no block ${name}`);
-    }
-    let end = -1;
-    for (let i = start + 1; i < lines.length; i += 1) {
-      if (lines[i] === "}") {
-        end = i;
-        break;
-      }
-    }
-    if (end === -1) {
-      throw new Error(`the fixture never closes block ${name}`);
-    }
-    return lines.slice(start, end + 1).join("\n");
-  });
-  return new Bun.CryptoHasher("sha256").update(hashed.join("\n")).digest("hex");
-}
-
-const FRESH_SHA = digest_of(SCHEMA, MODELS);
-
-// ---------------------------------------------------------------------------------------------
-// Building a map
-// ---------------------------------------------------------------------------------------------
-
-type Rows = Record<string, string>;
-
-function section(heading: string, rows: Rows): string {
-  const lines = [heading, "", "| field | value |", "|---|---|"];
-  for (const [field, value] of Object.entries(rows)) {
-    lines.push(`| ${field} | ${value} |`);
-  }
-  return `${lines.join("\n")}\n`;
-}
-
-const PHONE_ROWS: Rows = {
-  country_code: "997",
-  area_digits: "3",
-  subscriber_digits: "6",
-  max_unparseable_rate: "0.25",
-  shared_account_ceiling: "3",
-};
-
-const PERSON_ROWS: Rows = { export: "person.csv", id: "member_id", phone: "handset", created_at: "enrolled_at" };
-const REVENUE_ROWS: Rows = { export: "revenue.csv", person: "member_id", at: "arrived_at", amount: "amount" };
-const CHURN_ROWS: Rows = { export: "churn.csv", person: "member_id", at: "left_at", amount: "amount" };
-const CONVERSION_ROWS: Rows = {
-  export: "conversion.csv",
-  person: "member_id",
-  at: "signed_at",
-  amount: "amount",
-  status: "state",
-  valid_statuses: "LIVE, SETTLED",
-  split: "funding",
-  recycled_when: "CREDIT",
-};
-
-type MapParts = {
-  phone?: Rows;
-  person?: Rows;
-  conversion?: Rows;
-  /** Present by default. `null` drops the section, leaving the role unbound. */
-  revenue?: Rows | null;
-  churn?: Rows | null;
-  /** Drops `split` and `recycled_when`, for a project with no recycled-balance concept. */
-  no_split?: boolean;
-  /** Which schema blocks the fingerprint covers. Defaults to the two models; a case about a
-   *  renamed status or split marker lists the enum that holds them. */
-  models?: readonly string[];
-  sha256?: string;
-};
-
-function render_map(parts: MapParts = {}): string {
-  const conversion: Rows = { ...CONVERSION_ROWS, ...parts.conversion };
-  if (parts.no_split === true) {
-    delete conversion.split;
-    delete conversion.recycled_when;
-  }
-
-  const out = [
-    "# Database map\n",
-    section("## Phone format", { ...PHONE_ROWS, ...parts.phone }),
-    section("## Fingerprint", {
-      schema: "db/schema.prisma",
-      models: (parts.models ?? MODELS).join(", "),
-      // Always the digest of the pristine schema, so a case that writes an edited one records the
-      // hash taken before the edit — which is what drift is.
-      sha256: parts.sha256 ?? digest_of(SCHEMA, parts.models ?? MODELS),
-    }),
-    section("## Role: person", { ...PERSON_ROWS, ...parts.person }),
-    section("## Role: conversion", conversion),
-  ];
-  if (parts.revenue !== null) {
-    out.push(section("## Role: revenue", { ...REVENUE_ROWS, ...parts.revenue }));
-  }
-  if (parts.churn !== null) {
-    out.push(section("## Role: churn", { ...CHURN_ROWS, ...parts.churn }));
-  }
-  return out.join("\n");
+/** An invented Portuguese subscriber, for the cases about a list drawn from another market. */
+function foreign(n: number): string {
+  return `3519${String(n).padStart(8, "0")}`;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Building exports and lists
+// Building the source and the lists
 // ---------------------------------------------------------------------------------------------
 
 type Row = readonly (string | number)[];
@@ -243,21 +117,32 @@ function csv(header: readonly string[], rows: readonly Row[]): string {
   return `${[header.join(","), ...rows.map((row) => row.join(","))].join("\n")}\n`;
 }
 
-/** One row per account, not per person: a phone answering for several accounts appears twice. */
-function people(...rows: readonly Row[]): string {
-  return csv(["member_id", "handset", "enrolled_at"], rows);
+/** The lead role, headed with the contract's names. One row per account, not per person: a phone
+ *  answering for several accounts appears on several rows. */
+function leads(...rows: readonly Row[]): string {
+  return csv(["id", "phone", "created_at"], rows);
 }
 
 function revenue(...rows: readonly Row[]): string {
-  return csv(["member_id", "arrived_at", "amount"], rows);
+  return csv(["lead", "at", "amount"], rows);
 }
 
 function churn(...rows: readonly Row[]): string {
-  return csv(["member_id", "left_at", "amount"], rows);
+  return csv(["lead", "at", "amount"], rows);
 }
 
+/** The conversion role. `committed` and `recycled` are predicates the source answers rather than
+ *  statuses this package interprets, so they cross the boundary as the literal strings `true` and
+ *  `false`, and anything else is a fault rather than a falsy value. */
 function conversions(...rows: readonly Row[]): string {
-  return csv(["member_id", "signed_at", "amount", "state", "funding"], rows);
+  return csv(["lead", "at", "amount", "committed", "recycled"], rows);
+}
+
+/** The same role as a product with no recycled balance answers it. The column is absent rather
+ *  than `false` on every row, which is the difference between having no such concept and having
+ *  measured none of it. */
+function conversions_unsplit(...rows: readonly Row[]): string {
+  return csv(["lead", "at", "amount", "committed"], rows);
 }
 
 /** A `.txt` list: one identifier per line. */
@@ -265,12 +150,29 @@ function lines(...values: readonly string[]): string {
   return `${values.join("\n")}\n`;
 }
 
+/**
+ * The readable company one unreadable identifier has to keep before the rate guard is the thing a
+ * case is asking about.
+ *
+ * A run refuses above five percent unreadable, and five percent of twenty is one. So a fixture
+ * about *how* unknowns are counted — one sentinel repeated, a sentinel written twice with
+ * different padding, a list named twice — needs nineteen keys beside the unknown, or it is
+ * refused for being small rather than for the thing under test. `keyed_accounts(19)` and
+ * `keyed_numbers(19)` are the two sides of that quorum, and they key to each other.
+ */
+const READABLE = 19;
+
+function keyed_accounts(count: number, created: string = from_cut(HOUR)): Row[] {
+  return Array.from({ length: count }, (_, i): Row => [`account-${i}`, phone(i + 1), created]);
+}
+
+function keyed_numbers(count: number): string[] {
+  return Array.from({ length: count }, (_, i) => phone(i + 1));
+}
+
 type Parts = {
-  map?: MapParts;
-  /** `null` writes no schema file at all. */
-  schema?: string | null;
-  /** `null` leaves the role bound in the map with no file behind it. */
-  person?: string | null;
+  /** `null` writes no file for the role at all, which is how a role goes unanswered. */
+  lead?: string | null;
   revenue?: string | null;
   churn?: string | null;
   conversion?: string | null;
@@ -279,8 +181,8 @@ type Parts = {
 };
 
 type Fixture = {
-  map: string;
-  exports: string;
+  /** The directory the role files were written to, which is what a `files` source is pointed at. */
+  dir: string;
   /** Absolute path of one of this case's list files, written or not. */
   list: (name: string) => string;
 };
@@ -299,29 +201,24 @@ afterAll(async () => {
 
 async function build(name: string, parts: Parts = {}): Promise<Fixture> {
   const base = join(root, name);
-  const exports = join(base, "exports");
+  const dir = join(base, "exports");
 
-  await Bun.write(join(base, "MAPPING.md"), render_map(parts.map));
-  if (parts.schema !== null) {
-    await Bun.write(join(base, "db", "schema.prisma"), parts.schema ?? SCHEMA);
-  }
-
-  const files: readonly (readonly [string, string | null])[] = [
-    ["person.csv", parts.person === undefined ? people() : parts.person],
+  const roles: readonly (readonly [string, string | null])[] = [
+    ["lead.csv", parts.lead === undefined ? leads() : parts.lead],
     ["revenue.csv", parts.revenue === undefined ? revenue() : parts.revenue],
     ["churn.csv", parts.churn === undefined ? churn() : parts.churn],
     ["conversion.csv", parts.conversion === undefined ? conversions() : parts.conversion],
   ];
-  for (const [file, body] of files) {
+  for (const [file, body] of roles) {
     if (body !== null) {
-      await Bun.write(join(exports, file), body);
+      await Bun.write(join(dir, file), body);
     }
   }
   for (const [file, body] of Object.entries(parts.lists ?? {})) {
     await Bun.write(join(base, "lists", file), body);
   }
 
-  return { map: join(base, "MAPPING.md"), exports, list: (file) => join(base, "lists", file) };
+  return { dir, list: (file) => join(base, "lists", file) };
 }
 
 /** A cold cell on this fixture's cut, which is what most cases want. */
@@ -346,7 +243,7 @@ async function caught(work: Promise<unknown>): Promise<Error> {
 
 /** The single record a one-cell run emits. */
 async function one(fixture: Fixture, cell: Cell, now: Date = NOW): Promise<CellRecord> {
-  const records = await measure({ map: fixture.map, exports: fixture.exports, cells: [cell], now });
+  const records = await measure({ source: files(fixture.dir), cells: [cell], now });
   expect(records).toHaveLength(1);
   return records[0] as CellRecord;
 }
@@ -365,7 +262,7 @@ describe("the cut separates who was already there from who arrived", () => {
    */
   test("an account created at the exact cut is acquired, one a millisecond earlier is not", async () => {
     const fixture = await build("cut-boundary", {
-      person: people(
+      lead: leads(
         ["before", phone(1), from_cut(-1)],
         ["exactly", phone(2), from_cut(0)],
         ["after", phone(3), from_cut(1)],
@@ -385,7 +282,7 @@ describe("the cut separates who was already there from who arrived", () => {
 
   test("an account with no creation time falls in neither group rather than the flattering one", async () => {
     const fixture = await build("cut-undated", {
-      person: people(["dated", phone(1), from_cut(HOUR)], ["undated", phone(2), ""]),
+      lead: leads(["dated", phone(1), from_cut(HOUR)], ["undated", phone(2), ""]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
@@ -398,7 +295,7 @@ describe("the cut separates who was already there from who arrived", () => {
 
   test("the within windows include their own boundary and exclude the millisecond after it", async () => {
     const fixture = await build("cut-windows", {
-      person: people(
+      lead: leads(
         ["at-cut", phone(1), from_cut(0)],
         ["h24", phone(2), from_cut(24 * HOUR)],
         ["h24-plus", phone(3), from_cut(24 * HOUR + 1)],
@@ -420,7 +317,7 @@ describe("the cut separates who was already there from who arrived", () => {
 
   test("an event on the cut counts and one a millisecond earlier does not, in every money role", async () => {
     const fixture = await build("cut-events", {
-      person: people(
+      lead: leads(
         ["on", phone(1), from_cut(-DAY)],
         ["early", phone(2), from_cut(-DAY)],
         ["void", phone(3), from_cut(-DAY)],
@@ -428,10 +325,10 @@ describe("the cut separates who was already there from who arrived", () => {
       revenue: revenue(["on", from_cut(0), 25], ["early", from_cut(-1), 99]),
       churn: churn(["on", from_cut(0), 5], ["early", from_cut(-1), 88]),
       conversion: conversions(
-        ["on", from_cut(0), 10, "LIVE", "WIRE"],
-        ["early", from_cut(-1), 77, "LIVE", "WIRE"],
-        // A status outside the map's list is not a commitment, whenever it happened.
-        ["void", from_cut(HOUR), 500, "LAPSED", "WIRE"],
+        ["on", from_cut(0), 10, "true", "false"],
+        ["early", from_cut(-1), 77, "true", "false"],
+        // A row the source did not mark committed is not a commitment, whenever it happened.
+        ["void", from_cut(HOUR), 500, "false", "false"],
       ),
       lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
     });
@@ -439,8 +336,8 @@ describe("the cut separates who was already there from who arrived", () => {
     const record = await one(fixture, cold("cut-events", fixture.list("reached.txt")));
 
     expect(record.pre_existing.accounts).toBe(3);
-    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 25 });
-    expect(record.pre_existing.churn).toEqual({ people: 1, value: 5 });
+    expect(record.pre_existing.revenue).toEqual({ leads: 1, value: 25 });
+    expect(record.pre_existing.churn).toEqual({ leads: 1, value: 5 });
     expect(record.conversions.count).toBe(1);
     expect(record.conversions.value).toBe(10);
   });
@@ -453,24 +350,24 @@ describe("the cut separates who was already there from who arrived", () => {
     // the null half of the conversion filter and the 77 becomes a second commitment nobody can put
     // a date on. Both hand the campaign money with no evidence it arrived after contact.
     const fixture = await build("cut-mixed-dates", {
-      person: people(["mixed", phone(1), from_cut(-DAY)]),
+      lead: leads(["mixed", phone(1), from_cut(-DAY)]),
       revenue: revenue(["mixed", from_cut(HOUR), 25], ["mixed", "", 99]),
       churn: churn(["mixed", from_cut(HOUR), 5], ["mixed", "", 88]),
-      conversion: conversions(["mixed", from_cut(HOUR), 10, "LIVE", "WIRE"], ["mixed", "", 77, "LIVE", "WIRE"]),
+      conversion: conversions(["mixed", from_cut(HOUR), 10, "true", "false"], ["mixed", "", 77, "true", "false"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const record = await one(fixture, cold("cut-mixed-dates", fixture.list("reached.txt")));
 
-    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 25 });
-    expect(record.pre_existing.churn).toEqual({ people: 1, value: 5 });
+    expect(record.pre_existing.revenue).toEqual({ leads: 1, value: 25 });
+    expect(record.pre_existing.churn).toEqual({ leads: 1, value: 5 });
     expect(record.conversions.count).toBe(1);
     expect(record.conversions.value).toBe(10);
   });
 
   test("a cut finer than a millisecond is refused rather than silently truncated", async () => {
     const fixture = await build("cut-precision", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -485,7 +382,7 @@ describe("the cut separates who was already there from who arrived", () => {
 
   test("a blank cut is refused, because there is no moment to measure from", async () => {
     const fixture = await build("cut-blank", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -503,14 +400,13 @@ describe("the cut separates who was already there from who arrived", () => {
     // cut, the blank one above and the rolled and late ones below, names it outright. Two cells
     // here, because one cell cannot tell a message that names the cell from one that does not.
     const fixture = await build("cut-unreadable", {
-      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
       lists: { "first.txt": lines(phone(1)), "second.txt": lines(phone(2)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [
           cold("list-a", fixture.list("first.txt")),
           cold("list-b", fixture.list("second.txt"), { cut: "03/02/2030 09:00" }),
@@ -548,7 +444,7 @@ describe("the cut separates who was already there from who arrived", () => {
   for (const shape of ROLLED_CUTS) {
     test(`a cut of ${shape.cut} is refused rather than rolled forward to ${shape.rolls_to}`, async () => {
       const fixture = await build(shape.case, {
-        person: people(["one", phone(1), from_cut(HOUR)]),
+        lead: leads(["one", phone(1), from_cut(HOUR)]),
         lists: { "reached.txt": lines(phone(1)) },
       });
 
@@ -573,7 +469,7 @@ describe("the cut separates who was already there from who arrived", () => {
     // cut is honoured exactly — a check written as "February above 28 is a typo" turns a real
     // send date into a stop, and the campaign it measured never gets read at all.
     const fixture = await build("cut-feb-29-leap", {
-      person: people(
+      lead: leads(
         ["before", phone(1), "2028-02-28T23:59:59.999Z"],
         ["exactly", phone(2), "2028-02-29T00:00:00.000Z"],
         ["after", phone(3), "2028-02-29T12:00:00.000Z"],
@@ -598,7 +494,7 @@ describe("the cut separates who was already there from who arrived", () => {
     // for naming a March day the reading never touches, which is a correct send date turned into a
     // stop by a guard meant for typos.
     const fixture = await build("cut-offset-date", {
-      person: people(["before", phone(1), "2030-02-28T18:29:59.999Z"], ["after", phone(2), "2030-02-28T18:30:00.000Z"]),
+      lead: leads(["before", phone(1), "2030-02-28T18:29:59.999Z"], ["after", phone(2), "2030-02-28T18:30:00.000Z"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
@@ -618,14 +514,16 @@ describe("the cut separates who was already there from who arrived", () => {
 // Matching
 // ---------------------------------------------------------------------------------------------
 
-describe("matching a list against the person index", () => {
+describe("matching a list against the lead index", () => {
   test("one subscriber written several ways in one list counts once", async () => {
     const fixture = await build("match-forms", {
-      person: people(["multi", "480224466", from_cut(HOUR)], ["other", "481224466", from_cut(HOUR)]),
+      lead: leads(["multi", "5511987654321", from_cut(HOUR)], ["other", "5511987654322", from_cut(HOUR)]),
       lists: {
-        // The same subscriber as a mixed set of sources writes it: with the dialling prefix and
-        // the reform digit, with the prefix alone, bare with the reform digit, and bare.
-        "reached.txt": lines("9974807224466", "997480224466", "4807224466", "480224466", "481224466"),
+        // The same subscriber as a mixed set of sources writes it: with the calling code and the
+        // reform digit, with the calling code and the older national number, bare with the reform
+        // digit, and bare without it. Four rows, one person, and a cell that counted them as four
+        // publishes an audience four times the size of the one it reached.
+        "reached.txt": lines("5511987654321", "551187654321", "11987654321", "1187654321", "5511987654322"),
       },
     });
 
@@ -639,7 +537,7 @@ describe("matching a list against the person index", () => {
     // The record separates the two counts on purpose: a cell of 100 phones that matched 130
     // accounts is a different fact from one that matched 130 phones.
     const fixture = await build("match-two-accounts", {
-      person: people(["old", phone(10), from_cut(-DAY)], ["new", phone(10), from_cut(HOUR)]),
+      lead: leads(["old", phone(10), from_cut(-DAY)], ["new", phone(10), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(10)) },
     });
 
@@ -652,14 +550,15 @@ describe("matching a list against the person index", () => {
   });
 
   test("a phone at the shared ceiling is evicted before matching, so it cannot inflate a cell", async () => {
-    // The ceiling is three here. Left in the index, the switchboard below would hand this cell
-    // three arrivals it never reached — the failure the eviction exists to prevent — and it is
-    // the *matching* that must not see it, not merely the reported total.
+    // The ceiling is four. Left in the index, the switchboard below would hand this cell four
+    // arrivals it never reached — the failure the eviction exists to prevent — and it is the
+    // *matching* that must not see it, not merely the reported total.
     const fixture = await build("match-ceiling", {
-      person: people(
+      lead: leads(
         ["desk-a", phone(20), from_cut(HOUR)],
         ["desk-b", phone(20), from_cut(HOUR)],
         ["desk-c", phone(20), from_cut(HOUR)],
+        ["desk-d", phone(20), from_cut(HOUR)],
         ["person", phone(21), from_cut(HOUR)],
       ),
       lists: { "reached.txt": lines(phone(20), phone(21)) },
@@ -674,26 +573,26 @@ describe("matching a list against the person index", () => {
   });
 
   test("a phone one account below the ceiling is kept", async () => {
-    // The ceiling is `at or above`, not `above`. Two accounts under a ceiling of three survive,
+    // The ceiling is `at or above`, not `above`. Three accounts under a ceiling of four survive,
     // which is what pins the comparison rather than merely the constant.
     const fixture = await build("match-under-ceiling", {
-      person: people(["pair-a", phone(22), from_cut(HOUR)], ["pair-b", phone(22), from_cut(HOUR)]),
+      lead: leads(
+        ["trio-a", phone(22), from_cut(HOUR)],
+        ["trio-b", phone(22), from_cut(HOUR)],
+        ["trio-c", phone(22), from_cut(HOUR)],
+      ),
       lists: { "reached.txt": lines(phone(22)) },
     });
 
     const record = await one(fixture, cold("match-under-ceiling", fixture.list("reached.txt")));
 
-    expect(record.audience.matched_accounts).toBe(2);
-    expect(record.acquired.accounts).toBe(2);
+    expect(record.audience.matched_accounts).toBe(3);
+    expect(record.acquired.accounts).toBe(3);
   });
 
   test("a filter cuts one cell out of a file holding several", async () => {
     const fixture = await build("match-filter", {
-      person: people(
-        ["a1", phone(1), from_cut(HOUR)],
-        ["b1", phone(2), from_cut(HOUR)],
-        ["a2", phone(3), from_cut(HOUR)],
-      ),
+      lead: leads(["a1", phone(1), from_cut(HOUR)], ["b1", phone(2), from_cut(HOUR)], ["a2", phone(3), from_cut(HOUR)]),
       lists: {
         "roster.csv": `handset,cell\n${phone(1)},alpha\n${phone(2)},beta\n${phone(3)},alpha\n`,
       },
@@ -715,12 +614,12 @@ describe("matching a list against the person index", () => {
   test("a declared column that is not the file's first one", async () => {
     // Every other fixture that names a column puts it first, so the declaration and the fallback
     // pick the same column and a reader that ignored the declaration would look correct. Here they
-    // disagree, and the disagreement is a different set of people: `ticket` holds numbers that
+    // disagree, and the disagreement is a different set of leads: `ticket` holds numbers that
     // belong to two accounts that already existed, `handset` the two that arrived. Read the wrong
     // column and the cell reports two arrivals it never reached and none of the two it did, with
     // no error anywhere — the counts are the same size, only the people are wrong.
     const fixture = await build("match-second-column", {
-      person: people(
+      lead: leads(
         ["new-a", phone(31), from_cut(HOUR)],
         ["new-b", phone(32), from_cut(HOUR)],
         ["old-a", phone(33), from_cut(-DAY)],
@@ -745,7 +644,7 @@ describe("matching a list against the person index", () => {
     // is measured one person short, quietly, because a list of two that reads as one is a
     // perfectly plausible list.
     const fixture = await build("match-no-trailing-newline", {
-      person: people(["a1", phone(41), from_cut(HOUR)], ["a2", phone(42), from_cut(HOUR)]),
+      lead: leads(["a1", phone(41), from_cut(HOUR)], ["a2", phone(42), from_cut(HOUR)]),
       lists: { "roster.csv": `handset,cohort\n${phone(41)},evening\n${phone(42)},evening` },
     });
 
@@ -771,11 +670,7 @@ describe("matching a list against the person index", () => {
     // fixture because a spreadsheet writes one and this proves the whole path tolerates it. What
     // exercises the strip in `read_rows` is the doubled mark in the case below.
     const fixture = await build("match-scanner", {
-      person: people(
-        ["a1", phone(1), from_cut(HOUR)],
-        ["a2", phone(2), from_cut(HOUR)],
-        ["b1", phone(3), from_cut(HOUR)],
-      ),
+      lead: leads(["a1", phone(1), from_cut(HOUR)], ["a2", phone(2), from_cut(HOUR)], ["b1", phone(3), from_cut(HOUR)]),
       lists: {
         "roster.csv":
           "\uFEFFhandset,cohort\n" +
@@ -786,8 +681,7 @@ describe("matching a list against the person index", () => {
     });
 
     const records = await measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       now: NOW,
       cells: [
         {
@@ -825,7 +719,7 @@ describe("matching a list against the person index", () => {
     // part of the first column's name: without the strip this list fails with a MissingColumnError
     // naming a column that is visibly right in the file.
     const fixture = await build("match-double-bom", {
-      person: people(["a1", phone(1), from_cut(HOUR)], ["b1", phone(2), from_cut(HOUR)]),
+      lead: leads(["a1", phone(1), from_cut(HOUR)], ["b1", phone(2), from_cut(HOUR)]),
       lists: { "roster.csv": `\uFEFF\uFEFFhandset,cohort\n${phone(1)},evening\n${phone(2)},morning\n` },
     });
 
@@ -843,7 +737,7 @@ describe("matching a list against the person index", () => {
 
   test("an excluded identifier is subtracted however the number is written", async () => {
     const fixture = await build("match-exclude", {
-      person: people(
+      lead: leads(
         ["real", phone(1), from_cut(HOUR)],
         ["probe-a", phone(2), from_cut(HOUR)],
         ["probe-b", phone(3), from_cut(HOUR)],
@@ -855,12 +749,12 @@ describe("matching a list against the person index", () => {
     const record = await one(
       fixture,
       // The probes are written in different forms from their list rows on purpose: exclusion is
-      // by derived key, so the three ways a planted number reaches a declaration — copied with
-      // its dialling prefix, pasted out of a spreadsheet with spaces, typed bare — all subtract
-      // the same person. The refusal for entries that yield no key must not narrow this to one
-      // spelling.
+      // by derived key, so the three ways a planted number reaches a declaration — copied out of
+      // a delivery report with its calling code and punctuation, pasted from a spreadsheet with
+      // spaces and no calling code, typed bare — all subtract the same person. The refusal for
+      // entries that yield no key must not narrow this to one spelling.
       cold("match-exclude", fixture.list("reached.txt"), {
-        exclude: [`997${phone(2)}`, "480 000 003", phone(4)],
+        exclude: ["+55 (11) 90000-0002", "11 90000-0003", phone(4)],
       }),
     );
 
@@ -878,7 +772,7 @@ describe("top2_share puts concentration beside the total", () => {
   async function paid(name: string, amounts: readonly number[]): Promise<CellRecord> {
     const ids = amounts.map((_, i) => `payer-${i}`);
     const fixture = await build(name, {
-      person: people(...ids.map((id, i) => [id, phone(i + 1), from_cut(HOUR)] as Row)),
+      lead: leads(...ids.map((id, i) => [id, phone(i + 1), from_cut(HOUR)] as Row)),
       revenue: revenue(...ids.map((id, i) => [id, from_cut((i + 1) * DAY), amounts[i] as number] as Row)),
       lists: { "reached.txt": lines(...ids.map((_, i) => phone(i + 1))) },
     });
@@ -887,19 +781,19 @@ describe("top2_share puts concentration beside the total", () => {
 
   test("is null when nobody paid, because the question is meaningless", async () => {
     const fixture = await build("top2-none", {
-      person: people(["quiet", phone(1), from_cut(HOUR)]),
+      lead: leads(["quiet", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const record = await one(fixture, cold("top2-none", fixture.list("reached.txt")));
 
-    expect(record.acquired.revenue).toEqual({ people: 0, value: 0, top2_share: null, median_lag_days: null });
+    expect(record.acquired.revenue).toEqual({ leads: 0, value: 0, top2_share: null, median_lag_days: null });
   });
 
   test("is null when exactly one person paid, because there is no second to compare", async () => {
     const record = await paid("top2-one", [40]);
 
-    expect(record.acquired.revenue?.people).toBe(1);
+    expect(record.acquired.revenue?.leads).toBe(1);
     expect(record.acquired.revenue?.value).toBe(40);
     expect(record.acquired.revenue?.top2_share).toBeNull();
   });
@@ -921,11 +815,11 @@ describe("top2_share puts concentration beside the total", () => {
   });
 
   test("is one when a single person paid everything and the rest paid nothing", async () => {
-    // A zero-value event still counts its person: they did transact. The share then says that
+    // A zero-value event still counts its lead: they did transact. The share then says that
     // the total belongs to one of them, which is exactly the fact worth surfacing.
     const record = await paid("top2-all-one", [100, 0, 0]);
 
-    expect(record.acquired.revenue?.people).toBe(3);
+    expect(record.acquired.revenue?.leads).toBe(3);
     expect(record.acquired.revenue?.value).toBe(100);
     expect(record.acquired.revenue?.top2_share).toBe(1);
   });
@@ -939,7 +833,7 @@ describe("top2_share puts concentration beside the total", () => {
     // no number, and null is what the two other meaningless cases here already return.
     const record = await paid("top2-negative", [10, 10, -15]);
 
-    expect(record.acquired.revenue?.people).toBe(3);
+    expect(record.acquired.revenue?.leads).toBe(3);
     expect(record.acquired.revenue?.value).toBe(5);
     expect(record.acquired.revenue?.top2_share).toBeNull();
   });
@@ -952,7 +846,7 @@ describe("top2_share puts concentration beside the total", () => {
     // arithmetic on it turns every downstream figure to NaN too.
     const record = await paid("top2-zero-total", [0, 0]);
 
-    expect(record.acquired.revenue?.people).toBe(2);
+    expect(record.acquired.revenue?.leads).toBe(2);
     expect(record.acquired.revenue?.value).toBe(0);
     expect(record.acquired.revenue?.top2_share).toBeNull();
   });
@@ -984,7 +878,7 @@ describe("median_lag_days measures from the cut to the first payment", () => {
     // cut, where from-creation and from-cut differ by a constant and round to the same number — so
     // the reading has never been held apart from its two neighbours anywhere else.
     const fixture = await build("lag-from-cut", {
-      person: people(["late", phone(1), from_cut(10 * DAY)]),
+      lead: leads(["late", phone(1), from_cut(10 * DAY)]),
       revenue: revenue(["late", from_cut(12 * DAY), 30], ["late", from_cut(20 * DAY), 30]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -1002,19 +896,19 @@ describe("median_lag_days measures from the cut to the first payment", () => {
 describe("the emitted record", () => {
   async function shape_fixture(): Promise<Fixture> {
     return build("record-shape", {
-      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      lead: leads(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
       // Both groups earn after the cut, because the one thing this record must never do is credit
       // the campaign with a customer it already had. With revenue only on the acquired account,
       // accumulating it over the matched accounts instead reads identically and the misattribution
       // is invisible — and it is the most flattering mistake the engine can make.
       revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5], ["existing", from_cut(5 * HOUR), 40]),
       churn: churn(["existing", from_cut(DAY), 3]),
-      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "LIVE", "WIRE"]),
+      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "true", "false"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
   }
 
-  test("carries every role the map bound, and dates itself", async () => {
+  test("carries every role the source answered, and dates itself", async () => {
     const fixture = await shape_fixture();
 
     const record = await one(fixture, cold("record-shape", fixture.list("reached.txt")));
@@ -1028,24 +922,23 @@ describe("the emitted record", () => {
       acquired: {
         accounts: 1,
         within: { h24: 1, d7: 1, d30: 1 },
-        revenue: { people: 1, value: 12.5, top2_share: null, median_lag_days: 0.1 },
-        churn: { people: 0, value: 0 },
+        revenue: { leads: 1, value: 12.5, top2_share: null, median_lag_days: 0.1 },
+        churn: { leads: 0, value: 0 },
       },
       pre_existing: {
         accounts: 1,
-        revenue: { people: 1, value: 40 },
-        churn: { people: 1, value: 3 },
+        revenue: { leads: 1, value: 40 },
+        churn: { leads: 1, value: 3 },
       },
       conversions: { count: 1, value: 12.5, new_money: 12.5, recycled: 0 },
     });
   });
 
-  test("omits a role the map never bound rather than reporting it as a measured zero", async () => {
+  test("omits a role the source never answered rather than reporting it as a measured zero", async () => {
     // Unbound and empty are different facts, and a zero for a role a project does not have is
     // a number someone will eventually try to explain.
     const fixture = await build("record-unbound", {
-      map: { revenue: null, churn: null },
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: null,
       churn: null,
       lists: { "reached.txt": lines(phone(1)) },
@@ -1068,8 +961,8 @@ describe("the emitted record", () => {
 
     expect([...COUNTABLE_OUTCOMES]).toEqual([
       "acquired.accounts",
-      "acquired.revenue.people",
-      "acquired.churn.people",
+      "acquired.revenue.leads",
+      "acquired.churn.leads",
       "conversions.count",
     ]);
 
@@ -1095,10 +988,10 @@ describe("the emitted record", () => {
     // sentence rests on: give a path to both audiences and this fails, pointing at the message
     // that would otherwise have started lying.
     const fixture = await build("outcome-reachable", {
-      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      lead: leads(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
       revenue: revenue(["fresh", from_cut(3 * HOUR), 12.5], ["existing", from_cut(3 * HOUR), 8]),
       churn: churn(["fresh", from_cut(DAY), 3], ["existing", from_cut(DAY), 3]),
-      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "LIVE", "WIRE"]),
+      conversion: conversions(["fresh", from_cut(4 * HOUR), 12.5, "true", "false"]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
     });
 
@@ -1107,8 +1000,7 @@ describe("the emitted record", () => {
     const readable_by = async (outcome: string, audience: Cell["audience"]): Promise<boolean> => {
       try {
         await measure({
-          map: fixture.map,
-          exports: fixture.exports,
+          source: files(fixture.dir),
           cells: [
             { name: "treated", cut: CUT, lists: [fixture.list("treated.txt")], audience },
             { name: "untouched", cut: CUT, lists: [fixture.list("untouched.txt")], audience },
@@ -1143,13 +1035,12 @@ describe("the emitted record", () => {
 
   test("reads several cells in one pass and keeps them apart", async () => {
     const fixture = await build("record-two-cells", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(-DAY)]),
+      lead: leads(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(-DAY)]),
       lists: { "alpha.txt": lines(phone(1)), "beta.txt": lines(phone(2)) },
     });
 
     const records = await measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       cells: [cold("alpha", fixture.list("alpha.txt")), cold("beta", fixture.list("beta.txt"))],
       now: NOW,
     });
@@ -1168,7 +1059,7 @@ describe("the emitted record", () => {
     // by listed identifiers and publish it as the share of a list that paid. The arm holding the
     // weekly regulars then wins on nothing but how often its customers transact.
     const fixture = await build("record-repeat-events", {
-      person: people(
+      lead: leads(
         ["repeat", phone(1), from_cut(HOUR)],
         ["single", phone(2), from_cut(2 * HOUR)],
         ["held", phone(3), from_cut(-DAY)],
@@ -1195,10 +1086,10 @@ describe("the emitted record", () => {
     // Every headcount below is smaller than the number of events behind it, and the sums are what
     // those events add up to: the pair of them is what separates a count of people from a count of
     // rows, which a fixture where everyone transacted once cannot do.
-    expect(record.acquired.revenue).toEqual({ people: 2, value: 75, top2_share: 1, median_lag_days: 2.5 });
-    expect(record.acquired.churn).toEqual({ people: 1, value: 10 });
-    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 12 });
-    expect(record.pre_existing.churn).toEqual({ people: 1, value: 3 });
+    expect(record.acquired.revenue).toEqual({ leads: 2, value: 75, top2_share: 1, median_lag_days: 2.5 });
+    expect(record.acquired.churn).toEqual({ leads: 1, value: 10 });
+    expect(record.pre_existing.revenue).toEqual({ leads: 1, value: 12 });
+    expect(record.pre_existing.churn).toEqual({ leads: 1, value: 3 });
   });
 
   test("rounds every money field to the cent, not to a tenth of one", async () => {
@@ -1208,14 +1099,14 @@ describe("the emitted record", () => {
     // with no such unit — and a reader reconciling the file against the ledger it was drawn from
     // finds every total off by a fraction of the smallest coin it can be paid in.
     const fixture = await build("record-cents", {
-      person: people(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
+      lead: leads(["fresh", phone(1), from_cut(2 * HOUR)], ["existing", phone(2), from_cut(-DAY)]),
       revenue: revenue(["fresh", from_cut(3 * HOUR), 10.126], ["existing", from_cut(5 * HOUR), 20.374]),
       churn: churn(["fresh", from_cut(DAY), 3.208], ["existing", from_cut(DAY), 4.601]),
       // One event either side of the recycled marker, so the two split fields round on their own
       // subtotals rather than out of the total they sit under.
       conversion: conversions(
-        ["fresh", from_cut(4 * HOUR), 5.121, "LIVE", "WIRE"],
-        ["fresh", from_cut(5 * HOUR), 7.232, "SETTLED", "CREDIT"],
+        ["fresh", from_cut(4 * HOUR), 5.121, "true", "false"],
+        ["fresh", from_cut(5 * HOUR), 7.232, "true", "true"],
       ),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
@@ -1238,13 +1129,13 @@ describe("the emitted record", () => {
 
 describe("the conversion split", () => {
   const two_conversions = conversions(
-    ["one", from_cut(HOUR), 60, "LIVE", "WIRE"],
-    ["one", from_cut(2 * HOUR), 40, "SETTLED", "CREDIT"],
+    ["one", from_cut(HOUR), 60, "true", "false"],
+    ["one", from_cut(2 * HOUR), 40, "true", "true"],
   );
 
-  test("divides committed money when the map declares it", async () => {
+  test("divides committed money where the source answers the recycled predicate", async () => {
     const fixture = await build("split-declared", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       conversion: two_conversions,
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -1254,31 +1145,51 @@ describe("the conversion split", () => {
     expect(record.conversions).toEqual({ count: 2, value: 100, new_money: 60, recycled: 40 });
   });
 
-  test("counts a blank funding cell as new money, which is the side the schema puts it on", async () => {
-    // The column is written only on rows paid out of a balance the business already held, so a
-    // blank is the ordinary payment rather than an unknown one. Widen the comparison to admit the
-    // empty string and every unmarked payment moves to `recycled`: the report then says the
-    // campaign brought in no money the business did not already have, which is the opposite of
-    // what happened and reads as a cell worth switching off.
+  test("refuses a recycled cell that is neither true nor false, rather than picking a side for it", async () => {
+    // `recycled` is a predicate the source answers, and a blank is a source that did not answer.
+    // Both readings of it are wrong and both are silent. Read as false, money the business already
+    // held is published as money the campaign brought in; read as true, the report says the
+    // campaign brought in nothing new, which reads as a cell worth switching off. The column is
+    // one word in a query, so an unanswered row is a fault to be fixed there rather than a
+    // default this package gets to choose.
     const fixture = await build("split-blank-cell", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      conversion: conversions(["one", from_cut(HOUR), 50, "LIVE", ""]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
+      conversion: conversions(["one", from_cut(HOUR), 50, "true", ""]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
-    const record = await one(fixture, cold("split-blank-cell", fixture.list("reached.txt")));
+    const error = await caught(one(fixture, cold("split-blank-cell", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(ExportFlagError);
+    expect((error as ExportFlagError).column).toBe("recycled");
+    expect((error as ExportFlagError).raw).toBe("");
+    // The empty arm of the message. A blank and a wrong value are different jobs at the source,
+    // and the sentence has to say which one this row is.
+    expect(error.message).toContain("an unanswered question is not an answer of no");
+  });
+
+  test("and counts an answered false as new money, which is the side that row belongs on", async () => {
+    // The other half of the refusal above: answered, and answered `false`, the payment is money
+    // the business did not already have. This is the reading the blank was ambiguous between.
+    const fixture = await build("split-answered-false", {
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
+      conversion: conversions(["one", from_cut(HOUR), 50, "true", "false"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("split-answered-false", fixture.list("reached.txt")));
 
     expect(record.conversions).toEqual({ count: 1, value: 50, new_money: 50, recycled: 0 });
   });
 
-  test("omits the split fields entirely when the map does not declare one", async () => {
-    // A recycled balance is a property of one kind of product. Requiring every project to
-    // declare the concept produced two fields of zeros wherever it does not exist, and a zero
-    // that looks like a measurement is the expensive failure here.
+  test("omits the split fields entirely where the source answers no recycled column", async () => {
+    // A recycled balance is a property of one kind of product. Requiring every project to answer
+    // the question produced two fields of zeros wherever the concept does not exist, and a zero
+    // that looks like a measurement is the expensive failure here. An absent column says the
+    // question does not apply; a column of `false` says it was asked and answered.
     const fixture = await build("split-absent", {
-      map: { no_split: true },
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      conversion: two_conversions,
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
+      conversion: conversions_unsplit(["one", from_cut(HOUR), 60, "true"], ["one", from_cut(2 * HOUR), 40, "true"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -1289,15 +1200,14 @@ describe("the conversion split", () => {
     expect("recycled" in record.conversions).toBe(false);
   });
 
-  test("falls back to a second timestamp column where the map names one", async () => {
+  test("falls back to a second timestamp column where the source answers one", async () => {
     // The commitment timestamp is nullable on this role, and empty is what unset looks like in
     // an export. Without the fallback the event drops out and the cell loses a conversion.
     const fixture = await build("split-fallback", {
-      map: { conversion: { at_fallback: "opened_at" } },
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       conversion: csv(
-        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
-        [["one", "", from_cut(2 * HOUR), 30, "LIVE", "WIRE"]],
+        ["lead", "at", "at_fallback", "amount", "committed", "recycled"],
+        [["one", "", from_cut(2 * HOUR), 30, "true", "false"]],
       ),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -1316,11 +1226,10 @@ describe("the conversion split", () => {
     // read in the declared order the commitment falls after the cut and is counted, and read the
     // other way round it falls before and the cell reports a conversion it really has as none.
     const fixture = await build("split-fallback-precedence", {
-      map: { conversion: { at_fallback: "opened_at" } },
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       conversion: csv(
-        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
-        [["one", from_cut(2 * HOUR), from_cut(-2 * HOUR), 30, "LIVE", "WIRE"]],
+        ["lead", "at", "at_fallback", "amount", "committed", "recycled"],
+        [["one", from_cut(2 * HOUR), from_cut(-2 * HOUR), 30, "true", "false"]],
       ),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -1329,79 +1238,6 @@ describe("the conversion split", () => {
 
     expect(record.conversions.count).toBe(1);
     expect(record.conversions.value).toBe(30);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
-// Drift inside an enum
-// ---------------------------------------------------------------------------------------------
-
-/**
- * The two values a map reads that are not columns: the statuses it counts as committed, and the
- * marker that separates recycled money from new. Both are enum values, both live outside every
- * model block, and a migration renaming one of them changes what every binding means while
- * leaving the hashed schema byte-identical. The status half has a runtime refusal of its own
- * further down, because a status nobody matches drops the whole file. The split half has none
- * and can have none — a file where nothing was paid out of a balance is an ordinary month — so
- * the fingerprint is the only place it can be caught, and only if the map lists the enum.
- */
-describe("a marker renamed inside the schema's enum", () => {
-  /** The export as it reads after a migration renamed the recycled marker to `LEDGER`. */
-  const after_rename = conversions(
-    ["one", from_cut(HOUR), 60, "LIVE", "WIRE"],
-    ["one", from_cut(2 * HOUR), 40, "SETTLED", "LEDGER"],
-  );
-  const renamed_schema = SCHEMA.replace("  CREDIT", "  LEDGER");
-
-  test("silently doubles what is reported as new money while the map lists only models", async () => {
-    // Nothing here is malformed. Forty of the hundred was recycled from a balance the business
-    // already held, the map still looks for `CREDIT`, and the row now says `LEDGER` — so the
-    // whole sum falls through to the other side of the split and the report says every unit of
-    // it was fresh. The models the map hashes did not move, so the fingerprint passes.
-    const fixture = await build("enum-drift-silent", {
-      schema: renamed_schema,
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      conversion: after_rename,
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const record = await one(fixture, cold("enum-drift-silent", fixture.list("reached.txt")));
-
-    expect(record.conversions).toEqual({ count: 2, value: 100, new_money: 100, recycled: 0 });
-  });
-
-  test("stops the run once the map lists the enum that holds it", async () => {
-    // The same rename against the same export, with `Funding` added to the map's hashed blocks.
-    // The fingerprint now covers the one place the value lives, so the run refuses before it
-    // reads an export — which is the whole reason a map is allowed to list an enum at all.
-    const fixture = await build("enum-drift-caught", {
-      map: { models: [...MODELS, "Funding"] },
-      schema: renamed_schema,
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      conversion: after_rename,
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const error = await caught(one(fixture, cold("enum-drift-caught", fixture.list("reached.txt"))));
-
-    expect(error).toBeInstanceOf(MapStaleError);
-    expect((error as MapStaleError).expected).toBe(digest_of(SCHEMA, [...MODELS, "Funding"]));
-    expect((error as MapStaleError).actual).toBe(digest_of(renamed_schema, [...MODELS, "Funding"]));
-  });
-
-  test("and leaves a schema whose enums are untouched passing, with the enum listed", async () => {
-    // The listing itself must not become a permanent mismatch: a map naming an enum against the
-    // schema it was hashed from reads clean, or nobody would add one.
-    const fixture = await build("enum-listed-fresh", {
-      map: { models: [...MODELS, "Funding", "Standing"] },
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      conversion: conversions(["one", from_cut(HOUR), 60, "LIVE", "CREDIT"]),
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const record = await one(fixture, cold("enum-listed-fresh", fixture.list("reached.txt")));
-
-    expect(record.conversions).toEqual({ count: 1, value: 60, new_money: 0, recycled: 60 });
   });
 });
 
@@ -1418,24 +1254,24 @@ describe("a provisional cut", () => {
    * produce is one somebody would publish.
    */
   async function own_base_pair(name: string): Promise<Fixture> {
-    const person_rows: Row[] = [];
+    const lead_rows: Row[] = [];
     const conversion_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
     for (let i = 0; i < 40; i += 1) {
       treated_list.push(phone(100 + i));
       control_list.push(phone(200 + i));
-      person_rows.push([`t${i}`, phone(100 + i), from_cut(-DAY)]);
-      person_rows.push([`c${i}`, phone(200 + i), from_cut(-DAY)]);
+      lead_rows.push([`t${i}`, phone(100 + i), from_cut(-DAY)]);
+      lead_rows.push([`c${i}`, phone(200 + i), from_cut(-DAY)]);
       if (i < 30) {
-        conversion_rows.push([`t${i}`, from_cut(HOUR), 10, "LIVE", "WIRE"]);
+        conversion_rows.push([`t${i}`, from_cut(HOUR), 10, "true", "false"]);
       }
       if (i < 12) {
-        conversion_rows.push([`c${i}`, from_cut(HOUR), 10, "LIVE", "WIRE"]);
+        conversion_rows.push([`c${i}`, from_cut(HOUR), 10, "true", "false"]);
       }
     }
     return build(name, {
-      person: people(...person_rows),
+      lead: leads(...lead_rows),
       conversion: conversions(...conversion_rows),
       lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
     });
@@ -1443,7 +1279,7 @@ describe("a provisional cut", () => {
 
   test("measures normally while nobody has arrived, and says so on the record", async () => {
     const fixture = await build("provisional-quiet", {
-      person: people(["old", phone(1), from_cut(-DAY)]),
+      lead: leads(["old", phone(1), from_cut(-DAY)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -1459,16 +1295,15 @@ describe("a provisional cut", () => {
     expect(record.cut_provisional).toBe(true);
   });
 
-  test("and does the same where the map binds no money role at all", async () => {
+  test("and does the same where no money role is answered at all", async () => {
     // The scan reads six counts off the record and four of them are branches a project without
     // revenue or churn never emits. Read as anything but nothing to attribute, every provisional
-    // cell such a project declares is refused, and the refusal names a role its map never bound —
-    // sending the reader to find a revenue figure in a report that has no revenue in it.
+    // cell such a project declares is refused, and the refusal names a role the source never
+    // answered — sending the reader to find a revenue figure in a report that has no revenue in it.
     const fixture = await build("provisional-quiet-unbound", {
-      map: { revenue: null, churn: null },
       revenue: null,
       churn: null,
-      person: people(["old", phone(1), from_cut(-DAY)]),
+      lead: leads(["old", phone(1), from_cut(-DAY)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -1488,7 +1323,7 @@ describe("a provisional cut", () => {
     // to anything. This is the documented way a report once claimed arrivals that never
     // happened, and it is the reason the flag exists at all.
     const fixture = await build("provisional-arrivals", {
-      person: people(
+      lead: leads(
         ["old", phone(1), from_cut(-DAY)],
         ["new-a", phone(2), from_cut(HOUR)],
         ["new-b", phone(3), from_cut(2 * HOUR)],
@@ -1513,14 +1348,13 @@ describe("a provisional cut", () => {
     // is what decides which one arrives: a valid pair here would leave the two checks free to
     // swap places with nothing to show for it.
     const fixture = await build("provisional-control", {
-      person: people(["new", phone(1), from_cut(HOUR)]),
+      lead: leads(["new", phone(1), from_cut(HOUR)]),
       lists: { "treated.txt": lines(phone(1)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt"), { cut_provisional: true })],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
@@ -1540,8 +1374,7 @@ describe("a provisional cut", () => {
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [
           base("guessed", fixture.list("treated.txt"), { cut_provisional: true }),
           base("untouched", fixture.list("untouched.txt")),
@@ -1570,8 +1403,7 @@ describe("a provisional cut", () => {
     const fixture = await own_base_pair("provisional-own-base-stake");
 
     const [treated] = await measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       cells: [base("confirmed", fixture.list("treated.txt")), base("untouched", fixture.list("untouched.txt"))],
       controls: [{ treated: "confirmed", control: "untouched", outcome: "conversions.count" }],
       now: NOW,
@@ -1582,12 +1414,12 @@ describe("a provisional cut", () => {
   });
 
   test("refuses on money counted forward from the guess even where nobody committed", async () => {
-    // `pre_existing.revenue.people` counts people who were already there and then paid after the
+    // `pre_existing.revenue.leads` counts people who were already there and then paid after the
     // cut. Nothing arrived and nothing was committed, so neither of the two obvious counts is
     // non-zero, and the payment is still dated against a guess. A guard that stopped at arrivals
     // and commitments would let this one through.
     const fixture = await build("provisional-money", {
-      person: people(["old", phone(1), from_cut(-DAY)]),
+      lead: leads(["old", phone(1), from_cut(-DAY)]),
       revenue: revenue(["old", from_cut(2 * HOUR), 40]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -1595,7 +1427,7 @@ describe("a provisional cut", () => {
     const error = await caught(one(fixture, cold("guessed", fixture.list("reached.txt"), { cut_provisional: true })));
 
     expect(error).toBeInstanceOf(ProvisionalCutError);
-    expect(error.message).toContain("pre_existing.revenue.people 1");
+    expect(error.message).toContain("pre_existing.revenue.leads 1");
   });
 
   test("still measures an own_base cell with a guessed cut and nothing counted against it", async () => {
@@ -1604,8 +1436,8 @@ describe("a provisional cut", () => {
     // outcome — so reading it as something to attribute would refuse every provisional cut ever
     // declared on a base and leave the flag with no legal use at all.
     const fixture = await build("provisional-own-base-quiet", {
-      person: people(["old", phone(1), from_cut(-DAY)]),
-      conversion: conversions(["old", from_cut(-HOUR), 50, "LIVE", "WIRE"]),
+      lead: leads(["old", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["old", from_cut(-HOUR), 50, "true", "false"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -1618,7 +1450,7 @@ describe("a provisional cut", () => {
 
   test("leaves the key off a cell whose cut is confirmed", async () => {
     const fixture = await build("provisional-absent", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -1641,7 +1473,7 @@ describe("a control pair", () => {
    * without a second fixture builder saying the same thing with one number changed.
    */
   async function pair(name: string, control_arrivals = 18): Promise<Fixture> {
-    const person_rows: Row[] = [];
+    const lead_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
     for (let i = 0; i < 40; i += 1) {
@@ -1649,19 +1481,18 @@ describe("a control pair", () => {
       const control = phone(200 + i);
       treated_list.push(treated);
       control_list.push(control);
-      person_rows.push([`t${i}`, treated, from_cut(i < 28 ? HOUR : -DAY)]);
-      person_rows.push([`c${i}`, control, from_cut(i < control_arrivals ? HOUR : -DAY)]);
+      lead_rows.push([`t${i}`, treated, from_cut(i < 28 ? HOUR : -DAY)]);
+      lead_rows.push([`c${i}`, control, from_cut(i < control_arrivals ? HOUR : -DAY)]);
     }
     return build(name, {
-      person: people(...person_rows),
+      lead: leads(...lead_rows),
       lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
     });
   }
 
   async function read(fixture: Fixture, now: Date): Promise<CellRecord[]> {
     return measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
       controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
       now,
@@ -1714,22 +1545,18 @@ describe("a control pair", () => {
 
   test("reads a base that already holds accounts on commitment, and reports a null lift against nothing", async () => {
     const fixture = await build("control-own-base", {
-      person: people(
+      lead: leads(
         ["t1", phone(1), from_cut(-DAY)],
         ["t2", phone(2), from_cut(-DAY)],
         ["c1", phone(3), from_cut(-DAY)],
         ["c2", phone(4), from_cut(-DAY)],
       ),
-      conversion: conversions(
-        ["t1", from_cut(HOUR), 10, "LIVE", "WIRE"],
-        ["t2", from_cut(HOUR), 20, "SETTLED", "WIRE"],
-      ),
+      conversion: conversions(["t1", from_cut(HOUR), 10, "true", "false"], ["t2", from_cut(HOUR), 20, "true", "false"]),
       lists: { "treated.txt": lines(phone(1), phone(2)), "untouched.txt": lines(phone(3), phone(4)) },
     });
 
     const [treated] = await measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       cells: [
         { name: "treated", cut: CUT, lists: [fixture.list("treated.txt")], audience: "own_base" },
         { name: "untouched", cut: CUT, lists: [fixture.list("untouched.txt")], audience: "own_base" },
@@ -1801,25 +1628,24 @@ describe("a control pair", () => {
     // moment the treated cell was never measured from and clearing it on time the treated cell
     // never had. The floor outranks the p-value, and this is how it gets bypassed with the
     // p-value left intact.
-    const person_rows: Row[] = [];
+    const lead_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
     for (let i = 0; i < 40; i += 1) {
       treated_list.push(phone(100 + i));
       control_list.push(phone(200 + i));
-      person_rows.push([`t${i}`, phone(100 + i), from_cut(i < 28 ? HOUR : -DAY)]);
+      lead_rows.push([`t${i}`, phone(100 + i), from_cut(i < 28 ? HOUR : -DAY)]);
       // Dated against the control's own cut rather than the treated one, so eighteen of them
       // arrived after it and the pair carries the same counts every other case here reads.
-      person_rows.push([`c${i}`, phone(200 + i), from_cut(i < 18 ? -20 * DAY + HOUR : -25 * DAY)]);
+      lead_rows.push([`c${i}`, phone(200 + i), from_cut(i < 18 ? -20 * DAY + HOUR : -25 * DAY)]);
     }
     const fixture = await build("control-split-cuts", {
-      person: people(...person_rows),
+      lead: leads(...lead_rows),
       lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
     });
 
     const [treated, untouched] = await measure({
-      map: fixture.map,
-      exports: fixture.exports,
+      source: files(fixture.dir),
       cells: [
         cold("treated", fixture.list("treated.txt")),
         cold("untouched", fixture.list("untouched.txt"), { cut: from_cut(-20 * DAY) }),
@@ -1846,31 +1672,31 @@ describe("a control pair", () => {
     // Listed is the sample the send was drawn on. A number that matched nothing is a number this
     // cell reached and got nothing back from, which is a miss and belongs in the denominator. Read
     // over matched accounts the treated arm publishes 77.419% instead of 60%, a rate that climbs
-    // whenever the person export happens to hold a second account for someone; read over the
+    // whenever the lead role happens to hold a second account for someone; read over the
     // control's matched phones the pair reports 37.5% against 30%, which moves p from 0.007 to
     // 0.058 and holds back a reading that was publishable, on sends that did not change.
-    const person_rows: Row[] = [];
+    const lead_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
     for (let i = 0; i < 40; i += 1) {
       treated_list.push(phone(300 + i));
       control_list.push(phone(400 + i));
-      // Thirty of the forty treated numbers are in the person export, twenty-four of them arriving
+      // Thirty of the forty treated numbers are in the lead role, twenty-four of them arriving
       // after the cut; thirty-two of the forty control numbers, twelve arriving after it.
       if (i < 30) {
-        person_rows.push([`t${i}`, phone(300 + i), from_cut(i < 24 ? HOUR : -DAY)]);
+        lead_rows.push([`t${i}`, phone(300 + i), from_cut(i < 24 ? HOUR : -DAY)]);
       }
       if (i < 32) {
-        person_rows.push([`c${i}`, phone(400 + i), from_cut(i < 12 ? HOUR : -DAY)]);
+        lead_rows.push([`c${i}`, phone(400 + i), from_cut(i < 12 ? HOUR : -DAY)]);
       }
     }
     // One matched phone a side answers for a second account, which is what separates
     // `matched_accounts` from `matched_phones`. Both predate the cut, so the arrivals stay where
     // the loop above put them and only the denominators under test move.
-    person_rows.push(["t-second", phone(300), from_cut(-DAY)], ["c-second", phone(400), from_cut(-DAY)]);
+    lead_rows.push(["t-second", phone(300), from_cut(-DAY)], ["c-second", phone(400), from_cut(-DAY)]);
 
     const fixture = await build("control-listed-denominator", {
-      person: people(...person_rows),
+      lead: leads(...lead_rows),
       lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
     });
 
@@ -1898,17 +1724,17 @@ describe("a control pair", () => {
     // two places and three print the same thing. At two this same reading publishes 57.14 against
     // 21.43, so a rate copied out of an earlier run stops matching the run that produced it and
     // two passes over identical counts disagree in the last digit they print.
-    const person_rows: Row[] = [];
+    const lead_rows: Row[] = [];
     const treated_list: string[] = [];
     const control_list: string[] = [];
     for (let i = 0; i < 70; i += 1) {
       treated_list.push(phone(500 + i));
       control_list.push(phone(600 + i));
-      person_rows.push([`t${i}`, phone(500 + i), from_cut(i < 40 ? HOUR : -DAY)]);
-      person_rows.push([`c${i}`, phone(600 + i), from_cut(i < 15 ? HOUR : -DAY)]);
+      lead_rows.push([`t${i}`, phone(500 + i), from_cut(i < 40 ? HOUR : -DAY)]);
+      lead_rows.push([`c${i}`, phone(600 + i), from_cut(i < 15 ? HOUR : -DAY)]);
     }
     const fixture = await build("control-rate-precision", {
-      person: people(...person_rows),
+      lead: leads(...lead_rows),
       lists: { "treated.txt": lines(...treated_list), "untouched.txt": lines(...control_list) },
     });
 
@@ -1985,69 +1811,36 @@ describe("the publishability gate", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("the run refuses what it cannot measure", () => {
-  /**
-   * The map is read before anything else, so its refusals reach a `measure` caller from the same
-   * line every other refusal does. Each cause is exercised in `map.test.ts` against `load_map`;
-   * what these four prove is only that the pass does not swallow, wrap or rename them on the way
-   * out — which is the whole reason a caller is told it can catch by class.
-   */
-  test("no map at the path the caller named", async () => {
-    // Everything else this run needs is on disk, so the only thing missing is the map itself.
-    const fixture = await build("refuse-no-map", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1)) },
+  test("a base written entirely in national form, which names no market to read it in", async () => {
+    // The market a bare national number belongs to is inferred from the numbers in the base that
+    // carry a calling code, and here none of them does. Guessing one would key the whole base
+    // under a plan it was never written in, which does not fail loudly: the keys are well-formed
+    // and match nothing, so the run reports an audience that never registered.
+    const fixture = await build("refuse-no-market", {
+      lead: leads(["one", national(1), from_cut(HOUR)], ["two", national(2), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(national(1)) },
     });
 
-    const error = await caught(
-      measure({
-        map: join(root, "refuse-no-map", "NOT-THE-MAP.md"),
-        exports: fixture.exports,
-        cells: [cold("refuse-no-map", fixture.list("reached.txt"))],
-        now: NOW,
-      }),
-    );
-
-    expect(error).toBeInstanceOf(MapMissingError);
-    expect(error.message).toContain("NOT-THE-MAP.md");
-  });
-
-  test("a fingerprint naming a schema block the schema does not declare", async () => {
-    const fixture = await build("refuse-absent-block", {
-      map: { models: [...MODELS, "Ledger"], sha256: "0".repeat(64) },
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const error = await caught(one(fixture, cold("refuse-absent-block", fixture.list("reached.txt"))));
-
-    expect(error).toBeInstanceOf(MapSectionError);
-    expect(error.message).toContain("Ledger");
-  });
-
-  test("a key no section of the map defines", async () => {
-    const fixture = await build("refuse-unknown-key", {
-      map: { person: { nickname: "handle" } },
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const error = await caught(one(fixture, cold("refuse-unknown-key", fixture.list("reached.txt"))));
-
-    expect(error).toBeInstanceOf(MapFieldError);
-    expect((error as MapFieldError).key).toBe("nickname");
-    expect((error as MapFieldError).section).toBe("## Role: person");
-  });
-
-  test("a numbering plan no pair of fixed lengths can express", async () => {
-    const fixture = await build("refuse-plan", {
-      map: { phone: { area_digits: "0" } },
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const error = await caught(one(fixture, cold("refuse-plan", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-no-market", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(PhoneFormatError);
+    expect(error.message).toMatch(/calling code/i);
+  });
+
+  test("and a base split evenly between two markets, where picking the larger half is a guess", async () => {
+    // Half a base keyed under the wrong plan is the same silent zero as all of it, and the two
+    // shares are what the message has to carry: a genuinely two-country base and a mislabelled
+    // column read alike from here, and only whoever drew the export can tell them apart.
+    const fixture = await build("refuse-split-market", {
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", foreign(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-split-market", fixture.list("reached.txt"))));
+
+    expect(error).toBeInstanceOf(PhoneFormatError);
+    expect(error.message).toMatch(/no market dominates/i);
+    expect(error.message).toContain("BR 50.0%");
   });
 
   test("a single exported timestamp that cannot be read as a moment", async () => {
@@ -2055,7 +1848,7 @@ describe("the run refuses what it cannot measure", () => {
     // run rather than resolving to null, because a null instant is skipped by the accumulator and
     // the event would quietly leave the group it belongs to.
     const fixture = await build("refuse-timestamp", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       revenue: revenue(["one", from_cut(HOUR), 40], ["two", "last tuesday", 60]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
@@ -2066,97 +1859,45 @@ describe("the run refuses what it cannot measure", () => {
     expect((error as TimestampError).value).toBe("last tuesday");
   });
 
-  test("a stale fingerprint, before reading a single export", async () => {
-    const fixture = await build("refuse-stale", {
-      map: { sha256: "0".repeat(64) },
-      person: null,
+  test("a required role the source has no file for", async () => {
+    // The lead role is the index every other role joins against, so a source that cannot answer
+    // it has nothing for a cell to be about. Read as an absence instead, every cell matches
+    // nobody and the run publishes a campaign that reached an audience it never looked for.
+    const fixture = await build("refuse-missing-lead", {
+      lead: null,
       lists: { "reached.txt": lines(phone(1)) },
     });
 
-    const error = await caught(one(fixture, cold("refuse-stale", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-missing-lead", fixture.list("reached.txt"))));
 
-    expect(error).toBeInstanceOf(MapStaleError);
-    expect((error as MapStaleError).actual).toBe(FRESH_SHA);
-    expect((error as MapStaleError).expected).toBe("0".repeat(64));
+    expect(error).toBeInstanceOf(SourceError);
+    expect((error as SourceError).role).toBe("lead");
+    // The path it looked at, because a directory source names its files by role and the reader
+    // needs to know which name was expected.
+    expect(error.message).toContain("lead.csv");
   });
 
-  test("a churn section written by copying the revenue one and changing the heading", async () => {
-    // Both sections parse and every key is one the section defines, so the fault survives the
-    // whole reader and only shows up in the record: `money_index` is handed one binding at a
-    // time, opens the same file twice, and publishes churn as an exact copy of revenue. Before
-    // this refusal existed the fixture below returned `acquired.revenue` of two people and 700
-    // beside `acquired.churn` of two people and 700 — the same 700 arriving and leaving, from the
-    // same two people at the same two instants — and the run exited 0.
-    const fixture = await build("refuse-copied-churn", {
-      map: { churn: { export: "revenue.csv", at: "arrived_at" } },
-      person: people(["alfa", phone(1), from_cut(0)], ["bravo", phone(2), from_cut(DAY)]),
-      revenue: revenue(["alfa", from_cut(DAY), 300], ["bravo", from_cut(4 * DAY), 400]),
-      churn: null,
-      lists: { "reached.txt": lines(phone(1), phone(2)) },
-    });
-
-    const error = await caught(one(fixture, cold("refuse-copied-churn", fixture.list("reached.txt"))));
-
-    expect(error).toBeInstanceOf(MapDuplicateBindingError);
-    expect((error as MapDuplicateBindingError).roles).toEqual(["## Role: revenue", "## Role: churn"]);
-    expect((error as MapDuplicateBindingError).export).toBe("revenue.csv");
-  });
-
-  test("but measures two roles out of one export when they read different amount columns", async () => {
-    // The guard is narrow on purpose, and this is the shape it must not catch: a statement file
-    // carrying both directions per row. The two roles read the same rows and the same instants
-    // and disagree about the money, which is the whole difference between a file that says two
-    // things and a file read twice.
-    const fixture = await build("statement-two-amounts", {
-      map: { churn: { export: "revenue.csv", at: "arrived_at", amount: "withdrew" } },
-      person: people(["alfa", phone(1), from_cut(0)], ["bravo", phone(2), from_cut(DAY)]),
-      revenue: csv(
-        ["member_id", "arrived_at", "amount", "withdrew"],
-        [
-          ["alfa", from_cut(DAY), 300, 50],
-          ["bravo", from_cut(4 * DAY), 400, 20],
-        ],
-      ),
-      churn: null,
-      lists: { "reached.txt": lines(phone(1), phone(2)) },
-    });
-
-    const record = await one(fixture, cold("statement-two-amounts", fixture.list("reached.txt")));
-
-    expect(record.acquired.revenue).toEqual({ people: 2, value: 700, top2_share: 1, median_lag_days: 2.5 });
-    expect(record.acquired.churn).toEqual({ people: 2, value: 70 });
-  });
-
-  test("a person export that is not where the map says it is", async () => {
-    const fixture = await build("refuse-missing-person", {
-      person: null,
+  test("and the conversion role, which is the other half of what a campaign is measured on", async () => {
+    // Revenue and churn are optional: a product may collect neither, and an unanswered one is
+    // reported as unbound rather than as zero. These two are not optional, and the asymmetry has
+    // to be visible from outside — an absent conversion file read as an absence is a campaign
+    // nobody committed to, which is the reading this engine spends everything to avoid.
+    const fixture = await build("refuse-missing-conversion", {
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
+      conversion: null,
       lists: { "reached.txt": lines(phone(1)) },
     });
 
-    const error = await caught(one(fixture, cold("refuse-missing-person", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-missing-conversion", fixture.list("reached.txt"))));
 
-    expect(error).toBeInstanceOf(MissingExportError);
-    expect((error as MissingExportError).path).toContain("person.csv");
-    expect(error.message).toMatch(/person/i);
-  });
-
-  test("a bound role whose export was never produced", async () => {
-    const fixture = await build("refuse-missing-revenue", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      revenue: null,
-      lists: { "reached.txt": lines(phone(1)) },
-    });
-
-    const error = await caught(one(fixture, cold("refuse-missing-revenue", fixture.list("reached.txt"))));
-
-    expect(error).toBeInstanceOf(MissingExportError);
-    expect((error as MissingExportError).path).toContain("revenue.csv");
-    expect(error.message).toMatch(/revenue/i);
+    expect(error).toBeInstanceOf(SourceError);
+    expect((error as SourceError).role).toBe("conversion");
+    expect(error.message).toContain("conversion.csv");
   });
 
   test("a list file the cell names and nobody produced", async () => {
     const fixture = await build("refuse-missing-list", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
     });
 
     const error = await caught(one(fixture, cold("refuse-missing-list", fixture.list("never-written.txt"))));
@@ -2168,7 +1909,7 @@ describe("the run refuses what it cannot measure", () => {
 
   test("a list in a format it will not guess at", async () => {
     const fixture = await build("refuse-format", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "roster.json": `["${phone(1)}"]\n` },
     });
 
@@ -2178,27 +1919,27 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain(".json");
   });
 
-  test("a bound column the export's header does not carry", async () => {
-    // A timestamp column renamed under its binding reads as empty on every row, which places
-    // every account in neither group and reports a cell that arrived at nothing.
-    const fixture = await build("refuse-column-person", {
-      person: csv(["member_id", "handset", "joined_at"], [["one", phone(1), from_cut(HOUR)]]),
+  test("a contract column the role's rows do not carry", async () => {
+    // A timestamp column renamed under the query that aliases it reads as empty on every row,
+    // which places every account in neither group and reports a cell that arrived at nothing.
+    const fixture = await build("refuse-column-lead", {
+      lead: csv(["id", "phone", "joined_at"], [["one", phone(1), from_cut(HOUR)]]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
-    const error = await caught(one(fixture, cold("refuse-column-person", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-column-lead", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportColumnError);
-    expect((error as ExportColumnError).role).toBe("person");
-    expect((error as ExportColumnError).column).toBe("enrolled_at");
+    expect((error as ExportColumnError).role).toBe("lead");
+    expect((error as ExportColumnError).column).toBe("created_at");
     // The header as it actually reads, so the reader can see the rename without opening the file.
     expect(error.message).toContain("joined_at");
   });
 
   test("a bound column missing from a money role's header too", async () => {
     const fixture = await build("refuse-column-revenue", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
-      revenue: csv(["member_id", "arrived_at", "value"], [["one", from_cut(HOUR), 10]]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
+      revenue: csv(["lead", "at", "value"], [["one", from_cut(HOUR), 10]]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -2214,21 +1955,22 @@ describe("the run refuses what it cannot measure", () => {
     // rename usually leaves behind, and that reads identically downstream: every account parses
     // to no instant, falls in neither group, and the cell reports an audience that arrived at
     // nothing and was already there for nothing.
-    const fixture = await build("refuse-blank-person", {
-      person: people(["one", phone(1), ""], ["two", phone(2), ""]),
+    const fixture = await build("refuse-blank-lead", {
+      lead: leads(["one", phone(1), ""], ["two", phone(2), ""]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
-    const error = await caught(one(fixture, cold("refuse-blank-person", fixture.list("reached.txt"))));
+    const error = await caught(one(fixture, cold("refuse-blank-lead", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportBlankColumnError);
-    expect((error as ExportBlankColumnError).role).toBe("person");
-    expect((error as ExportBlankColumnError).columns).toEqual(["enrolled_at"]);
+    expect((error as ExportBlankColumnError).path).toBe("lead");
+    expect((error as ExportBlankColumnError).role).toBe("lead");
+    expect((error as ExportBlankColumnError).columns).toEqual(["created_at"]);
     expect(error.message).toContain("2 rows");
     // The kind, not just the column. Three of the four throw sites once inherited this word from a
-    // default that no test read, so flipping the default made this message say the person role
-    // binds its enrolment time "for its phone number" and the suite stayed green.
-    expect(error.message).toContain('"enrolled_at" for its timestamp');
+    // default that no test read, so flipping the default made this message say the lead role binds
+    // its creation time "for its phone number" and the suite stayed green.
+    expect(error.message).toContain('"created_at" for its timestamp');
     expect(error.message).toContain("falls out of the accumulator");
   });
 
@@ -2236,7 +1978,7 @@ describe("the run refuses what it cannot measure", () => {
     // Here the silence is total: the amounts are real and readable, so nothing else objects, and
     // every event is dropped for want of a time to place it against the cut.
     const fixture = await build("refuse-blank-revenue", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(["one", "", 10], ["one", "", 20]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2245,16 +1987,15 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(ExportBlankColumnError);
     expect((error as ExportBlankColumnError).role).toBe("revenue");
-    expect((error as ExportBlankColumnError).columns).toEqual(["arrived_at"]);
+    expect((error as ExportBlankColumnError).columns).toEqual(["at"]);
   });
 
-  test("names both timestamp columns where the map bound a fallback, since either would do", async () => {
+  test("names both timestamp columns where the source answered a fallback, since either would do", async () => {
     const fixture = await build("refuse-blank-conversion", {
-      map: { conversion: { at_fallback: "opened_at" } },
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       conversion: csv(
-        ["member_id", "signed_at", "opened_at", "amount", "state", "funding"],
-        [["one", "", "", 30, "LIVE", "WIRE"]],
+        ["lead", "at", "at_fallback", "amount", "committed", "recycled"],
+        [["one", "", "", 30, "true", "false"]],
       ),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2262,7 +2003,7 @@ describe("the run refuses what it cannot measure", () => {
     const error = await caught(one(fixture, cold("refuse-blank-conversion", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportBlankColumnError);
-    expect((error as ExportBlankColumnError).columns).toEqual(["signed_at", "opened_at"]);
+    expect((error as ExportBlankColumnError).columns).toEqual(["at", "at_fallback"]);
   });
 
   test("but not a role whose export has no rows at all, because that is a fact", async () => {
@@ -2270,7 +2011,7 @@ describe("the run refuses what it cannot measure", () => {
     // window somebody queried, and refusing it would make every quiet month unmeasurable. A full
     // file of blanks is a fault. Both produce zeros, and only one of them is a result.
     const fixture = await build("blank-empty-is-legal", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(),
       churn: churn(),
       conversion: conversions(),
@@ -2280,13 +2021,13 @@ describe("the run refuses what it cannot measure", () => {
     const record = await one(fixture, cold("blank-empty-is-legal", fixture.list("reached.txt")));
 
     expect(record.acquired.accounts).toBe(1);
-    expect(record.acquired.revenue).toEqual({ people: 0, value: 0, top2_share: null, median_lag_days: null });
+    expect(record.acquired.revenue).toEqual({ leads: 0, value: 0, top2_share: null, median_lag_days: null });
     expect(record.conversions.count).toBe(0);
   });
 
   test("an amount column holding something that is not a number", async () => {
     const fixture = await build("refuse-amount", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(["one", from_cut(HOUR), "twelve"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2306,7 +2047,7 @@ describe("the run refuses what it cannot measure", () => {
     // same string by the time an amount is read. An absent column is `ExportColumnError`, two
     // cases above.
     const fixture = await build("refuse-amount-blank", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(["one", from_cut(HOUR), ""]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2327,7 +2068,7 @@ describe("the run refuses what it cannot measure", () => {
     // silent shrunken total this class exists to stop, arriving from a file that looks fine in a
     // spreadsheet because the padding is invisible there.
     const fixture = await build("refuse-amount-spaces", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(["one", from_cut(HOUR), "   "]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2347,7 +2088,7 @@ describe("the run refuses what it cannot measure", () => {
     // added into the total, and carried through `round_half_even`, which passes non-finite input
     // straight through by design — so the cell publishes `Infinity` as money somebody collected.
     const fixture = await build("refuse-amount-overflow", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       revenue: revenue(["one", from_cut(HOUR), "1e999"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2361,11 +2102,11 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("amount");
   });
 
-  test("more unreadable numbers than the map allows", async () => {
-    // The map permits a quarter. Two rows in three is a dialling plan that does not describe
-    // this market, and that produces the same zero as a list nobody on it ever registered.
+  test("more unreadable numbers than the engine allows", async () => {
+    // The engine permits five percent. Two identifiers in three is a market whose plan does not
+    // describe this data, and that produces the same zero as a list nobody on it ever registered.
     const fixture = await build("refuse-unparseable", {
-      person: people(
+      lead: leads(
         ["good", phone(1), from_cut(HOUR)],
         ["bad-a", "not a number", from_cut(HOUR)],
         ["bad-b", "12", from_cut(HOUR)],
@@ -2380,12 +2121,12 @@ describe("the run refuses what it cannot measure", () => {
   });
 
   test("but an account that never gave a number is not an unreadable one either", async () => {
-    // This role's export writes `coalesce(u.phone, '')`, so every account without a number lands
-    // here as an empty cell. Charging the dialling plan for them spends the ceiling on absences:
-    // three of these five rows are blank, which under a row count is 60% and a refusal, while the
-    // only thing the map got wrong is nothing at all.
+    // A lead role writes `coalesce(u.phone, '')`, so every account without a number lands here as
+    // an empty cell. Charging the market for them spends the ceiling on absences: four of these
+    // six rows are blank, which under a row count is 67% and a refusal, while the only thing
+    // wrong with the file is nothing at all.
     const fixture = await build("blank-accounts-are-not-junk", {
-      person: people(
+      lead: leads(
         ["a", phone(1), from_cut(HOUR)],
         ["no-phone-1", "", from_cut(HOUR)],
         ["b", phone(2), from_cut(HOUR)],
@@ -2403,22 +2144,25 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.audience.matched_phones).toBe(2);
   });
 
-  test("and an export whose phone column is empty throughout, which the rate can no longer catch", async () => {
+  test("and a lead role whose phone column is empty throughout, which the rate cannot catch", async () => {
     // The hole skipping blanks opens. Nothing is unreadable, so the rate is zero and says the file
-    // is perfect; the index is empty, so every cell matches nobody and the run publishes an
-    // audience that was never there. Same fault as an undated file, and it has to fail the same way.
+    // is perfect; there is no index, so every cell matches nobody and the run publishes an
+    // audience that was never there. It is checked before the market is inferred, because a column
+    // of nothing reaches `dominant_market` as a corpus with no market in it — and reported that
+    // way it sends the reader to argue with the dialling plan over a column that is simply empty.
     const fixture = await build("every-account-without-a-number", {
-      person: people(["a", "", from_cut(HOUR)], ["b", "", from_cut(HOUR)]),
+      lead: leads(["a", "", from_cut(HOUR)], ["b", "", from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(one(fixture, cold("every-account-without-a-number", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportBlankColumnError);
-    // Names the column and what it was bound for, in one phrase. Asserting the column alone passed
-    // happily while the sentence read "binds "handset" for its timestamp" — the message was wrong
-    // in the only word that tells the reader which fault they have.
-    expect(error.message).toContain('"handset" for its phone number');
+    expect((error as ExportBlankColumnError).columns).toEqual(["phone"]);
+    // Names the column and what it was read for, in one phrase. Asserting the column alone passed
+    // happily while the sentence read `binds "phone" for its timestamp` — the message was wrong in
+    // the only word that tells the reader which fault they have.
+    expect(error.message).toContain('"phone" for its phone number');
     // And the consequence is the phone one, not the accumulator sentence the timestamp case uses.
     expect(error.message).toContain("matches nobody");
   });
@@ -2429,7 +2173,7 @@ describe("the run refuses what it cannot measure", () => {
     // readable and they build an index of one, so the honest reading is one key missing of two
     // and a refusal. Counting rows calls the same file 17% junk and lets it through.
     const fixture = await build("rate-against-the-index", {
-      person: people(
+      lead: leads(
         ["a1", phone(1), from_cut(HOUR)],
         ["a2", phone(1), from_cut(HOUR)],
         ["a3", phone(1), from_cut(HOUR)],
@@ -2446,39 +2190,38 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("1 of 2");
     // Ordered, like the cell side: swapping the two arguments leaves both numbers present and
     // every loose assertion passing while the sentence reports the observed rate as the ceiling.
-    expect(error.message).toContain("(50.0%), above the 25.0%");
+    expect(error.message).toContain("(50.0%), above the 5.0%");
   });
 
-  test("and one sentinel repeated down the export's phone column is one unknown", async () => {
-    // The export side of the same spelling problem. A base whose phone column says `SEM TELEFONE`
+  test("and one sentinel repeated down the lead role's phone column is one unknown", async () => {
+    // The base side of the same spelling problem. A base whose phone column says `SEM TELEFONE`
     // on every account that never gave one is describing a single thing it could not read, and
-    // charging the dialling plan once per row would refuse a file at four times its real rate.
-    // Three keys and one sentinel is one missing of four — the quarter this map allows.
+    // charging the market once per row would refuse a file at four times its real rate. Nineteen
+    // keys and one sentinel is one missing of twenty, which is exactly the five percent allowed;
+    // the same four rows counted one by one are four missing of twenty-three, and a refusal.
     const fixture = await build("one-sentinel-in-the-export", {
-      person: people(
-        ["a", phone(1), from_cut(HOUR)],
-        ["b", phone(2), from_cut(HOUR)],
-        ["c", phone(3), from_cut(HOUR)],
+      lead: leads(
+        ...keyed_accounts(READABLE),
         ["s1", "SEM TELEFONE", from_cut(HOUR)],
         ["s2", "SEM TELEFONE", from_cut(HOUR)],
         ["s3", "SEM TELEFONE", from_cut(HOUR)],
         ["s4", "SEM TELEFONE", from_cut(HOUR)],
       ),
-      lists: { "reached.txt": lines(phone(1), phone(2), phone(3)) },
+      lists: { "reached.txt": lines(...keyed_numbers(READABLE)) },
     });
 
     const record = await one(fixture, cold("one-sentinel-in-the-export", fixture.list("reached.txt")));
 
-    expect(record.audience.matched_phones).toBe(3);
+    expect(record.audience.matched_phones).toBe(READABLE);
   });
 
-  test("and more unreadable numbers in a cell's own list than the map allows", async () => {
+  test("and more unreadable numbers in a cell's own list than the engine allows", async () => {
     // The same ceiling, the other side of the join, and the opposite sign. An entry nobody can key
     // never reaches a numerator, so dropping it quietly only shrinks `listed` — the denominator
     // under every rate this cell publishes. Left unguarded, a list of junk reads as a tiny audience
     // that converted brilliantly, which is the direction that gets published.
     const fixture = await build("refuse-unparseable-list", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1), "not a number", "12", "also not one") },
     });
 
@@ -2486,8 +2229,8 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(UnparseablePhonesError);
     expect(error.message).toContain("3 of 4");
-    // Named, because the remedy differs: the map's plan is wrong for this market, or this one file
-    // is junk. Saying "the person export" here would send the reader to the wrong file entirely.
+    // Named, because the remedy differs: the base is written in another market's plan, or this one
+    // file is junk. Saying "the person export" here would send the reader to the wrong file.
     expect(error.message).toContain("refuse-unparseable-list");
   });
 
@@ -2498,7 +2241,7 @@ describe("the run refuses what it cannot measure", () => {
     // is mostly such rows, and the audience such a campaign publishes has always been the phones it
     // held rather than the lines the file ran to.
     const fixture = await build("blank-rows-are-not-junk", {
-      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
       lists: {
         // Two phones among a majority of empty cells, which is the shape of a real export.
         "reached.csv": csv(
@@ -2527,40 +2270,34 @@ describe("the run refuses what it cannot measure", () => {
   });
 
   test("and a rate sitting exactly on the ceiling is allowed, on both sides of the join", async () => {
-    // The map permits a quarter, and "above this share" means above it. Whether the comparison is
-    // strict decides what a map saying 0.25 actually licenses, and neither side pinned it — so a
-    // change from `>` to `>=` would silently start refusing every file measured at exactly its
-    // declared ceiling, which is the one value an author picked on purpose.
+    // The engine permits five percent, and "above this share" means above it. Whether the
+    // comparison is strict decides what the ceiling actually licenses, and neither side pinned it
+    // — so a change from `>` to `>=` would silently start refusing every file measured at exactly
+    // the declared limit, which is the one value anybody picks on purpose.
     const fixture = await build("ceiling-is-inclusive", {
-      // One unreadable of four accounts, and one of four possible list identifiers: 0.25 both ways.
-      person: people(
-        ["a", phone(1), from_cut(HOUR)],
-        ["b", phone(2), from_cut(HOUR)],
-        ["c", phone(3), from_cut(HOUR)],
-        ["junk", "not a number", from_cut(HOUR)],
-      ),
-      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+      // One unreadable of twenty accounts, and one of twenty possible list identifiers: 0.05 both
+      // ways, and one identifier fewer on either side would tip it over.
+      lead: leads(...keyed_accounts(READABLE), ["junk", "not a number", from_cut(HOUR)]),
+      lists: { "reached.txt": lines(...keyed_numbers(READABLE), "not a number") },
     });
 
     const record = await one(fixture, cold("ceiling-is-inclusive", fixture.list("reached.txt")));
 
-    expect(record.audience.listed).toBe(3);
-    expect(record.audience.matched_phones).toBe(3);
+    expect(record.audience.listed).toBe(READABLE);
+    expect(record.audience.matched_phones).toBe(READABLE);
   });
 
   test("and one unknown repeated down a column is one unknown, not a file of them", async () => {
     // A sentinel is how an export spells absence when its author did not leave the cell empty:
-    // `N/A`, `-`, `SEM TELEFONE`. Counting the rows it appears on charges the dialling plan once
-    // per row for a single thing it could not read, and twenty rows of one sentinel can hide at
-    // most one person between them. Three keys and one sentinel is one missing of four, which is
-    // exactly the quarter this map allows, however many rows carry it.
+    // `N/A`, `-`, `SEM TELEFONE`. Counting the rows it appears on charges the market once per row
+    // for a single thing it could not read, and twenty rows of one sentinel can hide at most one
+    // person between them. Nineteen keys and one sentinel is one missing of twenty, which is
+    // exactly the five percent allowed, however many rows carry it.
     const fixture = await build("one-sentinel-is-one-unknown", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(HOUR)]),
+      lead: leads(...keyed_accounts(READABLE)),
       lists: {
         "reached.txt": lines(
-          phone(1),
-          phone(2),
-          phone(3),
+          ...keyed_numbers(READABLE),
           "SEM TELEFONE",
           "SEM TELEFONE",
           "SEM TELEFONE",
@@ -2571,7 +2308,7 @@ describe("the run refuses what it cannot measure", () => {
 
     const record = await one(fixture, cold("one-sentinel-is-one-unknown", fixture.list("reached.txt")));
 
-    expect(record.audience.listed).toBe(3);
+    expect(record.audience.listed).toBe(READABLE);
   });
 
   test("and naming the same list twice cannot change what the cell measured", async () => {
@@ -2580,8 +2317,8 @@ describe("the run refuses what it cannot measure", () => {
     // list was refused as two copies of itself. A declaration is a statement about which people
     // the cell covers, and saying it twice says the same thing.
     const fixture = await build("the-same-list-twice", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(HOUR)]),
-      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+      lead: leads(...keyed_accounts(READABLE)),
+      lists: { "reached.txt": lines(...keyed_numbers(READABLE), "not a number") },
     });
 
     const once = await one(fixture, cold("the-same-list-twice", fixture.list("reached.txt")));
@@ -2599,7 +2336,7 @@ describe("the run refuses what it cannot measure", () => {
     // rows are readable but resolve to one person, so the row reading is one junk entry in six and
     // the honest one is one in two — half the audience missing, which the ceiling must catch.
     const fixture = await build("rate-against-the-audience", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: {
         "reached.txt": lines(phone(1), phone(1), phone(1), phone(1), phone(1), "not a number"),
       },
@@ -2614,24 +2351,20 @@ describe("the run refuses what it cannot measure", () => {
     // throws under a divisor loosened by one.
     // Rate and ceiling in one ordered phrase, not as two loose substrings. Swapping the two
     // arguments leaves both numbers in the sentence and every separate assertion still passing,
-    // while it reads "(25.0%), above the 50.0%" — an observed rate reported as the limit, sending
-    // whoever reads it to change the map to a number the map does not hold.
-    expect(error.message).toContain("(50.0%), above the 25.0%");
+    // while it reads "(5.0%), above the 50.0%" — an observed rate reported as the limit, sending
+    // whoever reads it to widen a ceiling that is not the problem.
+    expect(error.message).toContain("(50.0%), above the 5.0%");
   });
 
   test("and the rate measures the list as it was delivered, before exclusions are subtracted", async () => {
-    // One junk entry in four is exactly the quarter this map allows, and the probe subtracted
-    // below was on the list that was sent. Subtract exclusions first and the denominator drops to
-    // three, the same single junk entry reads as a third of the list, and this clean cell is
-    // refused for a dialling plan that fits it perfectly — one more probe named in a declaration
-    // deciding whether the map's phone format is called wrong for the market.
+    // One junk entry in twenty is exactly the five percent allowed, and the probe subtracted below
+    // was on the list that was sent. Subtract exclusions first and the denominator drops to
+    // nineteen, the same single junk entry reads as 5.3% of the list, and this clean cell is
+    // refused over a market that fits it perfectly — one more probe named in a declaration
+    // deciding whether the base is called unreadable.
     const fixture = await build("rate-before-exclusions", {
-      person: people(
-        ["probe", phone(1), from_cut(HOUR)],
-        ["a", phone(2), from_cut(HOUR)],
-        ["b", phone(3), from_cut(HOUR)],
-      ),
-      lists: { "reached.txt": lines(phone(1), phone(2), phone(3), "not a number") },
+      lead: leads(...keyed_accounts(READABLE)),
+      lists: { "reached.txt": lines(...keyed_numbers(READABLE), "not a number") },
     });
 
     const record = await one(
@@ -2639,19 +2372,19 @@ describe("the run refuses what it cannot measure", () => {
       cold("rate-before-exclusions", fixture.list("reached.txt"), { exclude: [phone(1)] }),
     );
 
-    // The exclusion still does its work: two members are left, and the junk entry is not one of
-    // them. What it must not do is change the verdict on the file it was subtracted from.
-    expect(record.audience.listed).toBe(2);
-    expect(record.audience.matched_phones).toBe(2);
+    // The exclusion still does its work: eighteen members are left, and the junk entry is not one
+    // of them. What it must not do is change the verdict on the file it was subtracted from.
+    expect(record.audience.listed).toBe(READABLE - 1);
+    expect(record.audience.matched_phones).toBe(READABLE - 1);
   });
 
   test("a cell whose lists hold nothing but junk, named as junk and not as emptiness", async () => {
     // Both faults stop the run and they read alike, but they are fixed in different files: a list
-    // of unreadable numbers sends the reader to the map's dialling plan or to the export that
-    // produced them, while an empty cell sends them to a wrong column or an over-narrow filter.
+    // of unreadable numbers sends the reader to the market the base is written in or to the export
+    // that produced them, while an empty cell sends them to a wrong column or an over-narrow filter.
     // The rate is therefore checked first, so the more specific of the two gets to speak.
     const fixture = await build("refuse-all-junk", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines("not a number", "also not one") },
     });
 
@@ -2667,7 +2400,7 @@ describe("the run refuses what it cannot measure", () => {
     // rate entirely and the cell falls through to being called empty — the same misnaming the
     // reorder exists to prevent, reachable again through the off-by-one.
     const fixture = await build("one-identifier-and-it-is-junk", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines("not a number") },
     });
 
@@ -2681,43 +2414,38 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("100.0%");
   });
 
-  test("and a person export of one repeated junk spelling, at the same boundary", async () => {
-    // The export side of the `possible === 1` case, and the export side of the ordering question
-    // with it. Two rows of one spelling make one unknown and no keys, so `possible` is 1: reading
-    // the guard as `possible > 1` skips the rate, and hoisting the blank-column refusal above it
-    // does the same, and both then blame an empty column for a file that is not empty but junk.
+  test("and a base of nothing but junk, refused before a market can be read off it", async () => {
+    // The base side of the same fault, and it now lands one guard earlier than the cell side
+    // does. The market a bare number is read in is inferred from the numbers that carry a calling
+    // code, and a file of junk carries none — so this is refused for naming no market rather than
+    // for its unreadable share, which is the earliest and most specific thing that is true of it.
+    // What must not happen either way is the blank-column refusal: the column is not empty, it is
+    // full of something nothing can read, and those are fixed in different places.
     const fixture = await build("one-junk-spelling-in-the-export", {
-      person: people(["a", "junk", from_cut(HOUR)], ["b", "junk", from_cut(HOUR)]),
+      lead: leads(["a", "junk", from_cut(HOUR)], ["b", "junk", from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(one(fixture, cold("one-junk-spelling-in-the-export", fixture.list("reached.txt"))));
 
-    expect(error).toBeInstanceOf(UnparseablePhonesError);
-    expect(error.message).toContain("1 of 1 distinct identifiers");
-    expect(error.message).toContain("the person export");
+    expect(error).toBeInstanceOf(PhoneFormatError);
+    expect(error).not.toBeInstanceOf(ExportBlankColumnError);
+    expect(error.message).toMatch(/calling code/i);
   });
 
   test("and a sentinel is trimmed before it is counted, on both sides", async () => {
     // An export that pads its columns writes the same absence two ways. Adding the untrimmed text
     // to the set makes `N/A` and `N/A   ` two unknowns instead of one, which is the padding
-    // deciding the verdict — the same fault as counting rows, reached through whitespace. Three
-    // keys and one sentinel is the quarter this map allows; two sentinels is forty percent.
+    // deciding the verdict — the same fault as counting rows, reached through whitespace.
+    // Nineteen keys and one sentinel is the five percent allowed; two sentinels is 9.5% and a
+    // refusal, so a trim dropped on either side of the join fails here.
     const fixture = await build("padding-is-not-a-second-unknown", {
-      person: people(
-        ["a", phone(1), from_cut(HOUR)],
-        ["b", phone(2), from_cut(HOUR)],
-        ["c", phone(3), from_cut(HOUR)],
-        ["s1", "SEM TEL", from_cut(HOUR)],
-        ["s2", "SEM TEL  ", from_cut(HOUR)],
-      ),
+      lead: leads(...keyed_accounts(READABLE), ["s1", "SEM TEL", from_cut(HOUR)], ["s2", "SEM TEL  ", from_cut(HOUR)]),
       lists: {
         "reached.csv": csv(
           ["phone", "note"],
           [
-            [phone(1), "a"],
-            [phone(2), "b"],
-            [phone(3), "c"],
+            ...keyed_numbers(READABLE).map((written, i): Row => [written, `row ${i}`]),
             ["N/A", "one spelling"],
             ["N/A   ", "the same one, padded"],
           ],
@@ -2730,8 +2458,8 @@ describe("the run refuses what it cannot measure", () => {
       cold("padding-is-not-a-second-unknown", fixture.list("reached.csv"), { column: "phone" }),
     );
 
-    expect(record.audience.listed).toBe(3);
-    expect(record.audience.matched_phones).toBe(3);
+    expect(record.audience.listed).toBe(READABLE);
+    expect(record.audience.matched_phones).toBe(READABLE);
   });
 
   test("and skipping a blank phone does not excuse its row from the rest of the file", async () => {
@@ -2742,7 +2470,7 @@ describe("the run refuses what it cannot measure", () => {
     // for the same kind of reason: it answers the join, which is a question about the id column,
     // so the revenue row belonging to that account must still land.
     const fixture = await build("a-blank-phone-is-still-a-row", {
-      person: people(["dated-no-phone", "", from_cut(HOUR)], ["undated", phone(1), ""]),
+      lead: leads(["dated-no-phone", "", from_cut(HOUR)], ["undated", phone(1), ""]),
       revenue: revenue(["dated-no-phone", from_cut(HOUR), 10]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -2758,7 +2486,7 @@ describe("the run refuses what it cannot measure", () => {
     // and its guard is there to say so out loud rather than to lean on `0 / 0` being `NaN` and
     // `NaN > ceiling` being false, which is true but is not a thing the next reader should need.
     const fixture = await build("refuse-empty", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: {
         "reached.csv": csv(
           ["phone", "cohort"],
@@ -2794,7 +2522,7 @@ describe("the run refuses what it cannot measure", () => {
     // A cell consisting only of planted probes is as unmeasurable as one whose file moved, and
     // it must fail the same way rather than reporting a clean row of zeros.
     const fixture = await build("refuse-empty-excluded", {
-      person: people(["probe", phone(2), from_cut(HOUR)]),
+      lead: leads(["probe", phone(2), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(2)) },
     });
 
@@ -2821,11 +2549,11 @@ describe("the run refuses what it cannot measure", () => {
     // campaign's, and the reading comes back a hundred times what it should be. An empty reading
     // is queried by whoever reads it; an inflated one is published.
     const fixture = await build("refuse-exclude-unreadable", {
-      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
+      lead: leads(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
-    const entries = ["48O000002", `${phone(2)} ext 20`, ""];
+    const entries = ["55 11 9OOOO-OOO2", `${phone(2)} ext 20`, ""];
     const error = await caught(
       one(fixture, cold("refuse-exclude-unreadable", fixture.list("reached.txt"), { exclude: entries })),
     );
@@ -2847,16 +2575,16 @@ describe("the run refuses what it cannot measure", () => {
     // under a refusal that missed it this cell measures with the probe still in the population and
     // its conversion credited to the campaign.
     const fixture = await build("refuse-exclude-one", {
-      person: people(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
+      lead: leads(["real", phone(1), from_cut(HOUR)], ["probe", phone(2), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
     const error = await caught(
-      one(fixture, cold("refuse-exclude-one", fixture.list("reached.txt"), { exclude: ["48O000002"] })),
+      one(fixture, cold("refuse-exclude-one", fixture.list("reached.txt"), { exclude: ["55 11 9OOOO-OOO2"] })),
     );
 
     expect(error).toBeInstanceOf(CellExclusionError);
-    expect((error as CellExclusionError).entries).toEqual(["48O000002"]);
+    expect((error as CellExclusionError).entries).toEqual(["55 11 9OOOO-OOO2"]);
     // Singular, because the sentence is an instruction to whoever fixes the declaration and "an
     // exclusion" and "3 exclusions" send them to look for different amounts of work.
     expect(error.message).toContain("lists an exclusion that cannot be read");
@@ -2864,14 +2592,13 @@ describe("the run refuses what it cannot measure", () => {
 
   test("two cells sharing one name, which would make every control join ambiguous", async () => {
     const fixture = await build("refuse-duplicate-cell", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("twice", fixture.list("reached.txt")), cold("twice", fixture.list("reached.txt"))],
         now: NOW,
       }),
@@ -2883,14 +2610,13 @@ describe("the run refuses what it cannot measure", () => {
 
   test("a control naming a cell nobody declared", async () => {
     const fixture = await build("refuse-control-unknown", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("reached.txt"))],
         controls: [{ treated: "treated", control: "imaginary", outcome: "acquired.accounts" }],
         now: NOW,
@@ -2905,14 +2631,13 @@ describe("the run refuses what it cannot measure", () => {
     // Nobody who has never heard of the brand can commit before arriving, so a cold pair read
     // on commitment is zero against zero: not a null result, a question never asked.
     const fixture = await build("refuse-control-audience", {
-      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "conversions.count" }],
         now: NOW,
@@ -2935,14 +2660,13 @@ describe("the run refuses what it cannot measure", () => {
     // same guard answers this, because a path no audience can be read on is refused by every
     // audience — and one refusal that names what this pair can be read on is the whole answer.
     const fixture = await build("refuse-control-outcome", {
-      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(HOUR)]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.revenue.value" }],
         now: NOW,
@@ -2964,7 +2688,7 @@ describe("the run refuses what it cannot measure", () => {
     // audiences share no countable path, so the message says so and sends the reader to draw a
     // control from the treated cell's own audience instead of trying a third outcome.
     const fixture = await build("refuse-control-mixed-audience", {
-      person: people(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)], ["two", phone(2), from_cut(-DAY)]),
       lists: { "treated.txt": lines(phone(1)), "untouched.txt": lines(phone(2)) },
     });
 
@@ -2972,8 +2696,7 @@ describe("the run refuses what it cannot measure", () => {
     // the condition refuses this one.
     const on_the_control = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt")), base("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
@@ -2988,8 +2711,7 @@ describe("the run refuses what it cannot measure", () => {
     // and the treated one cannot be read on it, so only the treated side of the condition refuses.
     const on_the_treated = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [base("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
@@ -3006,7 +2728,7 @@ describe("the run refuses what it cannot measure", () => {
 
   test("two controls on one treated cell, where the last would silently win", async () => {
     const fixture = await build("refuse-control-duplicate", {
-      person: people(
+      lead: leads(
         ["one", phone(1), from_cut(HOUR)],
         ["two", phone(2), from_cut(HOUR)],
         ["three", phone(3), from_cut(HOUR)],
@@ -3020,8 +2742,7 @@ describe("the run refuses what it cannot measure", () => {
     ];
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [
           cold("treated", fixture.list("treated.txt")),
           cold("first", fixture.list("first.txt")),
@@ -3036,17 +2757,23 @@ describe("the run refuses what it cannot measure", () => {
     expect(error.message).toContain("treated");
   });
 
-  test("a conversion export whose statuses were all renamed under the map", async () => {
-    // A role export can be present, well-formed and contribute nothing. Every column is bound,
-    // every timestamp parses, every amount is a number — and a migration renamed the statuses,
-    // so the per-cell filter drops all of them one at a time and the record says nobody
-    // committed. Counted once over the whole file, the difference between a quiet window and a
-    // status list that matches nothing becomes a fact this can refuse on.
+  test("a conversion role with rows, not one of which is marked committed", async () => {
+    // A role can be present, well-formed and contribute nothing. Every column is there, every
+    // timestamp parses, every amount is a number — and the value the `committed` predicate
+    // compares against was renamed in a migration, so the query stays valid and matches nothing.
+    // The per-cell filter then drops the rows one at a time and the record says nobody committed,
+    // which is indistinguishable from a campaign nobody committed to. Counted once over the whole
+    // role, the difference between a quiet window and a predicate that fires on nothing becomes a
+    // fact the run can refuse on.
+    //
+    // The predicate lives in the source's own query now, so this error cannot name the values it
+    // saw and does not try to: they are the product's vocabulary and this package is published.
+    // What it can say is how many rows answered and that none of them counted.
     const fixture = await build("refuse-status-drift", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       conversion: conversions(
-        ["one", from_cut(HOUR), 60, "RUNNING", "WIRE"],
-        ["two", from_cut(2 * HOUR), 40, "RUNNING", "CREDIT"],
+        ["one", from_cut(HOUR), 60, "false", "false"],
+        ["two", from_cut(2 * HOUR), 40, "false", "true"],
       ),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
@@ -3054,10 +2781,11 @@ describe("the run refuses what it cannot measure", () => {
     const error = await caught(one(fixture, base("refuse-status-drift", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportStatusError);
-    expect((error as ExportStatusError).declared).toEqual(["LIVE", "SETTLED"]);
-    // What the column actually holds, so the rename is legible without opening the export.
-    expect((error as ExportStatusError).found).toEqual(["RUNNING"]);
-    expect(error.message).toContain("2 rows");
+    expect((error as ExportStatusError).rows).toBe(2);
+    expect(error.message).toContain("answered 2 rows");
+    // The remedy names the predicate rather than a list of statuses this package no longer holds,
+    // which is the whole of what moved when the project's vocabulary left the package.
+    expect(error.message).toContain("`committed` predicate");
   });
 
   test("and the same drift in an export carrying a single row", async () => {
@@ -3069,50 +2797,51 @@ describe("the run refuses what it cannot measure", () => {
     // refusal. The blank-timestamp guard beside it is written to the same shape and is exercised
     // at one row, which is what makes the asymmetry a gap rather than a preference.
     const fixture = await build("refuse-status-drift-one-row", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
-      conversion: conversions(["one", from_cut(HOUR), 60, "RUNNING", "WIRE"]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["one", from_cut(HOUR), 60, "false", "false"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(one(fixture, base("refuse-status-drift-one-row", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(ExportStatusError);
-    expect((error as ExportStatusError).found).toEqual(["RUNNING"]);
-    expect(error.message).toContain("the 1 rows in");
+    expect((error as ExportStatusError).rows).toBe(1);
+    expect(error.message).toContain("answered 1 rows");
   });
 
-  test("and a status column blank on every row, not on one row in two", async () => {
-    // The other way a status column stops matching, and the one no per-row case can see: nothing
-    // was renamed, the column was emptied at the source while its header stayed. Every row then
-    // carries the empty string, the per-cell filter drops all of them, and the record reports
-    // conversions 0 of 0 for two people who both signed — the same reading a campaign nobody
-    // committed to produces. The counter behind the guard is what separates the two, so counting
-    // a blank as committed silences the refusal on exactly the file it was written for. The
-    // message has to quote what the column holds, because an empty pair of quotes is the only
-    // thing that tells the reader the column was emptied rather than renamed.
+  test("and a committed column blank on every row, which is not a role nobody committed to", async () => {
+    // The other way the predicate stops answering, and the one no count of committed rows can
+    // see: nothing was renamed, the column was emptied at the source while its header stayed.
+    // Read as false, an empty cell drops every row and the record reports conversions 0 of 0 for
+    // two people who both signed — the same reading a campaign nobody committed to produces. The
+    // boundary carries strings, so `true` and `false` are the whole of the answer and a blank is
+    // a source that did not answer at all.
     const fixture = await build("refuse-status-blank-column", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
-      conversion: conversions(["one", from_cut(HOUR), 60, "", "WIRE"], ["two", from_cut(2 * HOUR), 40, "", "CREDIT"]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      conversion: conversions(["one", from_cut(HOUR), 60, "", "false"], ["two", from_cut(2 * HOUR), 40, "", "true"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
     const error = await caught(one(fixture, base("refuse-status-blank-column", fixture.list("reached.txt"))));
 
-    expect(error).toBeInstanceOf(ExportStatusError);
-    expect((error as ExportStatusError).found).toEqual([""]);
-    expect(error.message).toContain('holds ""');
+    expect(error).toBeInstanceOf(ExportFlagError);
+    expect((error as ExportFlagError).column).toBe("committed");
+    // Which of the two happened, because an emptied column and a value from the wrong vocabulary
+    // are different jobs at the source.
+    expect((error as ExportFlagError).raw).toBe("");
+    expect(error.message).toContain("an unanswered question is not an answer of no");
   });
 
-  test("but not a file where one row in three carries a status the map counts", async () => {
+  test("but not a role where one row in three is marked committed", async () => {
     // The same distinction the blank-column check draws. A file whose rows are mostly abandoned
     // or cancelled is an ordinary file; it is a file with nothing countable in it that is a
     // fault, and refusing the first would make every honest month unmeasurable.
     const fixture = await build("status-partial-is-legal", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       conversion: conversions(
-        ["one", from_cut(HOUR), 10, "LAPSED", "WIRE"],
-        ["one", from_cut(2 * HOUR), 20, "LIVE", "WIRE"],
-        ["one", from_cut(3 * HOUR), 30, "LAPSED", "WIRE"],
+        ["one", from_cut(HOUR), 10, "false", "false"],
+        ["one", from_cut(2 * HOUR), 20, "true", "false"],
+        ["one", from_cut(3 * HOUR), 30, "false", "false"],
       ),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -3123,36 +2852,43 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.conversions.value).toBe(20);
   });
 
-  test("and a blank status is not one of the statuses the map counts either", async () => {
-    // The second row carries no status at all, which is what a column half-written by a migration
-    // looks like. Let the empty string through the per-cell filter and that row is counted as a
-    // commitment: the cell publishes two conversions and five hundred and twenty of money
-    // somebody signed for, on the strength of a cell with nothing in it.
-    const fixture = await build("blank-status-is-not-committed", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+  test("and a committed cell holding anything but true or false, which is not a row that did not commit", async () => {
+    // The strict read, and what it buys. A source answering `1`, `t`, `yes` or a status name has
+    // not answered the question, and reading that as false drops the row in silence: this cell
+    // would publish one conversion worth twenty where the truth is two worth five hundred and
+    // twenty, on the strength of a value nothing in the record mentions. Every other row here is
+    // well-formed, so the count guard above cannot see it — one row in two is committed.
+    const fixture = await build("committed-is-not-a-status-name", {
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       conversion: conversions(
-        ["one", from_cut(HOUR), 20, "LIVE", "WIRE"],
-        ["one", from_cut(2 * HOUR), 500, "", "WIRE"],
+        ["one", from_cut(HOUR), 20, "true", "false"],
+        ["one", from_cut(2 * HOUR), 500, "LIVE", "false"],
       ),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
-    const record = await one(fixture, base("blank-status-is-not-committed", fixture.list("reached.txt")));
+    const error = await caught(one(fixture, base("committed-is-not-a-status-name", fixture.list("reached.txt"))));
 
-    expect(record.conversions.count).toBe(1);
-    // The money beside the count, because they are two numbers: a value that carried the blank
-    // row's five hundred would publish it whatever the count said.
-    expect(record.conversions.value).toBe(20);
+    expect(error).toBeInstanceOf(ExportFlagError);
+    // Not `ExportValueError`: that one is about amounts and says so, and its remedy — look for a
+    // currency symbol, a thousands separator, a decimal comma — is no help at all here.
+    expect(error).not.toBeInstanceOf(ExportValueError);
+    expect((error as ExportFlagError).column).toBe("committed");
+    // The value as written, and the cause it points at: a query passing its own vocabulary
+    // through where the contract asked it to answer the question.
+    expect((error as ExportFlagError).raw).toBe("LIVE");
+    expect(error.message).toContain('holds "LIVE"');
+    expect(error.message).toContain("as committed");
   });
 
-  test("a conversion export whose person column holds the wrong kind of id", async () => {
-    // The join is the one binding that can be wrong while every column is present and every
-    // value well-formed: a conversion export keyed by the contract's own primary key instead of
-    // the person's matches nobody. What comes out is a thousand matched accounts and no
-    // conversions, which is exactly what a campaign nobody responded to looks like.
+  test("a conversion role whose lead column holds the wrong kind of id", async () => {
+    // The join is the one column that can be wrong while every column is present and every value
+    // well-formed: a conversion role keyed on the contract's own primary key instead of the
+    // person's matches nobody. What comes out is a thousand matched accounts and no conversions,
+    // which is exactly what a campaign nobody responded to looks like.
     const fixture = await build("refuse-join-conversion", {
-      person: people(["member-1", phone(1), from_cut(-DAY)]),
-      conversion: conversions(["contract-9", from_cut(HOUR), 50, "LIVE", "WIRE"]),
+      lead: leads(["member-1", phone(1), from_cut(-DAY)]),
+      conversion: conversions(["contract-9", from_cut(HOUR), 50, "true", "false"]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3160,16 +2896,16 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(ExportJoinError);
     expect((error as ExportJoinError).role).toBe("conversion");
-    expect((error as ExportJoinError).column).toBe("member_id");
+    expect((error as ExportJoinError).column).toBe("lead");
     // Both sides quoted, because the shape of the two ids is what tells the reader which one is
     // the wrong kind.
     expect(error.message).toContain("contract-9");
     expect(error.message).toContain("member-1");
   });
 
-  test("a money role that references nobody in the person export either", async () => {
+  test("a money role that references nobody in the lead role either", async () => {
     const fixture = await build("refuse-join-revenue", {
-      person: people(["member-1", phone(1), from_cut(-DAY)]),
+      lead: leads(["member-1", phone(1), from_cut(-DAY)]),
       revenue: revenue(["wallet-7", from_cut(HOUR), 25]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -3178,21 +2914,22 @@ describe("the run refuses what it cannot measure", () => {
 
     expect(error).toBeInstanceOf(ExportJoinError);
     expect((error as ExportJoinError).role).toBe("revenue");
-    expect((error as ExportJoinError).path).toContain("revenue.csv");
+    expect((error as ExportJoinError).path).toBe("revenue");
   });
 
-  test("a role bound to the wrong export entirely, reported as the wrong file and not as a surface fault", async () => {
-    // An orders extract bound to the conversion role. It joins on the order's own key and keeps
-    // the order's lifecycle in the status column, so it fails the status check as well — and that
-    // check used to run first. Its remedy reads "Correct `valid_statuses`, or re-export from the
-    // query that produces them", which the reader can carry out in full and arrive exactly where
-    // they started: no status list makes this file describe people. The honest drift beside it,
-    // `refuse-status-drift` above, is a file that does join and still reports as a status fault.
+  test("a role pointed at the wrong rows entirely, reported as the wrong rows and not as a surface fault", async () => {
+    // An orders extract answering the conversion role. It joins on the order's own key and keeps
+    // the order's lifecycle in whatever it calls a status, so its `committed` predicate matches
+    // nothing either — and that check used to run first. Its remedy sends the reader to read the
+    // predicate against the values the column holds, which they can carry out in full and arrive
+    // exactly where they started: no predicate makes this file describe people. The honest drift
+    // beside it, `refuse-status-drift` above, is a role that does join and is still reported as
+    // the uncommitted rows it is.
     const fixture = await build("wrong-file-status", {
-      person: people(["member-1", phone(1), from_cut(-DAY)], ["member-2", phone(2), from_cut(-DAY)]),
+      lead: leads(["member-1", phone(1), from_cut(-DAY)], ["member-2", phone(2), from_cut(-DAY)]),
       conversion: conversions(
-        ["ORD-1", from_cut(HOUR), 50, "DISPATCHED", "WIRE"],
-        ["ORD-2", from_cut(2 * HOUR), 70, "DISPATCHED", "WIRE"],
+        ["ORD-1", from_cut(HOUR), 50, "false", "false"],
+        ["ORD-2", from_cut(2 * HOUR), 70, "false", "false"],
       ),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
@@ -3211,7 +2948,7 @@ describe("the run refuses what it cannot measure", () => {
     // the wrong place. `refuse-blank-revenue` above is the honest half: a revenue export that
     // joins, with the same empty column, still reported as the blank column it is.
     const fixture = await build("wrong-file-blank", {
-      person: people(["member-1", phone(1), from_cut(-DAY)]),
+      lead: leads(["member-1", phone(1), from_cut(-DAY)]),
       revenue: revenue(["WAL-1", "", 25], ["WAL-2", "", 40]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -3225,18 +2962,18 @@ describe("the run refuses what it cannot measure", () => {
 
   test("but not a role that references only some of them, which is a narrower export", async () => {
     // One shared identifier is enough, and this must never become a coverage threshold: a role
-    // exported over a shorter window than the person export legitimately references a fraction
+    // exported over a shorter window than the lead role legitimately references a fraction
     // of it, and a fraction is not a fault. Zero is the fault, because zero is the only overlap
     // two files describing the same people cannot produce.
     const fixture = await build("join-partial-is-legal", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       revenue: revenue(["one", from_cut(HOUR), 10], ["outside-this-export", from_cut(HOUR), 90]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
     const record = await one(fixture, cold("join-partial-is-legal", fixture.list("reached.txt")));
 
-    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
+    expect(record.pre_existing.revenue).toEqual({ leads: 1, value: 10 });
   });
 
   test("and a blank on both sides is not the shared identifier that satisfies it", async () => {
@@ -3247,7 +2984,7 @@ describe("the run refuses what it cannot measure", () => {
     // error exists to break. A consumer reaches it the ordinary way: a left join that matched
     // nothing writes a null person, and a null reads as blank in an export.
     const fixture = await build("refuse-join-blank", {
-      person: people(["", phone(1), from_cut(-DAY)]),
+      lead: leads(["", phone(1), from_cut(-DAY)]),
       revenue: revenue(["", from_cut(HOUR), 5], ["wallet-7", from_cut(HOUR), 90]),
       lists: { "reached.txt": lines(phone(1)) },
     });
@@ -3269,9 +3006,9 @@ describe("the run refuses what it cannot measure", () => {
     // blank id. Ninety here, on a cell that really collected ten — and the conversion index is
     // read by its own loop, so both lookups are asserted or one of them keeps the fault.
     const fixture = await build("join-blank-not-credited", {
-      person: people(["", phone(1), from_cut(-DAY)], ["real", phone(2), from_cut(-DAY)]),
+      lead: leads(["", phone(1), from_cut(-DAY)], ["real", phone(2), from_cut(-DAY)]),
       revenue: revenue(["", from_cut(HOUR), 90], ["real", from_cut(HOUR), 10]),
-      conversion: conversions(["", from_cut(HOUR), 70, "LIVE", "WIRE"], ["real", from_cut(HOUR), 20, "LIVE", "WIRE"]),
+      conversion: conversions(["", from_cut(HOUR), 70, "true", "false"], ["real", from_cut(HOUR), 20, "true", "false"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
@@ -3282,7 +3019,7 @@ describe("the run refuses what it cannot measure", () => {
     // rather than disappearing from the denominator.
     expect(record.audience.matched_accounts).toBe(2);
     expect(record.pre_existing.accounts).toBe(2);
-    expect(record.pre_existing.revenue).toEqual({ people: 1, value: 10 });
+    expect(record.pre_existing.revenue).toEqual({ leads: 1, value: 10 });
     expect(record.conversions).toEqual({ count: 1, value: 20, new_money: 20, recycled: 0 });
   });
 
@@ -3290,11 +3027,11 @@ describe("the run refuses what it cannot measure", () => {
    * Twenty listed phones, four of them arriving two hours after the cut, with `wallets` rows per
    * person and the same person id on every copy of a row.
    *
-   * One wallet is the honest export. Two is what the map's own warning about the money roles
-   * produces when it is followed into the wrong file: those roles reach a person through the wallet
-   * table, so an author writes the person export the same way and gets one row per person and
-   * wallet. It is not an artificial duplicate — nobody types the same id twice — and it is the only
-   * shape this arrives in.
+   * One wallet is the honest export. Two is what the money roles' own join produces when it is
+   * followed into the wrong file: those roles reach a person through the wallet table, so an
+   * author writes the lead role the same way and gets one row per person and wallet. It is not an
+   * artificial duplicate — nobody types the same id twice — and it is the only shape this
+   * arrives in.
    */
   async function fanned_out(name: string, wallets: number): Promise<Fixture> {
     const rows: Row[] = [];
@@ -3305,14 +3042,14 @@ describe("the run refuses what it cannot measure", () => {
       }
     }
     return build(name, {
-      person: people(...rows),
+      lead: leads(...rows),
       revenue: revenue(...[1, 2, 3, 4].map((n): Row => [`member-${n}`, from_cut(3 * HOUR), 25])),
-      conversion: conversions(["member-1", from_cut(4 * HOUR), 70, "LIVE", "WIRE"]),
+      conversion: conversions(["member-1", from_cut(4 * HOUR), 70, "true", "false"]),
       lists: { "reached.txt": lines(...Array.from({ length: 20 }, (_, i) => phone(i + 1))) },
     });
   }
 
-  test("a person export fanned out onto one row per wallet, which multiplies every figure it publishes", async () => {
+  test("a lead role fanned out onto one row per wallet, which multiplies every figure it publishes", async () => {
     // Measured rather than refused, this file reads 40 matched accounts, 8 arrivals, 200 collected
     // and two commitments worth 140 — every figure in the test below doubled, and an acquisition
     // rate of 40% against a truth of 20%. None of it is distinguishable downstream from a base
@@ -3325,7 +3062,7 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(ExportRepeatedPersonError);
     expect((error as ExportRepeatedPersonError).rows).toBe(40);
     expect((error as ExportRepeatedPersonError).identifiers).toBe(20);
-    expect((error as ExportRepeatedPersonError).path).toContain("person.csv");
+    expect((error as ExportRepeatedPersonError).path).toBe("lead");
     // Both quantities in the sentence: 40 against 20 says the file is doubled without anybody
     // opening it, where either number alone says nothing.
     expect(error.message).toContain("40 rows");
@@ -3342,7 +3079,7 @@ describe("the run refuses what it cannot measure", () => {
     // spellings, the guard falls silent, and that person's money is collected twice — the same
     // inflation as the case above, reached through an off-by-one nothing else here can see.
     const fixture = await build("refuse-fan-out-with-blank", {
-      person: people(
+      lead: leads(
         ["", phone(1), from_cut(-DAY)],
         ["member-1", phone(2), from_cut(2 * HOUR)],
         ["member-1", phone(2), from_cut(2 * HOUR)],
@@ -3376,7 +3113,7 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.conversions.value).toBe(70);
   });
 
-  test("and a person export carrying no id on several rows, which is a left join that missed", async () => {
+  test("and a lead role carrying no id on several rows, which is a left join that missed", async () => {
     // The carve-out the count above depends on. A left join that matched nothing writes a null
     // person, and a null reads as blank in an export, so three blanks among five rows is an
     // ordinary file — one this engine already measures by crediting those rows nothing. Counted as
@@ -3384,7 +3121,7 @@ describe("the run refuses what it cannot measure", () => {
     // every export with a handful of unresolved rows becomes unmeasurable, which is the opposite
     // failure and by far the commoner one.
     const fixture = await build("fan-out-blank-ids-are-legal", {
-      person: people(
+      lead: leads(
         ["", phone(1), from_cut(-DAY)],
         ["member-1", phone(2), from_cut(2 * HOUR)],
         ["", phone(3), from_cut(-DAY)],
@@ -3392,7 +3129,7 @@ describe("the run refuses what it cannot measure", () => {
         ["", phone(5), from_cut(-DAY)],
       ),
       revenue: revenue(["member-1", from_cut(3 * HOUR), 40]),
-      conversion: conversions(["member-2", from_cut(3 * HOUR), 60, "LIVE", "WIRE"]),
+      conversion: conversions(["member-2", from_cut(3 * HOUR), 60, "true", "false"]),
       lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4), phone(5)) },
     });
 
@@ -3412,7 +3149,7 @@ describe("the run refuses what it cannot measure", () => {
     // clear the unreadable-share ceiling and yield four keys, so `EmptyCellError` passes them too.
     // Nothing else in the pass ever compares the keys against the index they are matched in.
     const fixture = await build("refuse-own-base-unmatched", {
-      person: people(["member-1", phone(90), from_cut(-30 * DAY)]),
+      lead: leads(["member-1", phone(90), from_cut(-30 * DAY)]),
       revenue: revenue(["member-1", from_cut(HOUR), 10]),
       lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
     });
@@ -3422,9 +3159,10 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(UnmatchedBaseError);
     expect((error as UnmatchedBaseError).cell).toBe("refuse-own-base-unmatched");
     expect((error as UnmatchedBaseError).listed).toBe(4);
-    // The export path, because the fix is a comparison between two files and the reader needs the
-    // second one named. And the audience word, because the refusal turns on the declaration.
-    expect(error.message).toContain("person.csv");
+    // The role the fix compares against, because the fix is a comparison between two sets of rows
+    // and the reader needs the second one named. And the audience word, because the refusal turns
+    // on the declaration.
+    expect(error.message).toContain("the lead role");
     expect(error.message).toContain("own_base");
   });
 
@@ -3434,7 +3172,7 @@ describe("the run refuses what it cannot measure", () => {
     // to get: people were reached and none of them arrived. Refusing it would refuse every honest
     // cold reading, a real sub-one-percent baseline included.
     const fixture = await build("cold-unmatched-is-a-finding", {
-      person: people(["member-1", phone(90), from_cut(-30 * DAY)]),
+      lead: leads(["member-1", phone(90), from_cut(-30 * DAY)]),
       revenue: revenue(["member-1", from_cut(HOUR), 10]),
       lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
     });
@@ -3446,20 +3184,73 @@ describe("the run refuses what it cannot measure", () => {
     expect(record.conversions.count).toBe(0);
   });
 
-  test("and an own_base cell against a person export with no rows, which is not the cell's fault", async () => {
-    // The mis-blame the guard above opens if it only counts matches. A person export of a header and
-    // nothing else builds an empty index, so no cell of any audience can match — and a refusal
-    // naming the cell sends the reader to check their column and their list file while the fault is
-    // in the other file entirely. An export with no rows is deliberately left publishing here, so
-    // this reads through as zeros; what must not happen is an error blaming the declaration.
+  test("a cell whose list is drawn from a market the base is not in", async () => {
+    // Every number in this list is valid, so no per-number check sees anything: the unreadable
+    // rate is zero, the keys are well-formed, and the join simply misses. The case above is what
+    // that looks like when it is honest — a cold send that nobody on it had ever registered — so
+    // the record cannot tell the two apart and only the distribution can.
+    //
+    // It is also the shape a column that is not a phone column arrives in, which is the fault this
+    // heuristic was added for: `20260805103000`-style timestamps fed to a keyer parsed
+    // *successfully* into thousands of Egyptian numbers, so an unparseable-rate ceiling counting
+    // failures never fired on any of them.
+    const fixture = await build("refuse-market-divergence", {
+      lead: leads(...keyed_accounts(READABLE)),
+      lists: { "elsewhere.txt": lines(foreign(1), foreign(2), foreign(3), foreign(4)) },
+    });
+
+    const error = await caught(one(fixture, cold("refuse-market-divergence", fixture.list("elsewhere.txt"))));
+
+    expect(error).toBeInstanceOf(MarketDivergenceError);
+    expect((error as MarketDivergenceError).cell).toBe("refuse-market-divergence");
+    // Disjoint, so the distance is the whole of it: nothing in this list shares a market with the
+    // base, which is the only reading a total-variation distance of one can have.
+    expect((error as MarketDivergenceError).divergence).toBe(1);
+  });
+
+  test("but the same list measures where the declaration says the campaign ran there", async () => {
+    // A heuristic that cannot be overridden refuses the honest case: a campaign genuinely run in a
+    // market the base is not mostly written in. The ceiling is a number on the call, and at one it
+    // admits a list sharing nothing with the base — which is exactly the reading, zeros and all,
+    // that the refusal above exists to stop anybody publishing by accident.
+    const fixture = await build("market-divergence-declared", {
+      lead: leads(...keyed_accounts(READABLE)),
+      lists: { "elsewhere.txt": lines(foreign(1), foreign(2), foreign(3), foreign(4)) },
+    });
+
+    const [record] = await measure({
+      source: files(fixture.dir),
+      cells: [cold("market-divergence-declared", fixture.list("elsewhere.txt"))],
+      max_market_divergence: 1,
+      now: NOW,
+    });
+
+    expect(record?.audience).toEqual({ listed: 4, matched_phones: 0, matched_accounts: 0 });
+  });
+
+  test("and an own_base cell against a lead role with no rows, which is not the cell's fault", async () => {
+    // The mis-blame the guard above opens if it only counts matches. A lead role of a header and
+    // nothing else builds no index, so no cell of any audience can match — and a refusal naming
+    // the cell sends the reader to check their column and their list file while the fault is in
+    // the other file entirely.
+    //
+    // What the empty base itself gets is a refusal rather than a reading, which reverses an
+    // earlier judgment and is worth stating: measuring against nobody produces zeros on every
+    // count by construction, and a row of zeros is indistinguishable from a campaign that reached
+    // nobody — the exact reading this engine exists to refuse. So the run stops, and it stops
+    // naming the role that is empty rather than the cell that is fine.
     const fixture = await build("own-base-no-base-to-match", {
-      person: people(),
+      lead: leads(),
       lists: { "reached.txt": lines(phone(1), phone(2), phone(3), phone(4)) },
     });
 
-    const record = await one(fixture, base("own-base-no-base-to-match", fixture.list("reached.txt")));
+    const error = await caught(one(fixture, base("own-base-no-base-to-match", fixture.list("reached.txt"))));
 
-    expect(record.audience).toEqual({ listed: 4, matched_phones: 0, matched_accounts: 0 });
+    expect(error).toBeInstanceOf(SourceError);
+    expect((error as SourceError).role).toBe("lead");
+    expect(error.message).toContain("answered a header and no rows");
+    expect(error).not.toBeInstanceOf(UnmatchedBaseError);
+    expect(error.message).not.toContain("own-base-no-base-to-match");
   });
 
   test("a total that overflows the range, on every one of the seven money fields", async () => {
@@ -3467,7 +3258,7 @@ describe("the run refuses what it cannot measure", () => {
     // it, and the sum is what leaves the range. `round_half_even` then hands a non-finite value
     // straight back — deliberately, it is exact integer arithmetic and has nothing to say about
     // infinity — and `JSON.stringify` writes it as `null`. That is the same `null` the record uses
-    // for a role the map never bound, so the overflow publishes as a legitimate absence.
+    // for a role the source never answered, so the overflow publishes as a legitimate absence.
     //
     // Seven cases because there are seven call sites and a guard missing at one of them is a field
     // that still publishes the null. The two split fields are not folded into `conversions.value`:
@@ -3478,60 +3269,60 @@ describe("the run refuses what it cannot measure", () => {
       {
         field: "acquired.revenue.value",
         parts: {
-          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          lead: leads(["late", phone(1), from_cut(2 * HOUR)]),
           revenue: revenue(["late", from_cut(3 * HOUR), BIG], ["late", from_cut(4 * HOUR), BIG]),
         },
       },
       {
         field: "pre_existing.revenue.value",
         parts: {
-          person: people(["old", phone(1), from_cut(-DAY)]),
+          lead: leads(["old", phone(1), from_cut(-DAY)]),
           revenue: revenue(["old", from_cut(3 * HOUR), BIG], ["old", from_cut(4 * HOUR), BIG]),
         },
       },
       {
         field: "acquired.churn.value",
         parts: {
-          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          lead: leads(["late", phone(1), from_cut(2 * HOUR)]),
           churn: churn(["late", from_cut(3 * HOUR), BIG], ["late", from_cut(4 * HOUR), BIG]),
         },
       },
       {
         field: "pre_existing.churn.value",
         parts: {
-          person: people(["old", phone(1), from_cut(-DAY)]),
+          lead: leads(["old", phone(1), from_cut(-DAY)]),
           churn: churn(["old", from_cut(3 * HOUR), BIG], ["old", from_cut(4 * HOUR), BIG]),
         },
       },
       {
         field: "conversions.value",
         parts: {
-          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          lead: leads(["late", phone(1), from_cut(2 * HOUR)]),
           conversion: conversions(
-            ["late", from_cut(3 * HOUR), BIG, "LIVE", "WIRE"],
-            ["late", from_cut(4 * HOUR), BIG, "LIVE", "WIRE"],
+            ["late", from_cut(3 * HOUR), BIG, "true", "false"],
+            ["late", from_cut(4 * HOUR), BIG, "true", "false"],
           ),
         },
       },
       {
         field: "conversions.new_money",
         parts: {
-          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          lead: leads(["late", phone(1), from_cut(2 * HOUR)]),
           conversion: conversions(
-            ["late", from_cut(3 * HOUR), BIG, "LIVE", "WIRE"],
-            ["late", from_cut(4 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
-            ["late", from_cut(5 * HOUR), BIG, "LIVE", "WIRE"],
+            ["late", from_cut(3 * HOUR), BIG, "true", "false"],
+            ["late", from_cut(4 * HOUR), `-${BIG}`, "true", "true"],
+            ["late", from_cut(5 * HOUR), BIG, "true", "false"],
           ),
         },
       },
       {
         field: "conversions.recycled",
         parts: {
-          person: people(["late", phone(1), from_cut(2 * HOUR)]),
+          lead: leads(["late", phone(1), from_cut(2 * HOUR)]),
           conversion: conversions(
-            ["late", from_cut(3 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
-            ["late", from_cut(4 * HOUR), BIG, "LIVE", "WIRE"],
-            ["late", from_cut(5 * HOUR), `-${BIG}`, "LIVE", "CREDIT"],
+            ["late", from_cut(3 * HOUR), `-${BIG}`, "true", "true"],
+            ["late", from_cut(4 * HOUR), BIG, "true", "false"],
+            ["late", from_cut(5 * HOUR), `-${BIG}`, "true", "true"],
           ),
         },
       },
@@ -3552,26 +3343,26 @@ describe("the run refuses what it cannot measure", () => {
     }
   });
 
-  test("an export whose header names one column twice, where the map binds that name", async () => {
-    // The duplicate defeats the check that exists to catch a bad binding: `handset` is in the
-    // header, so the binding passes, and only the second column of that name survives into each
-    // row — so the run reads whatever the second column holds and joins on nothing. Measured
+  test("a role whose header names one column twice, where the run reads that name", async () => {
+    // The duplicate defeats the check that exists to catch a wrong column: `phone` is in the
+    // header, so the presence check passes, and only the second column of that name survives into
+    // each row — so the run reads whatever the second column holds and joins on nothing. Measured
     // against the reader as it stood at `08a5548`, before this guard existed, the same shape
     // published `matched_phones: 0` and `conversions.value: 0` for two people who both held
     // accounts and both converted — against a truth of 2 and 100, and no word of it anywhere.
     const fixture = await build("refuse-duplicate-column", {
-      person: csv(["member_id", "handset", "enrolled_at", "handset"], [["one", phone(1), from_cut(HOUR), "480999999"]]),
+      lead: csv(["id", "phone", "created_at", "phone"], [["one", phone(1), from_cut(HOUR), phone(999)]]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
     const error = await caught(one(fixture, cold("refuse-duplicate-column", fixture.list("reached.txt"))));
 
     expect(error).toBeInstanceOf(DuplicateColumnError);
-    expect((error as DuplicateColumnError).column).toBe("handset");
+    expect((error as DuplicateColumnError).column).toBe("phone");
     // What reads the column, because the sentence used to assert a binding whatever had triggered
-    // it — and on a file where nothing bound the repeated name, that sent the reader into the map
-    // to hunt for one that was never there.
-    expect(error.message).toContain("The person role binds it");
+    // it — and on a file where nothing read the repeated name, that sent the reader hunting for a
+    // declaration that was never there.
+    expect(error.message).toContain("The lead role reads it");
   });
 
   test("but not a duplicate among the columns nothing reads", async () => {
@@ -3580,14 +3371,14 @@ describe("the run refuses what it cannot measure", () => {
     // really carries. Refusing it stopped a correct reading over a sentence about a binding that
     // did not exist.
     const fixture = await build("duplicate-unread-column", {
-      person: csv(
-        ["member_id", "handset", "enrolled_at", "note", "note"],
+      lead: csv(
+        ["id", "phone", "created_at", "note", "note"],
         [
           ["one", phone(1), from_cut(-DAY), "called", "left a message"],
           ["two", phone(2), from_cut(-DAY), "called", "no answer"],
         ],
       ),
-      conversion: conversions(["one", from_cut(HOUR), 50, "LIVE", "WIRE"]),
+      conversion: conversions(["one", from_cut(HOUR), 50, "true", "false"]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
@@ -3602,7 +3393,7 @@ describe("the run refuses what it cannot measure", () => {
     // note column the spreadsheet duplicated on its way out. The cell names `phone`, so `note` is
     // read by nothing here either.
     const fixture = await build("duplicate-unread-list-column", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       lists: {
         "roster.csv": csv(
           ["phone", "note", "note"],
@@ -3627,7 +3418,7 @@ describe("the run refuses what it cannot measure", () => {
     // never reached; read from it, the cell is measured against strangers and publishes them
     // under its own name.
     const fixture = await build("refuse-duplicate-list-column", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       lists: { "roster.csv": csv(["handset", "note", "handset"], [[phone(1), "called", phone(2)]]) },
     });
 
@@ -3644,7 +3435,7 @@ describe("the run refuses what it cannot measure", () => {
     // The filter decides which rows are this cell at all. Matched against the second column of
     // the name, it selects a different slice of the same file and reports that slice here.
     const fixture = await build("refuse-duplicate-filter-column", {
-      person: people(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)], ["two", phone(2), from_cut(-DAY)]),
       lists: {
         "roster.csv": csv(
           ["handset", "cell", "cell"],
@@ -3678,7 +3469,7 @@ describe("the run refuses what it cannot measure", () => {
     // the name is read at all, and a check that only looked at what the declaration spelled out
     // would pass this file straight through.
     const fixture = await build("refuse-duplicate-default-column", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       lists: { "roster.csv": csv(["handset", "handset"], [[phone(1), phone(2)]]) },
     });
 
@@ -3694,7 +3485,7 @@ describe("the run refuses what it cannot measure", () => {
     // single field. No parse error, no short row: the list simply ends at the stray quote and
     // the identifiers below it are never measured.
     const fixture = await build("refuse-unterminated-quote", {
-      person: people(
+      lead: leads(
         ["one", phone(1), from_cut(HOUR)],
         ["two", phone(2), from_cut(HOUR)],
         ["three", phone(3), from_cut(HOUR)],
@@ -3713,7 +3504,7 @@ describe("the run refuses what it cannot measure", () => {
 
   test("a text list declared with a column it has nowhere to hold", async () => {
     const fixture = await build("refuse-txt-column", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3730,7 +3521,7 @@ describe("the run refuses what it cannot measure", () => {
     // asked for. That is not a wider number with the same meaning; it is a different population
     // wearing this cell's label.
     const fixture = await build("refuse-txt-filter", {
-      person: people(["one", phone(1), from_cut(HOUR)]),
+      lead: leads(["one", phone(1), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3745,11 +3536,11 @@ describe("the run refuses what it cannot measure", () => {
   test("an identifier column the list does not carry, rather than a fall back to the first one", async () => {
     // The declaration says `handset` and the export was written with `msisdn`. Falling back to the
     // first column reads the ticket numbers as phones: none of them parses, the cell matches
-    // nobody, and what surfaces is either a dialling-plan complaint or an empty audience — both of
-    // which point the reader at the phone format instead of at the one word that is wrong in the
-    // declaration.
+    // nobody, and what surfaces is either an unreadable-share complaint or an empty audience —
+    // both of which point the reader at the numbers instead of at the one word that is wrong in
+    // the declaration.
     const fixture = await build("refuse-missing-identifier-column", {
-      person: people(["a1", phone(1), from_cut(HOUR)]),
+      lead: leads(["a1", phone(1), from_cut(HOUR)]),
       lists: { "roster.csv": `ticket,msisdn\nT-1,${phone(1)}\n` },
     });
 
@@ -3768,7 +3559,7 @@ describe("the run refuses what it cannot measure", () => {
     // matches no row, the cell comes out empty, and the error names the phone column — sending
     // the reader to correct the one binding that was correct.
     const fixture = await build("refuse-filter-column", {
-      person: people(["a1", phone(1), from_cut(HOUR)]),
+      lead: leads(["a1", phone(1), from_cut(HOUR)]),
       lists: { "roster.csv": `handset,cell\n${phone(1)},alpha\n` },
     });
 
@@ -3792,7 +3583,7 @@ describe("the run refuses what it cannot measure", () => {
     // comparison against the cut excludes everything, and the record reads as a campaign that
     // reached people and produced nothing.
     const fixture = await build("refuse-future-cut", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3807,7 +3598,7 @@ describe("the run refuses what it cannot measure", () => {
 
   test("but not a cut at the exact moment of the reading, which is a zero-hour window", async () => {
     const fixture = await build("cut-at-the-reading", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3829,7 +3620,7 @@ describe("the run refuses what it cannot measure", () => {
     // floors `window_hours` to -1, every comparison against the cut excludes every account and
     // every event, and what gets published is a full row of zeros under a negative window.
     const fixture = await build("refuse-future-cut-by-one", {
-      person: people(["one", phone(1), from_cut(-DAY)]),
+      lead: leads(["one", phone(1), from_cut(-DAY)]),
       lists: { "reached.txt": lines(phone(1)) },
     });
 
@@ -3849,7 +3640,7 @@ describe("the run refuses what it cannot measure", () => {
     // control drifts towards the treated arm and whatever difference survives is an artefact of
     // how the lists were drawn, published with a p-value on top.
     const fixture = await build("refuse-control-overlap", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
+      lead: leads(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
       lists: {
         "treated.txt": lines(phone(1), phone(2)),
         "untouched.txt": lines(phone(1), phone(2), phone(3)),
@@ -3858,8 +3649,7 @@ describe("the run refuses what it cannot measure", () => {
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
@@ -3879,7 +3669,7 @@ describe("the run refuses what it cannot measure", () => {
     // this one through with `publishable: true` on a comparison of a group against itself minus
     // one member.
     const fixture = await build("refuse-control-overlap-one", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
+      lead: leads(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)], ["c", phone(3), from_cut(-DAY)]),
       lists: {
         "treated.txt": lines(phone(1), phone(2)),
         "untouched.txt": lines(phone(2), phone(3)),
@@ -3888,8 +3678,7 @@ describe("the run refuses what it cannot measure", () => {
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("treated", fixture.list("treated.txt")), cold("untouched", fixture.list("untouched.txt"))],
         controls: [{ treated: "treated", control: "untouched", outcome: "acquired.accounts" }],
         now: NOW,
@@ -3902,14 +3691,13 @@ describe("the run refuses what it cannot measure", () => {
 
   test("a pair naming one cell on both sides, which compares a group against itself", async () => {
     const fixture = await build("refuse-control-self", {
-      person: people(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)]),
+      lead: leads(["a", phone(1), from_cut(HOUR)], ["b", phone(2), from_cut(HOUR)]),
       lists: { "reached.txt": lines(phone(1), phone(2)) },
     });
 
     const error = await caught(
       measure({
-        map: fixture.map,
-        exports: fixture.exports,
+        source: files(fixture.dir),
         cells: [cold("solo", fixture.list("reached.txt"))],
         controls: [{ treated: "solo", control: "solo", outcome: "acquired.accounts" }],
         now: NOW,

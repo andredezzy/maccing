@@ -1,30 +1,10 @@
-/** How this market writes a phone number. Read from the map; never guessed, never defaulted.
- *
- *  Nothing here names a country. The shape of a number is a property of the market being measured
- *  and belongs in the map beside the tables it describes, not in the engine that reads it. */
-export type PhoneFormat = {
-  /** Digits dialled before the national number, without `+`. Dropped when present, and — once
-   *  declared — required on any string too long to be a bare national number: a longer string
-   *  carrying some other prefix belongs to another market and gets no key at all. */
-  country_code: string;
-  /** Length of the area/region code. A market whose area codes vary in length cannot be
-   *  expressed this way, and `make_key` rejects it by name rather than producing wrong keys. */
-  area_digits: number;
-  /** Count of trailing digits that stay stable across dialling-plan reforms. */
-  subscriber_digits: number;
-  /** Share of unparseable numbers above which a run aborts. A misconfigured dialling plan
-   *  and a genuinely unmatched list both produce zero, and only one of them is a result. */
-  max_unparseable_rate: number;
-  /** A phone answering for this many accounts is a switchboard, not a person, and is dropped
-   *  from the index — otherwise every list containing it inherits all of them. */
-  shared_account_ceiling: number;
-  /** Optional allowlist of valid area codes. Length alone accepts codes that do not exist. */
-  area_codes?: readonly string[];
-};
+import { type CountryCode, parsePhoneNumberFromString } from "libphonenumber-js";
 
-/** A declared number format this engine cannot honour. Thrown once, when the format is read,
- *  rather than per row — a format that cannot produce correct keys produces wrong ones silently,
- *  and a run that reports zero matches looks exactly like a list nobody on it ever registered. */
+/**
+ * A number this engine could not place in any market. Thrown once, when a corpus is read, rather
+ * than per row: a corpus that cannot be keyed produces zero matches, and zero matches looks
+ * exactly like a list nobody on it ever registered.
+ */
 export class PhoneFormatError extends Error {
   constructor(message: string) {
     super(message);
@@ -33,111 +13,141 @@ export class PhoneFormatError extends Error {
 }
 
 /**
- * Build the function that turns whatever a column holds into a join key, or into null when the
- * value cannot be one.
+ * Digits of a national number that survive a dialling-plan reform, per market.
  *
- * The problem this solves: the same person's number is written several ways across the sources
- * being joined. One source keeps the international prefix, another drops it. One keeps a leading
- * trunk zero, another strips it. A dialling-plan reform inserted a digit at the front of the
- * subscriber part, so older records are one digit shorter than newer ones for the same line. Joining
- * on the raw text loses most of the overlap; joining on the last N digits alone collides across
- * regions. The key is therefore the region code followed by the trailing digits that survived the
- * reform, which is stable under all four variations at once.
+ * Only markets that have moved their numbering need an entry; everywhere else the national number
+ * is already stable and is used whole. This is the one piece of local knowledge the engine keeps,
+ * and it is kept because no library carries it: `libphonenumber` knows what a number *is today*,
+ * not which of two spellings across a reform belong to one person.
  *
- * The format is validated here, once, and the closure that comes back does no validation at all —
- * it runs once per row of a whole export, and a check that can be hoisted out of that loop should
- * be.
+ * Brazil inserted a `9` at the head of every mobile subscriber part between 2013 and 2016, so the
+ * same line is ten digits in older records and eleven in newer ones. Dropping that digit collapses
+ * both to one key. Measured on this project's user base: 16 accounts pairs reconcile this way, and
+ * a key without it splits 9 of them.
  */
-export function make_key(fmt: PhoneFormat): (raw: unknown) => string | null {
-  if (fmt.area_digits < 1 || fmt.subscriber_digits < 1) {
-    const field = fmt.area_digits < 1 ? "area_digits" : "subscriber_digits";
-    throw new PhoneFormatError(
-      `${field} must be at least 1, got ${field === "area_digits" ? fmt.area_digits : fmt.subscriber_digits}. ` +
-        "A market whose area codes vary in length cannot be expressed with fixed lengths at all: " +
-        "no pair of numbers describes it, so this needs a second key strategy rather than " +
-        "different numbers here.",
-    );
-  }
-  if (!/^[0-9]*$/.test(fmt.country_code)) {
-    throw new PhoneFormatError(
-      `country_code must be digits only, got ${JSON.stringify(fmt.country_code)}. ` +
-        "Leave it empty for a market with no dialled prefix; do not include a plus sign.",
-    );
-  }
-  if (!(fmt.max_unparseable_rate >= 0 && fmt.max_unparseable_rate <= 1)) {
-    throw new PhoneFormatError(
-      `max_unparseable_rate must be between 0 and 1 inclusive, got ${fmt.max_unparseable_rate}. ` +
-        "It is the share of a file's distinct identifiers allowed to be unreadable, not a count " +
-        "of them, and identifiers that are simply absent are not counted on either side of it.",
-    );
-  }
-  if (!(fmt.shared_account_ceiling >= 2)) {
-    throw new PhoneFormatError(
-      `shared_account_ceiling must be at least 2, got ${fmt.shared_account_ceiling}. ` +
-        "A ceiling of 1 evicts every phone holding a single account, which is every ordinary " +
-        "person, and 0 evicts everything. Either way the index comes out empty and every cell " +
-        "reports zero matches — the exact silent zero this design exists to prevent.",
-    );
-  }
+const STABLE: Partial<Record<CountryCode, (national: string) => string>> = {
+  BR: (national) =>
+    national.length === 11 && national[2] === "9" ? national.slice(0, 2) + national.slice(3) : national,
+};
 
-  const prefix = fmt.country_code;
-  const area = fmt.area_digits;
-  const subscriber = fmt.subscriber_digits;
-  const national = area + subscriber;
-  const allowed = fmt.area_codes ? new Set(fmt.area_codes) : null;
+/** A market, as ISO 3166-1 alpha-2. Re-exported so a caller can name one without importing
+ *  `libphonenumber-js` itself — the library is this module's business, not its consumers'. */
+export type { CountryCode };
 
-  return (raw: unknown): string | null => {
-    // Falsy is empty, including a numeric zero and a boolean: those are a column read that
-    // found nothing, not a number, and they must not survive into a key.
-    //
-    // The leading zeros stripped here are the ones in front of a country code: an international
-    // access code dialled as zeros, or a trunk zero on a number written without a country code.
-    // The trunk zero that sits *after* a country code cannot be removed at this point, because
-    // the country-code test that follows reads from the head of the string; it is stripped below,
-    // once the prefix is off.
-    const digits = (raw ? String(raw) : "").replace(/\D/g, "").replace(/^0+/, "");
+/** A number placed in its market, with the market kept so two markets can never collide. */
+export type Placed = { country: CountryCode; key: string };
 
-    // Length decides whether a leading run of digits is the country code or part of the national
-    // number, and it has to, because in a market whose area codes are as long as its country code
-    // the two are the same digits. A bare national number is `national` digits, or `national + 1`
-    // where a dialling-plan reform added one at the head of the subscriber part; both are read as
-    // national, prefix or no prefix, and that is the case the whole design rests on since most
-    // sources drop the country code entirely.
-    //
-    // Anything longer therefore carries a country code, and it must be the declared one. The
-    // tempting loose branch — fall through and read the tail of any string as a national number —
-    // is what mints a local-looking key for a foreign subscriber and collides it with a real
-    // person, so a longer string that does not start with the declared prefix is not ours and
-    // gets nothing. Do not restore the fall-through: it does not recover a single extra local
-    // number, it only manufactures wrong ones.
-    //
-    // What length cannot settle is a foreign number that happens to be a national length here.
-    // No arrangement of these three numbers separates it, because by every property the format
-    // declares it is a number of this market. `area_codes` is the lever for that residue: the
-    // foreign number carries a region code this plan never issued, and the check below drops it.
-    let national_digits: string | null = null;
-    if (digits.length === national || digits.length === national + 1) {
-      national_digits = digits;
-    } else if (prefix !== "" && digits.startsWith(prefix)) {
-      // A national number never begins with the trunk digit, so a zero left at the head after the
-      // country code came off is dialling notation rather than a digit of the number.
-      const rest = digits.slice(prefix.length).replace(/^0+/, "");
-      if (rest.length === national || rest.length === national + 1) {
-        national_digits = rest;
-      }
+/**
+ * Place one raw value in a market and derive its join key, or answer null when it is not a number.
+ *
+ * `fallback` is the market a bare national number belongs to — one carrying no calling code, which
+ * is most of what a database holds. It is inferred from the corpus rather than declared; see
+ * `dominant_market`.
+ *
+ * The market is part of the key. That is what makes a multi-country campaign measurable at all:
+ * `PT:912345678` and `BR:912345678` are different people, and a key that dropped the market would
+ * merge them. The previous key could only avoid that by refusing every foreign number outright.
+ */
+export function place(raw: unknown, fallback: CountryCode): Placed | null {
+  const digits = (raw ? String(raw) : "").replace(/\D/g, "");
+  if (digits.length < 8) {
+    return null;
+  }
+  // A string long enough to carry a calling code is offered as international; anything shorter is
+  // read as national in the fallback market. Deciding this by length rather than by a leading
+  // prefix is what keeps a real area code from being eaten: Brazil's area 55 serves Santa Maria,
+  // and stripping `55` on sight mutilates every number in that region. Length decides, and the
+  // per-market lengths that make length decidable are the library's metadata.
+  const offered = digits.length >= 12 ? `+${digits}` : digits;
+  const parsed = parsePhoneNumberFromString(offered, fallback);
+  if (parsed?.isValid() !== true || parsed.country === undefined) {
+    return null;
+  }
+  const shape = STABLE[parsed.country];
+  const national = parsed.nationalNumber;
+  return { country: parsed.country, key: `${parsed.country}:${shape ? shape(national) : national}` };
+}
+
+/**
+ * The market a corpus is mostly written in, used as the fallback for its bare national numbers.
+ *
+ * Inferred rather than declared, because a campaign may carry leads from any country and naming
+ * one of them would be naming the wrong thing. Only numbers that place themselves — those long
+ * enough to carry a calling code — get a vote, so the answer cannot be circular.
+ *
+ * A corpus with no clear majority is refused instead of guessed. Picking the larger of two similar
+ * shares would key half a base under the wrong plan, and a wrong plan does not fail loudly: it
+ * produces keys that match nothing, which reads as an audience that never registered.
+ */
+export function dominant_market(raws: Iterable<unknown>): CountryCode {
+  const votes = new Map<CountryCode, number>();
+  let counted = 0;
+  for (const raw of raws) {
+    const digits = (raw ? String(raw) : "").replace(/\D/g, "");
+    if (digits.length < 12) {
+      continue;
     }
+    const parsed = parsePhoneNumberFromString(`+${digits}`);
+    if (parsed?.isValid() !== true || parsed.country === undefined) {
+      continue;
+    }
+    votes.set(parsed.country, (votes.get(parsed.country) ?? 0) + 1);
+    counted += 1;
+  }
+  if (counted === 0) {
+    throw new PhoneFormatError(
+      "no identifier in this corpus carries a calling code, so the market its bare national " +
+        "numbers belong to cannot be inferred. Export at least some numbers in international form.",
+    );
+  }
+  const ranked = [...votes].sort((a, b) => b[1] - a[1]);
+  const [top, share] = ranked[0] as [CountryCode, number];
+  const runner = ranked[1]?.[1] ?? 0;
+  if (share < counted * 0.5 || share < runner * 2) {
+    const summary = ranked
+      .slice(0, 3)
+      .map(([country, n]) => `${country} ${((n / counted) * 100).toFixed(1)}%`)
+      .join(", ");
+    throw new PhoneFormatError(
+      `no market dominates this corpus (${summary} of ${counted} numbers carrying a calling code), ` +
+        "so the market for its bare national numbers cannot be inferred. A bare number keyed under " +
+        "the wrong plan matches nothing, which reads as an audience that never registered.",
+    );
+  }
+  return top;
+}
 
-    if (national_digits === null) {
-      return null;
-    }
-    // The extra digit, when present, sits at the head of the subscriber part, so the region is
-    // read from the head and the subscriber from the tail and the middle is discarded.
-    const key = national_digits.slice(0, area) + national_digits.slice(-subscriber);
-    // Length alone accepts region codes that were never issued. Where the map lists the real
-    // ones, a number of the right shape carrying an impossible region is still not a number.
-    if (allowed !== null && !allowed.has(key.slice(0, area))) {
-      return null;
-    }
-    return key;
-  };
+/**
+ * How far a corpus's markets diverge from the base they are measured against, as a share.
+ *
+ * The guard this serves is not a parse check and cannot be one. A column that is not a phone
+ * column still parses: feeding `20260805103000`-style timestamps to a keyer produced thousands of
+ * valid-looking Egyptian numbers, every one of them a parse *success*, so an unparseable-rate
+ * ceiling never fires. What gives it away is the company it keeps — a base that is 98% one market
+ * receiving a list that is 60% another is not a list of that base.
+ *
+ * A heuristic, and documented as one: it catches a wholesale mislabelled column, not a handful of
+ * wrong rows.
+ */
+export function market_divergence(list: Iterable<CountryCode>, base: ReadonlyMap<CountryCode, number>): number {
+  const base_total = [...base.values()].reduce((sum, n) => sum + n, 0);
+  if (base_total === 0) {
+    return 0;
+  }
+  const seen = new Map<CountryCode, number>();
+  let total = 0;
+  for (const country of list) {
+    seen.set(country, (seen.get(country) ?? 0) + 1);
+    total += 1;
+  }
+  if (total === 0) {
+    return 0;
+  }
+  // Total variation distance between the two distributions: half the summed absolute difference
+  // of their shares, so 0 is identical and 1 is disjoint.
+  let distance = 0;
+  for (const country of new Set([...seen.keys(), ...base.keys()])) {
+    distance += Math.abs((seen.get(country) ?? 0) / total - (base.get(country) ?? 0) / base_total);
+  }
+  return distance / 2;
 }
