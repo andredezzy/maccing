@@ -86,6 +86,8 @@ Execution happens in platform-specific skills.
 
 `meta/` groups by **platform** (same level as `google-ads/`, `tiktok-ads/`). Ownership is the level below it.
 
+A campaign folder's date is the **dispatch** date, so a campaign that has not gone out yet is just `<slug>/`.
+
 ### 2. Self-Improving Skill
 
 After every session: add new benchmarks, update techniques, note new patterns, record what worked/failed.

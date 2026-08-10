@@ -167,7 +167,7 @@ Every operation leaves a dated file. Reads included.
 # <short title>
 
 Date: YYYY-MM-DD
-Host: <which database, verified how>
+Database: <the identity the server reported back, and how you verified it>
 Type: read | write | both
 
 ## Prior cases read
@@ -213,7 +213,7 @@ Two habits close it:
 - **Ask who you are as a separate command**, and look at the response. An identity check folded into the same invocation as the work can be answered by the previous context. A standalone check that you then read cannot.
 - **Pin the target explicitly.** Name the host, database, project, or account in the command itself rather than inheriting whichever default is currently active. Defaults are ambient state; ambient state changes without telling you. An explicit target is wrong loudly instead of quietly.
 
-Then record in the case file which host you verified and how you verified it. "Production" is not a host. The identity the server reported back is.
+Then record in the case file which host you verified and how you verified it. "Production" is not a host. The identity the server reported back is. `Database: Production (Neon PostgreSQL)` names an environment and a vendor, and it would read the same against every database that provider holds for you; `Database: app_prod on ep-quiet-meadow-12345, from SELECT current_database(), inet_server_addr()` names the one you were connected to and says what was asked to establish it.
 
 ## Exports are deleted when done
 

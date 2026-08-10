@@ -44,7 +44,9 @@ When used in a project repo, growth state lives in a git-tracked `.maccing/growt
   google-ads/<account>/ · tiktok-ads/<account>/     platform → account
   meta/
     profiles/<profile>/<bm>/                        assets WE own (antidetect profile → BM → channel)
-    vendors/<vendor>/<channel>/<YYYY-MM-DD>-<slug>/ third parties who dispatch FOR us
+    vendors/<vendor>/<channel>/<YYYY-MM-DD>-<slug>/ third parties who dispatch FOR us; the date is the DISPATCH date
 ```
 
 "Vendor" means an outsourced dispatcher, not an ad platform.
+
+A campaign folder gets its date when the send happens, so one that has not been dispatched yet is just `<slug>/`.
