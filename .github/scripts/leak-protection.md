@@ -23,7 +23,7 @@ bun .github/scripts/leak-protection.ts --terms ~/elsewhere/leak-protections.json
 LEAK_PROTECTIONS=~/a.json:~/b.json bun .github/scripts/leak-protection.ts          # colon-separated
 ```
 
-The three git hooks resolve the dictionary as above, so the ordinary case needs no environment at all — one `git config leak.protections <path>` per clone and nothing else.
+The checker resolves that ladder itself, so every way of running it gets the same dictionary and the ordinary case needs no environment at all — one `git config leak.protections <path>` per clone and nothing else. It used to live in the three hooks as three copies of shell, which is three chances to drift, and which meant a plain `bun .github/scripts/leak-protection.ts` from a configured clone loaded no vocabulary at all.
 
 **The dictionary and the CI secret are one thing in two places, so keep them in step:**
 
@@ -262,7 +262,7 @@ What it *does* cover, and what nothing else here does: every tracked file's cont
 git config core.hooksPath hooks
 ```
 
-That points git at the tracked `hooks/` directory, so every hook travels with the repository and one setting installs all of them. **No shell profile export is needed.** Each hook falls back to `$repository/leak-protections.json` — an untracked file outside every checkout — when `LEAK_PROTECTIONS` is unset, so the hooks can be switched on before anything is exported and a machine that forgot the export gets a working gate rather than exit 2 on every commit. Set `LEAK_PROTECTIONS` only to point somewhere else. When neither exists the hooks still refuse, naming the missing dictionary by label and not by path.
+That points git at the tracked `hooks/` directory, so every hook travels with the repository and one setting installs all of them. **No shell profile export is needed.** Each hook is now one `exec` line: the checker resolves the dictionary itself, through `LEAK_PROTECTIONS`, then `git config leak.protections`, then `leak-protections.json` or `.maccing/leak-protections.json` in the repository — untracked files outside every checkout. So the hooks can be switched on before anything is exported, and a machine that forgot the export gets a working gate rather than exit 2 on every commit. Set `LEAK_PROTECTIONS` only to point somewhere else for one run. When none of the three answers the hooks still refuse, naming the missing dictionary by label and not by path.
 
 The push hook walks the whole object graph rather than the range being pushed, because the question a public repository has to answer is what the remote holds afterwards, not what this push adds; that costs about three and a half seconds. `git push --no-verify` skips it, which is worth knowing precisely because a force-push during a history rewrite is when somebody is most tempted to — the release runbook's clearance is the check with no off switch, and this is the net for the ordinary push nobody thought about.
 

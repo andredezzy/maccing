@@ -14,45 +14,18 @@
 # tracked directory so both hooks travel with the repository. Setting core.hooksPath installs every
 # hook in the directory at once; there is nothing to do per hook.
 #
-# The vocabulary is committed nowhere. CI reads it from the LEAK_PROTECTIONS_JSON secret; here
-# it is an untracked, git-ignored file in the repository being guarded — `leak-protections.json`
-# at the root, or `.maccing/leak-protections.json`, whichever exists. Set LEAK_PROTECTIONS to
-# name a different one:
-#
-#   export LEAK_PROTECTIONS="$HOME/somewhere/else/leak-protections.json"
-#
-# Naming a default rather than demanding the export is what stops this hook refusing every
-# `git commit` on a machine where nobody remembered to set it.
+# The vocabulary is committed nowhere, and the checker is what finds it: LEAK_PROTECTIONS, then
+# `git config leak.protections`, then `leak-protections.json` or `.maccing/leak-protections.json`
+# in this repository. That ladder used to be copied into each of the three hooks, which is three
+# chances to drift and left every other way of running the checker with no dictionary at all.
+# `bun .github/scripts/leak-protection.ts --help` prints it.
 #
 # --require-overlay is what makes the hook worth installing. Without it a checkout with no overlay
 # would match nothing, exit 0, and let every message through while looking exactly like a clean
-# gate. With it, an unset LEAK_PROTECTIONS fails the commit and says what is missing.
+# gate. With it, a clone where none of the three sources answers fails the commit and says what is
+# missing.
 
 set -eu
 
 repository=$(git rev-parse --show-toplevel)
-# Three ways to find the dictionary, in order. LEAK_PROTECTIONS wins. Then `leak.protections`
-# out of git config, which `git config leak.protections <path>` writes to .git/config — never
-# committed, never pushed, and excluded from every scan this checker runs. That is the one
-# place a path may be recorded when the dictionary lives somewhere the tracked tree must not
-# name: the private repository's own directory name is a term the dictionary declares, so
-# writing it into a tracked hook would publish, in this public repository, the exact string
-# the hook exists to keep out of it.
-#
-# Then two conventional homes for a repository that simply keeps its own: the root, and
-# `.maccing/`. When none of the three answers, nothing is set, the checker loads no
-# vocabulary, and --require-overlay turns that into a refusal that says so rather than a pass
-# over an unchecked tree.
-if [ -z "${LEAK_PROTECTIONS:-}" ]; then
-  LEAK_PROTECTIONS=$(git config --get leak.protections || true)
-fi
-if [ -z "${LEAK_PROTECTIONS:-}" ]; then
-  for candidate in "$repository/leak-protections.json" "$repository/.maccing/leak-protections.json"; do
-    if [ -f "$candidate" ]; then
-      LEAK_PROTECTIONS=$candidate
-      break
-    fi
-  done
-fi
-export LEAK_PROTECTIONS
 exec bun "$repository/.github/scripts/leak-protection.ts" --message "$1" --require-overlay

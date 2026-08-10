@@ -7,11 +7,12 @@
  * mechanism and nothing else: a curated list of one sector's words identifies that sector
  * precisely, so the list is itself the disclosure whether or not a client is ever named — and an
  * empty template naming the *kinds* of thing worth hiding says more than it looks like it does.
- * Every dictionary arrives at run time, through `--terms <path>` or the colon-separated
- * `LEAK_PROTECTIONS` variable, and on CI that means the `LEAK_PROTECTIONS_JSON` secret and nowhere
- * else. An
- * overlay carries its own exemptions too, for the same reason: an exemption has to quote the term
- * it exempts, so a public allowlist would republish a subset of the very vocabulary being withheld.
+ * Every dictionary arrives at run time, either on `--terms <path>` or through one of the three
+ * sources `resolve_overlays` walks — the colon-separated `LEAK_PROTECTIONS` variable, `git config
+ * leak.protections`, or a conventional path in the repository being gated — and on CI that means
+ * the `LEAK_PROTECTIONS_JSON` secret and nowhere else. An overlay carries its own exemptions too,
+ * for the same reason: an exemption has to quote the term it exempts, so a public allowlist would
+ * republish a subset of the very vocabulary being withheld.
  *
  * This file lives under `.github/scripts/`, beside the workflow that runs it, because it is CI
  * apparatus rather than something the published package ships.
@@ -250,9 +251,11 @@ type Options = {
   path: string | null;
   message: string | null;
   terms: string[];
-  /** How many leading entries of `terms` arrived in `LEAK_PROTECTIONS` rather than on `--terms`.
-   *  Only the labels read it, and only so a refusal names the thing the operator actually set. */
-  terms_from_environment: number;
+  /** How many leading entries of `terms` this run resolved for itself rather than being handed on
+   *  `--terms`, and the knob that supplied them. Only the labels read either, and only so a
+   *  refusal names the thing the operator actually set. See `resolve_overlays`. */
+  terms_resolved: number;
+  terms_source: string;
   require_overlay: boolean;
   quiet: boolean;
   help: boolean;
@@ -593,7 +596,7 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
  * run. Treating either as an absent overlay is how a rotated secret containing `{}` passes a gate
  * that was asked to require one.
  */
-function load_dictionaries(paths: string[], from_environment = 0): Loaded {
+function load_dictionaries(paths: string[], resolved = 0, source = OVERLAY_ENVIRONMENT): Loaded {
   const categories: TermCategory[] = [];
   const exemptions: Exemption[] = [];
   const rejected: string[] = [];
@@ -604,7 +607,7 @@ function load_dictionaries(paths: string[], from_environment = 0): Loaded {
   const first_entry = new Map<string, Exemption[]>();
   // The path goes no further than this function and the `quoted` key. Everything a message, a
   // header or an audit is allowed to say about a dictionary is the label; see `dictionary_labels`.
-  const labels = dictionary_labels(paths, from_environment);
+  const labels = dictionary_labels(paths, resolved, source);
   for (const [index, path] of paths.entries()) {
     const label = labels[index] as string;
     if (!existsSync(path)) {
@@ -615,7 +618,7 @@ function load_dictionaries(paths: string[], from_environment = 0): Loaded {
       throw new Refusal(
         `Dictionary not found: ${label}.\n` +
           "  Nothing was read, so this run would have matched a narrower vocabulary than it was asked to. " +
-          "Check the path given to --terms (or LEAK_PROTECTIONS) exists and is readable from here.",
+          "Check that the source named above points at a file that exists and is readable from here.",
       );
     }
     const parsed = parse_dictionary(path, label);
@@ -1968,8 +1971,26 @@ function repo_root(cwd: string): string {
  * repository still fails — on the caller's own directory, which is the one they can act on.
  */
 function gated_root(): string {
-  const found = git_text(["rev-parse", "--show-toplevel"], import.meta.dir);
-  return found.ok ? canonical_root(found.stdout.trim()) : repo_root(process.cwd());
+  // `repo_root` is asked again rather than trusted to have been asked: it is the throwing spelling,
+  // and its message names the caller's own directory, which is the one they can act on.
+  return optional_root() ?? repo_root(process.cwd());
+}
+
+/**
+ * The same question, for the callers that only want an answer if there is one.
+ *
+ * Resolving the overlay runs before any scope is chosen, and a run with `--self-test` or `--path`
+ * is entitled to happen outside a repository entirely. So this one answers `null` rather than
+ * refusing, and the refusal stays where a scope actually needs a root.
+ */
+function optional_root(): string | null {
+  for (const cwd of [import.meta.dir, process.cwd()]) {
+    const found = git_text(["rev-parse", "--show-toplevel"], cwd);
+    if (found.ok) {
+      return canonical_root(found.stdout.trim());
+    }
+  }
+  return null;
 }
 
 /** Tracked files only, so build output, caches and anything ignored never reach the scanner. */
@@ -3042,22 +3063,84 @@ function shorten(path: string): string {
  * There is no dictionary shipped beside this file to name. This repository holds the mechanism and
  * nothing else — no terms, no categories, not even the empty schema that used to sit here, because
  * a schema documenting which kinds of thing are worth hiding is itself a description of the work
- * being hidden. Every dictionary this run sees arrived through `--terms` or `LEAK_PROTECTIONS`, which on
- * CI means the secret and nowhere else.
+ * being hidden. Every dictionary this run sees was named by the operator, through `--terms` or one
+ * of the three sources `resolve_overlays` walks, which on CI means the secret and nowhere else.
  *
  * The source is named because the ordinal alone sent operators to the wrong knob. A path arriving
  * in `LEAK_PROTECTIONS` was labelled "given to --terms", so a refusal over an unreadable overlay
  * told them to check an argument they had not passed — and on CI, where the variable is set once
  * in a workflow and the flag is never used, that is every refusal the gate can raise.
  *
- * `from_environment` is how many leading paths came from the variable; `--terms` appends after
- * them, so the split is a prefix and the ordinal still counts across both.
+ * `resolved` is how many leading paths this run found for itself and `source` says which of the
+ * three it read them from; `--terms` appends after them, so the split is a prefix and the ordinal
+ * still counts across both.
  */
-function dictionary_labels(paths: string[], from_environment = 0): string[] {
+function dictionary_labels(paths: string[], resolved = 0, source = OVERLAY_ENVIRONMENT): string[] {
   return paths.map((_, at) => {
-    const source = at < from_environment ? "from LEAK_PROTECTIONS" : "given to --terms";
-    return paths.length === 1 ? `the overlay ${source}` : `overlay ${at + 1} of ${paths.length} ${source}`;
+    const from = at < resolved ? source : OVERLAY_FLAG;
+    return paths.length === 1 ? `the overlay ${from}` : `overlay ${at + 1} of ${paths.length} ${from}`;
   });
+}
+
+/** The four things a label may say about where a dictionary came from. Each one names a knob the
+ *  operator can go and turn, and none of them names a path: see `dictionary_labels`. */
+const OVERLAY_ENVIRONMENT = "from LEAK_PROTECTIONS";
+const OVERLAY_CONFIG = "from git config leak.protections";
+const OVERLAY_DEFAULT = "found at its default path in this repository";
+const OVERLAY_FLAG = "given to --terms";
+
+/** Where a dictionary is looked for when nobody passed `--terms`, in the order they are asked.
+ *  Both sit outside every checkout's tracked set: the root file is git-ignored, and `.maccing/`
+ *  is where a clone that keeps its own dictionary beside itself puts it. */
+const OVERLAY_DEFAULT_NAMES = ["leak-protections.json", ".maccing/leak-protections.json"];
+
+/**
+ * The dictionary an operator did not pass on the command line.
+ *
+ * Three ways to find it, in order, and the ladder lives here rather than in each hook because
+ * three shell copies of it is three chances to drift — and because a hook was the only caller that
+ * had it, so an ordinary `bun .github/scripts/leak-protection.ts` from a configured clone loaded
+ * no vocabulary at all and, without `--require-overlay`, said PASSED over an unscanned tree.
+ *
+ * `LEAK_PROTECTIONS` wins, colon-separated like a PATH, because it is the one CI sets. Then
+ * `leak.protections` out of git config, which `git config leak.protections <path>` writes to
+ * `.git/config` — never committed, never pushed, and excluded from every scan this checker runs.
+ * That is the one place a path may be recorded, because the private repository's own directory
+ * name is a term the dictionary declares: writing it into a tracked file would publish, in this
+ * public repository, the exact string the gate exists to keep out of it.
+ *
+ * Then the two conventional homes, so a clone that simply keeps its own dictionary needs no
+ * setting at all. When none of the three answers, nothing is loaded and `--require-overlay` turns
+ * that into a refusal that says so, rather than a pass over an unchecked tree.
+ *
+ * Both inputs are arguments rather than reads, so the resolution is testable without an
+ * environment or a working directory; `main` supplies the real ones.
+ */
+function resolve_overlays(exported: string, root: string | null): { paths: string[]; source: string } {
+  // The two colon-separated sources, in the order they are asked. Reading config needs a
+  // repository, and a `--self-test` or `--path` run is entitled to happen outside one.
+  const spellings: Array<[string, string]> = [[exported, OVERLAY_ENVIRONMENT]];
+  if (root !== null) {
+    const recorded = git_text(["config", "--get", "leak.protections"], root);
+    spellings.push([recorded.ok ? recorded.stdout.trim() : "", OVERLAY_CONFIG]);
+  }
+  for (const [value, source] of spellings) {
+    const paths = value.split(":").filter((entry) => entry.length > 0);
+    if (paths.length > 0) {
+      return { paths, source };
+    }
+  }
+  if (root === null) {
+    return { paths: [], source: OVERLAY_FLAG };
+  }
+  for (const name of OVERLAY_DEFAULT_NAMES) {
+    const candidate = join(root, name);
+    if (existsSync(candidate)) {
+      return { paths: [candidate], source: OVERLAY_DEFAULT };
+    }
+  }
+  // Nothing was resolved, so every path the run ends up with is one the operator typed.
+  return { paths: [], source: OVERLAY_FLAG };
 }
 
 /** How many dictionaries backed a run, for the header and again for the verdict line. */
@@ -3091,7 +3174,7 @@ function overlay_shortfall(dictionaries: Dictionary[], matchers: Matcher[]): str
     `${opening}\n` +
     "This repository ships no dictionary of its own, so this run would have checked no name, no " +
     "figure and no domain word, printed PASSED and exited 0 — the same exit code as a complete run. " +
-    "Merge an overlay that declares terms with --terms <path> or LEAK_PROTECTIONS."
+    "Merge an overlay that declares terms with --terms <path>, LEAK_PROTECTIONS or git config leak.protections."
   );
 }
 
@@ -3199,8 +3282,8 @@ function overlay_inside_scan(root: string, files: string[], dictionary: string, 
     `Overlay dictionary inside the tree being scanned: ${label}.\n` +
     "A dictionary's own terms are suppressed inside it, so an overlay here would put its vocabulary in " +
     "the single file the gate cannot report it in, and the run would pass over the disclosure. Keep the " +
-    "overlay outside this repository, or somewhere this run does not read, and merge it by path with " +
-    "--terms or LEAK_PROTECTIONS."
+    "overlay outside this repository, or somewhere this run does not read, and name it with --terms, " +
+    "LEAK_PROTECTIONS or git config leak.protections."
   );
 }
 
@@ -3305,8 +3388,9 @@ function report_dictionaries(loaded: Dictionary[], quiet: boolean): void {
   }
   if (loaded.reduce((sum, entry) => sum + entry.terms, 0) === 0) {
     console.log(
-      "  No vocabulary loaded (--terms <path>, LEAK_PROTECTIONS). This repository ships no dictionary of its " +
-        "own, so this run can find nothing. Pass --require-overlay wherever this runs as a gate.",
+      "  No vocabulary loaded (--terms <path>, LEAK_PROTECTIONS, git config leak.protections). This " +
+        "repository ships no dictionary of its own, so this run can find nothing. Pass " +
+        "--require-overlay wherever this runs as a gate.",
     );
   }
 }
@@ -5631,6 +5715,88 @@ function self_test(categories: TermCategory[]): number {
     if (alone[0] !== "the overlay from LEAK_PROTECTIONS") {
       failures.push(`a single overlay from the variable was labelled "${alone[0]}" rather than naming the variable`);
     }
+
+    // The ladder a run walks when nobody passed `--terms`. It used to be three copies of shell,
+    // one per hook, so a plain `bun .github/scripts/leak-protection.ts` from a configured clone
+    // loaded no vocabulary at all and — without `--require-overlay` — printed PASSED over a tree
+    // it had checked against nothing. Global and system config are taken out of the picture for
+    // the length of this block: an operator with `leak.protections` set globally would otherwise
+    // have their own path answer the questions below.
+    const outer_config = { global: process.env.GIT_CONFIG_GLOBAL, system: process.env.GIT_CONFIG_SYSTEM };
+    process.env.GIT_CONFIG_GLOBAL = join(directory, "no-such-global-config");
+    process.env.GIT_CONFIG_SYSTEM = join(directory, "no-such-system-config");
+    const ladder = join(directory, "ladder");
+    mkdirSync(join(ladder, ".maccing"), { recursive: true });
+    Bun.spawnSync(["git", "init", "--quiet", "-b", "main", ladder], { stdout: "pipe", stderr: "pipe" });
+    const configured = join(directory, `${unquotable}-configured.json`);
+    writeFileSync(configured, '{"categories":[]}');
+    Bun.spawnSync(["git", "config", "leak.protections", configured], { cwd: ladder, stdout: "pipe", stderr: "pipe" });
+    const exported_wins = resolve_overlays(overlays.join(":"), ladder);
+    if (exported_wins.source !== OVERLAY_ENVIRONMENT || exported_wins.paths.length !== overlays.length) {
+      failures.push(
+        `LEAK_PROTECTIONS did not win over a recorded leak.protections: ${exported_wins.paths.length} paths ` +
+          `labelled "${exported_wins.source}", so the knob CI sets can be overruled by a clone's own config`,
+      );
+    }
+    const from_config = resolve_overlays("", ladder);
+    if (from_config.source !== OVERLAY_CONFIG || from_config.paths[0] !== configured) {
+      failures.push(
+        `a dictionary recorded in git config resolved to ${from_config.paths.length} paths labelled ` +
+          `"${from_config.source}", so the one place a private path may be written is not read`,
+      );
+    }
+    if ((dictionary_labels(from_config.paths, 1, from_config.source)[0] ?? "").includes(unquotable)) {
+      failures.push("the label for a dictionary read out of git config echoed the path, and that path is the secret");
+    }
+    const two_configured = `${configured}:${join(directory, "second.json")}`;
+    Bun.spawnSync(["git", "config", "leak.protections", two_configured], {
+      cwd: ladder,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (resolve_overlays("", ladder).paths.length !== 2) {
+      failures.push(
+        "a colon-separated leak.protections resolved to one path, so config and LEAK_PROTECTIONS are not " +
+          "read the same way and a two-dictionary clone silently loads one",
+      );
+    }
+    Bun.spawnSync(["git", "config", "--unset", "leak.protections"], { cwd: ladder, stdout: "pipe", stderr: "pipe" });
+    const nested = join(ladder, ".maccing", "leak-protections.json");
+    writeFileSync(nested, '{"categories":[]}');
+    const from_nested = resolve_overlays("", ladder);
+    if (from_nested.source !== OVERLAY_DEFAULT || from_nested.paths[0] !== nested) {
+      failures.push(
+        `a dictionary kept at its conventional path under .maccing/ resolved to "${from_nested.paths[0]}" ` +
+          `labelled "${from_nested.source}", so a clone that keeps its own needs a setting after all`,
+      );
+    }
+    const rooted = join(ladder, "leak-protections.json");
+    writeFileSync(rooted, '{"categories":[]}');
+    if (resolve_overlays("", ladder).paths[0] !== rooted) {
+      failures.push("the two conventional paths are not asked in the documented order, root first");
+    }
+    // Outside a repository there is no config to read and no root to look under, and `--self-test`
+    // and `--path` are both entitled to run there. Resolution answers empty rather than refusing,
+    // and calls every path the run ends up with what it will be: an argument the operator typed.
+    const unrooted = resolve_overlays("", null);
+    if (unrooted.paths.length !== 0 || unrooted.source !== OVERLAY_FLAG) {
+      failures.push(
+        `resolving an overlay outside any repository produced ${unrooted.paths.length} paths labelled ` +
+          `"${unrooted.source}" rather than nothing, so a --path or --self-test run there is not neutral`,
+      );
+    }
+    // Assigning `undefined` to a variable that was unset writes the string "undefined", which is a
+    // path, so the two cases are restored differently.
+    for (const [name, before] of [
+      ["GIT_CONFIG_GLOBAL", outer_config.global],
+      ["GIT_CONFIG_SYSTEM", outer_config.system],
+    ] as Array<[string, string | undefined]>) {
+      if (before === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = before;
+      }
+    }
     const both = load_dictionaries(overlays);
     if (both.dictionaries[0]?.terms !== 2 || both.dictionaries[1]?.terms !== 1) {
       failures.push(
@@ -6317,7 +6483,11 @@ function self_test(categories: TermCategory[]): number {
         "never its path, at either volume, so an overlay under a directory named after the engagement " +
         "publishes nothing, and two merged overlays are told apart by the position of their own --terms " +
         "argument — in the header, in --require-overlay's list and in every refusal — with the second " +
-        "pooling its category into the first rather than replacing it; an overlay inside the tree about " +
+        "pooling its category into the first rather than replacing it; an overlay nobody passed on the " +
+        "command line is looked for in LEAK_PROTECTIONS, then git config leak.protections, then the two " +
+        "conventional paths in that order, each labelled by the knob it came from and none of them by " +
+        "its path, with nothing resolved and nothing refused outside a repository; " +
+        "an overlay inside the tree about " +
         "to be scanned is refused however the two are spelt, through a symlink in either direction — one " +
         "standing outside the tree and naming a dictionary in it, whether or not that target exists yet, " +
         "and one standing inside the tree and naming a dictionary outside — or with a filename opening on " +
@@ -6438,23 +6608,28 @@ function print_usage(): void {
       "",
       "  LEAK_PROTECTIONS            colon-separated overlay dictionaries, merged before --terms",
       "",
+      "With no --terms and no LEAK_PROTECTIONS, the dictionary is looked for in git config as",
+      "leak.protections, then at leak-protections.json and .maccing/leak-protections.json in the",
+      "repository. One `git config leak.protections <path>` per clone needs nothing else set.",
+      "",
       "A run without --history has not looked at the history. Only --history clears a force-push.",
     ].join("\n"),
   );
 }
 
 function parse_arguments(argv: string[]): Options {
-  const from_environment = (process.env.LEAK_PROTECTIONS ?? "").split(":").filter((entry) => entry.length > 0);
+  const resolved = resolve_overlays(process.env.LEAK_PROTECTIONS ?? "", optional_root());
   const options: Options = {
     mode: "tracked",
     history: false,
     history_range: null,
     path: null,
     message: null,
-    // Read once and counted, because `--terms` appends to the same list below and the labels have
-    // to tell an operator which knob to go and look at. Colon-separated, like a PATH.
-    terms: from_environment.slice(),
-    terms_from_environment: from_environment.length,
+    // Resolved once and counted, because `--terms` appends to the same list below and the labels
+    // have to tell an operator which knob to go and look at. See `resolve_overlays`.
+    terms: resolved.paths.slice(),
+    terms_resolved: resolved.paths.length,
+    terms_source: resolved.source,
     require_overlay: false,
     quiet: false,
     help: false,
@@ -6528,7 +6703,7 @@ function main(): number {
     // resolved, and a spelling that disagrees defeats `overlay_inside_scan`. `labels` is all any
     // message may say about them; see `dictionary_labels`.
     const paths = options.terms.map((path) => canonical(path));
-    const labels = dictionary_labels(paths, options.terms_from_environment);
+    const labels = dictionary_labels(paths, options.terms_resolved, options.terms_source);
     // Everything inside this fence has the dictionary open, so an error escaping it carries the
     // dictionary unless this file wrote the message. The outer catch prints to stderr, which
     // `--quiet` does not reach and must not — an operator whose overlay is broken has to be told
@@ -6536,7 +6711,7 @@ function main(): number {
     let loaded: Loaded;
     let matchers: Matcher[];
     try {
-      loaded = load_dictionaries(paths, options.terms_from_environment);
+      loaded = load_dictionaries(paths, options.terms_resolved, options.terms_source);
       matchers = build_matchers(loaded.categories);
     } catch (failure) {
       throw failure instanceof Refusal ? failure : withheld(failure, labels);
