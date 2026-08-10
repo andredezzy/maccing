@@ -81,6 +81,8 @@ Every operation leaves a dated file. Reads included.
 
 **Write it as you go.** Open the file before the first statement, with the context and what you expect to find. Update it after each phase. A case file written entirely at the end records your conclusion, not your path, and the path is where the mistakes are visible.
 
+**It keeps the language it was worked in.** A case file is an artifact of the work rather than prose about it: it records what was asked, the exact statement, and what came back, on a date, by whoever was there. Translating one afterwards produces a paraphrase of evidence made by someone who was not present, and nobody can check a directory of that. So a case worked in Portuguese stays Portuguese, and this is not untidiness to be cleaned up later. Prose *about* the area — a reference someone maintains, a heading — is written in the project's documentation language.
+
 **Shape:**
 
 ```markdown
