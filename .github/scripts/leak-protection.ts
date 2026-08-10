@@ -250,6 +250,9 @@ type Options = {
   path: string | null;
   message: string | null;
   terms: string[];
+  /** How many leading entries of `terms` arrived in `LEAK_PROTECTIONS` rather than on `--terms`.
+   *  Only the labels read it, and only so a refusal names the thing the operator actually set. */
+  terms_from_environment: number;
   require_overlay: boolean;
   quiet: boolean;
   help: boolean;
@@ -590,7 +593,7 @@ const SELF_TEST_CATEGORIES: TermCategory[] = [
  * run. Treating either as an absent overlay is how a rotated secret containing `{}` passes a gate
  * that was asked to require one.
  */
-function load_dictionaries(paths: string[]): Loaded {
+function load_dictionaries(paths: string[], from_environment = 0): Loaded {
   const categories: TermCategory[] = [];
   const exemptions: Exemption[] = [];
   const rejected: string[] = [];
@@ -601,7 +604,7 @@ function load_dictionaries(paths: string[]): Loaded {
   const first_entry = new Map<string, Exemption[]>();
   // The path goes no further than this function and the `quoted` key. Everything a message, a
   // header or an audit is allowed to say about a dictionary is the label; see `dictionary_labels`.
-  const labels = dictionary_labels(paths);
+  const labels = dictionary_labels(paths, from_environment);
   for (const [index, path] of paths.entries()) {
     const label = labels[index] as string;
     if (!existsSync(path)) {
@@ -3041,11 +3044,20 @@ function shorten(path: string): string {
  * a schema documenting which kinds of thing are worth hiding is itself a description of the work
  * being hidden. Every dictionary this run sees arrived through `--terms` or `LEAK_PROTECTIONS`, which on
  * CI means the secret and nowhere else.
+ *
+ * The source is named because the ordinal alone sent operators to the wrong knob. A path arriving
+ * in `LEAK_PROTECTIONS` was labelled "given to --terms", so a refusal over an unreadable overlay
+ * told them to check an argument they had not passed — and on CI, where the variable is set once
+ * in a workflow and the flag is never used, that is every refusal the gate can raise.
+ *
+ * `from_environment` is how many leading paths came from the variable; `--terms` appends after
+ * them, so the split is a prefix and the ordinal still counts across both.
  */
-function dictionary_labels(paths: string[]): string[] {
-  return paths.map((_, at) =>
-    paths.length === 1 ? "the overlay given to --terms" : `overlay ${at + 1} of ${paths.length} given to --terms`,
-  );
+function dictionary_labels(paths: string[], from_environment = 0): string[] {
+  return paths.map((_, at) => {
+    const source = at < from_environment ? "from LEAK_PROTECTIONS" : "given to --terms";
+    return paths.length === 1 ? `the overlay ${source}` : `overlay ${at + 1} of ${paths.length} ${source}`;
+  });
 }
 
 /** How many dictionaries backed a run, for the header and again for the verdict line. */
@@ -4455,7 +4467,7 @@ function self_test(categories: TermCategory[]): number {
       ]),
     );
 
-    const result = scan_files(walk_path(directory), matchers, directory, new Map(), null, null);
+    const result = scan_files(walk_path(directory, []), matchers, directory, new Map(), null, null);
     const found = new Map<string, Set<string>>();
     for (const hit of result.hits) {
       const seen = found.get(hit.source) ?? new Set<string>();
@@ -5596,6 +5608,29 @@ function self_test(categories: TermCategory[]): number {
           "--terms arguments in the order they were given",
       );
     }
+    // Which knob to go and turn. A path from `LEAK_PROTECTIONS` was labelled "given to --terms",
+    // so every refusal over an unreadable overlay sent the operator to an argument they had not
+    // passed — and on CI, where the variable is set once in the workflow and the flag never
+    // appears, that was every refusal the gate can raise. The ordinal counts across both sources
+    // because `--terms` appends after the variable's paths, so the split is a prefix.
+    const from_variable = dictionary_labels(overlays, overlays.length);
+    if (from_variable.some((label) => label.includes("--terms"))) {
+      failures.push(
+        `overlays supplied by LEAK_PROTECTIONS were labelled "${from_variable[0]}", naming a flag nobody ` +
+          "passed, so a refusal points at the wrong place to look",
+      );
+    }
+    const mixed = dictionary_labels(overlays, 1);
+    if (!mixed[0]?.includes("from LEAK_PROTECTIONS") || !mixed[1]?.includes("given to --terms")) {
+      failures.push(
+        `one overlay from the variable and one from the flag were labelled "${mixed[0]}" and "${mixed[1]}", ` +
+          "so the two sources cannot be told apart when both are in play",
+      );
+    }
+    const alone = dictionary_labels([overlays[0] as string], 1);
+    if (alone[0] !== "the overlay from LEAK_PROTECTIONS") {
+      failures.push(`a single overlay from the variable was labelled "${alone[0]}" rather than naming the variable`);
+    }
     const both = load_dictionaries(overlays);
     if (both.dictionaries[0]?.terms !== 2 || both.dictionaries[1]?.terms !== 1) {
       failures.push(
@@ -6409,13 +6444,17 @@ function print_usage(): void {
 }
 
 function parse_arguments(argv: string[]): Options {
+  const from_environment = (process.env.LEAK_PROTECTIONS ?? "").split(":").filter((entry) => entry.length > 0);
   const options: Options = {
     mode: "tracked",
     history: false,
     history_range: null,
     path: null,
     message: null,
-    terms: (process.env.LEAK_PROTECTIONS ?? "").split(":").filter((entry) => entry.length > 0),
+    // Read once and counted, because `--terms` appends to the same list below and the labels have
+    // to tell an operator which knob to go and look at. Colon-separated, like a PATH.
+    terms: from_environment.slice(),
+    terms_from_environment: from_environment.length,
     require_overlay: false,
     quiet: false,
     help: false,
@@ -6489,7 +6528,7 @@ function main(): number {
     // resolved, and a spelling that disagrees defeats `overlay_inside_scan`. `labels` is all any
     // message may say about them; see `dictionary_labels`.
     const paths = options.terms.map((path) => canonical(path));
-    const labels = dictionary_labels(paths);
+    const labels = dictionary_labels(paths, options.terms_from_environment);
     // Everything inside this fence has the dictionary open, so an error escaping it carries the
     // dictionary unless this file wrote the message. The outer catch prints to stderr, which
     // `--quiet` does not reach and must not — an operator whose overlay is broken has to be told
@@ -6497,7 +6536,7 @@ function main(): number {
     let loaded: Loaded;
     let matchers: Matcher[];
     try {
-      loaded = load_dictionaries(paths);
+      loaded = load_dictionaries(paths, options.terms_from_environment);
       matchers = build_matchers(loaded.categories);
     } catch (failure) {
       throw failure instanceof Refusal ? failure : withheld(failure, labels);
