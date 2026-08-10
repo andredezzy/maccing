@@ -29,9 +29,29 @@ Store for each contact:
 - IP address or session ID
 - Category of messages consented to
 
-**Retention under LGPD (Brazil):** Retain consent records (timestamp, source, exact consent language, IP) for a minimum of **5 years** after consent revocation. Retain opt-out records for a minimum of 5 years. ANPD active enforcement since 2025 — audits request these records as evidence of compliance.
+**Retention of consent records (Brazil):** Article 8 §2 of the LGPD puts the burden of proof on the
+controller — "cabe ao controlador o ônus da prova de que o consentimento foi obtido em conformidade
+com o disposto nesta Lei" — so the records above are evidence you have to be able to produce.
+**The LGPD sets no retention period for them.** Art. 16 requires elimination after processing ends
+while allowing retention to comply with a legal or regulatory obligation; art. 37 requires a record
+of processing operations without saying how long to keep it; art. 40 lets the ANPD set retention
+times for records, and for this it has not. Five years, two years, any number: that is somebody's
+risk judgement, not a statutory floor. Set one with your own counsel, write down the reasoning, and
+apply it consistently — a documented, defensible policy is what art. 6 X (responsabilização e
+prestação de contas) actually asks for. ([Lei 13.709/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm))
 
-**Brazil LGPD channel separation:** Email/SMS consent does **not** cover WhatsApp. ANPD guidance requires separate, explicit WhatsApp-specific consent naming the channel, the business, and message type. Re-obtaining consent from email-only lists before WhatsApp outreach is mandatory for LGPD compliance.
+**Does an email or SMS consent cover WhatsApp?** Treat it as not covering it, on two grounds of very
+different strength. The platform ground is verifiable and decisive: Messaging Policy §1 requires
+"opt-in permission from the recipient confirming that they wish to receive subsequent messages or
+calls from you" — permission for WhatsApp, whatever another channel's list says. The statutory
+ground is narrower than it is usually stated: the LGPD has no channel rule, but art. 8 §4 voids
+generic authorisations and requires consent to refer to determined purposes, and art. 6 I forbids
+later processing incompatible with the purposes the person was told about. A consent collected for
+email marketing does not obviously survive that test when reused for WhatsApp outreach.
+**Claims that "ANPD guidance requires separate WhatsApp-specific consent" are unverified** — no
+published ANPD resolution or orientation guide says so. Re-consenting an email-only list before
+WhatsApp outreach is the conservative reading and the one this skill recommends; it is not a rule
+anyone has written down.
 
 ### Opt-Out Handling
 
@@ -39,16 +59,51 @@ Recognize and honor: STOP, UNSUBSCRIBE, CANCEL, OPT OUT, NO, PARAR, SAIR.
 
 **Required actions upon opt-out:**
 1. Immediately confirm opt-out via final message
-2. Stop all promotional sends **immediately** (maximum 24 hours). Brazil's ANPD LGPD guidance treats processing over 48 hours as a fine-eligible violation — immediate processing avoids any exposure.
+2. Stop all promotional sends **immediately**, and do not budget a grace window, because no statute
+   or regulation grants one. LGPD art. 18 §4 assumes the measure is adopted immediately and only
+   permits a reply explaining why immediate action is impossible; art. 8 §5 makes revocation
+   effective on the person's express manifestation, through a free and facilitated procedure.
+   Art. 18 §5 defers the actual deadline to a regulation, and Resolução CD/ANPD nº 2/2022 art. 14 I
+   still refers to that regulation as forthcoming ("nos termos de regulamentação específica"), so it
+   does not yet exist. The 15-day figure in art. 19 II is for a complete access declaration, not for
+   an opt-out. **Anyone quoting you 24 or 48 hours for a WhatsApp opt-out is quoting nothing.**
 3. Record timestamp and source of opt-out
 4. Add to suppression list
-5. Honor for minimum 2 years. Note: WhatsApp policy sets no specific floor — this timeframe is derived from LGPD best-practice guidance for Brazil (maintain opt-out records for at least 2 years after last interaction; consent records for 5 years after revocation, to demonstrate compliance in an ANPD audit).
+5. Honor it indefinitely, and keep the suppression entry for as long as you keep the contact. There
+   is no floor and no expiry in either direction — WhatsApp policy states none and neither does the
+   LGPD. An opt-out that lapses is a permission you never obtained: Messaging Policy §1 requires you
+   to "respect all requests (either on or off WhatsApp) by a person to block, discontinue, or
+   otherwise opt out of communications from you via WhatsApp", with no end date, and Business Terms
+   §4 repeats the obligation. The "two years" that used to sit here was never a rule.
 
-**Platform-level opt-out (2025-2026):** WhatsApp exposes an 'Offers and Announcements' toggle on business profiles. Users can disable marketing messages without sending a keyword. Subscribe to the `MARKETING_SUBSCRIPTION_UPDATE` webhook event to receive these opt-out signals and suppress affected contacts immediately.
+**Platform-level opt-out:** WhatsApp exposes an **Offers and announcements** setting through which a
+user can stop or resume delivery of your marketing templates without sending a keyword. Subscribe to
+the **`user_preferences`** webhook field to receive those signals. It fires on `stop` and `resume`
+only — the *Interested* / *Not interested* feedback in the same setting does **not** trigger it —
+and each entry carries `wa_id`, `category: "marketing_messages"` and a `value` of `stop` or
+`resume`. Send anyway and the API accepts the request without delivering: the status webhook returns
+`failed` with code **131050**.
+
+**This toggle is the one opt-out the user can take back, and it is narrower than it looks.** Suppress
+marketing to that `wa_id` on `stop`, and lift the suppression only when a `resume` arrives on the
+same webhook — never on a timer, and never because a campaign wants the audience back. Two things
+follow. First, the signal is category-scoped: `category` is `marketing_messages`, so utility and
+authentication templates and 24h service-window replies are unaffected and should keep flowing.
+Second, this is **not** the opt-out in step 5 above. A person who sends you STOP has withdrawn
+permission to hear from you; nothing in Meta's UI reverses that, and only the person can, by opting
+in again. Keep the two suppressions in separate fields — a platform `resume` must not clear a
+keyword opt-out, which is the failure that quietly re-messages someone who told you to stop.
+([user_preferences reference](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/user_preferences),
+[marketing templates → user preferences](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates))
+
+**`MARKETING_SUBSCRIPTION_UPDATE` is not a Meta webhook field.** It is Infobip's own event name, for
+Infobip's Subscriptions API. Against Cloud API that string subscribes to nothing, and an integrator
+who wires it receives no opt-out signals at all — a compliance failure and a deliverability one at
+the same time. This file named it until it was corrected; do not let it back in.
 
 ### Anti-Spam Policies
 
-- Meta limits marketing templates per user at an undisclosed daily threshold (commonly estimated at ~2/day across all businesses, but Meta does not publish the exact number and adjusts it dynamically). Error code when exceeded: **131049**. The cap is per-recipient, not per-sender — a recipient receiving 2 marketing messages from other businesses will block your message too, even if your number is warm and high-quality.
+- **Per-user marketing limits are adaptive, not a daily cap.** Meta's [per-user limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits) page describes a ceiling that moves with "a dynamic view of an individual's recent marketing message read rate and how many messages they currently have in their inbox from friends, family, and businesses" — so the widely repeated "~2/day" is a folk number, not a published one, and no fixed figure is worth planning against. It is **per recipient across all businesses**, so a recipient already saturated by other senders rejects your message however warm your number is. Marketing sent inside an open 24h customer service window does not count toward it. Error code when the limit blocks a send: **131049**. Excessive retries against an already-limited recipient are a *separate* enforcement — wait at least 24h before resending, or further attempts to those users can be unavailable for up to 24h, also under 131049. Not currently active for business numbers or recipients in the EEA, UK, Japan or South Korea.
 - Do not send the same message repeatedly to the same user
 - Messages must match the category they're submitted under
 - Do not confuse, deceive, mislead, or surprise users
@@ -60,13 +115,19 @@ Recognize and honor: STOP, UNSUBSCRIBE, CANCEL, OPT OUT, NO, PARAR, SAIR.
 
 ### GDPR & Regional Compliance
 
+**This table routes; it does not rule, and none of it is legal advice.** Each cell names the regime
+that applies and the obligation area it lands in — not what that regime requires of your business,
+which turns on your entity, your legal basis and your actual processing, and which only counsel in
+that jurisdiction can settle. Where a figure or a deadline appears below it is quoted from the named
+text and linked; where the text is silent, the cell says so rather than supplying a number.
+
 | Region | Key Requirement |
 |---|---|
-| EU/EEA | Data Processing Agreement (DPA) with BSP; EU data residency option; explicit GDPR consent |
+| EU/EEA | Data Processing Agreement (DPA) with BSP; EU data residency option. Note that the consent standard for unsolicited electronic marketing comes from each member state's ePrivacy implementation, not from the GDPR alone, so "explicit GDPR consent" is not a single answer — confirm the local rule |
 | Germany | BSP must have EU data residency and DPA |
 | India | Comply with DPDPA (Digital Personal Data Protection Act) |
-| Brazil | LGPD compliance; explicit consent required per ANPD guidance (active enforcement since 2025). Key obligations: (a) WhatsApp consent must be obtained **separately** from email/SMS — different channels require separate consents; (b) Consent records must be retained for **5 years** after revocation; (c) Marketing messages require explicit consent — transactional messages may use contract-execution basis; (d) Opt-out must be processed within 48 hours (ANPD interpretation); (e) Fines up to 2% of Brazil annual revenue, capped at R$50 million per infraction, now actively enforced. |
-| US | TCPA consent separate from WhatsApp opt-in; marketing templates blocked to US numbers since April 2025 |
+| Brazil | LGPD ([Lei 13.709/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm)). **What the statute says:** consent must be free, informed and unequivocal and refer to determined purposes, and generic authorisations are null (arts. 5 XII, 8 §4); the controller bears the burden of proving valid consent (art. 8 §2); consent is revocable at any time by a free and facilitated procedure (art. 8 §5); art. 7 lists ten legal bases besides consent, including execution of a contract to which the person is a party (art. 7 V) — which one fits a given message is a question for counsel, not a default; a simple fine reaches **2% of the private entity's revenue in Brazil in its last financial year, excluding taxes, capped at R$ 50,000,000 per infraction** (art. 52 II). **What the statute does not say:** any retention period for consent or opt-out records, and any deadline for processing an opt-out — art. 18 §5 leaves that deadline to a regulation the ANPD has not issued. **Enforcement predates 2025:** the ANPD's first private-sector sanction (DOU 06/07/2023, Telekall Infoservice) fined a company for offering a list of WhatsApp contacts with no legal basis for the processing (art. 7) — the cold-list case exactly |
+| US | Meta's [per-user marketing limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits) page states that WhatsApp "does not currently deliver marketing template messages to WhatsApp users with United States phone numbers". Meta announces no end date and has never called it permanent; its own word is *currently*. Rollout was 1 April 2025 according to BSP notices at the time — Meta's current page carries a dangling "after this date" with the date itself edited out, so do not attribute that date to Meta. Utility and authentication templates and 24h service-window replies are unaffected. US telemarketing law (TCPA and successors) is a separate regime from WhatsApp opt-in and is not settled by it — take local advice |
 
 **2026 AI restriction:** General-purpose AI chatbots are prohibited on WhatsApp. Only task-oriented automation with predictable, business-specific outcomes is allowed (support, booking, order processing).
 

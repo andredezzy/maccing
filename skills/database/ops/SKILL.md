@@ -5,6 +5,20 @@ description: 'Use BEFORE the first read or write against any non-local database,
 
 # Database Ops
 
+```
+MANDATORY — before the first statement against any non-local database, and
+before any clarifying question:
+1. READ the case files this project already has. A prior correction can change
+   what you are about to run, which is why it comes first.
+2. VERIFY the host as its own command, and read the answer back.
+3. NAME where the credential came from. The secret store, or stop.
+4. DECLARE read or write, now rather than after the statement is written.
+5. OPEN the case file and record 1–4 in it before running anything.
+
+Any one of the five you cannot complete means you are not ready to run a
+statement. "Quick lookup" does not shorten this list.
+```
+
 ## Overview
 
 This skill is the discipline for operating on data that other people depend on. It is not a query cookbook and it is not tied to any one schema — the schema lives in `database-mapping`, and this skill governs how you are allowed to touch what that map describes.
@@ -56,6 +70,24 @@ This is not pedantry about sourcing. A failed read that goes unnoticed is indist
 | "The case file says it is X" | The case file is history. Confirm it against the database now. |
 | "That read probably worked" | If you did not see rows, you have no rows. Re-run it. |
 | "I remember this account's shape" | Memory is not the database. |
+
+## Full identifiers, full dates, one subject per query
+
+Three habits that keep a read reviewable. They bind every statement and every sentence you write about one — the dry-run gate covers writes, and these are the failures that happen on the way to it, in material nobody thought needed a gate because nothing was being changed.
+
+- **Show the identifier in full.** Never truncate one to `a1b2…` in a dry run, a table, a summary or a chat message. A truncated id cannot be pasted back into a query, cannot be matched against a case file, and conceals the one thing it looks like it is guarding against: two rows that differ only past the cut.
+- **Show the date on every record.** The case file carries a single date and that date belongs to the operation, not to the row. A record presented bare reads as current, and "that was already fixed last month" is an argument you can only settle if the date travelled with the row.
+- **One subject per query.** Never pull several subjects with `WHERE id IN (…)` and then attribute the rows by eye. Rows come back unordered and unlabelled, one subject can return three and its neighbour none, and the resulting mix-up presents as a finding rather than as an error. Query once per subject, or group and label explicitly so the attribution is in the output instead of in your head. [The wrong subject](#when-a-number-on-a-screen-disagrees-with-the-database) is the same failure seen from the far end; this is the query shape that prevents it.
+
+## Timestamps come back as text or they come back wrong
+
+**Read timestamp columns as text and parse them as UTC.** Where a schema stores `timestamp without time zone` holding UTC — which is the case this discipline governs — the value on the wire is digits with no offset attached, and any client that hands you a native date object has already supplied one. It supplies the *client machine's*. The digits are right; the instant they now denote is wrong, by your own distance from UTC, and the same row therefore reads differently on two laptops. `SET TIME ZONE` does not help, because the conversion happens after the value has left the server.
+
+- Select `col::text`, and parse it as UTC.
+- `NOW()` becomes `(NOW() AT TIME ZONE 'utc')::text`.
+- A value that only ever crosses a text client such as `psql` is text end to end and is not at risk.
+
+**Printing one wrong is the small failure.** The large one is feeding it back in as a window bound: the shifted bound moves the window by that offset, and every record within the offset of a boundary lands in the neighbouring interval — a whole day's batch attributed to the day before or after, from a query that returns rows, raises nothing and looks entirely well. This has been paid for three times.
 
 ## Step 0 — the mandatory first step
 
@@ -138,6 +170,10 @@ Date: YYYY-MM-DD
 Host: <which database, verified how>
 Type: read | write | both
 
+## Prior cases read
+<which case files were consulted, and one line each on what it changed about the
+approach — or "nothing matched; read the most recent five">
+
 ## What was asked
 <the request, in the requester's terms, and what would count as done>
 
@@ -160,7 +196,11 @@ Type: read | write | both
 
 Drop the write-only sections when nothing was written. Keep the rest even for a two-minute lookup; a two-minute lookup that later turns out to have answered the wrong question is exactly the case you will want to reread.
 
+**`Prior cases read` is what closes the loop.** The reading described above is real work and it is thrown away unless the file names the cases consulted and what each one changed. "Nothing matched; read the most recent five" is a result too: it tells the next agent the gap is genuine rather than unsearched, and spares them re-deriving the same reading from the whole directory.
+
 Case files belong in the project, not in this skill — they contain that project's data. Put them in a project-local directory, one file per operation, named `YYYY-MM-DD-<slug>.md`. `.maccing/database/ops/` is the default if the project has no established place. Any artifact an operation produces goes beside its case file, sharing the date and slug.
+
+**A finished case is committed.** Committing the case file, together with any artifact kept beside it, is the closing step of the operation — the same closing step that deletes the exports. This is not put to the operator, because an uncommitted case file is a record only its author has, held on one machine, invisible to the next person who asks what was run. That is precisely the state this section's argument says the case file exists to prevent, and asking permission for it only invites "not now".
 
 ## Host verification
 

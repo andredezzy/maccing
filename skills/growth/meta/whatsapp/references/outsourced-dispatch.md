@@ -8,12 +8,33 @@ Rules for paying a third party to send messages **for** you, on **their** number
 
 The trade is not price. It is **which asset absorbs the damage when a blast goes badly.**
 
+**Before either column: consent is not a routing decision.** Messaging Policy §1 permits you to
+contact someone on WhatsApp only if "(a) they have given you their mobile phone number; and (b) you
+have received opt-in permission from the recipient confirming that they wish to receive subsequent
+messages or calls from you." A vendor sending from its own numbers does not supply that permission
+and cannot hold it on your behalf — the permission is to hear from *you*, and it is your brand that
+travels in the message. So a list of unknown consent is not a list you route to a vendor. It is a
+list you do not send to until it has consent. Everything below assumes that is already settled.
+
+**And the downside is not priced in money.** Meta's remedy is access, not a fine: the Messaging
+Policy's overview states that "if content or actions violate our terms or policies, we may limit or
+remove your access to WhatsApp Business Services", and Business Terms §6 gives the range — "we have
+the right to limit, throttle, suspend, or terminate Company's account", up to "in the event that we
+terminate Company's account, Company will not create another WhatsApp business account without our
+express written permission." The account at risk is not only the vendor's, and §9 of this file is
+the reason: your brand and domain ride inside the vendor's messages, Meta correlates entities
+across them, and a display-name rejection on an owned asset has already been traced back to traffic
+that asset never sent. Outsourcing moves the number, not the exposure. Nor does it move the legal
+exposure: the ANPD's first private-sector sanction (DOU 06/07/2023, Telekall Infoservice) landed on
+the company *offering* a list of WhatsApp contacts, for processing with no legal basis under LGPD
+art. 7 — not on whoever pressed send.
+
 | | Own WABA | Vendor |
 |---|---|---|
 | Numbers | Yours | Theirs |
 | Practical daily ceiling | Your current tier, and no more | Far above any single tier |
-| Cost of a burn | The channel — quality rating drops, tier upgrades block, ramp restarts | Money only |
-| Recovery | Slow. Observed Red→Green in ~4 days of zero volume, against the documented 7–14 day protocol (7 days to recalculate, 7 more at Green/Yellow to fully clear) — see `references/sending-and-scale.md` | None needed; you buy the next campaign |
+| Cost of a burn | The channel — quality rating drops, tier upgrades block, ramp restarts | The vendor's numbers first, then whatever reaches you through entity correlation (§9), and — on an unconsented list — your own WABA and business account under Business Terms §6. Never "money only" |
+| Recovery | Slow. Observed Red→Green in ~4 days of zero volume, against the documented 7–14 day protocol (7 days to recalculate, 7 more at Green/Yellow to fully clear) — see `references/sending-and-scale.md` | The vendor's number needs none; you buy the next campaign. Your own assets may still need it — see §9 |
 | Control | Full — templates, timing, opt-out handling, delivery data | Whatever the vendor agrees to report |
 
 An owned number's quality rating is a **scarce, slow-to-recover asset**. It is earned over weeks of healthy ramp and lost in one bad list.
@@ -23,8 +44,9 @@ An owned number's quality rating is a **scarce, slow-to-recover asset**. It is e
 | Situation | Route |
 |---|---|
 | Warm, opted-in, engaged list; volume within your tier | Own WABA |
-| Cold list, unknown consent, or volume far above your tier | Vendor |
-| A test whose failure mode is high block/report rates | Vendor — never spend your rating to learn this |
+| Warm, opted-in list; volume far above your tier | Vendor |
+| Cold list, or consent you cannot evidence | **Neither.** Obtain consent first — the gate above is not negotiable by choosing a different sender |
+| A test on an opted-in list whose failure mode is high block/report rates | Vendor — never spend your rating to learn this |
 | Anything requiring reply handling or a free 24h window | Own WABA — a vendor cannot hand you the conversation |
 
 ---
@@ -212,6 +234,11 @@ Observed: a display-name rejection on an owned asset turned out to be **entity c
 - Record the correlation risk per vendor in `meta/vendors/<vendor>/README.md`, alongside price and channel.
 - Do not assume isolation. Outsourcing moves the **number** off your books, not the **brand**.
 - If an owned asset gets rejected or restricted shortly after a vendor campaign, treat correlation as a live hypothesis before debugging the asset itself.
+- **This is why §1 refuses to route an unconsented list to a vendor rather than pricing it.** The
+  vendor's numbers are expendable and yours are not, but correlation means the two are not separate
+  accounts as far as enforcement is concerned. A policy breach committed on the vendor's
+  infrastructure with your brand in the copy is a breach Meta can attribute to you, and Business
+  Terms §6 lets it act on your account for it.
 
 ---
 

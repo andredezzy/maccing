@@ -1,3 +1,5 @@
+> ⚠️ **Everything below sends. A bulk campaign/broadcast send is ALWAYS operator-executed — never loop these calls over a recipient list.** Full rule: [SKILL.md → Send Doctrine](../SKILL.md#send-doctrine--read-this-before-the-routing-table).
+
 ## Contents
 
 - [Recommended Library: @great-detail/whatsapp](#recommended-library-great-detailwhatsapp)
@@ -25,7 +27,13 @@ npm install @great-detail/whatsapp
 bun add @great-detail/whatsapp
 ```
 
-Compatible with Node.js v22+, Deno v2.4+, Bun v1.2+. Built for Cloud API v23.
+Compatible with Node.js v22+, Deno v2.4+, Bun v1.2+. Built for Cloud API v23 — the client hard-defaults `graphVersion` to `v23.0` (verified in `@great-detail/whatsapp@9.1.0`), so every SDK call below hits `https://graph.facebook.com/v23.0/…` unless you override it:
+
+```typescript
+const sdk = new Client({ graphVersion: 'v25.0', request: { /* ... */ } });
+```
+
+**Why these docs stay on v23.0.** The latest Graph API version is v26.0 (released July 29, 2026); v23.0 runs until **October 8, 2027**. We keep the raw-HTTP examples pinned to v23.0 so they agree with the SDK's own default — a doc-wide bump would silently disagree with every SDK snippet in this skill and buy nothing, since the one version-gated payload change that matters (statuses webhooks omit the `conversation` object from v24.0+) is called out explicitly in `webhooks.md` rather than implied by a URL. Revisit before mid-2027.
 
 ### Basic Setup
 
@@ -112,9 +120,13 @@ const sdk = new Client({
   request: { headers: { Authorization: `Bearer ${process.env.WA_ACCESS_TOKEN}` } }
 });
 
-// Webhook verification
-app.get('/webhook', (req, res) => {
-  const reg = sdk.webhook.register({
+// Webhook verification (GET).
+// `register()` returns a Promise. Without `await`, `reg` is a pending Promise,
+// `reg.verifyToken` is `undefined`, the comparison is always true, and every
+// legitimate verification request is rejected — the endpoint never passes
+// Meta's handshake. (In TypeScript it also will not compile.)
+app.get('/webhook', async (req, res) => {
+  const reg = await sdk.webhook.register({
     method: req.method,
     query: req.query as Record<string, string>,
     body: req.body,
@@ -122,30 +134,39 @@ app.get('/webhook', (req, res) => {
   });
 
   if (reg.verifyToken !== process.env.WEBHOOK_VERIFY_TOKEN) {
-    return res.end(reg.reject());
+    reg.reject();              // returns void — you set the status code
+    return res.sendStatus(403);
   }
-  return res.end(reg.accept());
+  return res.end(reg.accept()); // accept() returns the hub.challenge string
 });
 
-// Webhook event handling
+// Webhook event handling (POST).
+// `eventNotification()` and `verifySignature()` are both async. An unawaited
+// `verifySignature()` rejects in the background while the handler goes on to
+// accept a forged payload — await it and fail closed.
 app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
-  const event = sdk.webhook.eventNotification({
+  const event = await sdk.webhook.eventNotification({
     method: req.method,
     query: req.query as Record<string, string>,
     body: req.body.toString(),
     headers: req.headers as Record<string, string>
   });
 
-  event.verifySignature(process.env.APP_SECRET!);
+  try {
+    await event.verifySignature(process.env.APP_SECRET!);
+  } catch {
+    return res.sendStatus(401);
+  }
 
-  // Return 200 immediately
-  res.end(event.accept());
+  // Return 200 immediately (accept() returns void)
+  event.accept();
+  res.sendStatus(200);
 
   // Process async
-  processEvent(event).catch(console.error);
+  processEvent(event.eventNotification).catch(console.error);
 });
 
-async function processEvent(event: unknown) {
+async function processEvent(notification: unknown) {
   // Handle incoming messages, status updates, etc.
 }
 ```
@@ -227,19 +248,29 @@ User sends message
 
 ### CRM Integration Pattern
 
+There is no `identity` object on a message. The BSUID lives in two flat properties of the webhook `value` block: `contacts[].user_id` and `messages[].from_user_id`. The phone number (`contacts[].wa_id`, `messages[].from`) is the field that can go missing — it is omitted once a user adopts a username and you have not interacted with them recently — so key the CRM on the BSUID and treat the phone as an attribute.
+
 ```typescript
-// On incoming message webhook
-async function handleIncomingMessage(message: WaMessage) {
-  // Upsert contact in CRM
+// On incoming message webhook — operate on entry[].changes[].value,
+// not on a bare message: contacts[] is a sibling of messages[], not a child.
+async function handleIncomingMessage(value: WaMessageValue) {
+  const contact = value.contacts?.[0];
+  const message = value.messages![0];
+
+  // BSUID is always present; the phone number can be omitted.
+  const bsuid = message.from_user_id ?? contact?.user_id;
+
+  // Upsert contact in CRM, keyed on BSUID
   await crm.upsertContact({
-    phone: message.from,
-    bsuid: message.identity?.user_id, // Store BSUID alongside phone
-    name: message.contacts?.[0]?.profile?.name
+    bsuid,
+    phone: message.from ?? contact?.wa_id,   // may be undefined
+    username: contact?.profile?.username,    // only if the user adopted one
+    name: contact?.profile?.name
   });
 
   // Record interaction
   await crm.addInteraction({
-    contactPhone: message.from,
+    contactBsuid: bsuid,
     channel: 'whatsapp',
     direction: 'inbound',
     content: message.text?.body,
@@ -248,11 +279,13 @@ async function handleIncomingMessage(message: WaMessage) {
 
   // Trigger automation
   await automationEngine.trigger('whatsapp_message_received', {
-    contact: message.from,
-    message: message
+    contact: bsuid,
+    message
   });
 }
 ```
+
+In **status** webhooks the same identifier appears as `statuses[].recipient_user_id` (always set) alongside `recipient_id` (the phone, which can be omitted). If you have parent BSUIDs enabled, `from_parent_user_id` / `parent_user_id` / `recipient_parent_user_id` carry the portfolio-spanning variant.
 
 ---
 

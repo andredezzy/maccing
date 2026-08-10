@@ -2,7 +2,7 @@
 
 This file is a platform-specific extension. Read the global doctrine first — all cross-cutting automation rules (surface selection decision tree, antidetect discipline, timing floors, proven MCP read recipe, fallback ladder) are defined there and are not repeated here:
 
-**Global doctrine:** [`../../growth/reference/automation.md`](../../growth/reference/automation.md)
+**Global doctrine:** [`../../growth/references/automation.md`](../../growth/references/automation.md)
 
 ---
 

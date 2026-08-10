@@ -1,3 +1,5 @@
+> ⚠️ **Everything below sends. A bulk campaign/broadcast send is ALWAYS operator-executed — never loop these calls over a recipient list.** Full rule: [SKILL.md → Send Doctrine](../SKILL.md#send-doctrine--read-this-before-the-routing-table).
+
 ## Contents
 
 - [Sending Messages: Core Endpoint](#sending-messages-core-endpoint)
@@ -12,6 +14,7 @@
 - [Reaction Message](#reaction-message)
 - [Interactive: Reply Buttons](#interactive-reply-buttons)
 - [Interactive: List Message](#interactive-list-message)
+- [Interactive: Media Carousel](#interactive-media-carousel)
 - [Interactive: Flow Message](#interactive-flow-message)
 - [Typing Indicator](#typing-indicator)
 - [Read Receipt](#read-receipt)
@@ -226,8 +229,14 @@ Or using a media ID (preferred for performance):
 ```
 
 - Max 3 buttons
-- Button ID: max 256 chars; Title: max 20 chars
-- Only available inside 24-hour customer service window (not a template)
+- Body text: **required**, max 1,024 chars. URLs are auto-hyperlinked
+- Footer text: optional, max **60** chars
+- Header: optional, `text` / `image` / `video` / `document`
+- Button ID: max 256 chars; Button label: max 20 chars, and labels must be unique across the buttons
+
+Exceeding any of these caps is a 400, not a truncation.
+
+Availability: reply buttons are a **service message**, so they send only while the 24-hour customer service window is open; outside it only approved templates go through. Meta's reply-buttons reference page does not state this — it is stated on the Service messages page, which lists interactive reply buttons among the types you "can send during an open customer service window". Note the window is also opened (and reset) by a user *call*, not just a message. Template quick-reply buttons are a different mechanism and are not gated this way.
 
 ### Interactive: List Message
 
@@ -264,9 +273,81 @@ Or using a media ID (preferred for performance):
 }
 ```
 
-- Max 10 rows total across all sections
-- Row ID: max 200 chars; Title: max 24 chars; Description: max 72 chars
-- Only available inside 24-hour customer service window
+- Max **10 sections**, and max 10 rows total across all sections
+- Header: optional, `text` type only, max 60 chars
+- Body: required, max 4,096 chars
+- Footer: optional, max 60 chars
+- Button label (`action.button`): required, single button, max 20 chars
+- Section title: max 24 chars
+- Row ID: max 200 chars; Row title: max 24 chars; Row description: optional, max 72 chars
+
+Same window rule as reply buttons: list messages are service messages, so the 24-hour customer service window must be open.
+
+### Interactive: Media Carousel
+
+A horizontally scrollable set of media cards. Each card carries its own header, body, and button(s).
+
+```json
+{
+  "messaging_product": "whatsapp",
+  "recipient_type": "individual",
+  "to": "15551234567",
+  "type": "interactive",
+  "interactive": {
+    "type": "carousel",
+    "body": { "text": "Here are three of our latest arrivals, each under $25:" },
+    "action": {
+      "cards": [
+        {
+          "card_index": 0,
+          "type": "cta_url",
+          "header": { "type": "image", "image": { "link": "https://example.com/blue-echeveria.jpeg" } },
+          "body": { "text": "*Blue Echeveria*\n\nPowdery blue rosette succulent." },
+          "action": {
+            "name": "cta_url",
+            "parameters": { "display_text": "Buy now", "url": "https://shop.example.com/blue-echeveria" }
+          }
+        },
+        {
+          "card_index": 1,
+          "type": "cta_url",
+          "header": { "type": "image", "image": { "link": "https://example.com/zebra-haworthia.jpeg" } },
+          "body": { "text": "*Zebra Haworthia*\n\nWhite stripes on deep green leaves." },
+          "action": {
+            "name": "cta_url",
+            "parameters": { "display_text": "Buy now", "url": "https://shop.example.com/zebra-haworthia" }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+- **2 to 10 cards.** `card_index` is zero-based and orders the cards left to right
+- Main `body.text` is **required**, max 1,024 chars. A main header, footer, or interactive component is **not supported** — the cards carry those
+- Every card **must** have an `image` or `video` header; no other header type is allowed
+- Card `body.text` is optional, max **160** chars and up to 2 line breaks
+- Each card carries **either** one `cta_url` button **or** one-or-more `quick_reply` buttons. The button type *and* count must be identical across every card — 2 quick replies on one card means exactly 2 on all of them
+- Quick-reply button ID: max 256 chars; any button label: max 20 chars
+
+Swap a card's `action` for quick replies like this (the surrounding card object is unchanged):
+```json
+{
+  "card_index": 0,
+  "type": "cta_url",
+  "header": { "type": "image", "image": { "link": "https://example.com/blue-echeveria.jpeg" } },
+  "body": { "text": "*Blue Echeveria*" },
+  "action": {
+    "buttons": [
+      { "type": "quick_reply", "quick_reply": { "id": "learn-blue-echeveria", "title": "Learn more" } },
+      { "type": "quick_reply", "quick_reply": { "id": "fav-blue-echeveria", "title": "Add to favorites" } }
+    ]
+  }
+}
+```
+
+Service message, so 24-hour-window only. The outside-the-window equivalent is a different mechanism: the **media card carousel template**, which is marketing-category only, fixes the card count at creation time, and is not covered in `templates.md` — see Meta's [Media card carousel templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates).
 
 ### Interactive: Flow Message
 

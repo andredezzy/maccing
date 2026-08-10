@@ -108,7 +108,7 @@ deny_reason() {
       printf 'Load the growth skill before editing anything under the growth tree — campaign measurement has one canonical contract, and hand-rolled arithmetic beside it is how two readings of the same campaign end up disagreeing.'
       ;;
     database-mapping)
-      printf 'Load the database-mapping skill before editing the database map — every downstream reader fingerprints this file, so an edit made without the skill silently invalidates all of them.'
+      printf 'Load the database-mapping skill before editing the database map — it carries the fingerprint procedure and the role contract, and an edit made without it can leave the map describing a schema that has moved.'
       ;;
     database-ops)
       printf 'Load the database-ops skill before editing anything under the database ops tree — it carries the investigation discipline and the query conventions these cases are written against.'

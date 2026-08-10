@@ -63,9 +63,11 @@ async function uploadMedia(filePath: string, mimeType: string, phoneNumberId: st
 ### Retrieve Media URL
 
 ```
-GET https://graph.facebook.com/v23.0/{MEDIA_ID}
+GET https://graph.facebook.com/v23.0/{MEDIA_ID}?phone_number_id={PHONE_NUMBER_ID}
 Authorization: Bearer {ACCESS_TOKEN}
 ```
+
+`phone_number_id` is optional; when supplied the request only succeeds if the media was uploaded on that business phone number.
 
 Response:
 ```json
@@ -79,7 +81,7 @@ Response:
 }
 ```
 
-The URL returned expires quickly (~5 minutes). Download immediately.
+The URL returned expires after **5 minutes**. Download immediately; after that, re-query the ID for a fresh URL.
 
 ### Download Media
 
@@ -89,11 +91,34 @@ curl -OJ \
   "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=..."
 ```
 
-### Media Caching
+The access token is mandatory — omit it and the download fails. A failed download returns `404 Not Found`; retry by fetching a new media URL, then by renewing the token.
 
-- Uploaded media IDs persist for **30 days** on Meta's servers
-- **Best practice:** Use media IDs (upload once, reuse) rather than URLs for frequently sent assets (logos, product images, standard docs)
-- When sending the same media to thousands of users, upload once and store the ID
+### Delete Media
+
+```bash
+curl -X DELETE "https://graph.facebook.com/v23.0/{MEDIA_ID}?phone_number_id={PHONE_NUMBER_ID}" \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
+```json
+{ "success": true }
+```
+
+`phone_number_id` is optional and scopes the delete the same way it scopes the GET. Delete assets you uploaded for a one-off campaign rather than waiting out the 30-day retention — a stale ID that is still reachable is still sendable.
+
+### Media ID Lifetimes
+
+Two different clocks, and confusing them is how inbound-media handlers break after a week:
+
+| Media ID origin | Lifetime |
+|---|---|
+| Returned by `POST /{PHONE_NUMBER_ID}/media` (you uploaded it) | **30 days**, unless you `DELETE` it earlier |
+| Arriving in an incoming-message webhook (the user sent it) | **7 days** |
+| The `url` from `GET /{MEDIA_ID}` (either origin) | **5 minutes** |
+
+- **Never store a webhook media ID as your record of the file.** Resolve it to a URL and download the bytes to your own storage on receipt; at day 8 the ID is gone and re-resolving it fails.
+- **Best practice for outbound:** use media IDs (upload once, reuse) rather than `link` URLs for frequently sent assets (logos, product images, standard docs). Re-upload on a schedule shorter than 30 days.
+- When sending the same media to thousands of users, upload once and store the ID.
 
 ---
 

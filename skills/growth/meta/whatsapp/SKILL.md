@@ -1,6 +1,6 @@
 ---
 name: whatsapp
-description: WhatsApp Business Platform (Cloud API) production reference. Covers Cloud API setup, message types, templates (creation, approval, pacing, strategy), per-message pricing, webhooks, bulk sending at scale, WhatsApp Flows, media handling, Node.js/TypeScript SDK, error codes, compliance (LGPD, opt-in/opt-out), Calling API, MM Lite, Business Management API, business profile fields, dispatch operations (chip warming, direct API setup, BSP migration, number longevity), and 2025-2026 platform changes. Use when the user asks about whatsapp, whatsapp api, cloud api, WABA, BSP, whatsapp template, whatsapp marketing, message template, WhatsApp dispatch, WhatsApp number quality, WhatsApp Brazil, WhatsApp opt-in, WhatsApp webhook, WhatsApp flows, WhatsApp pricing, or anything related to sending or receiving WhatsApp messages via the Cloud API.
+description: Use when a WhatsApp dispatch needs building, sending, or rescuing, on Meta Cloud API or a BSP. Triggers — template rejected or paused; messages not delivering; errors 131026, 131049, 132015, 131031, 130497; quality rating dropped; number restricted or WABA suspended; messaging tier, throughput, or 24-hour-window limits; per-message pricing; opt-in/LGPD; webhooks, Flows, media; chip warming, BSP migration, outsourced dispatch.
 ---
 
 # WhatsApp Business Platform — Production Reference (2025-2026)
@@ -31,6 +31,45 @@ Skipping this = operating on stale data and hiding live assets from the operator
 
 ---
 
+## Send Doctrine — read this before the routing table
+
+> ⚠️ **DOCTRINE — the campaign/broadcast SEND is ALWAYS operator-executed, NEVER automated by the agent.**
+> The agent builds and validates the recipient list, runs the pre-send health gate, picks the template, and
+> reconciles results afterward — but the **human operator** is the one who uploads the list and clicks Send
+> in the BSP UI (e.g. YCloud → Campaigns → New campaign). The agent MUST NOT submit a marketing broadcast
+> programmatically: no `POST /v2/whatsapp/messages` loop over a list, no broadcast endpoint, no
+> `sendDirectly` fan-out. **Why:** a broadcast is irreversible, costs real money, reaches hundreds of real
+> people, and one mistake (wrong template, wrong list, wrong variable mapping) can crater a hard-won quality
+> rating or permanently ban the number — a human at the trigger is the last safety gate. Scope: this covers
+> **bulk campaign/broadcast sends**; single transactional/inbox replies inside the 24h service window are not
+> the target.
+
+Duplicated verbatim from [references/sending-and-scale.md](references/sending-and-scale.md) on purpose: the router below hands out files that contain a working send, so the prohibition has to load first. Do not "de-duplicate" it away.
+
+---
+
+## Routing Table
+
+| Intent | Reference | Use for |
+|---|---|---|
+| Message types, payloads, interactive messages, typing indicator, read receipt | [references/message-types.md](references/message-types.md) | All send-message JSON shapes; text, image, video, document, audio, sticker, location, contacts, reaction, buttons, lists, flows, typing |
+| Template creation, approval, pacing, limits, dispatch strategy | [references/templates.md](references/templates.md) | Creating templates via API, template JSON, approval process, quality states, pacing vs pausing, Template Strategy for marketing broadcasts (copy, image headers, forbidden words, opt-out) |
+| Quality KPIs, throughput tiers, daily limits, quality rating, recovery protocol, queue management | [references/sending-and-scale.md](references/sending-and-scale.md) | 80 MPS throughput, messaging limit tiers, quality system, quality KPIs, recovery protocol, bulk send queue code |
+| WhatsApp Flows (native in-chat forms, appointments, surveys) | [references/flows.md](references/flows.md) | Flow JSON schema, API endpoints, dynamic flows backend, payment flows (Brazil/India) |
+| Webhook events, payloads, signature verification, BSUID, best practices | [references/webhooks.md](references/webhooks.md) | Incoming message webhooks, status updates, BSUID June 2026 change, Express handler code, queue-first architecture |
+| Media upload, retrieve, download, caching | [references/media.md](references/media.md) | Supported formats, size limits, upload/retrieve/download API, media ID reuse strategy |
+| Node.js/TypeScript SDK, raw fetch, integration patterns | [references/integration-sdk.md](references/integration-sdk.md) | `@great-detail/whatsapp` SDK setup, webhook handler, raw fetch, order lifecycle/CTWA/CRM patterns |
+| Error codes, retry logic, delivery failures, 131026/131049/132015 | [references/error-codes.md](references/error-codes.md) | Full error code table by category, retry strategy TypeScript snippet, real-world broadcast baselines |
+| Opt-in/opt-out, LGPD (Brazil), GDPR, anti-spam, content restrictions, Business Profile compliance, display-name approval, verification, OBA, financial-niche | [references/compliance.md](references/compliance.md) | Consent requirements, opt-out recognition, LGPD 5-year retention, 2026 AI restriction, Business Profile API + field definitions, display-name approval, verification, OBA requirements, financial-niche restrictions |
+| Per-message pricing, free windows (CSW/CTWA), Meta rate card, cost optimization, BSP comparison table, WhatsApp Payments | [references/pricing-and-billing.md](references/pricing-and-billing.md) | PMP rates by market, free window rules, volume tier discounts, Meta base rate card, cost calc, full BSP comparison table, WhatsApp Payments (Brazil/India) |
+| Direct Cloud API setup, BSP migration, number quality/longevity, cold lists | [references/waba-provisioning.md](references/waba-provisioning.md) | Direct Cloud API setup sequence, switching BSP / migrating WABA (PIN reset, device-trust gotchas), cold list strategy |
+| Outsourced dispatch (a third party sends on their numbers), and the campaign measurement contract | [references/outsourced-dispatch.md](references/outsourced-dispatch.md) | Outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, vendor checklist, entity correlation; declaring cells and controls and calling `measure` from `@maccing/growth` |
+| Disposable BM pipeline, proxy/isolation stack, BM sources, profile acquisition, phone number strategy, display name strategy | `meta` skill | Full disposable-BM strategy, proxy comparison table, BM setup sequence, Number Warming Protocol (official WABA), phone number acquisition |
+| YCloud BSP platform (campaigns, inbox, contacts, webhooks) | `ycloud` skill | BSP platform operations, campaign management, YCloud features |
+| YCloud v2 REST API (send message, list messages, webhook endpoints, pagination) | `ycloud-api` skill | YCloud API reference, pagination gotchas (`page` not `offset`), HMAC signature, campaign-send lag caveat, broadcast monitoring |
+
+---
+
 ## 1. Platform Overview
 
 ### WhatsApp Business App vs. Cloud API
@@ -47,6 +86,20 @@ Skipping this = operating on stale data and hiding live assets from the operator
 | Cost | Free | Per-message charges apply |
 
 **On-Premises API:** Permanently shut down October 23, 2025. Cloud API is the only path. Error code 1005 = number still on on-prem.
+
+### Coexistence — one number on both the Business App and Cloud API
+
+Meta's own name for this is **"API Solutions for Business App Users"**; support and partner channels call it **Coexistence**. It is entered through **Embedded Signup**: the business connects its existing WhatsApp Business app account and number to Cloud API, then keeps answering 1:1 from the phone while the API sends at volume, with both directions mirrored ([Meta primary doc](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/)).
+
+- **Who can offer it:** the integrator must already be a Solution Partner or Tech Provider; the business must run WhatsApp Business app **2.24.17+**.
+- **Sync:** contacts, and 1:1 history for the most recent 6 months, are synchronizable — but only if you subscribe to the `history`, `smb_app_state_sync` and `smb_message_echoes` webhook fields AND fire both `smb_app_data` sync calls within **24h** of onboarding. Miss that window and the customer must offboard and redo Embedded Signup.
+- **Confirm the state:** `GET /{PHONE_NUMBER_ID}?fields=is_on_biz_app,platform_type` — both modes live is `is_on_biz_app: true` plus `platform_type: CLOUD_API`.
+- **What it costs you:** throughput is **fixed at 20 mps** (against the 80 default), **Broadcast lists are disabled** (existing ones go read-only), and group chats, disappearing messages, view-once, live location and voice/video calls are unsupported on the Cloud API side.
+- **Window and billing:** a customer service window opens only when a user messages a number that is *already* onboarded. Messages sent from the app sit outside the CSW entirely — they neither create nor extend a Cloud API window, and are not billed as Cloud API.
+- **Offboarding is client-side:** the Deregister API will NOT deregister a coexisting number. The business disconnects in-app (Settings → Account → Business Platform → Disconnect Account), which fires `account_update` with `PARTNER_REMOVED`.
+- **Expect error 131060** (an `unsupported` messages webhook) on a user's first inbound and from unsupported companion devices — normal, usually clears within seconds.
+
+**Dispatch verdict:** the 20 mps ceiling and the loss of Broadcast lists make coexistence an inbox/service posture, not a broadcast posture. Do not onboard a number you intend to broadcast from.
 
 **Integration paths:**
 1. **Direct Cloud API** — REST against Meta directly. Full control, requires engineering effort.
@@ -166,8 +219,10 @@ See [references/compliance.md](references/compliance.md) for all Business Profil
 | BSUID may replace phone in `from` | June 2026+ | CRM must handle both identifiers |
 | AI chatbot restriction | 2026 | Only task-specific AI allowed |
 | Auto-categorization enforcement | April 9/16, 2025 | Meta auto-corrects category; repeat offenders lose UTILITY access 7 days |
-| Carousel messages (interactive) | February 2026 | 2-10 card carousels in CSW |
-| Business App + Cloud API coexistence | January 2026 | Same number, both modes |
+| Carousel messages (interactive) | unverified | 2-10 cards, CSW only (non-template) — [references/message-types.md](references/message-types.md#interactive-media-carousel) |
+| Business App + Cloud API coexistence | unverified | Same number in both; 20 mps ceiling, Broadcast lists disabled — [§1 → Coexistence](#coexistence--one-number-on-both-the-business-app-and-cloud-api) |
+
+> **Two dates above read `unverified` on purpose.** Neither feature page carries a publication or updated date, and Meta's public changelog — the one place a landing date is published — returned HTTP 500 on every attempt. So the "February 2026" and "January 2026" dates previously asserted here could not be confirmed against a primary source, and are no longer asserted. Both *features* are confirmed from Meta docs — [interactive media carousel](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-media-carousel-messages) and [coexistence](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/) — only their ship dates are unknown. To close the gap, retry the changelog; do not restore a remembered date.
 
 ---
 
@@ -223,25 +278,3 @@ Monthly Cost = Σ (messages_delivered × country_rate × category_multiplier)
 
 Effective Rate: Marketing >> Utility > Authentication >> Service (free)
 ```
-
----
-
-## Routing Table
-
-| Intent | Reference | Use for |
-|---|---|---|
-| Message types, payloads, interactive messages, typing indicator, read receipt | [references/message-types.md](references/message-types.md) | All send-message JSON shapes; text, image, video, document, audio, sticker, location, contacts, reaction, buttons, lists, flows, typing |
-| Template creation, approval, pacing, limits, dispatch strategy | [references/templates.md](references/templates.md) | Creating templates via API, template JSON, approval process, quality states, pacing vs pausing, Template Strategy for marketing broadcasts (copy, image headers, forbidden words, opt-out) |
-| Quality KPIs, throughput tiers, daily limits, quality rating, recovery protocol, queue management | [references/sending-and-scale.md](references/sending-and-scale.md) | 80 MPS throughput, messaging limit tiers, quality system, quality KPIs, recovery protocol, bulk send queue code |
-| WhatsApp Flows (native in-chat forms, appointments, surveys) | [references/flows.md](references/flows.md) | Flow JSON schema, API endpoints, dynamic flows backend, payment flows (Brazil/India) |
-| Webhook events, payloads, signature verification, BSUID, best practices | [references/webhooks.md](references/webhooks.md) | Incoming message webhooks, status updates, BSUID June 2026 change, Express handler code, queue-first architecture |
-| Media upload, retrieve, download, caching | [references/media.md](references/media.md) | Supported formats, size limits, upload/retrieve/download API, media ID reuse strategy |
-| Node.js/TypeScript SDK, raw fetch, integration patterns | [references/integration-sdk.md](references/integration-sdk.md) | `@great-detail/whatsapp` SDK setup, webhook handler, raw fetch, order lifecycle/CTWA/CRM patterns |
-| Error codes, retry logic, delivery failures, 131026/131049/132015 | [references/error-codes.md](references/error-codes.md) | Full error code table by category, retry strategy TypeScript snippet, real-world broadcast baselines |
-| Opt-in/opt-out, LGPD (Brazil), GDPR, anti-spam, content restrictions, Business Profile compliance, display-name approval, verification, OBA, financial-niche | [references/compliance.md](references/compliance.md) | Consent requirements, opt-out recognition, LGPD 5-year retention, 2026 AI restriction, Business Profile API + field definitions, display-name approval, verification, OBA requirements, financial-niche restrictions |
-| Per-message pricing, free windows (CSW/CTWA), Meta rate card, cost optimization, BSP comparison table, WhatsApp Payments | [references/pricing-and-billing.md](references/pricing-and-billing.md) | PMP rates by market, free window rules, volume tier discounts, Meta base rate card, cost calc, full BSP comparison table, WhatsApp Payments (Brazil/India) |
-| Direct Cloud API setup, BSP migration, number quality/longevity, cold lists | [references/waba-provisioning.md](references/waba-provisioning.md) | Direct Cloud API setup sequence, switching BSP / migrating WABA (PIN reset, device-trust gotchas), cold list strategy |
-| Outsourced dispatch (a third party sends on their numbers), and the campaign measurement contract | [references/outsourced-dispatch.md](references/outsourced-dispatch.md) | Outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, vendor checklist, entity correlation; declaring cells and controls and calling `measure` from `@maccing/growth` |
-| Disposable BM pipeline, proxy/isolation stack, BM sources, profile acquisition, phone number strategy, display name strategy | `meta` skill | Full disposable-BM strategy, proxy comparison table, BM setup sequence, Number Warming Protocol (official WABA), phone number acquisition |
-| YCloud BSP platform (campaigns, inbox, contacts, webhooks) | `ycloud` skill | BSP platform operations, campaign management, YCloud features |
-| YCloud v2 REST API (send message, list messages, webhook endpoints, pagination) | `ycloud-api` skill | YCloud API reference, pagination gotchas (`page` not `offset`), HMAC signature, campaign-send lag caveat, broadcast monitoring |

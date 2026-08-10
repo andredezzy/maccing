@@ -62,36 +62,43 @@ Quality is computed from the last 7 days of user feedback: blocks, spam reports,
 
 **Pair Rate Limiting:** Sending too many messages to the same recipient in a short period triggers error 131056. Space out messages to individual users; WhatsApp limits how fast you can message a single number.
 
-### Queue Management for Bulk Sends
+### Throughput Pacing
+
+There is **no recipient-list fan-out in this file, deliberately.** An earlier revision shipped a
+`sendBulkMessages(recipients: string[], template)` that `Promise.allSettled`-ed a whole list through
+the queue below — fifty-five lines under a banner forbidding exactly that. A working broadcast loop
+is liftable in a way the paragraph above it is not: what gets copied out of a reference is the
+function, never the warning. Bulk pacing belongs to whoever actually sends the bulk — the BSP, on
+the campaign the operator submits, or the operator's own sender on direct Cloud API. The agent's
+job ends at building and validating the list.
+
+What the agent *is* allowed to send — service-window replies and single transactional messages —
+still has to respect the 80 MPS default ceiling. Pace those one recipient at a time:
 
 ```typescript
 import PQueue from 'p-queue';
 
-// Respect 80 MPS default throughput
+// Respect 80 MPS default throughput.
 const queue = new PQueue({
   concurrency: 10,
   interval: 1000,
   intervalCap: 80
 });
 
-async function sendBulkMessages(recipients: string[], template: TemplateMessage) {
-  const results = await Promise.allSettled(
-    recipients.map(phone =>
-      queue.add(() => sendWhatsAppMessage(phone, template))
-    )
-  );
-  return results;
+// One recipient. Not a list — see the doctrine banner at the top of this file.
+export function sendPaced(phone: string, message: OutboundMessage) {
+  return queue.add(() => sendWhatsAppMessage(phone, message));
 }
 ```
 
 ### Best Practices for High-Volume Sending
 
-1. **Warm up new numbers:** Start at 50-100 messages/day (internal/warm contacts only), increasing ~20% per day. The Dispatch Infrastructure section has the canonical detailed ramp (50→100→300→500→1,500→2,000). The 500-1,000/day starting volume is too aggressive for a brand-new number and triggers bot-detection signals. Note: inheriting the portfolio tier limit instantly (Oct 2025 change) does NOT eliminate the need to warm — quality rating is per-number and starts at zero.
+1. **Warm up new numbers:** Day 1 is 20-50 messages to warm contacts only (team, admins, people who expect the message), then step up on quality rather than on a calendar. The canonical day-by-day ramp is the `meta` skill → [`disposable-bm-strategy.md` → Dispatch Infrastructure → Number Warming Protocol (Official WABA)](../../meta/references/disposable-bm-strategy.md#number-warming-protocol-official-waba); follow that table rather than a ramp quoted from memory. A 500-1,000/day start is far too aggressive for a brand-new number and triggers bot-detection signals. Note: inheriting the portfolio tier limit instantly (Oct 2025 change) does NOT eliminate the need to warm — quality rating is per-number and starts at zero.
 2. **Test first:** Send to 50-100 internal contacts before full blast
 3. **Segment by relevance:** High-relevance sends → lower block rates → quality stays green
 4. **Monitor in real-time:** Watch delivery rates, read rates, and opt-out rates during sends
-   - **And ALWAYS surface unanswered inbound replies FIRST.** Every reconciliation/monitoring pass must also read the BSP Inbox for conversations where the customer replied and is waiting, and raise them as the **top-priority next action — above the funnel numbers**. An inbound reply opens the free 24h customer-service window (a $0, highest-converting warm path that closes in 24h) and is a positive quality signal; leaving it unanswered wastes the window and is the recipient most likely to block/report. For YCloud the exact read recipe is in the `ycloud` skill (`reference/api-automation.md` → "ALWAYS surface unanswered inbox replies").
-5. **Respect user-level caps:** Meta limits each user to an undisclosed number of marketing messages per day across all businesses (commonly estimated at ~2/day, but Meta does not publish the exact threshold — it is dynamically adjusted). If your message is blocked by this cap, you get error **131049** (not 130472). Error 130472 is a separate mechanism: recipients in Meta's experiment holdout (~1% of users per region, ongoing since 2023) who cannot receive marketing templates unless a 24h CSW is open, a marketing conversation exists, or the user came via CTWA. These are two distinct errors.
+   - **And ALWAYS surface unanswered inbound replies FIRST.** Every reconciliation/monitoring pass must also read the BSP Inbox for conversations where the customer replied and is waiting, and raise them as the **top-priority next action — above the funnel numbers**. An inbound reply opens the free 24h customer-service window (a $0, highest-converting warm path that closes in 24h) and is a positive quality signal; leaving it unanswered wastes the window and is the recipient most likely to block/report. For YCloud the exact read recipe is in the `ycloud` skill (`references/api-automation.md` → "ALWAYS surface unanswered inbox replies").
+5. **Respect user-level caps:** the per-recipient marketing limit is **adaptive, not a daily number.** Meta's [per-user limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits) page describes a ceiling that moves with "a dynamic view of an individual's recent marketing message read rate and how many messages they currently have in their inbox from friends, family, and businesses"; the "~2/day" everyone repeats is folklore, not a published threshold, and there is no figure to plan against. It counts across all businesses, and marketing sent inside an open 24h CSW does not count toward it. Blocked by the limit → error **131049**; retrying an already-limited recipient repeatedly within 24h is a separate enforcement that can make further attempts to those users unavailable for up to 24h, under the same code. The limit is not currently active for business numbers or recipients in the EEA, UK, Japan or South Korea. Do not confuse it with **130472**, a different mechanism: recipients in Meta's experiment holdout (~1% of users per region, ongoing since 2023) who cannot receive marketing templates unless a 24h CSW is open, a marketing conversation exists, or the user came via CTWA.
 6. **Implement exponential backoff:** For 429/rate-limit errors, back off and retry
 
 ---
@@ -103,7 +110,7 @@ async function sendBulkMessages(recipients: string[], template: TemplateMessage)
 | Delivery rate | >95% | 90-95% | <90% |
 | Read rate | >70% | 50-70% | <50% |
 | Block/report rate | <2% | 2-5% | >5% |
-| Quality rating | Green | Yellow | Red (tier downgrade) |
+| Quality rating | Green | Yellow | Red — blocks tier advancement, and since the October 2025 change above does **not** by itself reduce a tier you already hold |
 | Open rate | >96% | 90-96% | <90% |
 | CTR (link in template) | >15% | 5-15% | <5% |
 
@@ -114,7 +121,7 @@ async function sendBulkMessages(recipients: string[], template: TemplateMessage)
 - Delivery rate: 95-99% (well-optimized: 99%+)
 
 **If quality drops to yellow:** stop broadcast, review template content, reduce volume, wait 6h evaluation cycle.
-**If quality drops to red:** pause all marketing, switch to utility-only for 7+ days, may need to ramp up tier again.
+**If quality drops to red:** pause all marketing, switch to utility-only for 7+ days, and run the recovery protocol below. Note what Red now costs and what it does not: it blocks advancement toward the next tier but does not cut the tier you already hold, per the October 2025 change above — so the price is stalled growth, not a rebuild. The exception is the one that section names: a policy violation riding along with the Red, which can move the tier.
 
 
 ---
@@ -126,7 +133,7 @@ async function sendBulkMessages(recipients: string[], template: TemplateMessage)
 3. Clean contact list: remove non-engaged, non-opted-in
 4. Wait 7 days for quality score recalculation
 5. Resume gradually: best templates → most engaged contacts only
-6. If quality holds at Green/Yellow for 7 days: status returns to Connected
+6. If quality holds at Green/Yellow for 7 more days: the Red window has fully rolled off and tier advancement is unblocked again. Note there is no status change to wait for — the **Flagged** state that used to sit between Red and Connected was eliminated in October 2025 (see above), so a number under this protocol reads Connected throughout. What you are waiting on is the 7-day quality window, not a status flip.
 
 
 ---
