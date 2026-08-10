@@ -1,6 +1,6 @@
 {
   "name": "@maccing/growth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Campaign measurement for Bun. Point it at your database or a directory of exports, declare the groups you sent to, and get one record per group out. Every ambiguity throws; nothing degrades to zero.",
   "keywords": [
