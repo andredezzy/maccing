@@ -1244,17 +1244,12 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   }
   const fallback = dominant_market(lead_rows.map((row) => row.phone));
   const place_key = (raw: unknown): string | null => place(raw, fallback)?.key ?? null;
-  // What the base looks like by market, counted once. A cell's list is compared against this
-  // rather than against a declared country, so a project that genuinely spans markets carries its
-  // own shape and a single-market project gets a tight guard for free.
+  // What the base looks like by market. A cell's list is compared against this rather than against
+  // a declared country, so a project that genuinely spans markets carries its own shape and a
+  // single-market project gets a tight guard for free. Counted in the pass below rather than its
+  // own: placing a number is the most expensive thing this function does, and the loop that builds
+  // the index already does it for every row.
   const base_markets = new Map<CountryCode, number>();
-  const place_market = (raw: unknown): CountryCode | null => place(raw, fallback)?.country ?? null;
-  for (const row of lead_rows) {
-    const country = place_market(row.phone);
-    if (country !== null) {
-      base_markets.set(country, (base_markets.get(country) ?? 0) + 1);
-    }
-  }
 
   const by_key = new Map<string, Account[]>();
   // Every id in the file, whether or not its phone was readable and whether or not its key
@@ -1291,11 +1286,13 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     if (written === "") {
       continue;
     }
-    const key = place_key(written);
-    if (key === null) {
+    const placed = place(written, fallback);
+    if (placed === null) {
       unknowns.add(written);
       continue;
     }
+    const key = placed.key;
+    base_markets.set(placed.country, (base_markets.get(placed.country) ?? 0) + 1);
     const account: Account = { id, created };
     const bucket = by_key.get(key);
     if (bucket === undefined) {
