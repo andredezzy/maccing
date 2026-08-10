@@ -1,6 +1,6 @@
 ---
 name: database-ops
-description: 'Use BEFORE the first read or write against any non-local database, however small: a `SELECT` against production, any SQL run by hand, a single-row lookup, a support investigation touching live rows, a data fix, a schema or migration check, an export, or writing up what was done afterwards. Covers the mandatory first step (which host, credentials from the secret store, read or write), the dry-run-and-approval gate on every INSERT/UPDATE/DELETE, the dated case file recording the exact query and its observed output, host identity verification, and deleting exports when the work is finished. MANDATORY, never optional — "quick lookup", "obvious fix", "just a SELECT", or "it is read-only anyway" is the exact trap: those are the queries that reach production with no record and an unverified host. If the task touches live or production data at all, load this FIRST. Requires database-mapping before any operation that needs to know which table holds what.'
+description: 'Use BEFORE the first read or write against any non-local database, however small: a `SELECT` against production, any SQL run by hand, a single-row lookup, a support investigation touching live rows, a data fix, a schema or migration check, an export, or writing up what was done afterwards. Covers reading the prior cases first, the host-and-credential step (secret store, read or write), the dry-run-and-approval gate on every INSERT/UPDATE/DELETE, the dated case file recording the exact query and its observed output, host identity verification, and deleting exports when the work is finished. MANDATORY, never optional — "quick lookup", "obvious fix", "just a SELECT", or "it is read-only anyway" is the exact trap: those are the queries that reach production with no record and an unverified host. If the task touches live or production data at all, load this FIRST. Requires database-mapping before any operation that needs to know which table holds what.'
 ---
 
 # Database Ops
@@ -10,6 +10,52 @@ description: 'Use BEFORE the first read or write against any non-local database,
 This skill is the discipline for operating on data that other people depend on. It is not a query cookbook and it is not tied to any one schema — the schema lives in `database-mapping`, and this skill governs how you are allowed to touch what that map describes.
 
 The whole thing rests on one asymmetry. A read that goes wrong wastes your time. A write that goes wrong spends someone else's money, deletes someone else's history, or quietly corrupts a row that nobody notices for three months. Every rule below exists because that asymmetry is real and because the pressure to skip the rule is strongest exactly when the operation is most dangerous — late, urgent, and "obvious".
+
+## Before Step 0 — read the cases
+
+The first action of any operation is reading the case files that already exist, and it comes before the host check because it can change what you are about to do.
+
+Past cases are the only place the operator's corrections are written down. When a mutation was wrong and they said so, that sentence is in a case file and nowhere else — not in the schema, not in the code, not in this skill. A directory of them is a record of every way this database has already been got wrong.
+
+Find the ones that share a user, an operation type, or a symptom with the task in front of you. Where nothing matches, read the most recent handful anyway: the corrections are recent, and the patterns transfer further than the subject matter does.
+
+| Signal in a past case | What it means for you |
+|---|---|
+| A field was changed, then reverted | Do not touch that field in a similar operation |
+| The operator corrected the approach | The corrected one is the approach; the original is a trap that already caught someone |
+| Rollback SQL was run | Find out why before you repeat the thing that needed rolling back |
+| A "Note:" aside | A rule discovered mid-operation, which is where the real ones come from |
+| Several rounds of changes | The final state is the pattern; the earlier ones are the mistakes |
+
+### Rationalizations
+
+| Thought | Reality |
+|---|---|
+| "I already know how to do this" | The cases hold corrections you have not seen. Knowing the mechanism is not knowing what went wrong last time. |
+| "This is a different operation" | Corrections transfer across operation types far better than the mechanics do. |
+| "I will read them if I get stuck" | Stuck is too late: by then the write has happened. Read first. |
+| "There are too many to read" | Filter by relevance, then read the recent ones. Some is not none. |
+| "The schema map already tells me this" | The map says what the columns are. A case says which one someone regretted touching. |
+
+**Their values are stale; their lessons are not.** A case records an id, a balance and an ancestors array as they were on the day. Take the approach and the correction from it, and re-read every concrete value live — see the next section.
+
+## Every fact comes from a live query
+
+Every id, balance, status, referrer, count and relationship you state or act on comes from a `SELECT` you ran in this session against this database. Not from memory, not from training data, not from a case file's recorded values, not from inference.
+
+This is not pedantry about sourcing. A failed read that goes unnoticed is indistinguishable from an empty result, and an agent that narrates what it expected to see rather than what it saw will build a dry run on values that never existed. The rule exists because that happened: failed file reads produced confabulated ids and an entire account hierarchy that was not there.
+
+- **Re-query rather than recall.** Ids and balances move. Anything you are about to act on gets re-fetched, however recently you saw it.
+- **A read that errored is not data.** If a query fails or returns nothing, stop and say so. Never continue as though it returned what you wanted.
+- **Never invent one.** No id, username, count or history that did not come back from a statement. If you do not have it, query it or say you cannot.
+- **Build the dry run from fresh state**, not from values carried down the session.
+
+| Thought | Reality |
+|---|---|
+| "I saw that id earlier" | Earlier could be stale, or from the read that failed. Query it again. |
+| "The case file says it is X" | The case file is history. Confirm it against the database now. |
+| "That read probably worked" | If you did not see rows, you have no rows. Re-run it. |
+| "I remember this account's shape" | Memory is not the database. |
 
 ## Step 0 — the mandatory first step
 
@@ -143,6 +189,18 @@ Lifecycle, all four steps:
 If the export genuinely must outlive the operation, that is a decision someone else makes explicitly, and the case file records who made it and where the file went. Silence is not that decision.
 
 **One artifact is not an export in this sense, and deleting it destroys the record.** The before-state you captured to build the dry run — the rows as they stood, with the values the write was about to change — is the evidence the case file's own "what changed" section rests on. It is narrow by construction, it is dated, and it is the only thing that lets anyone later check that the undo statement was correct. Keep it beside the case file under the same date and slug, and say in the file that it is kept and why. The rule above is about the broad pull taken to answer a question, which has served its purpose the moment the answer is written down; a project may also record, once and in one place rather than per operation, that these narrow snapshots are kept as part of its record. What is never allowed is a wide export left lying around because nobody decided anything.
+
+## When a number on a screen disagrees with the database
+
+A support report is almost never a database observation. Someone saw a figure in an interface, and the interface is the end of a chain: a query, a resolver, a use case, a transport, a client cache, a filter, a formatter. Any link can produce the discrepancy, and only one of them is worth a write.
+
+So the discrepancy is not the finding — it is the beginning. Reproduce the number the *interface* produced, not the one you would compute from the tables, and walk the chain until the two answers first diverge. That is where the fault is. Three of the links deserve suspicion before the data does, because each is invisible from a `SELECT`:
+
+- **A cache holding a pre-correction value.** The most common cause of "the balance is wrong" after somebody already fixed it, and the one no query will ever reveal.
+- **A filter in the read path.** A layer that hides zeros, or one currency, or one status, makes real rows vanish from a total without touching them.
+- **The wrong subject.** A near-identical username or a second account belonging to the same person answers every question correctly, about somebody else.
+
+Only once the chain is walked and the divergence located does a data fix become the right instrument. A write made against a display bug corrupts correct data to match an incorrect screen, and it will pass every verification you write for it, because you will write them against the same wrong belief.
 
 ## `database-mapping` is a required substrate
 
