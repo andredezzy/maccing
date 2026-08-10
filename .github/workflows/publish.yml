@@ -1,0 +1,108 @@
+# Publishes `@maccing/growth` to npm when a `growth-v*` tag is pushed.
+#
+# **The first release cannot come from here, and that is not a gap in this file.** npm's trusted
+# publishing is configured per package on npmjs.com, and that settings page does not exist until
+# the package does. So version 0.1.0 goes up by hand, once, from a machine holding a credential;
+# the trusted publisher is configured afterwards; and every release from then on is this workflow
+# with no token anywhere. Until that configuration exists this job will fail at the publish step,
+# which is the honest outcome — a workflow that fell back to a long-lived token would quietly
+# undo the reason for using OIDC at all.
+#
+# `id-token: write` is what mints the short-lived OIDC credential npm exchanges for publish rights.
+# There is deliberately no `NODE_AUTH_TOKEN`, no `NPM_TOKEN` and no `.npmrc` written here: a token
+# in a public repository's Actions environment is a token one workflow-file pull request away from
+# being exfiltrated, and provenance signed by a token proves only that somebody had the token.
+#
+# The gate runs first and the tests run second, before anything reaches the registry, because a
+# publish cannot be taken back. `npm unpublish` is refused after 72 hours and is a courtesy before
+# it — the version number is burned either way, and a leaked term is public the moment the tarball
+# lands. That ordering is the locked decision from the framework spec: the grep gates the first
+# publish, and every one after it.
+#
+# The scan here is `--path` over the extracted tarball rather than the tracked tree. They are not
+# the same set: `files` in package.json ships `src`, the README and the licence, while the tracked
+# tree also holds tests and fixtures that never leave. Scanning the tree would clear files nobody
+# receives and — the direction that matters — would miss anything `files` pulls in that git does
+# not track. What ships is what has to be clean.
+
+name: publish
+
+on:
+  push:
+    tags:
+      - "growth-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Mints the OIDC token npm exchanges for publish rights. Without it the publish step has no
+      # credential at all, which is the intended failure mode rather than a fallback to a secret.
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/growth
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      # Trusted publishing needs a recent npm; the runner's bundled version predates it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install a publish-capable npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Types
+        run: bunx tsc --noEmit
+
+      - name: Tests
+        run: bun run test
+
+      - name: Build the tarball that would ship
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Extract it for scanning
+        run: tar -xzf "$RUNNER_TEMP"/*.tgz -C "$RUNNER_TEMP"
+
+      # Same reasoning as `leak.yml`: the overlay is a secret, it lands outside the workspace, and
+      # a run without one is red rather than green. See that file's header for why a checkout of
+      # the private repository is not an equivalent way to get the dictionary here.
+      - name: Write the overlay dictionary outside the workspace
+        env:
+          LEAK_PROTECTIONS_JSON: ${{ secrets.LEAK_PROTECTIONS_JSON }}
+        run: |
+          set -eu
+          if [ -z "${LEAK_PROTECTIONS_JSON:-}" ]; then
+            echo "::error::No overlay dictionary, so nothing would be checked before this tarball" \
+                 "reached a public registry. Set the LEAK_PROTECTIONS_JSON secret."
+            exit 1
+          fi
+          printf '%s' "$LEAK_PROTECTIONS_JSON" > "$RUNNER_TEMP/leak-protections.json"
+
+      # `--quiet` for the reason `leak.yml` gives at length: a hit prints the term, its category and
+      # the overlay's own prose, and this repository's logs are world-readable.
+      - name: Clear the tarball
+        working-directory: ${{ github.workspace }}
+        run: |
+          bun .github/scripts/leak-protection.ts \
+            --terms "$RUNNER_TEMP/leak-protections.json" \
+            --require-overlay --quiet \
+            --path "$RUNNER_TEMP/package"
+
+      # `--provenance` is what ties the published tarball to this workflow run and this commit. It
+      # requires the OIDC token above, and it is the whole point of publishing from CI rather than
+      # from a laptop: a consumer can check where the bytes came from.
+      - name: Publish
+        run: npm publish --provenance --access public
