@@ -78,6 +78,15 @@ the vocabulary, and its answer is a boolean.
 `at_fallback` is read only where `at` is blank. Omitting `recycled` declares that the product has no
 recycled-balance concept, and the record omits the breakdown rather than publishing two zeros.
 
+**Timestamps must arrive as text.** A driver turns a Postgres `timestamp without time zone` into a
+`Date` by reading the stored wall clock in the *client's* timezone, so the same row becomes a
+different instant on every machine that measures it — `23:49:45` is one moment in London and another
+in São Paulo, with nothing to say so. The driver cannot tell you which columns were naive, because a
+real `timestamptz` arrives correctly through the same path. So a `Date` reaching this boundary is
+`TimestampDriverError` rather than a guess: cast it in the query, with `at::text` for a naive
+`timestamp` or `to_char(at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MSZ')` for a `timestamptz`.
+`files()` is unaffected — a CSV already carries text.
+
 **A role can be unbound.** A source that answers with neither a header nor a row is saying it does
 not carry that role at all, which the record distinguishes from a role that carries nothing: a
 product with no withdrawals reports a churn of zero, a product with no concept of churn reports no

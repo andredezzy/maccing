@@ -90,20 +90,12 @@ export function postgres(url: string, options: { queries: Queries }): Source {
         return { header: [], records: [] };
       }
       const sql = new SQL(url);
+      // Only the query itself is wrapped. Reading the rows it returned is a separate kind of
+      // failure - the query ran, and answered with something this boundary will not carry - and
+      // folding the two together would bury that message under "could not be run".
+      let result: Record<string, unknown>[];
       try {
-        const result = (await sql.unsafe(query)) as Record<string, unknown>[];
-        const records = result.map((row) => {
-          const out: Record<string, string> = {};
-          for (const [column, value] of Object.entries(row)) {
-            out[column] = value === null || value === undefined ? "" : render(value);
-          }
-          return out;
-        });
-        // A driver hands back objects, so two columns aliased alike have already collapsed into
-        // one and the shadow check downstream has nothing left to find. Naming a column twice in
-        // one `select` is the query author's fault and their editor's to catch; the header here
-        // describes what actually arrived.
-        return { header: Object.keys(result[0] ?? {}), records };
+        result = (await sql.unsafe(query)) as Record<string, unknown>[];
       } catch (failure) {
         throw new SourceError(
           role,
@@ -114,19 +106,77 @@ export function postgres(url: string, options: { queries: Queries }): Source {
       } finally {
         await sql.close();
       }
+      return driver_rows(role, result);
     },
   };
 }
 
-/** What a CSV would have held for this value. */
+/**
+ * What a driver handed back, as the strings this boundary carries.
+ *
+ * Separate from `postgres` so it can be read and tested without a database, which is where the
+ * one defect this file has had so far lived: a timestamp that meant a different moment on every
+ * machine, invisible to every guard downstream because by then it was a well-formed instant.
+ */
+export function driver_rows(role: RoleName, result: Record<string, unknown>[]): Rows {
+  const records = result.map((row) => {
+    const out: Record<string, string> = {};
+    for (const [column, value] of Object.entries(row)) {
+      if (value instanceof Date) {
+        throw new TimestampDriverError(role, column);
+      }
+      out[column] = value === null || value === undefined ? "" : render(value);
+    }
+    return out;
+  });
+  // A driver hands back objects, so two columns aliased alike have already collapsed into one and
+  // the shadow check downstream has nothing left to find. Naming a column twice in one `select` is
+  // the query author's fault and their editor's to catch; the header here describes what arrived.
+  return { header: Object.keys(result[0] ?? {}), records };
+}
+
+/** What a CSV would have held for this value. Dates never reach here - see `TimestampDriverError`. */
 function render(value: unknown): string {
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
   if (typeof value === "boolean") {
     return value ? "true" : "false";
   }
   return String(value);
+}
+
+/**
+ * A query that handed the driver a timestamp instead of text.
+ *
+ * `Bun.sql` turns a Postgres `timestamp without time zone` into a JS `Date` by reading its
+ * wall-clock digits **in the client's own timezone**. The same row therefore becomes a different
+ * instant on every machine that measures it: a value stored as `23:49:45` is `23:49:45Z` in London,
+ * `02:49:45Z` in Sao Paulo and `18:19:45Z` in Mumbai. Setting the session timezone does not help,
+ * because the conversion never reaches the server. And the driver cannot say which columns were
+ * naive: a real `timestamptz` arrives as a correct `Date` through the same path, so undoing the
+ * offset would break those instead.
+ *
+ * Two columns that disagree by hours is exactly the silent wrong number this package exists to
+ * refuse, so it refuses rather than picking a side. The fix is one cast in the query, written by
+ * the person who knows which kind of column it is, and it makes the boundary say what it already
+ * claims to be: strings.
+ */
+export class TimestampDriverError extends Error {
+  readonly role: RoleName;
+  readonly column: string;
+
+  constructor(role: RoleName, column: string) {
+    super(
+      `the ${role} query returned column ${JSON.stringify(column)} as a timestamp rather than as ` +
+        "text, and this boundary carries strings. The driver builds that value by reading the " +
+        "stored wall clock in whatever timezone the measuring machine happens to be in, so the " +
+        "same row would be read as a different moment somewhere else and no error would ever say " +
+        `so. Cast it in the query - \`${column}::text\` for a naive \`timestamp\`, or ` +
+        `\`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MSZ')\` for a ` +
+        "`timestamptz` - and the value arrives meaning one thing everywhere.",
+    );
+    this.name = "TimestampDriverError";
+    this.role = role;
+    this.column = column;
+  }
 }
 
 /**

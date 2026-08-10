@@ -22,7 +22,7 @@ export {
 } from "../../../internal/table.ts";
 export { TimestampError } from "../../../internal/timestamp.ts";
 export type { RoleName, Source } from "./source.ts";
-export { files, postgres, SourceError } from "./source.ts";
+export { files, postgres, SourceError, TimestampDriverError } from "./source.ts";
 
 /**
  * The measurement pass, and the shape of what goes into and comes out of it.
