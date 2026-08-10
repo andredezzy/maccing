@@ -80,32 +80,29 @@ Recognize and honor: STOP, UNSUBSCRIBE, CANCEL, OPT OUT, NO, PARAR, SAIR.
 
 ---
 
-## Business Profile Compliance (Financial Niche)
+## Business profile compliance
 
-### Business Profile Compliance (financial niche)
+**Check Messaging Policy §4 before provisioning anything.** If the business model sits in a
+restricted vertical, no wording on the profile makes it eligible, and Meta says so explicitly:
+the prohibitions apply "irrespective of the global or local licenses, registrations, or other
+approvals your business may hold." A local authorisation is not a defence, and neither is a
+profile that describes the business carefully. Establish eligibility first; everything below is
+about a business that is already allowed to be there.
 
-**The profile IS reviewed by Meta** — reactively (when account is flagged for any reason: spam reports, volume spikes, blocks), not proactively like templates. Meta's terms: "WhatsApp may review, remove, or delete Company Content you share on your business profile." A profile that contradicts the WABA category becomes evidence of deception during review.
+**The profile IS reviewed** — reactively, when the account is flagged for any reason at all
+(spam reports, a volume spike, blocks), not proactively the way templates are. Meta's terms:
+"WhatsApp may review, remove, or delete Company Content you share on your business profile." A
+profile that contradicts the WABA category becomes evidence of deception during that review.
 
-**Category + About + Description must tell ONE coherent story.** Mismatch (e.g., category "Education" but description says "managed capital") is a compounding risk during review.
+**Category, About and Description must tell one coherent story.** A category of "Education"
+against a description promising managed returns is not two separate risks; it is one compounding
+one, and the mismatch is what a reviewer sees first.
 
-**Profile risk spectrum (Brazil financial/investment):**
-| Phrase | Meta risk | Regulator risk | Use? |
-|---|---|---|---|
-| education framing | None | None | ✅ Safe |
-| "comunidade de investidores" | None | None | ✅ Safe |
-| naming the market as a topic | None | None | ✅ Safe |
-| "compartilhamos análises/estratégias" | None | None | ✅ Safe |
-| a regulated-activity self-description | Medium | High (regulator authorization required) | ❌ Avoid |
-| a managing verb applied to client money | High | Very High | ❌ Never |
-| "retorno garantido" / "rentabilidade garantida" | Instant flag | Criminal-level | ❌ Never |
-
-**Key distinction (Brazilian law):**
-- Teaching markets and strategies = NO regulator authorization needed
-- Personalized investment advice = regulator registration required
-- Managing portfolios on a client’s behalf = regulator authorization required
-- A sharing verb is safe; a managing verb triggers regulation
-
-**The sector regulator is aggressive (2025):** platforms suspended, daily fines. Meta risk and regulator risk are independent but additive — a regulated-activity self-description hits both at once.
+**Where the wording genuinely is the risk, the sector's own regulator decides that, not Meta.**
+Which claims require a licence, and which verb turns a description into a regulated activity, is
+jurisdiction-specific and changes. That mapping belongs with the project that operates under it,
+beside its legal advice — not in a portable skill, which cannot keep it current and has no
+standing to give it.
 
 **Complete profile is SAFER than minimal** (counterintuitive but consistent):
 - Quality rating depends on message reception, NOT profile completeness

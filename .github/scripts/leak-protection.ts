@@ -393,7 +393,7 @@ const COMBINING = /\p{M}/u;
  *
  * The fold is one-way and deliberately lossy: genuine Cyrillic or Greek text is folded too, so a
  * repository written in either would see false positives. That trade is documented in
- * `.github/scripts/leak-check.md` rather than hidden, and it is the right way round for a gate.
+ * `.github/scripts/leak-protection.md` rather than hidden, and it is the right way round for a gate.
  */
 const CONFUSABLE: Record<string, string> = {
   // Cyrillic, uppercase
@@ -6383,7 +6383,7 @@ function staged_contents(root: string, files: string[]): Map<string, Uint8Array>
 function print_usage(): void {
   console.log(
     [
-      "Usage: bun .github/scripts/leak-check.ts [options]",
+      "Usage: bun .github/scripts/leak-protection.ts [options]",
       "",
       "Scans this repository for vocabulary that belongs to private work. Exits 1 on any hit.",
       "The vocabulary itself is not in this repository: merge a project's overlay to load one.",

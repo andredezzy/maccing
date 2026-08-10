@@ -24,7 +24,7 @@ __pycache__/
 # maccing-pictura legacy output (untracked tool output, never committed)
 pictura-output/
 
-# The leak-check dictionary. Its content is the LEAK_PROTECTIONS github secret and it is never
+# The leak-protection dictionary. Its content is the LEAK_PROTECTIONS github secret and it is never
 # committed: the vocabulary lives in the secret and in this one untracked file, nowhere else.
 # The sibling patterns matter as much as the first — an editor swap or backup beside it carries
 # the same bytes under a name a single entry would miss.

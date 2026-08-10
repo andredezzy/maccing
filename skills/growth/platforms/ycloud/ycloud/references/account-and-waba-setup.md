@@ -74,8 +74,8 @@ Creating the YCloud **account** (login + company) is a SEPARATE step from WhatsA
 | **Profile photo** ("Choose JPG or PNG File") | 640×640 px, <5MB, JPG/PNG | brand logo |
 | **Display name** ("Edit" button) | — | set in Embedded Signup; badge shows **"In review" → "Approved"** |
 | **About** | **139** chars | one-line brand + niche tagline |
-| **Category** (dropdown) | — | **Education** (financial-education niche; never Finance) |
-| **Description** ("What does your business do?") | **512** chars | brand story, Education-framed (no regulated-activity wording) |
+| **Category** (dropdown) | — | the closest honest fit; a category contradicting the Description is what a reviewer sees first |
+| **Description** ("What does your business do?") | **512** chars | brand story that matches the Category, and no wording that claims an activity the sector's regulator licenses |
 | **Address** | **256** chars | e.g. just the country |
 | **Email** | **128** chars | ⚠️ **leave EMPTY** — a real email links the WABA to the real domain (isolation break) |
 | **Website1** | **255** chars | ⚠️ **brand homepage** (NOT /grupo) — the **display-name verification source**; must show the brand. DIFFERENT field from the locked WABA Site in Step 2 |

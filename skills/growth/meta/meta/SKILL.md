@@ -57,7 +57,7 @@ Brazil is the highest-risk Meta market for financial advertisers. The black hat 
 
 **CNPJ matters:** Meta cross-references CNPJ with Receita Federal. Inactive CNPJ, mismatched address, or CPF/CNPJ linked to permanently banned BMs creates persistent blacklist entries. Financial identity verification (March 2026) adds another layer for banking/fintech/crypto advertisers.
 
-**WhatsApp profile compliance:** Category + About + Description must tell one coherent story. A regulated-activity self-description triggers both Meta and regulator risk simultaneously. Education framing and analysis-sharing wording are safe. Complete profile is safer than minimal — empty fields signal scam during manual review.
+**WhatsApp profile compliance:** Category, About and Description must tell one coherent story — a category that contradicts the description is evidence of deception during review, not two separate risks. Complete beats minimal: empty fields read as a scam to a human reviewer. Which specific claims a sector's own regulator treats as a licensed activity is jurisdictional and changes; that mapping belongs with the project operating under it, not here.
 
 Full playbook + WABA profile risk table: `references/brazilian-classifier-defense.md`
 

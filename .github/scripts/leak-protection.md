@@ -1,6 +1,6 @@
 # Leak check
 
-This repository is public. Some of the work that produced it was not. `.github/scripts/leak-check.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
+This repository is public. Some of the work that produced it was not. `.github/scripts/leak-protection.ts` scans for vocabulary carried over from private engagements and fails the run if any of it appears — in a tracked file, in a file or directory name, in a staged change, in a commit message, or in any version of any file that is still reachable from any ref.
 
 It lives under `.github/scripts/`, beside the workflow that runs it, because it is CI apparatus rather than anything the published package ships.
 
@@ -19,8 +19,8 @@ An earlier version of this file kept the "generic" half of a dictionary in publi
 So the whole dictionary is private. This repository ships the mechanism; each project keeps its own terms and merges them at run time:
 
 ```sh
-bun .github/scripts/leak-check.ts --terms ~/elsewhere/leak-protections.json   # repeatable
-LEAK_PROTECTIONS=~/a.json:~/b.json bun .github/scripts/leak-check.ts          # colon-separated
+bun .github/scripts/leak-protection.ts --terms ~/elsewhere/leak-protections.json   # repeatable
+LEAK_PROTECTIONS=~/a.json:~/b.json bun .github/scripts/leak-protection.ts          # colon-separated
 ```
 
 The three git hooks resolve the dictionary as above, so the ordinary case needs no environment at all — one `git config leak.protections <path>` per clone and nothing else.
@@ -185,14 +185,14 @@ A hit found across a line break reports the line the term starts on, marks how m
 ### Modes
 
 ```sh
-bun .github/scripts/leak-check.ts                       # every tracked file and path (the default)
-bun .github/scripts/leak-check.ts --staged              # staged content and paths, for a pre-commit gate
-bun .github/scripts/leak-check.ts --message <file>      # a commit message, for a commit-msg gate
-bun .github/scripts/leak-check.ts --path packages/      # one file or directory
-bun .github/scripts/leak-check.ts --history             # ALSO clear the whole history
-bun .github/scripts/leak-check.ts --history v1.0..HEAD  # ALSO clear a chosen range
-bun .github/scripts/leak-check.ts --audit               # read every exemption and flag the stale ones
-bun .github/scripts/leak-check.ts --self-test           # prove the checker against planted fixtures
+bun .github/scripts/leak-protection.ts                       # every tracked file and path (the default)
+bun .github/scripts/leak-protection.ts --staged              # staged content and paths, for a pre-commit gate
+bun .github/scripts/leak-protection.ts --message <file>      # a commit message, for a commit-msg gate
+bun .github/scripts/leak-protection.ts --path packages/      # one file or directory
+bun .github/scripts/leak-protection.ts --history             # ALSO clear the whole history
+bun .github/scripts/leak-protection.ts --history v1.0..HEAD  # ALSO clear a chosen range
+bun .github/scripts/leak-protection.ts --audit               # read every exemption and flag the stale ones
+bun .github/scripts/leak-protection.ts --self-test           # prove the checker against planted fixtures
 ```
 
 **`--history` is the clearance, and a run without it has not looked at the history at all.** It walks every object reachable from every ref: the content of every blob, every path any object was ever stored under, **every annotated tag's own message**, and every commit message. A tag is an object with a message of its own and `git push --follow-tags` publishes it beside the commits, so reading commit messages and stopping there left a release note — the one text nobody rewrites — unread. Blobs are deduplicated by object id, so a file unchanged across five hundred commits is one object, read once and reported once, and the report says how many were read, how many were skipped as bytes the tracked scan had already read, how many were read only for their runs of text, and how many were not read at all. **Everything skipped is named**, with its path, its object id and the reason; it used to be a number in the scope line, so a disclosure sitting in a blob too large to read left no trace in the report. Each hit names the path and at least one commit that contains it, as `history:<path> (commit <sha>)`. The path a hit belongs to travels **with the hit** rather than inside that label: a path may legally contain an `@`, and recovering it by cutting the label at the last `@` read `assets@2x/notes.md` as `assets`, so an exemption written for `assets` could suppress a hit belonging to a path nobody had judged. Nothing parses a label now.
@@ -218,7 +218,7 @@ Reads are batched — `git rev-list --objects` for the graph, `git cat-file --ba
 **Those are a measurement, not constants, and two of them only reproduce under a stated method.** Measured at `5e820a3` on an idle machine, over a *clean* checkout, running that checkout's own copy of the script:
 
 ```sh
-bun .github/scripts/leak-check.ts --history --require-overlay --quiet
+bun .github/scripts/leak-protection.ts --history --require-overlay --quiet
 ```
 
 Three of those numbers are stable however you take them. The other two are not, and the earlier figures on this line — 274 files, 1,994 objects, 507 blobs, 307 messages, "about two seconds" — had drifted on every count before anybody re-ran them. **Superseded blobs needs a clean tree**: a modified tracked file's committed blob stops counting as already read and becomes superseded, so the figure rises by exactly one per dirty file, and the same repository measured with four modified files reports 629 rather than 625. **Ref names is not a property of the history at all** but of the checkout — 15 here, 16 in a single-branch clone, 17 in a full one, because a clone carries remote-tracking refs this repository does not. Timing needs an idle machine and an overlay: with none loaded the same run takes about 1.8 seconds, because nothing is matched. And run the repository's *own* copy of the script — invoking another checkout's copy without `--path` scans that checkout instead, which is the trap the `--path` section below describes, and it silently produces the wrong repository's numbers.
@@ -271,9 +271,9 @@ Neither *commit* hook clears the history — nothing that runs per commit can af
 ### Before a publish, and before a force-push
 
 ```sh
-bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --self-test \
-  && bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --audit \
-  && bun .github/scripts/leak-check.ts --terms <overlay> --require-overlay --history
+bun .github/scripts/leak-protection.ts --terms <overlay> --require-overlay --self-test \
+  && bun .github/scripts/leak-protection.ts --terms <overlay> --require-overlay --audit \
+  && bun .github/scripts/leak-protection.ts --terms <overlay> --require-overlay --history
 ```
 
 **`PASSED` and `PASSED WITH GAPS` both exit 0, so the `&&` above cannot tell them apart.** The chain proves that each step ran and that none of them found anything; it does not prove the clearance managed to read everything. A gap is a file or blob nothing could open or decode, and this repository always has some — the twelve historical images under `.claude/plugins/maccing/pictura/output/`. So read the three verdict lines rather than only the exit code. The `&&` is there to stop the chain on a failure, not to judge coverage, and a run that could not read half the tree still exits 0 and still says so in words.

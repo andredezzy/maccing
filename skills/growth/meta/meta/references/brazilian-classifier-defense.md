@@ -10,7 +10,6 @@
    - [Profile Types and Survival Rates](#profile-types-and-survival-rates)
    - [Niche Classification in Brazil](#niche-classification-in-brazil)
    - [2025-2026 Trends](#2025-2026-trends)
-2. [Business Profile Compliance (financial niche) — WhatsApp](#business-profile-compliance-financial-niche--whatsapp)
 
 ---
 
@@ -149,12 +148,12 @@ A legitimate operator in the White category (e.g. a regulated financial-services
 - **CNPJ cross-verification:** Meta now cross-references CNPJ with Brazilian public databases (Receita Federal), flagging inconsistencies (inactive CNPJ, mismatched address). Benefits legitimate companies.
 - **CPF/CNPJ blacklisting:** Brazilian documents linked to permanently banned BMs create persistent blacklist entries. Total investment loss, blocking of all linked accounts.
 - **Financial identity verification (March 2026):** Meta now requires identity verification for financial product advertisers (banking, lending, fintech, crypto) as additional compliance layer.
-- **Regulatory convergence:** securities, banking, consumer-protection and data-protection regulators increasingly monitoring digital advertising in sensitive niches. Receita Federal cross-referencing Pix transactions with tax returns.
+- **Regulatory convergence:** Banco Central, Senacon and ANPD are all increasingly monitoring digital advertising, and a sector's own regulator will be watching too. Receita Federal cross-referencing Pix transactions with tax returns.
 - **Meta ML detection rate:** reportedly detects 95% of traditional proxy connections, VPNs, shared residential IPs. Only mobile proxies remain effective.
 - **BM supply chain scale:** npprteam.shop's top product (Verified BM with WABAs, $59) has 1,713 orders — thousands of disposable BMs in active circulation.
 
 ---
 
-## Business Profile Compliance (financial niche) — WhatsApp
+## Business profile compliance
 
-Moved to `skills/meta/whatsapp/reference/compliance.md` — see "Business Profile Compliance (Financial Niche)".
+In the `whatsapp` skill, under "Business profile compliance" in `references/compliance.md`.

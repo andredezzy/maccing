@@ -55,4 +55,4 @@ if [ -z "${LEAK_PROTECTIONS:-}" ]; then
   done
 fi
 export LEAK_PROTECTIONS
-exec bun "$repository/.github/scripts/leak-check.ts" --message "$1" --require-overlay
+exec bun "$repository/.github/scripts/leak-protection.ts" --message "$1" --require-overlay
