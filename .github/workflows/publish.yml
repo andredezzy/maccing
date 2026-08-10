@@ -13,11 +13,11 @@
 # in a public repository's Actions environment is a token one workflow-file pull request away from
 # being exfiltrated, and provenance signed by a token proves only that somebody had the token.
 #
-# The gate runs first and the tests run second, before anything reaches the registry, because a
-# publish cannot be taken back. `npm unpublish` is refused after 72 hours and is a courtesy before
-# it — the version number is burned either way, and a leaked term is public the moment the tarball
-# lands. That ordering is the locked decision from the framework spec: the grep gates the first
-# publish, and every one after it.
+# Every check here runs before anything reaches the registry, because a publish cannot be taken
+# back. `npm unpublish` is refused after 72 hours and is a courtesy before it — the version number
+# is burned either way, and a leaked term is public the moment the tarball lands. That is the
+# locked decision from the framework spec: the grep gates the first publish, and every one after
+# it.
 #
 # The scan here is `--path` over the extracted tarball rather than the tracked tree. They are not
 # the same set: `files` in package.json ships `src`, the README and the licence, while the tracked
@@ -93,7 +93,7 @@ jobs:
 
       # `--quiet` for the reason `leak.yml` gives at length: a hit prints the term, its category and
       # the overlay's own prose, and this repository's logs are world-readable.
-      - name: Clear the tarball
+      - name: Scan it for leaked terms
         working-directory: ${{ github.workspace }}
         run: |
           bun .github/scripts/leak-protection.ts \
