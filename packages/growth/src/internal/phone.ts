@@ -1,10 +1,7 @@
 import { type CountryCode, parsePhoneNumberFromString } from "libphonenumber-js";
 
-/**
- * A number this engine could not place in any market. Thrown once, when a corpus is read, rather
- * than per row: a corpus that cannot be keyed produces zero matches, and zero matches looks
- * exactly like a list nobody on it ever registered.
- */
+/** A corpus this engine could not place in any market. Thrown once per corpus, not per row: a corpus
+ *  that cannot be keyed yields zero matches, which looks like a list nobody on it ever registered. */
 export class PhoneFormatError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,52 +9,40 @@ export class PhoneFormatError extends Error {
   }
 }
 
-/**
- * Digits of a national number that survive a dialling-plan reform, per market.
- *
- * Only markets that have moved their numbering need an entry; everywhere else the national number
- * is already stable and is used whole. This is the one piece of local knowledge the engine keeps,
- * and it is kept because no library carries it: `libphonenumber` knows what a number *is today*,
- * not which of two spellings across a reform belong to one person.
- *
- * Brazil inserted a `9` at the head of every mobile subscriber part between 2013 and 2016, so the
- * same line is ten digits in older records and eleven in newer ones. Dropping that digit collapses
- * both to one key. Measured on this project's user base: 16 accounts pairs reconcile this way, and
- * a key without it splits 9 of them.
- */
+/** Digits of a national number that survive a dialling-plan reform, per market; a market that never
+ *  moved its numbering needs no entry and is used whole. `libphonenumber` cannot supply this: it
+ *  knows what a number *is today*, not which two spellings across a reform are one person. Brazil
+ *  inserted a `9` into every mobile subscriber part between 2013 and 2016, so one line is ten digits
+ *  in old records and eleven in new ones. */
 const STABLE: Partial<Record<CountryCode, (national: string) => string>> = {
   BR: (national) =>
     national.length === 11 && national[2] === "9" ? national.slice(0, 2) + national.slice(3) : national,
 };
 
 /** A market, as ISO 3166-1 alpha-2. Re-exported so a caller can name one without importing
- *  `libphonenumber-js` itself — the library is this module's business, not its consumers'. */
+ *  `libphonenumber-js` itself. */
 export type { CountryCode };
 
-/** A number placed in its market, with the market kept so two markets can never collide. */
+/** A number placed in its market. The market is part of the key, so two markets can never collide:
+ *  `PT:912345678` and `BR:912345678` are different people. */
 export type Placed = { country: CountryCode; key: string };
 
 /**
- * Place one raw value in a market and derive its join key, or answer null when it is not a number.
+ * Place one raw value in a market and derive its join key. Null when it is not a number: fewer than
+ * 8 digits, or nothing the market's plan accepts.
  *
- * `fallback` is the market a bare national number belongs to — one carrying no calling code, which
- * is most of what a database holds. It is inferred from the corpus rather than declared; see
- * `dominant_market`.
- *
- * The market is part of the key. That is what makes a multi-country campaign measurable at all:
- * `PT:912345678` and `BR:912345678` are different people, and a key that dropped the market would
- * merge them. The previous key could only avoid that by refusing every foreign number outright.
+ * `fallback` is the market a bare national number belongs to — one carrying no calling code, which is
+ * most of what a database holds. Infer it with `dominant_market` rather than declaring it.
  */
 export function place(raw: unknown, fallback: CountryCode): Placed | null {
   const digits = (raw ? String(raw) : "").replace(/\D/g, "");
   if (digits.length < 8) {
     return null;
   }
-  // A string long enough to carry a calling code is offered as international; anything shorter is
-  // read as national in the fallback market. Deciding this by length rather than by a leading
-  // prefix is what keeps a real area code from being eaten: Brazil's area 55 serves Santa Maria,
-  // and stripping `55` on sight mutilates every number in that region. Length decides, and the
-  // per-market lengths that make length decidable are the library's metadata.
+  // A string long enough to carry a calling code is offered as international; anything shorter reads
+  // as national in the fallback market. Length decides, never a leading prefix: `55` is also a real
+  // Brazilian area code (Santa Maria), so stripping it on sight mutilates every number in that
+  // region. The per-market lengths that make length decidable are the library's metadata.
   const offered = digits.length >= 12 ? `+${digits}` : digits;
   const parsed = parsePhoneNumberFromString(offered, fallback);
   if (parsed?.isValid() !== true || parsed.country === undefined) {
@@ -71,13 +56,10 @@ export function place(raw: unknown, fallback: CountryCode): Placed | null {
 /**
  * The market a corpus is mostly written in, used as the fallback for its bare national numbers.
  *
- * Inferred rather than declared, because a campaign may carry leads from any country and naming
- * one of them would be naming the wrong thing. Only numbers that place themselves — those long
- * enough to carry a calling code — get a vote, so the answer cannot be circular.
- *
- * A corpus with no clear majority is refused instead of guessed. Picking the larger of two similar
- * shares would key half a base under the wrong plan, and a wrong plan does not fail loudly: it
- * produces keys that match nothing, which reads as an audience that never registered.
+ * Only numbers long enough to carry a calling code vote, so the answer cannot be circular. Throws
+ * `PhoneFormatError` when nothing votes, and when no market holds both half the votes and twice the
+ * runner-up: half a base keyed under a guessed plan matches nothing, which reads as an audience that
+ * never registered.
  */
 export function dominant_market(raws: Iterable<unknown>): CountryCode {
   const votes = new Map<CountryCode, number>();
@@ -118,16 +100,11 @@ export function dominant_market(raws: Iterable<unknown>): CountryCode {
 }
 
 /**
- * How far a corpus's markets diverge from the base they are measured against, as a share.
+ * How far a corpus's markets diverge from the base they are measured against, as a share in 0..1.
  *
- * The guard this serves is not a parse check and cannot be one. A column that is not a phone
- * column still parses: feeding `20260805103000`-style timestamps to a keyer produced thousands of
- * valid-looking Egyptian numbers, every one of them a parse *success*, so an unparseable-rate
- * ceiling never fires. What gives it away is the company it keeps — a base that is 98% one market
- * receiving a list that is 60% another is not a list of that base.
- *
- * A heuristic, and documented as one: it catches a wholesale mislabelled column, not a handful of
- * wrong rows.
+ * A heuristic for a wholesale mislabelled column, not a handful of wrong rows, and it cannot be a
+ * parse check: `20260805103000`-style timestamps fed to a keyer produced thousands of valid Egyptian
+ * numbers, every one of them a parse *success*, so an unparseable-rate ceiling never fires on them.
  */
 export function market_divergence(list: Iterable<CountryCode>, base: ReadonlyMap<CountryCode, number>): number {
   const base_total = [...base.values()].reduce((sum, n) => sum + n, 0);
@@ -143,8 +120,8 @@ export function market_divergence(list: Iterable<CountryCode>, base: ReadonlyMap
   if (total === 0) {
     return 0;
   }
-  // Total variation distance between the two distributions: half the summed absolute difference
-  // of their shares, so 0 is identical and 1 is disjoint.
+  // Total variation distance between the two distributions: half the summed absolute difference of
+  // their shares, so 0 is identical and 1 is disjoint.
   let distance = 0;
   for (const country of new Set([...seen.keys(), ...base.keys()])) {
     distance += Math.abs((seen.get(country) ?? 0) / total - (base.get(country) ?? 0) / base_total);

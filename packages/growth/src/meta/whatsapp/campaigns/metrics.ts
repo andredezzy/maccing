@@ -12,12 +12,12 @@ import {
 import type { RoleName, Source } from "./source.ts";
 import { SourceError } from "./source.ts";
 
+/** Phone types: an ISO country code, and a placed number carrying its `country` and join `key`. */
 export type { CountryCode, Placed } from "../../../internal/phone.ts";
-// The key itself, not only the error. Anything analysing a campaign beside the engine — an ad-hoc
-// query, a case file, a one-off split — has to join phones to accounts the same way the engine
-// does, and the only alternative to exporting this is every caller hand-rolling a second key that
-// agrees until the day it does not.
+/** The phone keying itself, so anything analysing a campaign beside the engine joins phones to
+ *  accounts the same way the engine does. `PhoneFormatError` is a plan this engine cannot honour. */
 export { dominant_market, market_divergence, PhoneFormatError, place } from "../../../internal/phone.ts";
+/** Errors raised while reading a list file or an export as a table. */
 export {
   DuplicateColumnError,
   MissingColumnError,
@@ -25,53 +25,49 @@ export {
   UnsupportedListFormatError,
   UnterminatedQuoteError,
 } from "../../../internal/table.ts";
+/** Raised when an exported timestamp cannot be read as a moment. */
 export { TimestampError } from "../../../internal/timestamp.ts";
+/** The row contract: a `Source` answers `rows(role)` with a header and records, all strings. */
 export type { RoleName, Source } from "./source.ts";
+/** The two shipped row sources and their errors. A `Date` reaching the boundary is
+ *  `TimestampDriverError`, because a naive Postgres timestamp becomes a different instant on
+ *  every machine that reads it; cast to text in the query instead. */
 export { files, postgres, SourceError, TimestampDriverError } from "./source.ts";
 
 /**
  * The measurement pass, and the shape of what goes into and comes out of it.
  *
- * Every object below uses snake_case keys, because the emitted record is the public surface and it
- * is snake_case; a declaration in a different case would make every campaign script translate
- * between two conventions for no reason.
+ * Keys are snake_case throughout, because the emitted record is the public surface and it is
+ * snake_case; a declaration in another case would make every caller translate between two.
  *
- * None of these labels comes from a business. The engine computes four roles and names the record
- * after them, so the shape belongs to this package. The map says which tables and columns fill
- * those roles and stops there — it never learns that a campaign script exists.
- *
- * Every failure below is loud and named for one reason: this engine's cheapest wrong answer is
- * zero. A dialling plan that does not match the market, a list file that moved, a column someone
- * renamed, a cut set to a planning date instead of a send time — each of those produces a record
- * full of zeros that reads exactly like a campaign nobody responded to. So the pass refuses at
- * every point where the two are indistinguishable, and the error says which one happened.
+ * Every ambiguity below throws a named error instead of degrading to zero. A zero reads exactly
+ * like a campaign nobody responded to, and only one of the two is a result.
  */
 
 /** One measured group. A cell is a list plus the moment it was reached. */
 export type Cell = {
   /** Join key for controls and for the emitted record. */
   name: string;
-  /** ISO-8601 UTC. The real moment of contact — not midnight, not the planning date. A cut
-   *  earlier than the truth counts people who arrived before anything reached them. A day its
-   *  month does not have is refused rather than rolled forward: the runtime would answer
-   *  `2030-02-30` with 2 March and the record would go on publishing 30 February. */
+  /** ISO-8601 UTC, the real moment of contact. A cut earlier than the truth counts people who
+   *  arrived before anything reached them. Refused where it names a day its month does not have:
+   *  the runtime rolls `2030-02-30` to 2 March while the record goes on publishing 30 February.
+   *  Refused too when blank, finer than a millisecond, or later than the moment of reading. */
   cut: string;
-  /** True while no confirmed contact time exists. Measuring against a placeholder is the
-   *  documented way this kind of report once claimed arrivals that never happened. */
+  /** True while no confirmed contact time exists. Anything counted forward from a provisional cut
+   *  is then refused as `ProvisionalCutError`. */
   cut_provisional?: boolean;
   /** Files holding the reached identifiers. Unioned, then de-duplicated by derived key. */
   lists: readonly string[];
-  /** Column holding the phone. Defaults to the first column. */
+  /** Column holding the phone. Defaults to the first column. Declared beside a `.txt` list it is
+   *  refused as `TextListOptionError`, and a name absent from the header as `MissingColumnError`. */
   column?: string;
-  /** Row filter, for one file holding several cells. Splitting it into derived files would
-   *  create copies free to drift from the source the attribution depends on. */
+  /** Row filter, for one file holding several cells. Same two refusals as `column`. */
   filter?: { column: string; value: string };
-  /** `cold` has no counterfactual: nobody who never heard of the brand arrives unprompted, so
-   *  arrival is the outcome. `own_base` already holds accounts, so arrival measures nothing
-   *  and commitment is the outcome. The engine rejects a control pair that contradicts this. */
+  /** What the cell can be compared on. A `cold` list is read on arrival, an `own_base` list on
+   *  commitment. A control pair contradicting this is refused. */
   audience: "cold" | "own_base";
-  /** Identifiers to subtract before measuring: planted probes, internal numbers. Counting one
-   *  as a member inflates the rate of whichever cell it landed in. */
+  /** Identifiers to subtract before measuring: planted probes, internal numbers. An entry that
+   *  cannot be keyed is `CellExclusionError`, because it would subtract nobody in silence. */
   exclude?: readonly string[];
 };
 
@@ -79,28 +75,26 @@ export type Cell = {
 export type Control = {
   treated: string;
   control: string;
-  /** Dotted path into the record, e.g. `acquired.accounts`. Resolved and validated rather
-   *  than left as a bare string the reader has to interpret. */
+  /** Dotted path into the record, e.g. `acquired.accounts`. Must be a count listed in
+   *  `COUNTABLE_OUTCOMES` and one both cells' audiences can produce. */
   outcome: string;
 };
 
-/** A count and a sum. Both event roles carry the same shape; a flat form would name them four
- *  different things and hide that they are one. `value` is null where the role has no money. */
+/** A count and a sum. `value` is null where the role carries no money. */
 export type EventTotals = { leads: number; value: number | null };
 
+/** `EventTotals` for the acquired group, with the two figures only arrival can carry. */
 export type AcquiredRevenue = EventTotals & {
-  /** Share of the total held by the two largest contributors. Concentration hides in an
-   *  average, and it has been found by hand more than once. */
+  /** Share of the total held by the two largest contributors. Null where the question is
+   *  meaningless: nothing collected, fewer than two contributors, or any contributor below zero. */
   top2_share: number | null;
   /** Days from the **cut** to a person's first payment counted from it, medianed over the acquired
-   *  accounts that paid and rounded to one decimal. From the cut, not from the account's creation:
-   *  an account that arrives ten days after contact and pays the same afternoon reports ten, not
-   *  nothing, because what this measures is how long the money took to follow the send. A median
-   *  over people rather than a mean over events, so somebody paying weekly cannot drag it. Null
-   *  where nobody in the group paid — there is no first payment to measure to. */
+   *  accounts that paid and rounded to one decimal. From the cut, not from the account's own
+   *  creation. Null where nobody in the group paid. */
   median_lag_days: number | null;
 };
 
+/** How a treated cell came out against its control. Attached to the treated cell's record. */
 export type ControlReading = {
   against: string;
   outcome: string;
@@ -109,22 +103,20 @@ export type ControlReading = {
   lift: number | null;
   control_events: number;
   p: number | null;
-  /** A comparison travelling without its uncertainty becomes a wrong decision in two days.
-   *  False until the difference clears significance and the control carries enough events. */
+  /** Whether this comparison may leave the building. See `is_publishable` for the thresholds. */
   publishable: boolean;
 };
 
+/** One measured cell. Emitted in declaration order, one per cell. */
 export type CellRecord = {
   cell: string;
   cut_utc: string;
-  /** Present and true only where the declaration called the cut a placeholder. Mirrored onto the
-   *  record so the caveat travels with the numbers: whoever opens this JSON weeks later reads on
-   *  the same line that the moment everything is measured from was a guess. */
+  /** Present and true only where the declaration called the cut a placeholder, so the caveat
+   *  travels with the numbers. */
   cut_provisional?: boolean;
-  /** When this reading was taken. Every reading is self-dating, because an undated number
-   *  misleads someone two weeks later. */
+  /** When this reading was taken. Every reading is self-dating. */
   measured_utc: string;
-  /** Hours between the cut and the reading. Makes the floor mechanical instead of prose. */
+  /** Hours between the cut and the reading. */
   window_hours: number;
   audience: { listed: number; matched_phones: number; matched_accounts: number };
   acquired: {
@@ -134,72 +126,57 @@ export type CellRecord = {
     churn?: EventTotals;
   };
   pre_existing: { accounts: number; revenue?: EventTotals; churn?: EventTotals };
-  /** `new_money` and `recycled` are present only where the map declares the split. A product
-   *  with no recycled balance has no such distinction, and reporting it as two zeros would
-   *  invent one. */
+  /** `new_money` and `recycled` are present only where the source answers a `recycled` column. A
+   *  product with no such concept gets no pair rather than two zeros. */
   conversions: { count: number; value: number; new_money?: number; recycled?: number };
   control?: ControlReading;
 };
 
+/** What `measure` is given. */
 export type MeasureOptions = {
-  /** Where the four roles' rows come from. A database, a directory of exports, anything that can
-   *  answer with rows — see `Source`. The engine never learns which. */
+  /** Where the four roles' rows come from. The engine never learns which. */
   source: Source;
   cells: readonly Cell[];
   controls?: readonly Control[];
-  /** How far a cell's markets may diverge from the lead index's before the run refuses it, as a
-   *  total-variation distance in `0..1`. Defaults to 0.5, which passes a list drawn from the same
-   *  base and refuses one drawn from somewhere else entirely. See `market_divergence` for why a
-   *  parse-rate ceiling cannot do this job. */
+  /** How far a cell's markets may diverge from the lead index's before the run refuses it as
+   *  `MarketDivergenceError`. Total-variation distance in `0..1`, default 0.5. */
   max_market_divergence?: number;
   /** Overrides the reading time. Only a test has a reason to set this. */
   now?: Date;
 };
 
-/** Readings below this are never publishable, whatever the p-value says. Seven days, because that
- *  is longer than the tail of any response this engine has been pointed at: a shorter window has
+/** A reading younger than this is never publishable, whatever the p-value says: the window has
  *  not finished collecting the thing it is being asked about. */
 export const WINDOW_FLOOR_HOURS = 24 * 7;
 
 /** Below this many events in the control, one outlier flips the sign of the comparison. */
 export const MIN_CONTROL_EVENTS = 10;
 
-/** The conventional two-sided significance threshold. Exported rather than written inline so an
- *  old reading can be re-checked against the number that produced it. */
+/** The two-sided significance threshold. A p-value must be strictly below it. */
 export const MAX_P = 0.05;
 
 /**
- * The gate on a published comparison: significance, and the two conditions significance cannot
- * speak for.
+ * The gate on a published comparison: a p-value below `MAX_P`, at least `MIN_CONTROL_EVENTS` in
+ * the control, and a window of at least `WINDOW_FLOOR_HOURS`.
  *
- * The p read here is the unrounded one, because rounding first would let a value sitting just
- * above the threshold cross it on presentation alone, and the comparison is `<` rather than `<=`
- * — a reading exactly on the threshold has not cleared it. The other two are `>=`: a control
- * carrying exactly `MIN_CONTROL_EVENTS`, and a window standing exactly on `WINDOW_FLOOR_HOURS`,
- * are inside. Below the minimum one outlier in the control flips the sign of the comparison.
- * Below the floor the window is younger than the tail of any response, and an early reading that
- * clears p is the most confidently wrong number this engine can produce — so the floor outranks
- * the p-value rather than qualifying it.
+ * Pass the unrounded p. Rounding first would let a value sitting just above the threshold cross
+ * it on presentation alone. Only that comparison is strict: a p exactly on `MAX_P` has not
+ * cleared it, while a control on exactly `MIN_CONTROL_EVENTS` and a window on exactly
+ * `WINDOW_FLOOR_HOURS` are inside. The floor outranks the p-value rather than qualifying it, so
+ * an early reading that clears significance still does not publish.
  *
- * A named export rather than an expression inside the record literal, because this is the one
- * boolean deciding whether a number leaves the building, and it is the shape of the decision
- * rather than a rename: three thresholds, one of them strict and two of them not. Inline it could
- * only be exercised through data, and no arrangement of integer counts puts a p-value exactly on
- * the threshold — whether that comparison was inclusive could not be pinned at all, and a
- * mutation pass moved it with the suite still green. A caller holding a stored reading can also
- * ask it directly whether a longer window would publish that reading.
+ * Exported so a stored reading can be asked whether a longer window would publish it.
  */
 export function is_publishable(p: number | null, control_events: number, window_hours: number): boolean {
   return p !== null && p < MAX_P && control_events >= MIN_CONTROL_EVENTS && window_hours >= WINDOW_FLOOR_HOURS;
 }
 
 /**
- * More of a file's identifiers are unreadable than the map permits.
+ * More of a corpus's distinct identifiers are unreadable than the run permits.
  *
- * Raised against the person export and against a cell's own lists, because the fault has opposite
- * signs on the two sides and both mislead. Unreadable people shrink the index, so the audience
- * looks like it never registered; unreadable list entries shrink the denominator every rate is
- * divided by, so the audience looks like it converted brilliantly.
+ * Raised against the person export and against a cell's own lists; `source` says which. The fault
+ * has opposite signs on the two sides: unreadable people shrink the index, unreadable list entries
+ * shrink the denominator every rate is divided by.
  */
 export class UnparseablePhonesError extends Error {
   readonly source: string;
@@ -233,13 +210,8 @@ export class MissingExportError extends Error {
 }
 
 /** A bound amount column that is empty on a row, or holding something that is not a number. The
- *  two have different fixes, so the message names which one happened.
- *
- *  A third case used to be named here — the column absent from the file — and it could not
- *  happen. `read_export` asserts every column the map binds against the header before a single
- *  row is indexed, and `read_rows` fills a short row's missing columns with an empty string
- *  rather than leaving them off, so nothing reaching this class can be absent rather than blank.
- *  An absent column is `ExportColumnError`, which says so with the header beside it. */
+ *  two have different fixes, so the message names which one happened. A column absent from the
+ *  file is `ExportColumnError` instead, checked against the header before any row is read. */
 export class ExportValueError extends Error {
   constructor(path: string, column: string, raw: string) {
     const found =
@@ -285,17 +257,13 @@ const BLANK_COLUMN_CONSEQUENCE = {
     "and every cell reports an audience that was never there",
 };
 
-/** What a bound column holds. Spelled out at every throw site rather than defaulted: the wording
- *  fault this exists to prevent is a message describing the wrong kind of column, and a default is
- *  how three of four call sites would inherit the wrong one without a test able to see it.
- *
- *  A kind must read as a singular noun phrase — the message interpolates it twice, as "binds X for
- *  its <kind>" and "bind the one that now holds the <kind>". The type catches a kind with no
- *  sentence and a sentence with no kind; that a sentence describes its kind truthfully is the one
- *  thing left to a reader, and the reachability test each kind carries is where it gets read. */
+/** What a bound column holds. Spelled out at every throw site rather than defaulted, so no call
+ *  site can inherit a sentence describing the wrong kind of column. Must read as a singular noun
+ *  phrase: the message interpolates it as "binds X for its <kind>" and "now holds the <kind>". */
 type BlankColumnKind = keyof typeof BLANK_COLUMN_CONSEQUENCE;
 
-/** A bound column that is in the header and empty, or unreadable, on every row. */
+/** A bound column that is in the header and empty, or unreadable, on every row. An export with no
+ *  rows at all is a fact and passes; this is rows with nothing readable in them. */
 export class ExportBlankColumnError extends Error {
   readonly path: string;
   readonly role: string;
@@ -320,12 +288,11 @@ export class ExportBlankColumnError extends Error {
 }
 
 /**
- * A column the contract reads as a boolean, holding something that is neither `true` nor `false`.
+ * A column the contract reads as a boolean, holding something other than `true` or `false`.
  *
- * Kept apart from `ExportValueError`, which is about amounts and says so. The likely cause here is
- * a query passing its own vocabulary straight through — a status, a payment method — where the
- * contract asked for the answer to a question. Reading an unrecognised value as `false` is exactly
- * the silent-zero this boundary exists to prevent.
+ * Kept apart from `ExportValueError`, which is about amounts. The usual cause is a query passing
+ * its own vocabulary through where the contract asked for the answer to a question, and reading
+ * an unrecognised value as `false` would drop every row it applies to in silence.
  */
 export class ExportFlagError extends Error {
   readonly role: string;
@@ -353,15 +320,12 @@ export class ExportFlagError extends Error {
 /**
  * A conversion role with rows, not one of which is marked committed.
  *
- * This is the renamed-value trap, caught at measurement time. The predicate lives in the source's
- * own query, so a value it compares against — a status, a state, whatever the product calls it —
- * can be renamed in a migration while the query stays valid and simply stops matching. The rows
- * arrive, every one is dropped, and the cell reports no conversions at all, which reads exactly
- * like a campaign nobody committed to.
+ * The committed predicate lives in the source's own query, so a value it compares against can be
+ * renamed in a migration while the query stays valid and stops matching: every row is dropped and
+ * the cell reads as a campaign nobody committed to. A role with no rows at all passes.
  *
- * It cannot name the values it saw, and that is deliberate: they are the product's vocabulary and
- * this package is published. The author of the predicate has the context this message would only
- * be guessing at.
+ * It cannot name the values it saw. They are the product's vocabulary and this package is
+ * published.
  */
 export class ExportStatusError extends Error {
   readonly rows: number;
@@ -405,18 +369,11 @@ export class ExportJoinError extends Error {
   }
 }
 
-/** A person export carrying the same identifier on more than one row. Every copy becomes its own
- *  account in the index, and both the money loop and the conversion loop look each account's id up
- *  once per copy, so one person arrives, pays and commits as many times as the file repeats them.
- *  A file fanned out two ways publishes twice the acquisitions, twice the revenue and twice the
- *  commitments, and an acquisition rate at double the truth — twenty percent published as forty.
- *
- *  It is the inflating direction, and nothing else here can see it. `matched_accounts` above
- *  `matched_phones` is also what a base whose people genuinely hold two accounts looks like, which
- *  the record documents as ordinary; and the narrower shape, one person landing on two phone rows,
- *  does not move `matched_accounts` off `matched_phones` at all. A fan-out as wide as the declared
- *  switchboard ceiling is worse again: every phone reaches the ceiling, the eviction empties the
- *  index, and the run publishes a campaign that reached nobody. */
+/** A person export carrying the same identifier on more than one row, which the export being one
+ *  row per person forbids. Each copy becomes its own account, so that person arrives, pays and
+ *  commits once per copy and every published figure comes out multiplied. It is the one fault here
+ *  that inflates, and nothing downstream tells it apart from a base whose people really do hold
+ *  several accounts. Blank identifiers are counted on neither side. */
 export class ExportRepeatedPersonError extends Error {
   readonly path: string;
   readonly rows: number;
@@ -441,7 +398,8 @@ export class ExportRepeatedPersonError extends Error {
   }
 }
 
-/** A cell whose declaration cannot be measured as written. */
+/** A cell that cannot be measured as written: a cut that is unreadable, blank, sub-millisecond,
+ *  later than the reading, or naming a day its month does not have; or a duplicated cell name. */
 export class CellDeclarationError extends Error {
   readonly cell: string;
 
@@ -452,16 +410,13 @@ export class CellDeclarationError extends Error {
   }
 }
 
-/** An exclusion entry that cannot be read as a number in the format the map declares.
+/** An exclusion entry that cannot be read as a number in the declared format.
  *
- *  This is the one refusal in the pass that guards against overstatement rather than a silent
- *  zero. An entry that yields no key subtracts nobody: the probe or internal handset it names
- *  stays in the population, and everything that account did is counted as the campaign's. One
- *  planted number carrying a single large conversion is enough to move a small cell by two orders
- *  of magnitude, and an inflated reading is the kind that gets published rather than questioned.
- *  A mistyped digit, an extension that pushes the string past a national length, and an empty
- *  string all land here. What does not is a value that yields a well-formed key for somebody
- *  else, since nothing in it distinguishes that from a number this cell could really hold. */
+ *  The one refusal in the pass that guards against overstatement rather than a silent zero: an
+ *  entry that yields no key subtracts nobody, so the probe it names stays in the cell and
+ *  everything that account did is counted as the campaign's. A mistyped digit, an extension
+ *  pushing the string past a national length, and an empty string all land here. A value that
+ *  yields a well-formed key for somebody else does not, being indistinguishable from a real one. */
 export class CellExclusionError extends Error {
   readonly cell: string;
   readonly entries: readonly string[];
@@ -486,9 +441,8 @@ export class CellExclusionError extends Error {
 /** A cell's lists yielded nothing usable, either as read or after its exclusions were subtracted. */
 export class EmptyCellError extends Error {
   readonly cell: string;
-  /** Which of the two emptinesses this is, for the same reason `UnparseablePhonesError` carries
-   *  `source`: one class covers two faults with different remedies, and a caller should not have
-   *  to match on the sentence to tell an over-narrow filter from an over-broad `exclude`. */
+  /** Which of the two emptinesses this is, so a caller need not match on the sentence to tell an
+   *  over-narrow filter from an over-broad `exclude`. */
   readonly after_exclusions: boolean;
 
   constructor(cell: string, lists: readonly string[], column: string | undefined, after_exclusions: boolean) {
@@ -513,22 +467,12 @@ export class EmptyCellError extends Error {
 
 /** An `own_base` cell not one of whose listed identifiers answers for an account.
  *
- *  The declaration is the claim. `own_base` says these people already hold accounts, which is why
- *  arrival measures nothing about them and commitment is the outcome instead. Matching none of them
- *  contradicts the claim, and every count on the record then comes back zero — a base that was
- *  listed, reached, and did nothing, which is exactly what an indifferent base looks like. The same
- *  zeros on a `cold` cell are left alone: nobody who had never heard of the brand registered, and
- *  that is the number a cold send exists to produce rather than a fault in how it was measured.
+ *  `own_base` is the claim that these people already hold accounts, so nothing matched contradicts
+ *  the declaration and every count would publish as a base that was reached and did nothing. The
+ *  same zeros on a `cold` cell are measured, because there they are the finding.
  *
- *  It sits past the cell's own two guards rather than between them, because neither asks this
- *  question. The unreadable-share ceiling asks whether the identifiers could be keyed, and three
- *  well-formed numbers pass it; `EmptyCellError` asks whether the list yielded any keys at all, and
- *  three keys pass that too. Nothing else compares the keys against the index they are matched in.
- *
- *  Three faults land here and the message names all three, because the record cannot separate them:
- *  a list of the wrong people, a `column` holding numbers that are not phones, and a person export
- *  cut narrower than the list — to a window, to a segment, or to a market whose numbers key
- *  differently on the two sides. */
+ *  Raised only where the person export built an index at all. With no index no cell of any
+ *  audience can match, and naming the cell would send the reader to the wrong file. */
 export class UnmatchedBaseError extends Error {
   readonly cell: string;
   readonly listed: number;
@@ -552,12 +496,12 @@ export class UnmatchedBaseError extends Error {
 }
 
 /**
- * A cell whose list is drawn from a different set of markets than the base it is measured against.
+ * A cell whose list is drawn from a different set of markets than the base it is measured against,
+ * beyond `max_market_divergence`.
  *
- * Every number in such a list can be perfectly valid, so no per-number check sees anything wrong:
- * the parse rate is clean, the keys are well-formed, and the join simply misses. For a cold list
- * that is also what a campaign that did not land looks like, and the two are indistinguishable
- * downstream — which is why this is measured as a distribution rather than caught per row.
+ * Measured as a distribution because no per-number check can see it: every number parses, the keys
+ * are well-formed, and the join simply misses, which on a cold list reads as a campaign that did
+ * not land.
  */
 export class MarketDivergenceError extends Error {
   readonly cell: string;
@@ -579,7 +523,10 @@ export class MarketDivergenceError extends Error {
   }
 }
 
-/** A control pair that cannot be read, or that reads the wrong outcome for its audience. */
+/** A control pair that cannot be read: naming an undeclared cell, naming one cell on both sides,
+ *  sharing so much as one identifier between its arms, reading an outcome neither the test nor the
+ *  audience can take, reading a path the record does not carry, or a second control on one
+ *  treated cell. */
 export class ControlError extends Error {
   constructor(reason: string) {
     super(reason);
@@ -611,17 +558,10 @@ export class ProvisionalCutError extends Error {
 
 /** A published money total that summed past the range a number here can hold.
  *
- *  Every row that went into it was finite and passed the per-row check; the sum is what left the
- *  range. `JSON.stringify` writes a non-finite number as `null`, and that is the same `null` the
- *  record already uses for a total nobody measured — `EventTotals.value` is `number | null` exactly
- *  so a role the map never bound reads as absent instead of as zero. An overflowed total is
- *  therefore indistinguishable from a documented, legitimate absence, which is the half of this
- *  that misleads in silence. `conversions.value` is the louder half: it is typed a plain `number`,
- *  so the null it publishes is not a value its own type admits.
- *
- *  Two overflows of opposite sign sum to `NaN` rather than to `Infinity` — a group of refunds
- *  against a group of payments, both past the range — and `NaN` publishes as the same `null`. So the
- *  test is for finiteness, and infinity alone would miss it. */
+ *  Test for finiteness rather than for infinity: two overflows of opposite sign, a group of
+ *  refunds against a group of payments, sum to `NaN`, and `NaN` serialises as the same JSON `null`
+ *  an infinity does. That `null` is also what the record publishes for a role nobody bound, so an
+ *  overflow left alone reads as a documented absence. `field` is the record's own dotted path. */
 export class OverflowedTotalError extends Error {
   readonly cell: string;
   readonly field: string;
@@ -644,21 +584,18 @@ export class OverflowedTotalError extends Error {
 
 type Account = { id: string; created: Date | null };
 type MoneyEvent = { at: Date | null; amount: number };
-/** `committed` and `recycled` are answers, not statuses. Which values of a product's own
- *  lifecycle count as a commitment, and which mean value was recycled rather than new, are
- *  properties of that product; the source answers them and the engine only counts them. `recycled`
- *  is absent where the source does not answer it, which says the product has no such distinction
- *  rather than that it measured zero. */
+/** `committed` and `recycled` are answers the source gives, not statuses the engine interprets.
+ *  `recycled` is absent where the source does not answer it, which says the product has no such
+ *  distinction rather than that it measured zero. */
 type ConversionEvent = MoneyEvent & { committed: boolean; recycled?: boolean };
 
 /** Share of a corpus's distinct identifiers allowed to be unreadable before a run stops. A
  *  misconfigured plan and a genuinely unmatched list both produce zero matches, and only one of
- *  them is a result. Five percent was this project's declared tolerance and is kept as the
- *  engine's default now that no map declares one. */
+ *  them is a result. */
 const MAX_UNPARSEABLE_RATE = 0.05;
 
 /** A phone answering for this many accounts is a switchboard, not a person, and is dropped from
- *  the index — otherwise every list containing it inherits all of them. */
+ *  the index. Left in, every list containing it would inherit all of them. */
 const SHARED_ACCOUNT_CEILING = 4;
 
 /** How far a cell's markets may diverge from the lead index's before the run refuses the cell. */
@@ -668,22 +605,21 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
 /** Days in each month of a common year, indexed by month number minus one. February's other
- *  answer is the leap rule in `rolls_forward_to`; every other month has one length forever. */
+ *  answer is the leap rule in `rolls_forward_to`. */
 const COMMON_YEAR_MONTH_DAYS: readonly number[] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-/** The civil date a declared cut opens with. A month outside 01–12 or a day outside 01–31 never
- *  reaches this — the parser refuses those outright — so what arrives here is a real-looking date
- *  that may still name a day its own month does not have. */
+/** The civil date a declared cut opens with. A month outside 01-12 or a day outside 01-31 never
+ *  reaches this, the parser having refused it, so what arrives is a real-looking date that may
+ *  still name a day its own month does not have. */
 const CIVIL_DATE = /^(\d{4})-(\d{2})-(\d{2})/;
 
 /**
  * The date the runtime would measure from, where that is not the date the cut names. Null for
  * every real day, which is every cut but a mistyped one.
  *
- * Only the `YYYY-MM-DD` a person typed is read, never the instant it parsed to. Taking the date
- * back off the instant would refuse correct cuts: `2030-03-01T00:00:00+05:30` is 28 February in
- * UTC, and a check comparing UTC fields against the typed ones would call that a rollover and stop
- * a reading that is exactly right.
+ * Read the `YYYY-MM-DD` a person typed, never the instant it parsed to. Taking the date back off
+ * the instant refuses correct cuts: `2030-03-01T00:00:00+05:30` is 28 February in UTC, and
+ * comparing UTC fields against the typed ones would call that a rollover.
  *
  * Only a month shorter than thirty-one days can overflow, so the roll lands at most three days
  * into the next month of the same year and needs no calendar arithmetic beyond a subtraction.
@@ -697,8 +633,7 @@ function rolls_forward_to(declared: string): string | null {
   const month = Number(match[2] as string);
   const day = Number(match[3] as string);
   // Divisible by four, except a century not also divisible by four hundred. Both exceptions reach
-  // a cut: `2100-02-29` is not a date and `2000-02-29` is, and a rule written as `year % 4` alone
-  // waves the first one through to be measured from 1 March.
+  // a cut, so `year % 4` alone would wave `2100-02-29` through to be measured from 1 March.
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const length = month === 2 && leap ? 29 : (COMMON_YEAR_MONTH_DAYS[month - 1] as number);
   if (day <= length) {
@@ -707,10 +642,8 @@ function rolls_forward_to(declared: string): string | null {
   return `${match[1] as string}-${String(month + 1).padStart(2, "0")}-${String(day - length).padStart(2, "0")}`;
 }
 
-/** A blank is refused rather than read as zero, and the caller hands the row's value through the
- *  same `?? ""` every other bound column uses: a record built by `read_rows` carries every header
- *  column, so a missing one and an empty one are the same string here and there is no third case
- *  to distinguish. */
+/** A blank amount is refused rather than read as zero. A record built by `read_rows` carries every
+ *  header column, so a missing value and an empty one are the same string here. */
 function amount_of(raw: string, role: string, column: string): number {
   if (raw.trim() === "") {
     throw new ExportValueError(role, column, raw);
@@ -724,11 +657,9 @@ function amount_of(raw: string, role: string, column: string): number {
 
 /** Round a money total to the cent, having first refused one that has stopped being a number.
  *
- *  The per-row check above bounds each value; nothing bounds their sum, and `round_half_even` passes
- *  a non-finite input straight through by design. Every total the record publishes goes through
- *  here, because the field would otherwise serialise as `null` and read as a role nobody measured.
- *  `field` is the record's own dotted path, so the sentence names the number the reader is looking
- *  at rather than the role it came from. */
+ *  The per-row check bounds each value; nothing bounds their sum, and `round_half_even` passes a
+ *  non-finite input straight through by design. Every published total goes through here, because
+ *  the field would otherwise serialise as `null` and read as a role nobody measured. */
 function published_total(total: number, cell: string, field: string): number {
   if (!Number.isFinite(total)) {
     throw new OverflowedTotalError(cell, field);
@@ -737,28 +668,11 @@ function published_total(total: number, cell: string, field: string): number {
 }
 
 /**
- * Read a role's export, having first checked that every column the map binds for it is in the
- * header exactly once.
- *
- * The check is here because the two ways a binding can be wrong fail differently. A missing amount
- * column throws on the first row, because what it reads is not a number. A missing timestamp column
- * throws nothing at all: the read is `undefined`, the parse is null, the accumulator skips the
- * event, and a file of real events reports as none. Asserting the header once, before any row is
- * indexed, makes the silent half as loud as the other.
- *
- * A bound name the header carries twice is the same fault wearing the other face: the column is
- * present, so the check above passes, and the record holds only the second of the two. It is
- * asserted per bound column rather than over the whole header, so a `note` column the export
- * happens to carry twice — bound by nothing, read by nobody — does not refuse a file this run
- * would have measured correctly.
- */
-/**
  * A predicate column, read strictly.
  *
- * The boundary carries strings, so a boolean arrives as `true` or `false`. Anything else is a
- * fault rather than a falsy value: a source that answers `1`, `t`, `yes` or an empty cell has not
- * answered the question, and reading that as `false` would silently drop every row it applies to —
- * which for `committed` means reporting a campaign nobody committed to.
+ * The boundary carries strings, so a boolean arrives as the literal `true` or `false`. Anything
+ * else is a fault rather than a falsy value: `1`, `t`, `yes` and an empty cell have not answered
+ * the question, and reading them as `false` drops every row they apply to in silence.
  */
 function read_flag(row: Record<string, string>, column: string, role: string): boolean {
   const raw = row[column] ?? "";
@@ -771,16 +685,26 @@ function read_flag(row: Record<string, string>, column: string, role: string): b
   throw new ExportFlagError(role, column, raw);
 }
 
+/**
+ * Read a role's rows, having first checked that every column bound for it is in the header exactly
+ * once. Null where the source carries no such role at all.
+ *
+ * The check is here because the two ways a binding can be wrong fail differently. A missing amount
+ * column throws on the first row; a missing timestamp column throws nothing at all, and a file of
+ * real events reports as none. A name the header carries twice is the same fault the other way up:
+ * the column is present, the check passes, and only the second of the two survives into a row. It
+ * is asserted per bound column, so a column nothing reads may repeat without refusing the file.
+ */
 async function read_role(
   source: Source,
   role: RoleName,
   bound: readonly string[],
 ): Promise<Record<string, string>[] | null> {
   const { header, records } = await source.rows(role);
-  // Neither a header nor a row is how a source says it does not carry this role at all, and that
-  // is a different fact from a role that carries nothing: a product with no withdrawals reports a
-  // churn of zero, a product with no concept of churn should not report a figure for it. Every
-  // other emptiness — a header with no rows under it — is a measured zero and reads on below.
+  // Neither a header nor a row is how a source says it does not carry this role at all, which is a
+  // different fact from a role that carries nothing: a product with no withdrawals reports a churn
+  // of zero, a product with no concept of churn reports none. A header with no rows under it is a
+  // measured zero and reads on below.
   if (header.length === 0 && records.length === 0) {
     return null;
   }
@@ -798,42 +722,23 @@ async function read_role(
 /**
  * Refuse a role whose rows reference nobody in the person export.
  *
- * Every other check on a role's export asks whether it is well-formed, and a file joining on the
- * wrong kind of identifier can pass every one of them: the columns are bound, the timestamps parse,
- * the amounts are numbers. It then contributes nothing to any cell, because `accumulate` looks each
- * account's id up in this index and misses every time — a thousand matched accounts and no
- * revenue, no churn, no conversions, and not a word about why.
+ * A file joining on the wrong kind of identifier passes every other check here and then
+ * contributes nothing to any cell, silently.
  *
- * One shared key is enough to pass. This is not a coverage check and must not become one: a role
- * exported over a narrower window than the person export legitimately references a fraction of it,
- * and a threshold on that fraction would refuse quiet months. Zero is the fault, because zero is
+ * One shared key is enough to pass, and this must not become a coverage check: a role exported
+ * over a narrower window than the person export legitimately references a fraction of it. Zero is
  * the only overlap that cannot happen while both files describe the same people.
  *
- * It runs before the blank-column and status checks in both index functions, and the order is the
- * whole point of it. Those two describe a surface of the file, this one describes whether the file
- * is the right file at all. A role bound to the wrong export usually carries an incidental fault as
- * well — an orders extract has its own lifecycle in the status column and often no timestamp the
- * map's name reaches — and reported as that fault it sends the reader to widen `valid_statuses` or
- * re-export a column, neither of which can work, before the join error they needed first. The
- * three checks all run after the indexing loop and share no state, so the order costs nothing:
- * a right file with drifted statuses joins, passes here, and reports exactly as it did.
+ * Runs before the blank-column and status checks in both index functions. Those describe a surface
+ * of the file, this one whether it is the right file at all, and their remedies cannot work on a
+ * file describing other things.
  *
- * The person side is every id in the person export, including accounts whose phone was unreadable
- * and switchboards evicted from the index. They are still people this role can reference, and
- * measuring the overlap against the surviving subset would turn a phone-format problem into a
- * join error and send the reader to the wrong file.
- *
- * The empty string is not an identifier and is skipped on both sides. A blank person column is
- * what a left join that matched nothing leaves behind, and it reads as `""` here exactly as a
- * blank id column does — so one blank row on each side used to satisfy this check on a key that
- * names nobody, and the real rows beside it could then reference no one at all in silence, which
- * is the whole of what this error exists to catch. Skipped at the comparison rather than dropped
- * when either index is built: a role whose person column is blank on every row keeps its bucket
- * and is still refused for referencing nobody, where an index built without blanks would come
- * back empty and be read two lines below as "no rows, nothing to say". The count in the message
- * stays the number of distinct values in the column, blanks included, because that is what the
- * reader will find in the file; the quoted sample skips them, because a blank tells them nothing
- * about which kind of id was bound by mistake.
+ * The person side is every id in the export, including accounts whose phone was unreadable and
+ * switchboards later evicted from the index; measuring against the surviving subset would report a
+ * phone-format problem as a join error. The empty string is skipped on both sides at the
+ * comparison rather than when either index is built, since one blank row on each side would
+ * otherwise satisfy the check on a key that names nobody. The count in the message keeps the
+ * blanks, being what the reader finds in the file.
  */
 function assert_joins(
   index: ReadonlyMap<string, unknown>,
@@ -842,15 +747,9 @@ function assert_joins(
   role: string,
   column: string,
 ): void {
-  // PRECONDITION, and the rule every reader of the lead role owes an answer to: **say what you do
-  // when it has no rows.** An empty lead role is now refused outright, in `measure`, before the
-  // market is inferred — the earlier judgment measured it, and produced three defects from guards
-  // that were each correct in isolation and silent about this case. This one still returns rather
-  // than throwing, because it can be reached with a non-empty base whose ids simply do not overlap,
-  // and a join against nobody is unprovable rather than wrong: with no
-  // ids on the other side, a key that would never have matched is indistinguishable from one that
-  // simply has nothing to match yet. Whoever writes the next check here answers the same question
-  // in their own comment, or becomes the fourth.
+  // Returns rather than throwing when either side is empty. With no ids on the other side, a key
+  // that would never have matched is indistinguishable from one that has nothing to match yet. An
+  // empty lead role is refused outright in `measure`, before the market is inferred.
   if (index.size === 0 || lead_ids.size === 0) {
     return;
   }
@@ -879,12 +778,10 @@ function assert_joins(
 /**
  * Group a money-carrying role's rows under the person they reference.
  *
- * The header check in `read_export` proves the bound timestamp column exists; the count below
- * proves it holds something. A column that is present and blank on every row is what a rename at
- * the source usually leaves behind, and it produces the same silent nothing an absent column
- * would: every event parses to a null instant, the accumulator skips all of them, and a file of
- * real money reports as none. The bound amount needs no such count, because `amount_of` already
- * refuses a blank on the first row it meets.
+ * `read_role` proves the bound timestamp column exists; the count below proves it holds something.
+ * A column present and blank on every row is what a rename at the source leaves behind, and it
+ * produces the same silent nothing an absent column would. The bound amount needs no such count,
+ * because `amount_of` refuses a blank on the first row it meets.
  */
 async function money_index(
   source: Source,
@@ -911,12 +808,10 @@ async function money_index(
       bucket.push(event);
     }
   }
-  // First, because it is the only check here that can say the export is the wrong file. A wallet
-  // extract bound to the revenue role often has no column the map's timestamp name reaches either,
-  // and reported as a blank timestamp it sends the reader to re-export a column in a file that was
-  // never this role's.
+  // First, because it is the only check here that can say the export is the wrong file. Reported
+  // as a blank timestamp instead, it sends the reader to re-export a column in the wrong file.
   assert_joins(index, lead_ids, role, role, "lead");
-  // An export with no rows is a fact — a role that saw no activity in the window someone queried.
+  // An export with no rows is a fact: a role that saw no activity in the window someone queried.
   // An export with rows and no times in any of them is a fault, and the two must not be confused.
   if (rows.length > 0 && dated === 0) {
     throw new ExportBlankColumnError(role, role, ["at"], rows.length, "timestamp");
@@ -928,9 +823,9 @@ async function conversion_index(
   source: Source,
   lead_ids: ReadonlySet<string>,
 ): Promise<Map<string, ConversionEvent[]>> {
-  // Two optional columns, discovered from what the source answered rather than declared anywhere:
-  // a fallback timestamp for rows whose primary one is blank, and the recycled predicate. Absent
-  // means the product has no such concept, which is a different fact from measuring zero.
+  // Two optional columns, discovered from what the source answered rather than declared: a
+  // fallback timestamp for rows whose primary one is blank, and the recycled predicate. Absent
+  // means the product has no such concept, which is not the same as measuring zero.
   const { header } = await source.rows("conversion");
   const present = new Set(header);
   const at_fallback = present.has("at_fallback");
@@ -946,15 +841,13 @@ async function conversion_index(
   }
 
   const index = new Map<string, ConversionEvent[]>();
-  // The committed filter runs per cell, against the cut, so a source whose predicate never fires
-  // is invisible there: the events are simply skipped one by one. Counted once here, over the
-  // whole role, the difference between "nobody committed in this window" and "this predicate
-  // matches nothing at all" becomes a fact the run can refuse on.
+  // The committed filter runs per cell against the cut, so a predicate that never fires is
+  // invisible there. Counted once here, over the whole role, "nobody committed in this window" and
+  // "this predicate matches nothing at all" become different facts.
   let committed = 0;
   let dated = 0;
   for (const row of rows) {
-    // The primary timestamp is nullable on this role, so the map may name a second column to
-    // stand in. Empty, not absent, is what an unset timestamp looks like in an export.
+    // Empty, not absent, is what an unset timestamp looks like in an export.
     const primary = row.at ?? "";
     const when = primary !== "" || !at_fallback ? primary : (row.at_fallback ?? "");
     const event: ConversionEvent = {
@@ -982,8 +875,8 @@ async function conversion_index(
     }
   }
   // First, for the reason written over `assert_joins`. An orders extract bound to this role keeps
-  // its own lifecycle in whatever it calls a status, so it fails the committed check too — and
-  // that message cannot fix a file describing different things than the role wanted.
+  // its own lifecycle in whatever it calls a status, so it fails the committed check too, and that
+  // message cannot fix a file describing different things than the role wanted.
   assert_joins(index, lead_ids, "conversion", "conversion", "lead");
   // Both timestamp columns are named where a fallback was answered: reporting only the primary
   // would send the reader to correct a column the source was already prepared to do without.
@@ -1006,9 +899,8 @@ async function conversion_index(
  * Sum one role over one group, from the cut forward.
  *
  * Each person is counted once however many events they generated, and their events are summed into
- * a subtotal before that subtotal joins the running total — the same association the reference
- * implementation uses, which matters because floating-point addition is not associative and a
- * different grouping would move the last cent of a published figure.
+ * a subtotal before that subtotal joins the running total. Keep that grouping: floating-point
+ * addition is not associative, and a different one moves the last cent of a published figure.
  */
 function accumulate(
   group: Account[],
@@ -1021,11 +913,10 @@ function accumulate(
   const per_person: number[] = [];
 
   for (const account of group) {
-    // An account whose id is blank joins nothing, by the same rule `assert_joins` applies. The
-    // bucket a blank keys holds every row whose person column was empty — money that belongs to
-    // nobody — and looking it up here would credit all of it to whichever listed person happens
-    // to carry the blank. The account stays in the audience it was matched into: its phone was
-    // read and it is a person this cell reached, and only its join key is missing.
+    // An account whose id is blank joins nothing, by the same rule `assert_joins` applies: the
+    // bucket a blank keys holds every row whose person column was empty, and looking it up would
+    // credit all of it to whichever listed person happens to carry the blank. The account stays in
+    // the audience it was matched into; only its join key is missing.
     if (account.id === "") {
       continue;
     }
@@ -1063,24 +954,15 @@ function accumulate(
 
 /**
  * Share of a group's total held by its two largest contributors. Null where the question is
- * meaningless: nothing collected, fewer than two contributors to compare, or a total that is not
- * a whole made of parts.
+ * meaningless: nothing collected, fewer than two contributors, or any contributor below zero.
  *
- * An average over a group where two people account for most of the money describes nobody in it,
- * and the concentration is invisible until someone goes looking. This puts it beside the total.
+ * That last condition is the one worth stating. A part over a whole only reads as a share while
+ * every part is non-negative: a person whose events net out below zero, a refund larger than what
+ * they paid, shrinks the denominator without shrinking the two numerators, and the ratio then
+ * comes back above 1 or below 0. Null says the group has no whole to take a share of.
  *
- * That last condition is the one worth stating. A share is a part over a whole, and it only reads
- * as one while every part is non-negative — a person whose events net out below zero, a refund or
- * a reversal larger than what they paid, shrinks the denominator without shrinking the two
- * numerators, and the arithmetic then returns something above 1 or below 0. Read as a percentage
- * it says the top two hold four hundred percent of the money, which is not a fact about
- * concentration at all; it is the ratio complaining that this group has no whole to take a share
- * of. Null says exactly that, and it is the same null the two other meaningless cases already
- * return, sitting in a field the reader can see beside a `value` that is very much not null.
- *
- * Not refused, because a negative contribution is data rather than a fault: a reversal is a real
- * thing that happens to a real account, and `value` still totals it correctly. Only the share is
- * undefined, so only the share goes null.
+ * Not refused. A negative contribution is data rather than a fault, `value` still totals it
+ * correctly, and only the share is undefined.
  */
 function top2_share(per_person: number[], total: number): number | null {
   if (total <= 0 || per_person.length < 2) {
@@ -1108,30 +990,19 @@ function resolve_outcome(record: CellRecord, path: string): number | undefined {
 }
 
 /**
- * Which outcomes a control pair may be read on, by the audience it was read against.
+ * Which outcomes a control pair may be read on, by the audience of each cell. The only statement
+ * of the rule: `measure` reads nothing else, and `COUNTABLE_OUTCOMES` is derived from it.
  *
- * Two rules used to live here as two lists, and they contradicted each other. One admitted seven
- * paths; the other confined a `cold` cell to `acquired.*` and an `own_base` cell to
- * `conversions.*`, which made the three `pre_existing.*` paths unreachable for every audience —
- * admitted by the allowlist and then refused by the audience check, two errors for one mistake
- * and the second contradicting the first. They were dropped rather than admitted, because there
- * is no reading they enable: `pre_existing` counts people who were already there before the cut,
- * so it is the same population in both arms of any pair and a difference in it is a difference in
- * how the two lists were drawn, not an effect of anything that was sent. This table is the only
- * statement of the rule, and `measure` reads nothing else: the union below is derived from it for
- * callers, and checking against the union first only ever repeated this check or contradicted it.
+ * A cold list has no counterfactual, so arrival is the effect; a list of people who already hold
+ * accounts cannot arrive at all, so commitment is. A pair read the other way round gives zero
+ * against zero, which is a question never asked rather than a null result.
  *
- * Why the shape of each entry. A cold list has no counterfactual: nobody who has never heard of
- * the brand arrives unprompted, so arrival is the effect. A list of people who already hold
- * accounts cannot arrive at all, so arrival there measures nothing and commitment is the effect.
- * Reading a pair on the wrong one gives zero against zero, which is not a null result — it is a
- * question that was never asked.
+ * Every entry must stay a count. The two-proportion test behind `publishable` divides successes by
+ * listed identifiers, and given a sum of money it still answers a p-value that means nothing while
+ * reading as publishable.
  *
- * Why every entry is a count. The two-proportion test behind `publishable` compares successes
- * against a denominator of listed identifiers. Hand it a sum of money and it still returns a
- * number: a p-value on "currency per person listed", which is not a proportion of anything and
- * cannot be below or above a significance threshold in any meaningful way. The reading would
- * carry `publishable: true` and mean nothing.
+ * `pre_existing.*` is on neither list. It counts people already there before the cut, so it is the
+ * same population in both arms and a difference in it is a difference in how the lists were drawn.
  */
 const COUNTABLE_BY_AUDIENCE: Record<Cell["audience"], readonly string[]> = {
   cold: ["acquired.accounts", "acquired.revenue.leads", "acquired.churn.leads"],
@@ -1140,35 +1011,27 @@ const COUNTABLE_BY_AUDIENCE: Record<Cell["audience"], readonly string[]> = {
 
 /** Every path some audience can be read on: the union of the table above, derived so it can never
  *  admit a path no audience will read. Exported for a caller validating a declaration before it
- *  measures. `measure` does not consult it — a check against the union can only refuse what the
- *  per-audience check is about to refuse anyway, and refusing one mistake twice sent the reader a
- *  first message naming four paths and a second one taking three of them back. */
+ *  measures. `measure` does not consult it, because a check against the union could only refuse
+ *  what the per-audience check is about to refuse anyway, in a message naming paths that check
+ *  then takes back. */
 export const COUNTABLE_OUTCOMES: readonly string[] = [...new Set(Object.values(COUNTABLE_BY_AUDIENCE).flat())];
 
 /**
- * The counts a provisional cut makes meaningless.
+ * The counts a provisional cut makes meaningless. Every one is accumulated forward from the cut.
  *
- * Every one of them is accumulated forward from the cut, so a cut that is a guess dates all of
- * them against a guess. `acquired.accounts` is the obvious one and was for a while the only one
- * checked, which left the guard blind to exactly the case that matters: an `own_base` cell is by
- * construction one whose matched accounts all predate the cut, so its arrivals are always zero
- * and the guard could never fire on it — while `conversions.count`, the one outcome such a cell
- * is ever read on, was accumulated from the same guess and published.
+ * `acquired.accounts` alone would not do. An `own_base` cell has by construction no arrivals, so
+ * the guard could never fire on one, while `conversions.count`, the only outcome such a cell is
+ * read on, is accumulated from the same guess. The two `pre_existing` counts are not symmetry
+ * either: they count people already there who paid or left *after* the cut, which a guessed cut
+ * moves and nothing else here would catch.
  *
- * The revenue and churn counts are here for the same reason and not merely for symmetry. The two
- * on the `acquired` branch are subsets of `acquired.accounts` and so can only add detail to the
- * message, but the two on the `pre_existing` branch are not: they count people who were already
- * there and then paid or left *after* the cut, which is a number a guessed cut moves and nothing
- * else here would catch.
+ * `pre_existing.accounts` is deliberately absent. It partitions the audience rather than measuring
+ * an outcome, and it is non-zero for essentially every `own_base` cell, so including it would
+ * refuse every provisional cut ever declared on one. Money sums are absent because a non-zero sum
+ * always carries a non-zero count.
  *
- * `pre_existing.accounts` is deliberately absent. It is a partition of the audience rather than
- * an outcome — nothing was attributed to it — and it is non-zero for essentially every `own_base`
- * cell, so including it would refuse every provisional cut ever declared on one and destroy the
- * quiet case the flag exists to allow. Money sums are absent too, because a non-zero sum always
- * carries a non-zero count and the counts already detect it.
- *
- * Not derived from `COUNTABLE_OUTCOMES`: that list answers which paths a proportion test can
- * read, this one answers which paths the cut dates, and the two questions only look alike.
+ * Not derived from `COUNTABLE_OUTCOMES`: that answers which paths a proportion test can read, this
+ * one which paths the cut dates.
  */
 const ACCUMULATED_FROM_CUT: readonly string[] = [
   "acquired.accounts",
@@ -1179,11 +1042,16 @@ const ACCUMULATED_FROM_CUT: readonly string[] = [
   "pre_existing.churn.leads",
 ];
 
+/**
+ * Measure every declared cell against the source's rows and apply the declared controls.
+ *
+ * Returns one `CellRecord` per cell, in declaration order. Refuses rather than publishing an
+ * ambiguous zero: every error class above names the condition it is raised on.
+ */
 export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
-  // Both of these are faults in the argument the caller just typed, and both are refused before a
-  // single export is opened. Two cells sharing a name make every control naming it ambiguous, and
-  // the join would silently pick one. Two controls on one treated cell both write `record.control`,
-  // and the last one wins with nothing said about the first.
+  // Both are faults in the argument the caller just typed, refused before a single export is
+  // opened. Two cells sharing a name make every control naming it ambiguous. Two controls on one
+  // treated cell both write `record.control`, and the last one wins without a word.
   const declared = new Set<string>();
   for (const cell of opts.cells) {
     if (declared.has(cell.name)) {
@@ -1223,19 +1091,14 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     );
   }
 
-  // The market a bare national number belongs to, read off the base rather than declared. A
-  // campaign may carry leads from any country, so naming one of them would name the wrong thing;
-  // and only numbers already carrying a calling code get a vote, so the answer is not circular.
-  // Before the market, because an entirely empty phone column would otherwise arrive at
-  // `dominant_market` as a corpus nothing can be inferred from, and be reported as an ambiguous
-  // market rather than as the missing column it is. Every cell would match nobody either way; only
-  // one of the two sentences sends the reader to the right place.
-  // Before the market for the same reason as the blank column below: with no rows there is no
-  // corpus to infer from, and the run would surface as an ambiguous market rather than as an empty
-  // base. Every figure this engine publishes is about people in that base, so with nobody in it
-  // every number is zero by construction - the engine's own "zero against zero, a question that was
-  // never asked". This reverses an earlier judgment that measured the empty case; it was reversed
-  // because the reading it produced could not be told apart from a campaign that reached nobody.
+  // The market a bare national number belongs to is read off the base rather than declared: a
+  // campaign may carry leads from any country, and only numbers already carrying a calling code
+  // get a vote, so the answer is not circular.
+  //
+  // Both refusals below come before that inference. With no rows, or with an entirely blank phone
+  // column, `dominant_market` has no corpus and would report an ambiguous market instead of the
+  // empty base or the missing column it is. Every cell matches nobody either way; only one of the
+  // two sentences sends the reader to the right place.
   if (lead_rows.length === 0) {
     throw new SourceError(
       "lead",
@@ -1249,21 +1112,17 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   }
   const fallback = dominant_market(lead_rows.map((row) => row.phone));
   const place_key = (raw: unknown): string | null => place(raw, fallback)?.key ?? null;
-  // What the base looks like by market. A cell's list is compared against this rather than against
-  // a declared country, so a project that genuinely spans markets carries its own shape and a
-  // single-market project gets a tight guard for free. Counted in the pass below rather than its
-  // own: placing a number is the most expensive thing this function does, and the loop that builds
-  // the index already does it for every row.
+  // What the base looks like by market, which is what a cell's list is compared against. Counted
+  // in the pass below rather than its own: placing a number is the most expensive thing this
+  // function does, and that loop already places every row.
   const base_markets = new Map<CountryCode, number>();
 
   const by_key = new Map<string, Account[]>();
   // Every id in the file, whether or not its phone was readable and whether or not its key
-  // survives the switchboard eviction below. It is what the other roles are asked to join
-  // against, and that question is about the id column, not about the dialling plan.
+  // survives the switchboard eviction below. It is what the other roles are asked to join against.
   const lead_ids = new Set<string>();
-  // Rows that carried an id, against the distinct spellings among them. One row per person is what
-  // the id column being a primary key means, and the check below costs nothing here because both
-  // quantities are already being built.
+  // Rows that carried an id, against the distinct spellings among them: one row per person is what
+  // the id column being a primary key means.
   let identified = 0;
   // Distinct spellings, not rows, so both sides of the rate below count the same kind of thing.
   // One sentinel repeated down a column is a single unknown, and it can hide at most one person.
@@ -1281,12 +1140,10 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     if (created !== null) {
       dated += 1;
     }
-    // The same distinction the cell lists are read with, for the same reason. This role's export
-    // writes `coalesce(u.phone, '')`, so an account with no number recorded arrives as an empty
-    // cell — an absent identifier, not one the dialling plan failed on. Counting it here would
-    // charge the plan for a person who never gave a number, and it would do so at a rate that
-    // grows with the account base: the ceiling is spent on absences until a genuine format fault
-    // has almost no room left below it.
+    // An absent identifier, not one the dialling plan failed on: an account with no number
+    // recorded arrives as an empty cell. Counting it as unreadable would charge the plan for a
+    // person who never gave a number, at a rate that grows with the account base until a genuine
+    // format fault has almost no room left below the ceiling.
     const written = (row.phone ?? "").trim();
     if (written === "") {
       continue;
@@ -1308,10 +1165,8 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   }
   // Before the two checks below, which describe the index this file builds and which a fanned-out
   // file has already inflated: a fan-out as wide as the switchboard ceiling puts every phone at it,
-  // the eviction empties the index, and the run then publishes a campaign that reached nobody with
-  // nothing said about why. Blanks count on neither side — a blank id is a left join that matched
-  // nothing, already handled as a person who collects nothing, and a column of them read as one id
-  // repeated would refuse a file that measures correctly.
+  // the eviction empties the index, and the run publishes a campaign that reached nobody. Blanks
+  // count on neither side, a blank id being a left join that matched nothing.
   const distinct_ids = lead_ids.has("") ? lead_ids.size - 1 : lead_ids.size;
   if (identified > distinct_ids) {
     throw new ExportRepeatedPersonError("lead", identified, distinct_ids);
@@ -1328,18 +1183,15 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         throw new UnparseablePhonesError(unknowns.size, possible, rate, MAX_UNPARSEABLE_RATE);
       }
     }
-    // Checked after the phone rate, because an export whose numbers are unreadable is the larger
-    // fault and the one whose message the reader wants first. An account with no creation time is
-    // legal on its own — it falls in neither group rather than the flattering one — but a file
-    // where every account is undated places nobody, and the run then reports an audience that
-    // arrived at nothing and was already there for nothing.
+    // After the phone rate, which is the larger fault and the message the reader wants first. An
+    // account with no creation time is legal on its own, falling in neither group, but a file
+    // where every account is undated places nobody at all.
     if (dated === 0) {
       throw new ExportBlankColumnError("lead", "lead", ["created_at"], lead_rows.length, "timestamp");
     }
   }
 
-  // A number answering for this many accounts is a switchboard, a placeholder or a support desk,
-  // not a person. Left in the index, every list containing it inherits all of them.
+  // See `SHARED_ACCOUNT_CEILING`. Evicted after the two checks above, which describe the file.
   for (const [key, accounts] of by_key) {
     if (accounts.length >= SHARED_ACCOUNT_CEILING) {
       by_key.delete(key);
@@ -1349,23 +1201,20 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   const revenue = await money_index(opts.source, "revenue", lead_ids);
   const churn = await money_index(opts.source, "churn", lead_ids);
   const conversions = await conversion_index(opts.source, lead_ids);
-  // Whether this product distinguishes recycled value at all, read off what the source answered
-  // rather than declared anywhere. No `recycled` column means no such concept, which the record
-  // reports by omitting the pair rather than by publishing two zeros.
+  // Whether this product distinguishes recycled value at all, read off what the source answered.
+  // No `recycled` column means no such concept, which the record reports by omitting the pair.
   const splits_value = [...conversions.values()].some((events) => events.some((event) => event.recycled !== undefined));
 
   const measured: { cell: Cell; record: CellRecord; keys: ReadonlySet<string> }[] = [];
 
   for (const cell of opts.cells) {
     // The cut is the one instant the truncation in `parse_ts` is not provably harmless for: every
-    // event is compared against it, and the argument that no event can change side holds only
-    // while the cut itself sits on a whole millisecond. A cut is typed by a person, once, so
-    // refusing an unhonourable one costs nothing and closes the only case that could disagree.
+    // event is compared against it, and the argument that truncation cannot move an event across
+    // the cut holds only while the cut itself sits on a whole millisecond.
     //
     // A cut nobody can read is caught here rather than left to rise as the parser wrote it. That
-    // error names the text and nothing else, and the four refusals below it all name the cell — so
-    // a run measuring several cells answered `not a readable timestamp: "03/02/2030 09:00"` and
-    // left the reader grepping the declaration for whichever cell was carrying that string.
+    // error names the text and not the cell, so a run measuring several cells left the reader
+    // grepping the declaration for whichever one carried the string.
     let reading: TimestampReading;
     try {
       reading = parse_ts_with_precision(cell.cut);
@@ -1392,12 +1241,10 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
     // Refused before the instant is taken, because the fault is in the string and not in where it
-    // landed. `new Date` answers an impossible day by counting past the end of the month instead
-    // of refusing it, so `2030-02-30` measures from 2 March. Every cut on disk is transcribed by
-    // hand off a delivery report, where `2026-04-31`, `2026-06-31` and `2026-02-30` are ordinary
-    // slips, and the shift runs whichever way the typo points — it can credit the campaign as
-    // easily as rob it. Left alone the record publishes the day that was typed while the counts
-    // behind it were taken from a different one, and nothing in the record says so.
+    // landed. `new Date` answers an impossible day by counting past the end of the month, so
+    // `2030-02-30` measures from 2 March while the record goes on publishing the day that was
+    // typed. Cuts are transcribed by hand off a delivery report, and the shift runs whichever way
+    // the typo points: it can credit the campaign as easily as rob it.
     const rolled = rolls_forward_to(cell.cut);
     if (rolled !== null) {
       throw new CellDeclarationError(
@@ -1411,10 +1258,9 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
     const cut_ms = cut.getTime();
-    // A cut later than the reading is not a small error. The window comes out negative, every
-    // comparison against the cut excludes everything, and the record reads as a campaign that
-    // reached people and produced nothing — the same zeros a real failure produces. A planning
-    // date left in place after the send slipped is exactly how it happens.
+    // A cut later than the reading makes the window negative: every comparison against it excludes
+    // everything, and the record reads as a campaign that reached people and produced nothing. A
+    // planning date left in place after the send slipped is how it happens.
     if (cut_ms > now_ms) {
       throw new CellDeclarationError(
         cell.name,
@@ -1426,13 +1272,11 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
 
     const keys = new Set<string>();
-    // Distinct spellings, not rows, for the same reason `keys` is a set: both sides of this
-    // fraction have to count the same kind of thing. Twenty rows reading `SEM TELEFONE` are one
-    // unknown repeated, and can hide at most one person between them; twenty different junk
-    // strings can hide twenty. Counting rows scores those two identically and lets a file's
-    // duplication decide the verdict — most sharply when a cell names the same list twice, which
-    // deduplicates on the readable side and accumulated on the other, so repeating a filename
-    // changed a cell's audience.
+    // Distinct spellings, not rows, for the same reason `keys` is a set: both sides of the rate
+    // below have to count the same kind of thing. Twenty rows reading `SEM TELEFONE` are one
+    // unknown and can hide at most one person; twenty different junk strings can hide twenty.
+    // Counting rows would let a file's duplication decide the verdict, most sharply where a cell
+    // names the same list twice.
     const unknowns = new Set<string>();
     const list_markets: CountryCode[] = [];
     for (const list of cell.lists) {
@@ -1441,12 +1285,9 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       }
       for (const raw of await read_identifiers(list, cell.column, cell.filter)) {
         // A row carrying nothing in its identifier column is not a member this cell failed to
-        // read; it is a row of somebody's export that was never part of the dispatch. A CRM dump
-        // is mostly such rows, and the count the campaign publishes has always been the phones it
-        // held rather than the lines it ran to. Counting them as unreadable would refuse a
-        // correct reading, which is the opposite of the fault this guard exists for. A `.txt`
-        // list already drops blank lines, so this also stops the same identifiers passing or
-        // failing on nothing but the file's extension.
+        // read; it is a row of somebody's export that was never part of the dispatch, and a CRM
+        // dump is mostly such rows. A `.txt` list already drops blank lines, so this also stops
+        // identical identifiers passing or failing on nothing but the file's extension.
         const written = raw.trim();
         if (written === "") {
           continue;
@@ -1460,26 +1301,18 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         list_markets.push(placed.country);
       }
     }
-    // The same ceiling the person export is held to, for the same reason and with the opposite
-    // sign. An entry nobody can key never matches an account, so it can never reach a numerator —
-    // dropping it quietly shrinks `listed`, which is the denominator under every rate this cell
-    // publishes and under both arms of its comparison. A file of junk therefore reads as a small
-    // audience that converted brilliantly, and two lists carrying different amounts of junk make a
-    // comparison whose difference is the junk. The person export is rate-checked a few dozen lines
-    // above; leaving the lists unchecked guarded the side that empties and left the side that
-    // inflates open, and of the two it is the inflated reading that gets published.
+    // The same ceiling the person export is held to, with the opposite sign. An entry nobody can
+    // key never matches an account, so dropping it quietly shrinks `listed`, the denominator under
+    // every rate this cell publishes and under both arms of its comparison: a file of junk reads
+    // as a small audience that converted brilliantly.
     //
-    // The denominator is what `listed` could have been, not how many rows were read. Each distinct
-    // unknown could have contributed at most one key, so the sum is the largest audience this cell
-    // could have had, and the share lost is the distortion of the one number the guard protects.
-    // Dividing by rows instead would understate it wherever readable entries repeat: a list of
-    // eighty rows resolving to twenty people reads as five percent junk while a fifth of its
-    // audience is missing.
+    // The denominator is what `listed` could have been, not how many rows were read, each distinct
+    // unknown having been worth at most one key. Dividing by rows would understate the loss
+    // wherever readable entries repeat.
     //
     // Checked before the empty cell below, so a list of nothing but junk is refused for being junk
-    // rather than for being empty. The two faults read alike and are fixed in different files —
-    // one sends the reader to the map's dialling plan, the other to a wrong column or an
-    // over-narrow filter — and this order is also what leaves `possible` provably non-zero.
+    // rather than for being empty. The two are fixed in different files, and this order is also
+    // what leaves `possible` provably non-zero.
     const possible = keys.size + unknowns.size;
     if (possible > 0) {
       const rate = unknowns.size / possible;
@@ -1497,14 +1330,12 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       throw new EmptyCellError(cell.name, cell.lists, cell.column, false);
     }
 
-    // Probes and internal numbers are subtracted after that first check so the two ways a cell can
-    // come out empty are reported apart: a file that yielded nothing is a different fix from a file
-    // whose every entry was excluded. Both are refused, because a cell with no members left reads
-    // downstream as an audience that converted nothing.
+    // Exclusions are subtracted after that first check so the two ways a cell can come out empty
+    // are reported apart: a file that yielded nothing is a different fix from a file whose every
+    // entry was excluded. Both are refused.
     //
     // An entry that yields no key is refused ahead of both. Dropped in silence it subtracts nobody
-    // and the number it named stays in the cell, so this fault inflates where every other one
-    // empties — and of the two, the inflated reading is the one that gets published.
+    // and the number it named stays in the cell, so this fault inflates where every other empties.
     const unusable: string[] = [];
     for (const raw of cell.exclude ?? []) {
       const key = place_key(raw);
@@ -1533,29 +1364,22 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
         matched_accounts.push(account);
       }
     }
-    // Checked here because this is the first line at which the answer exists: the two guards above
-    // ask whether the identifiers could be read and whether any survived, and a list of well-formed
-    // numbers absent from the export passes both. Only `own_base` is refused. It is a declaration
-    // that these people already hold accounts, so nothing matched contradicts it; the same zeros on
-    // a cold cell are the finding that send was run to get, and refusing them would refuse every
-    // honest cold reading this engine takes.
+    // The first line at which the answer exists: the two guards above ask whether the identifiers
+    // could be read and whether any survived, and a list of well-formed numbers absent from the
+    // export passes both. Only `own_base` is refused; the same zeros on a cold cell are the
+    // finding that send was run to get.
     //
-    // And only where there is an index to match against. Two files leave none: an export of a
-    // header and no rows, which this pass measures rather than refuses on purpose, and a populated
-    // one whose every key sat at the switchboard ceiling and was evicted a few dozen lines above.
-    // In both, no cell of any audience can match one identifier, so naming the cell would send the
-    // reader to check their column and their list file over a fault in the other file. This error
-    // means there is a base and this list does not intersect it; where there is no base the fault
-    // is upstream of the declaration, and both worlds read the same whichever audience is declared.
+    // And only where there is an index to match against. An export of a header and no rows, or one
+    // whose every key sat at the switchboard ceiling and was evicted above, leaves none, and then
+    // no cell of any audience can match: naming the cell would send the reader to the wrong file.
     if (cell.audience === "own_base" && by_key.size > 0 && matched_keys.length === 0) {
       throw new UnmatchedBaseError(cell.name, keys.size);
     }
 
-    // A list from the wrong market matches nothing for a reason no per-number check can see: every
-    // number in it is valid, and the join is against a population that was never in this file. The
-    // unparseable rate cannot catch it — a Portuguese list parses perfectly — and `UnmatchedBaseError`
-    // only fires for a cell that claimed the base. This is the cold-list case, where zero matches is
-    // the expected reading and a wrong-country list looks exactly like a campaign that did not land.
+    // A wrong-market list matches nothing for a reason no per-number check can see: every number
+    // is valid and the join is against a population that was never in this file. This is the
+    // cold-list case, where zero matches is the expected reading and `UnmatchedBaseError` does not
+    // fire.
     const spread = market_divergence(list_markets, base_markets);
     if (spread > (opts.max_market_divergence ?? MAX_MARKET_DIVERGENCE)) {
       throw new MarketDivergenceError(cell.name, spread, opts.max_market_divergence ?? MAX_MARKET_DIVERGENCE);
@@ -1588,8 +1412,7 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
 
     let conversion_count = 0;
     let conversion_value = 0;
-    // Only accumulated where the map declares the split. A product with no recycled balance has
-    // no such distinction to report, and two zeros would read as one that came out empty.
+    // Only accumulated where the source answers the split; two zeros would invent a distinction.
     let new_money = 0;
     let recycled = 0;
     for (const account of matched_accounts) {
@@ -1623,8 +1446,8 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     const record: CellRecord = {
       cell: cell.name,
       cut_utc: cell.cut,
-      // Beside the cut it qualifies rather than at the end of the record: the number and the fact
-      // that the moment it is counted from is a placeholder have to be read together.
+      // Beside the cut it qualifies rather than at the end of the record, so the number and the
+      // fact that it is counted from a placeholder are read together.
       ...(cell.cut_provisional === true ? { cut_provisional: true } : {}),
       measured_utc,
       window_hours: Math.floor((now_ms - cut_ms) / HOUR_MS),
@@ -1676,25 +1499,23 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       };
     }
 
-    // The key set travels with the record. It is the cell's membership, and the only place a
-    // control pair can be checked for the one fault that makes its arithmetic meaningless.
+    // The key set travels with the record. It is the cell's membership, and the only thing a
+    // control pair can be checked against for overlapping arms.
     measured.push({ cell, record, keys });
   }
 
-  // A provisional cut is a date somebody wrote down while waiting for the real one. Everything
-  // counted forward from it is dated against a guess, so the run refuses rather than emitting it.
-  // It refuses instead of printing a warning because the reader who is misled is not the one
-  // watching this run: it is whoever opens the JSON weeks later, and nothing printed to a terminal
-  // reaches them. The record carries `cut_provisional` for the same reason, and that flag is what
-  // the case with nothing counted is left with.
+  // Everything counted forward from a provisional cut is dated against a guess, so the run refuses
+  // rather than emitting it. It refuses instead of warning because the reader who is misled is not
+  // the one watching this run: it is whoever opens the JSON weeks later. A cell with nothing
+  // counted is allowed through carrying `cut_provisional`.
   const against_a_guess = measured
     .filter((entry) => entry.cell.cut_provisional === true)
     .map((entry) => ({
       cell: entry.cell.name,
       counted: ACCUMULATED_FROM_CUT.map((outcome) => ({
         outcome,
-        // Zero where the map left the role unbound, which is the same "nothing to attribute" as a
-        // bound role that counted none.
+        // Zero where the role is unbound, which is the same "nothing to attribute" as a bound
+        // role that counted none.
         count: resolve_outcome(entry.record, outcome) ?? 0,
       })).filter((reading) => reading.count > 0),
     }))
@@ -1721,10 +1542,8 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
 
     // The two-proportion test assumes two independent samples. Arms that share members break that
     // assumption without breaking anything visible: the shared people are counted on both sides,
-    // so the control drifts towards the treated arm and the difference that survives is a
-    // selection artefact wearing a p-value. A control drawn as "everyone we did not send to" from
-    // a list that was later extended, or the same cell named twice, both land here — and both
-    // publish `publishable: true` on a comparison of a group against itself.
+    // the control drifts towards the treated arm, and the difference that survives is a selection
+    // artefact wearing a p-value. One shared identifier is enough to refuse the pair.
     const smaller = treated.keys.size <= untouched.keys.size ? treated.keys : untouched.keys;
     const larger = smaller === treated.keys ? untouched.keys : treated.keys;
     let overlap = 0;
@@ -1750,20 +1569,16 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       );
     }
 
-    // One check, not two. There was a countability check ahead of this one, reading the union of
-    // the same table, so every outcome it refused this one refuses too and the only thing it
-    // decided was which message the reader got: a first that named all four countable paths and a
-    // second that then took three of them back, for one mistake. What the reader needs is a single
-    // sentence naming what this pair can be read on and why the path asked for is not it.
+    // One check, not two. A countability check ahead of this one read the union of the same table,
+    // so it refused nothing this does not and only decided which message the reader got: a first
+    // naming four countable paths and a second taking three of them back, for one mistake.
     const treated_allows = COUNTABLE_BY_AUDIENCE[treated.cell.audience];
     const control_allows = COUNTABLE_BY_AUDIENCE[untouched.cell.audience];
     if (!treated_allows.includes(control.outcome) || !control_allows.includes(control.outcome)) {
-      // A pair whose cells share an audience is told the rule once instead of hearing the same
-      // list twice. The mixed case states that nothing can be read on both as a fact rather than
-      // intersecting the two lists to find out: they are disjoint, so a branch for the case where
-      // they overlapped would be a sentence no input could produce — the very thing this whole
-      // check was merged to stop shipping. Their disjointness is pinned by a test, which is what
-      // fires if it ever stops holding and this message starts lying.
+      // The mixed case states that nothing can be read on both as a fact rather than intersecting
+      // the two lists to find out. They are disjoint, so a branch for an overlap would be a
+      // sentence no input could produce. A test pins that disjointness, and fires if this message
+      // ever starts lying.
       const rule =
         treated.cell.audience === untouched.cell.audience
           ? `Both cells are ${treated.cell.audience}, and a ${treated.cell.audience} cell is read on ` +
@@ -1813,9 +1628,8 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
           : round_half_even(treated_value / treated_listed / (control_value / control_listed), 2),
       control_events: control_value,
       p: round_or_null(test === null ? null : test.p, 3),
-      // The unrounded p, and the window off the treated cell — which is the record this reading is
-      // attached to and published from. Why each threshold is where it is, and which of the three
-      // comparisons are inclusive, is on `is_publishable`.
+      // The unrounded p, and the window off the treated cell, which is the record this reading is
+      // attached to. The thresholds and their inclusivity are on `is_publishable`.
       publishable: is_publishable(test === null ? null : test.p, control_value, treated.record.window_hours),
     };
   }

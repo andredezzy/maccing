@@ -1,12 +1,11 @@
 /**
- * Rounding that agrees with the reference implementation on exact ties.
+ * Rounding that agrees with the reference implementation on exact ties: half to *even*, decided on
+ * the double's exact binary value, with no step that scales through a float.
  *
- * The reference rounds half to *even*, on the double's exact binary value. `toFixed` rounds half
- * up, on a decimal rendering. They disagree whenever the scaled value lands exactly on a half, and
- * that is reachable here rather than theoretical: the median of two lag measurements is the mean of
- * two doubles, so a pair like 4.0 and 4.5 gives exactly 4.25, where half-to-even yields 4.2 and
- * `toFixed(1)` yields 4.3. One digit of drift in a published number is the whole reason this file
- * exists, so the arithmetic below is exact and never scales through a float.
+ * `toFixed` is not a substitute. It rounds half up, on a decimal rendering, and the two disagree
+ * whenever the scaled value lands exactly on a half. That is reachable here rather than
+ * theoretical: the median of two lag measurements is the mean of two doubles, so 4.0 and 4.5 give
+ * exactly 4.25, which this rounds to 4.2 and `toFixed(1)` to 4.3.
  */
 
 /** Scratch view for reading a double's IEEE-754 bits. Single-threaded, so one is enough. */
@@ -15,17 +14,13 @@ const bits_view = new DataView(new ArrayBuffer(8));
 const MANTISSA_BITS = 52n;
 const FRACTION_MASK = (1n << MANTISSA_BITS) - 1n;
 const EXPONENT_MASK = 0x7ffn;
-/** Exponent bias (1023) plus the 52 fraction bits, so `stored_exponent - 1075` scales the
- *  integer significand back to the value it stands for. */
+/** Bias 1023 plus the 52 fraction bits: `stored_exponent - 1075` scales the significand to its value. */
 const EXPONENT_SHIFT = 1075;
 /** Every subnormal shares one exponent: the smallest normal's, with no implicit leading bit. */
 const SUBNORMAL_EXPONENT = -1074;
 
-/**
- * Split a finite non-negative double into an exact `significand * 2 ** exponent`. Both parts are
- * exact, which is the point — the pair reproduces the double with no rounding of its own, so every
- * comparison downstream is between integers.
- */
+/** Split a finite non-negative double into an exact `significand * 2 ** exponent`; both parts are
+ *  exact, so every comparison downstream is between integers rather than floats. */
 function decompose(value: number): { significand: bigint; exponent: number } {
   bits_view.setFloat64(0, value);
   const bits = bits_view.getBigUint64(0);
@@ -38,24 +33,18 @@ function decompose(value: number): { significand: bigint; exponent: number } {
 }
 
 /**
- * Round `x` to `digits` decimal places, breaking exact ties toward the even neighbour.
+ * Round `x` to `digits` decimal places, breaking exact ties toward the even neighbour. Non-finite
+ * `x` comes back unchanged. Throws `RangeError` unless `digits` is a whole number in 0..100, which
+ * a caller would otherwise get back as a silent `NaN` or `Infinity`.
  *
- * Non-finite input is returned unchanged, matching what a caller would get from any other
- * arithmetic on it. Everything else goes through exact integer arithmetic: the scaled value is
- * written as a rational `numerator / denominator` in BigInt, and the tie is decided by comparing
- * twice the remainder against the denominator rather than by inspecting a decimal string.
+ * The scaled value is an exact BigInt rational, and the tie is decided by comparing twice the
+ * remainder against the denominator, never by inspecting a decimal string.
  *
- * The result is handed back by writing the exact quotient as a decimal string and parsing it,
- * not by dividing it by `10 ** digits`. That division is a float operation at the end of an
- * otherwise exact computation, and it has its own rounding: `10 ** digits` is not exactly
- * representable past a handful of digits, so the quotient of two approximations can land on a
- * different double than the decimal actually asked for. Parsing the decimal has no such step —
- * the language specifies that a numeric string becomes the nearest double to the value it
- * denotes, which is by definition the correctly rounded answer.
- *
- * `digits` must be a non-negative integer within a range a double can express. Anything else is a
- * caller bug that would otherwise come back as a silent `NaN` or `Infinity`, which is the one kind
- * of wrong answer this whole file exists to prevent.
+ * The quotient is returned by rendering it as a decimal string and parsing that. Do not replace
+ * the step with a division by `10 ** digits`: past a handful of digits that power is not exactly
+ * representable, so the quotient of two approximations can land on a different double than the
+ * decimal asked for. Parsing has no such step, since the language specifies that a numeric string
+ * becomes the nearest double to the value it denotes, which is the correctly rounded answer.
  */
 export function round_half_even(x: number, digits: number): number {
   if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
@@ -71,9 +60,8 @@ export function round_half_even(x: number, digits: number): number {
   const negative = x < 0;
   const { significand, exponent } = decompose(Math.abs(x));
 
-  // A non-negative binary exponent means the double is already a whole number, so rounding to
-  // any decimal place returns it. Short-circuiting is not only cheaper: past 2**53 the scaled
-  // integer no longer fits a double, and converting it back would saturate to infinity.
+  // A non-negative binary exponent means the double is already whole, so any decimal rounding
+  // returns it. Not only cheaper: past 2**53 the scaled integer would convert back to infinity.
   if (exponent >= 0) {
     return x;
   }
@@ -90,8 +78,7 @@ export function round_half_even(x: number, digits: number): number {
     quotient += 1n;
   }
 
-  // `quotient` counts units of 10**-digits, so the decimal point goes `digits` places from the
-  // right; zero-padding first covers the case where the value is smaller than one such unit.
+  // `quotient` counts units of 10**-digits; the padding covers a value below one such unit.
   const scaled_text = quotient.toString().padStart(digits + 1, "0");
   const point = scaled_text.length - digits;
   const decimal = digits === 0 ? scaled_text : `${scaled_text.slice(0, point)}.${scaled_text.slice(point)}`;
@@ -99,7 +86,7 @@ export function round_half_even(x: number, digits: number): number {
   return negative ? -rounded : rounded;
 }
 
-/** The same rounding, transparent to the absent measurement a nullable field carries. */
+/** `round_half_even`, passing the absent measurement a nullable field carries through as null. */
 export function round_or_null(x: number | null, digits: number): number | null {
   return x === null ? null : round_half_even(x, digits);
 }
