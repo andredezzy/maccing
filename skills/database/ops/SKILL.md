@@ -232,9 +232,11 @@ Cases belong in the project, not in this skill — they contain that project's d
 **A project still holding flat `YYYY-MM-DD-<slug>.md` cases gets converted, once, before you open your own case.** You are already reading that directory — it is step 1 — and a directory carrying two shapes is one every later reader has to learn.
 
 1. `YYYY-MM-DD-<slug>.md` becomes `YYYY-MM-DD-<slug>/case.md`.
-2. Siblings sharing that `YYYY-MM-DD-<slug>` prefix move in, prefix stripped; scripts land in `scripts/`.
-3. A file matching no case's prefix stays put and is named in the migration's own case. An orphan reported beats an orphan guessed.
+2. Each remaining file goes to the case it shares a date and **the longest run of leading slug words** with. Strip that shared run from its name on the way in; scripts land in `scripts/`.
+3. A file sharing no leading word with any case of its date, or carrying no date, stays put and is named in the migration's own case. So does one where two cases tie. An orphan reported beats an orphan guessed.
 4. `git mv`, so history follows and the conversion is one reviewable commit.
+
+Step 2 is a run of *words*, not of characters, because an artifact is usually named for the same subject as its case and then diverges: `<date>-<subject>-rollback.sql` belongs to `<date>-<subject>-balance-review.md`, and neither name is a prefix of the other. Matching on the shared subject places it; matching on a literal prefix strands it beside a directory it obviously belongs in.
 
 Contents are never edited, stale cross-references included: a `Prior cases read` line naming `2026-07-30-refund-check.md` still resolves, because the slug is the case's identity and the folder is named exactly what the file was. Editing evidence to tidy a path is not a trade this skill makes. Where the directory is empty or already folders, there is nothing to do.
 

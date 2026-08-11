@@ -224,11 +224,22 @@ before/                                  after/
 ```
 
 1. `YYYY-MM-DD-<slug>.md` becomes `YYYY-MM-DD-<slug>/case.md`.
-2. Every sibling whose name starts with that same `YYYY-MM-DD-<slug>` prefix moves into the
-   folder with the prefix stripped; a script among them lands in `scripts/`.
-3. A file matching no case's prefix stays where it is and is named in the migration record.
-   Guessing which case an orphan belonged to is worse than reporting that it has no owner.
+2. Every remaining file joins the case it shares a date and the **longest run of leading slug
+   words** with, that shared run stripped from its name; a script among them lands in `scripts/`.
+3. A file sharing no leading word with any case of its date, carrying no date, or tying between
+   two cases, stays where it is and is named in the migration record. Guessing which case an
+   orphan belonged to is worse than reporting that it has no owner.
 4. `git mv`, so history follows each file and the whole conversion is one reviewable commit.
+
+**Step 2 matches words, not characters, and that was a correction.** The rule first written here
+moved siblings sharing the case's whole `YYYY-MM-DD-<slug>` prefix — which is how the fixture
+this design was tested against happened to be named, because the fixture was invented rather
+than sampled. Measured afterwards against a real archive of 177 cases and 84 sibling files, that
+rule placed **38 of 84**; the rest are named for the same subject as their case and then diverge
+(`<date>-<subject>-rollback.sql` beside `<date>-<subject>-balance-review.md`), so neither name is
+a prefix of the other. Matching the shared leading *words* instead places **69 of 84 with
+no ambiguous ties**, and the 16 that remain are genuine — no case on their date shares a subject
+with them, or they carry no date at all. Reporting those is the rule working, not failing.
 
 **No file's contents are edited, stale cross-references included.** A `Prior cases read`
 section naming `2026-07-30-refund-check.md` still resolves after the migration, because the
