@@ -1,6 +1,6 @@
 ---
 name: database-ops
-description: 'Use BEFORE the first read or write against any non-local database, however small: a `SELECT` against production, any SQL run by hand, a single-row lookup, a support investigation touching live rows, a data fix, a schema or migration check, an export, or writing up what was done afterwards. Covers reading the prior cases first, the host-and-credential step (secret store, read or write), the dry-run-and-approval gate on every INSERT/UPDATE/DELETE, the dated case file recording the exact query and its observed output, host identity verification, and deleting exports when the work is finished. MANDATORY, never optional — "quick lookup", "obvious fix", "just a SELECT", or "it is read-only anyway" is the exact trap: those are the queries that reach production with no record and an unverified host. If the task touches live or production data at all, load this FIRST. Requires database-mapping before any operation that needs to know which table holds what.'
+description: 'Use BEFORE the first read or write against any non-local database, however small: a `SELECT` against production, any SQL run by hand, a single-row lookup, a support investigation touching live rows, a data fix, a schema or migration check, an export, or writing up what was done afterwards. Covers reading the prior cases first, the host-and-credential step (secret store, read or write), the dry-run-and-approval gate on every INSERT/UPDATE/DELETE, the dated case folder recording the exact query and its observed output, host identity verification, and what is kept or deleted when the work is finished. MANDATORY, never optional — "quick lookup", "obvious fix", "just a SELECT", or "it is read-only anyway" is the exact trap: those are the queries that reach production with no record and an unverified host. If the task touches live or production data at all, load this FIRST. Requires database-mapping before any operation that needs to know which table holds what.'
 ---
 
 # Database Ops
@@ -8,12 +8,13 @@ description: 'Use BEFORE the first read or write against any non-local database,
 ```
 MANDATORY — before the first statement against any non-local database, and
 before any clarifying question:
-1. READ the case files this project already has. A prior correction can change
+1. READ the cases this project already has. A prior correction can change
    what you are about to run, which is why it comes first.
 2. VERIFY the host as its own command, and read the answer back.
 3. NAME where the credential came from. The secret store, or stop.
 4. DECLARE read or write, now rather than after the statement is written.
-5. OPEN the case file and record 1–4 in it before running anything.
+5. OPEN the case folder — `YYYY-MM-DD-<slug>/case.md` — and record 1–4 in it
+   before running anything.
 
 Any one of the five you cannot complete means you are not ready to run a
 statement. "Quick lookup" does not shorten this list.
@@ -27,7 +28,7 @@ The whole thing rests on one asymmetry. A read that goes wrong wastes your time.
 
 ## Before Step 0 — read the cases
 
-The first action of any operation is reading the case files that already exist, and it comes before the host check because it can change what you are about to do.
+The first action of any operation is reading the cases that already exist, and it comes before the host check because it can change what you are about to do.
 
 Past cases are the only place the operator's corrections are written down. When a mutation was wrong and they said so, that sentence is in a case file and nowhere else — not in the schema, not in the code, not in this skill. A directory of them is a record of every way this database has already been got wrong.
 
@@ -96,7 +97,18 @@ Do this before the first statement of any session against a non-local database. 
 Answer three questions, out loud, in the case file:
 
 1. **Which host am I on?** Not which host I intended, not which host the last command used — which host this connection actually resolves to. Verify it (see [Host verification](#host-verification)), then write the answer down.
-2. **Where did the credential come from?** It must come from the secret store. Not a `.env` file you found, not a connection string pasted in the scrollback, not one you remember from last week. A credential lying around in a file is a credential nobody rotated and nobody scoped, and the string in your scrollback may well point at a host that is no longer the one you want.
+2. **Where did the credential come from, and how does it travel?** It must come from the secret store. Not a `.env` file you found, not a connection string pasted in the scrollback, not one you remember from last week. A credential lying around in a file is a credential nobody rotated and nobody scoped, and the string in your scrollback may well point at a host that is no longer the one you want.
+
+   Then it travels as a reference, never as a literal. **The credential's characters appear in no command, no script, and no case record** — what appears is the expression that fetches it:
+
+   ```sh
+   psql "$(<secret-store command>)" -c "select ..."
+   ```
+
+   Where the store answers freely, that is the whole rule: fetch it inside every command and nothing persists anywhere. Where the store cannot be asked twice — a rate limit, audited issuance, an MFA prompt — issue it once into a file **outside the repository**, `chmod 600`, then read from that file the same way. Delete it as part of the close and record the deletion, exactly as an export. An exported shell variable is not a carrier here: it dies with the command that set it.
+
+   This is what lets a script be kept. A script in `scripts/` is committed with the case, so the habit is what makes it safe to commit — not a scrubbing pass afterwards.
+
 3. **Does this operation read or write?** State it before you start. This is the fork in the road: reads proceed freely, writes enter the gate. Deciding which one you are doing *after* you have written the statement is how an "investigation" turns into an UPDATE without anyone approving anything.
 
 If you cannot answer all three, you are not ready to run anything.
@@ -149,13 +161,15 @@ The identifiers and values there are invented for illustration. Note the row cou
 | "It is just a rollback" | A rollback is a write. It gets its own dry run and its own approval. |
 | "I know this schema" | Knowing the schema is not authorization, and confidence is precisely the state in which people forget a predicate. |
 
-## The case file
+## The case
 
-Every operation leaves a dated file. Reads included.
+Every operation leaves a dated folder. Reads included.
 
 **Why.** An operation with no record cannot be checked afterwards by anyone, including you. When a number looks wrong next week, the only question that matters is "what exactly was run, and what came back?", and the only acceptable answer is a transcript. "I ran something like this" is not a record — it is a reconstruction from memory, produced by the person with the strongest incentive to remember it as correct. The case file also removes an entire class of argument: with the exact query and the exact output on disk, disagreements are about interpretation instead of about what happened.
 
 **The record is literal.** Paste the statement as executed and the output as returned. Not a paraphrase, not a rounded summary, not "returned about forty rows". If the output is enormous, record the shape faithfully — the first rows verbatim, the exact total count, and how you obtained the count — and say that you truncated. A summary is a claim; the transcript is evidence.
+
+This has no redaction exception, and needs none: a statement written per Step 0 carries the fetch expression rather than the credential, so what you ran and what you record are the same publishable line. A statement that would need redacting is one to re-run correctly, not to edit on the way into the file.
 
 **Write it as you go.** Open the file before the first statement, with the context and what you expect to find. Update it after each phase. A case file written entirely at the end records your conclusion, not your path, and the path is where the mistakes are visible.
 
@@ -171,7 +185,7 @@ Database: <the identity the server reported back, and how you verified it>
 Type: read | write | both
 
 ## Prior cases read
-<which case files were consulted, and one line each on what it changed about the
+<which cases were consulted, and one line each on what it changed about the
 approach — or "nothing matched; read the most recent five">
 
 ## What was asked
@@ -192,15 +206,48 @@ approach — or "nothing matched; read the most recent five">
 
 ## Outcome
 <what the requester needs to know, and any artifact created or deleted>
+
+## Credential scan
+<the patterns scanned for, and the files and counts they matched — never the
+matched lines themselves. The last thing done before the commit>
 ```
 
 Drop the write-only sections when nothing was written. Keep the rest even for a two-minute lookup; a two-minute lookup that later turns out to have answered the wrong question is exactly the case you will want to reread.
 
 **`Prior cases read` is what closes the loop.** The reading described above is real work and it is thrown away unless the file names the cases consulted and what each one changed. "Nothing matched; read the most recent five" is a result too: it tells the next agent the gap is genuine rather than unsearched, and spares them re-deriving the same reading from the whole directory.
 
-Case files belong in the project, not in this skill — they contain that project's data. Put them in a project-local directory, one file per operation, named `YYYY-MM-DD-<slug>.md`. `.maccing/database/ops/` is the default if the project has no established place. Any artifact an operation produces goes beside its case file, sharing the date and slug.
+Cases belong in the project, not in this skill — they contain that project's data. Put them in a project-local directory, one **folder** per operation; `.maccing/database/ops/` is the default if the project has no established place.
 
-**A finished case is committed.** Committing the case file, together with any artifact kept beside it, is the closing step of the operation — the same closing step that deletes the exports. This is not put to the operator, because an uncommitted case file is a record only its author has, held on one machine, invisible to the next person who asks what was run. That is precisely the state this section's argument says the case file exists to prevent, and asking permission for it only invites "not now".
+```
+.maccing/database/ops/
+  YYYY-MM-DD-<slug>/
+    case.md          <- always this name, so the entry point is at a known path
+    <artifact>.txt   <- evidence the case cites
+    scripts/
+      <script>.ts    <- the method that produced the numbers
+```
+
+**A folder every time**, including a two-minute lookup that produces nothing but `case.md`. The folder is opened before the first statement, which is before you can know how many files the operation will make, and a shape that depends on that answer is a shape that has to be renamed halfway through — invalidating every path already written down. `case.md` is fixed across languages too, so a directory of cases worked in different languages stays walkable by path.
+
+**A project still holding flat `YYYY-MM-DD-<slug>.md` cases gets converted, once, before you open your own case.** You are already reading that directory — it is step 1 — and a directory carrying two shapes is one every later reader has to learn.
+
+1. `YYYY-MM-DD-<slug>.md` becomes `YYYY-MM-DD-<slug>/case.md`.
+2. Siblings sharing that `YYYY-MM-DD-<slug>` prefix move in, prefix stripped; scripts land in `scripts/`.
+3. A file matching no case's prefix stays put and is named in the migration's own case. An orphan reported beats an orphan guessed.
+4. `git mv`, so history follows and the conversion is one reviewable commit.
+
+Contents are never edited, stale cross-references included: a `Prior cases read` line naming `2026-07-30-refund-check.md` still resolves, because the slug is the case's identity and the folder is named exactly what the file was. Editing evidence to tidy a path is not a trade this skill makes. Where the directory is empty or already folders, there is nothing to do.
+
+**A finished case is committed**, and the unit committed is the folder. The close runs in this order, and only this order works:
+
+1. **Delete** the bulk data, and the credential file if Step 0 made one.
+2. **Scan** the folder for credential material — connection strings, key-shaped values, anything issued by the secret store.
+3. **Record** what you scanned and what came back, under `## Credential scan` — the patterns, and the matching *files and counts*. A scan reports where it hit, never the line it hit: echoing a match copies the credential into the record the scan exists to protect.
+4. **Commit** the folder.
+
+A scan run before the deletion did not look at the state that gets committed. The scan is discipline, not tooling: an unrecorded check reads exactly like a skipped one, which is why it lands in the file beside `Prior cases read` rather than in your head.
+
+Committing is not put to the operator. An uncommitted case is a record only its author has, held on one machine, invisible to the next person who asks what was run — precisely the state the case exists to prevent, and asking permission for it only invites "not now".
 
 ## Host verification
 
@@ -215,20 +262,34 @@ Two habits close it:
 
 Then record in the case file which host you verified and how you verified it. "Production" is not a host. The identity the server reported back is. `Database: Production (Neon PostgreSQL)` names an environment and a vendor, and it would read the same against every database that provider holds for you; `Database: app_prod on ep-quiet-meadow-12345, from SELECT current_database(), inet_server_addr()` names the one you were connected to and says what was asked to establish it.
 
-## Exports are deleted when done
+## What is kept, and what is deleted
+
+Three kinds of file come out of an operation, and each has one fate. The taxonomy sorts *files*; `case.md` is not sorted by it and is always kept.
+
+| Kind | What it is | Fate |
+|---|---|---|
+| **Method** | the scripts that produced the numbers | kept, in `scripts/` |
+| **Evidence** | the narrow before-state a dry run was built from, and any narrow output the case cites | kept, in the folder |
+| **Bulk data** | wide exports, raw dumps, whole-table pulls | deleted at close, deletion recorded |
+
+Method and evidence are what make a case checkable later. Bulk data is a copy of production with none of production's protections around it, and it has served its purpose the moment the answer is written down.
+
+**A statement is method too, and it already has a home**: `## What was run`, verbatim. `scripts/` is for method that is a *file* — control flow, a retry ladder, a batching pass. A query does not graduate into `scripts/` for being long; it graduates when it stops being a query.
+
+**Method that outlives the case does not live in the case.** A script written to answer *this* question belongs in `scripts/`. A script somebody will re-run — a monthly reconciliation, a check that joins the project's routine — is project code and belongs wherever the project keeps its executables, with the case naming where it went. The test is not size or quality: it is whether anyone will run it again on purpose. Two copies of a live script is the worse outcome, because the one in the case folder goes stale and nobody notices.
 
 A CSV of production rows on your disk is the same data with none of the protections around it. No access control, no audit trail, no retention policy, no encryption, and no expiry — and unlike the database, nobody is watching it. It also drifts: within an hour it is a stale copy of the truth that someone may later read as though it were current.
 
-Lifecycle, all four steps:
+Bulk-data lifecycle, all four steps:
 
 1. **Export** the narrowest set of columns and rows that answers the question. Every extra column is extra exposure for no benefit.
-2. **Use** it, next to the case file, under the same date and slug.
+2. **Use** it, inside the case folder.
 3. **Delete** it when the operation closes. Not "eventually" — as the closing step of the operation, in the same session.
 4. **Record the deletion** in the case file, naming the file that no longer exists. Otherwise the next reader sees a referenced artifact and cannot tell whether it was cleaned up or is still sitting on someone's laptop.
 
 If the export genuinely must outlive the operation, that is a decision someone else makes explicitly, and the case file records who made it and where the file went. Silence is not that decision.
 
-**One artifact is not an export in this sense, and deleting it destroys the record.** The before-state you captured to build the dry run — the rows as they stood, with the values the write was about to change — is the evidence the case file's own "what changed" section rests on. It is narrow by construction, it is dated, and it is the only thing that lets anyone later check that the undo statement was correct. Keep it beside the case file under the same date and slug, and say in the file that it is kept and why. The rule above is about the broad pull taken to answer a question, which has served its purpose the moment the answer is written down; a project may also record, once and in one place rather than per operation, that these narrow snapshots are kept as part of its record. What is never allowed is a wide export left lying around because nobody decided anything.
+**The before-state is evidence, not bulk data, and deleting it destroys the record.** The rows as they stood, with the values the write was about to change, are what the case's own "what changed" section rests on. Narrow by construction, dated, and the only thing that lets anyone later check the undo statement was correct. Keep it in the case folder and say in `case.md` that it is kept and why. A project may record once, in one place rather than per operation, that these narrow snapshots are kept as part of its record. What is never allowed is a wide export left lying around because nobody decided anything.
 
 ## When a number on a screen disagrees with the database
 
