@@ -1,6 +1,6 @@
 ---
 name: growth
-description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to platform skills (google-ads, meta-ads, tiktok-ads, whatsapp) over the shared `meta` substrate and the `ycloud`/`ycloud-api` BSP skills. Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach", "automation", "adspower", "undetectable", "human-like", "cost", "budget", "wallet", "spend", "optimize", "CPDM".
+description: Growth orchestrator for paid acquisition and owned messaging. Use for ad strategy, metrics, optimization, budgets, creative testing, audience targeting, attribution, scaling, competitive intelligence, and WhatsApp messaging campaigns. Routes to platform skills (growth-google-ads, growth-meta-ads, growth-tiktok-ads, growth-meta-whatsapp) over the shared `growth-meta` substrate and the `growth-ycloud`/`growth-ycloud-api` BSP skills. Triggers on "growth", "ads", "paid ads", "PPC", "ROAS", "CPA", "campaign", "ad copy", "retargeting", "attribution", "whatsapp campaign", "outreach", "automation", "adspower", "undetectable", "human-like", "cost", "budget", "wallet", "spend", "optimize", "CPDM".
 ---
 
 # Paid Advertising: Master Skill
@@ -41,13 +41,13 @@ Execution happens in platform-specific skills.
 ```
 
 **Routing:**
-- Google Ads execution → `google-ads` skill (Scripts-first)
-- TikTok Ads execution → `tiktok-ads` skill (API + MCP)
-- Meta/Facebook/Instagram execution → `meta-ads` skill (Marketing API + CAPI + CTWA)
-- WhatsApp message dispatch → `whatsapp` skill (Cloud API, templates, bulk sending)
-- Meta platform substrate (BM, verification, account quality, classifier, asset isolation, disposable-BM, ban/appeal) → `meta` skill — **shared**, loaded first by both `meta-ads` and `whatsapp`
-- YCloud BSP (dispatch console, campaigns, opt-out automation) → `ycloud` skill; YCloud v2 REST API → `ycloud-api` skill
-- Outsourced dispatch (a third party sends for us, on their numbers) + the campaign measurement contract → `whatsapp` skill, `references/outsourced-dispatch.md`
+- Google Ads execution → `growth-google-ads` skill (Scripts-first)
+- TikTok Ads execution → `growth-tiktok-ads` skill (API + MCP)
+- Meta/Facebook/Instagram execution → `growth-meta-ads` skill (Marketing API + CAPI + CTWA)
+- WhatsApp message dispatch → `growth-meta-whatsapp` skill (Cloud API, templates, bulk sending)
+- Meta platform substrate (BM, verification, account quality, classifier, asset isolation, disposable-BM, ban/appeal) → `growth-meta` skill — **shared**, loaded first by both `growth-meta-ads` and `growth-meta-whatsapp`
+- YCloud BSP (dispatch console, campaigns, opt-out automation) → `growth-ycloud` skill; YCloud v2 REST API → `growth-ycloud-api` skill
+- Outsourced dispatch (a third party sends for us, on their numbers) + the campaign measurement contract → `growth-meta-whatsapp` skill, `references/outsourced-dispatch.md`
 - Other platforms → research + manual guidance
 
 **Project data:** `.maccing/growth/<platform>/<account>/` — each project has its own README + platform subdirectories (git-tracked per Iron Law 0b).
@@ -134,7 +134,7 @@ Cost discipline (ledger-in-place, present-before-spend, always optimize): see `r
 |---|---|---|
 | Automation: official-surface-first decision tree, AdsPower tooling, undetectable/human-like behavior, keep-open, MCP recipe, fallback ladder | `references/automation.md` | Automating any platform — choosing API vs browser vs operator; staying undetectable |
 | Cost ledger, budgets, wallet, present-before-spend, cost optimization, CPDM | `references/cost-tracking.md` | Tracking/optimizing spend; before any cost-committing action |
-| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, worked blast example, vendor checklist, campaign measurement contract | `whatsapp` skill, `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor; measuring a campaign |
+| Outsourced dispatch: outsource-vs-own-WABA call, unit price vs own CPDM, phone×segment attribution, split-test design, statistical power / MDE, copy-vs-product verification, worked blast example, vendor checklist, campaign measurement contract | `growth-meta-whatsapp` skill, `references/outsourced-dispatch.md` | Paying a third party to send on their numbers; before briefing or paying a dispatch vendor; measuring a campaign |
 
 ## Core Metrics
 
@@ -484,7 +484,7 @@ Ad headline and page H1 must use the same language. Disconnects are the #1 drive
 | LinkedIn | Conversions API |
 
 ### GA4 Measurement Protocol
-Server-side event tracking via GA4. Details and gotchas → `../google-ads/SKILL.md`.
+Server-side event tracking via GA4. Details and gotchas → `../growth-google-ads/SKILL.md`.
 
 ### Consent Mode V2 (mandatory EEA/UK)
 - Requires Google-certified CMP (Cookiebot, OneTrust, etc.)

@@ -1,6 +1,6 @@
 # Global Automation Doctrine
 
-This is the canonical, platform-agnostic automation doctrine for the maccing-growth plugin. All platform-specific skills defer to this file for all cross-cutting automation rules (`meta` via `reference/browser-automation.md`; `google-ads` and `tiktok-ads` via `reference/automation.md`; `ycloud` via `reference/api-automation.md`). Read this document in full before executing any automation task. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
+This is the canonical, platform-agnostic automation doctrine for the maccing-growth plugin. All platform-specific skills defer to this file for all cross-cutting automation rules (`growth-meta` via `reference/browser-automation.md`; `growth-google-ads` and `growth-tiktok-ads` via `reference/automation.md`; `growth-ycloud` via `reference/api-automation.md`). Read this document in full before executing any automation task. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
 
 ---
 
@@ -380,7 +380,7 @@ Each platform skill maintains its own platform-specific automation reference tha
 **These files defer to this global doctrine.** They do not repeat the universal rules — they extend them. When a platform rule conflicts with this document, this document governs unless the platform-specific file explicitly documents a justified exception.
 
 Platform reference locations:
-- `skills/meta/references/browser-automation.md`
-- `skills/google-ads/references/automation.md`
-- `skills/tiktok-ads/references/automation.md`
-- `skills/ycloud/references/api-automation.md`
+- `skills/growth-meta/references/browser-automation.md`
+- `skills/growth-google-ads/references/automation.md`
+- `skills/growth-tiktok-ads/references/automation.md`
+- `skills/growth-ycloud/references/api-automation.md`

@@ -1,6 +1,6 @@
 # Global Cost-Tracking Doctrine
 
-This is the canonical, platform-agnostic cost-tracking doctrine for the maccing-growth plugin. All platform-specific skills (`meta`, `google-ads`, `tiktok-ads`, `ycloud`, and others) and all project state files follow the rules here. Read this document in full before logging any cost event or presenting a spend projection. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
+This is the canonical, platform-agnostic cost-tracking doctrine for the maccing-growth plugin. All platform-specific skills (`growth-meta`, `growth-google-ads`, `growth-tiktok-ads`, `growth-ycloud`, and others) and all project state files follow the rules here. Read this document in full before logging any cost event or presenting a spend projection. The rules here are normative — they are not suggestions, and deviation requires an explicit documented reason.
 
 ---
 
@@ -268,7 +268,7 @@ Each platform skill may maintain a `cost-tracking.md` in its own `reference/` di
 **These files defer to this global doctrine.** They do not repeat the universal rules — they extend them. When a platform rule conflicts with this document, this document governs unless the platform-specific file explicitly documents a justified exception.
 
 Platform reference locations (extend as new channels onboard):
-- `skills/google-ads/references/cost-tracking.md`
-- `skills/meta/references/cost-tracking.md`
-- `skills/tiktok-ads/references/cost-tracking.md`
-- `skills/ycloud/references/cost-tracking.md`
+- `skills/growth-google-ads/references/cost-tracking.md`
+- `skills/growth-meta/references/cost-tracking.md`
+- `skills/growth-tiktok-ads/references/cost-tracking.md`
+- `skills/growth-ycloud/references/cost-tracking.md`

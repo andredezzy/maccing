@@ -28,19 +28,19 @@
   "skills": [
     "./skills/database-mapping/",
     "./skills/database-ops/",
-    "./skills/dx/",
-    "./skills/google-ads/",
+    "./skills/engineering-dx/",
+    "./skills/engineering-writing-code/",
     "./skills/google-workspace/",
+    "./skills/growth-google-ads/",
+    "./skills/growth-meta-ads/",
+    "./skills/growth-meta/",
+    "./skills/growth-tiktok-ads/",
+    "./skills/growth-meta-whatsapp/",
+    "./skills/growth-ycloud-api/",
+    "./skills/growth-ycloud/",
     "./skills/growth/",
-    "./skills/meta/",
-    "./skills/meta-ads/",
     "./skills/notion/",
-    "./skills/reasoning/",
-    "./skills/tiktok-ads/",
-    "./skills/whatsapp/",
-    "./skills/writing-code/",
-    "./skills/ycloud/",
-    "./skills/ycloud-api/"
+    "./skills/reasoning/"
   ],
   "commands": ["./commands/"]
 }

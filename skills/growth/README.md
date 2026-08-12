@@ -10,26 +10,26 @@ Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) an
 
 ## Skills
 
-Each skill is a thin SKILL.md (routing table) over on-demand `references/` files (progressive disclosure). Every skill is its own folder directly under `skills/`, named exactly as the skill — the layout the Agent Plugins spec discovers. The Group column below is a load-order relationship, not a folder.
+Each skill is a thin SKILL.md (routing table) over on-demand `references/` files (progressive disclosure). Every skill is its own folder directly under `skills/`, named exactly as the skill — the layout the Agent Plugins spec discovers. The nesting that used to carry the grouping is in the names now, so a skill says which family it belongs to wherever it is quoted. The Substrate column is a load-order relationship, not a folder.
 
 ```
 skills/
-  growth/        the orchestrator this README documents
-  google-ads/ · tiktok-ads/                        platform references
-  meta/ · meta-ads/ · whatsapp/                    shared Meta substrate + its two children
-  ycloud/ · ycloud-api/                            a comms provider + its API
+  growth/                                                   the orchestrator this README documents
+  growth-google-ads/ · growth-tiktok-ads/                   platform references
+  growth-meta/ · growth-meta-ads/ · growth-meta-whatsapp/   shared Meta substrate + its two children
+  growth-ycloud/ · growth-ycloud-api/                       a comms provider + its API
 ```
 
-| Skill | Group | Purpose |
-|-------|-------|---------|
+| Skill | Substrate | Purpose |
+|-------|-----------|---------|
 | growth | — | Cross-channel strategy, metrics, funnel, attribution, competitive intelligence, defensive techniques |
-| google-ads | — | Google Ads production reference + 12 ready-to-run Scripts (6 read: campaign performance, keyword performance, search terms, ad details, conversion actions, full audit; 6 write: add keywords, add negatives, create conversion, create RSA, pause campaign, update ad URL) |
-| tiktok-ads | — | TikTok Ads production reference |
-| **meta** | meta | **Shared Meta platform substrate** — Business Manager, business verification, account quality, enforcement classifier + defensive intelligence, asset isolation, proxy/antidetect, disposable-BM strategy, payment hygiene, ban/appeal/cascade. Loaded first by `meta-ads` and `whatsapp`. |
-| meta-ads | meta | Meta (Facebook/Instagram) Ads production reference. Loads `meta`. |
-| whatsapp | meta | WhatsApp Business Platform / Cloud API production reference. Loads `meta` (not `meta-ads`). |
-| ycloud | platforms | **YCloud** — multi-channel communications provider (CPaaS: WhatsApp, SMS, Voice, Email). WhatsApp BSP ops: console, plans, embedded signup, campaigns/inbox/journeys, auto-unsubscribe chatbot, dashboard-vs-API, read-only CDP automation |
-| ycloud-api | platforms | YCloud v2 REST API reference — messages, templates, phone/WABA, wallet, webhooks, contacts, unsubscribers, media, pagination gotchas |
+| growth-google-ads | — | Google Ads production reference + 12 ready-to-run Scripts (6 read: campaign performance, keyword performance, search terms, ad details, conversion actions, full audit; 6 write: add keywords, add negatives, create conversion, create RSA, pause campaign, update ad URL) |
+| growth-tiktok-ads | — | TikTok Ads production reference |
+| **growth-meta** | — | **Shared Meta platform substrate** — Business Manager, business verification, account quality, enforcement classifier + defensive intelligence, asset isolation, proxy/antidetect, disposable-BM strategy, payment hygiene, ban/appeal/cascade. Loaded first by `growth-meta-ads` and `growth-meta-whatsapp`. |
+| growth-meta-ads | growth-meta | Meta (Facebook/Instagram) Ads production reference. Loads `growth-meta`. |
+| growth-meta-whatsapp | growth-meta | WhatsApp Business Platform / Cloud API production reference. Loads `growth-meta` (not `growth-meta-ads`). |
+| growth-ycloud | — | **YCloud** — multi-channel communications provider (CPaaS: WhatsApp, SMS, Voice, Email). WhatsApp BSP ops: console, plans, embedded signup, campaigns/inbox/journeys, auto-unsubscribe chatbot, dashboard-vs-API, read-only CDP automation |
+| growth-ycloud-api | growth-ycloud | YCloud v2 REST API reference — messages, templates, phone/WABA, wallet, webhooks, contacts, unsubscribers, media, pagination gotchas |
 
 ## Command
 
