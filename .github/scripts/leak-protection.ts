@@ -100,6 +100,20 @@ type TermCategory = {
 
 type Exemption = {
   path: string;
+  /**
+   * Paths this file stood at before it was moved, if the author named any. The sentence is still
+   * read out of the tree at `path` and nothing is ever resolved against these, so a name here that
+   * no longer exists on disk is not stale — the history is the only place it can appear. They
+   * widen where the resolved sentence may be suppressed and nothing else: a hit at one of these
+   * paths is exempt only when it carries the very sentence `path` was judged for, so a disclosure
+   * that stood at the old name is still reported.
+   *
+   * Without this, moving a file with an exempted line in it fails the clearance forever. The entry
+   * follows the file to its new path, every older version keeps the old one, and no entry can name
+   * both: an entry written for the old path resolves against a file that is no longer there, and
+   * an entry that resolves nothing suppresses nothing.
+   */
+  historical_paths: string[];
   category: string;
   term: string;
   /** The line the entry was written for; 0 names the path itself rather than any line in it. */
@@ -1142,6 +1156,13 @@ function read_exemptions(
     const why = typeof entry.why === "string" ? entry.why.trim() : "";
     const line = typeof entry.line === "number" && Number.isInteger(entry.line) && entry.line >= 0 ? entry.line : -1;
     const anchor = typeof entry.anchor === "string" ? entry.anchor.trim().toLowerCase() : "";
+    const declared_historical = entry.historical_paths;
+    const historical_paths = Array.isArray(declared_historical)
+      ? declared_historical
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim().replace(/^\.\//, ""))
+          .filter((value) => value !== "")
+      : [];
     const named = path === "" ? "" : ` (${path}${term === "" ? "" : ` — ${term}`})`;
     const label = `${source} entry ${index + 1}${named}`;
     if (path === "" || term === "" || category === "") {
@@ -1175,7 +1196,30 @@ function read_exemptions(
       );
       continue;
     }
-    exemptions.push({ path, category, term, line, why, source, anchor, contexts: [] });
+    if (declared_historical !== undefined && !Array.isArray(declared_historical)) {
+      rejected.push(
+        `${label}: \`historical_paths\` is not an array. It lists the paths this file stood at before it ` +
+          "moved, so the sentence judged at `path` is still suppressed in the versions that carry the old " +
+          "name. The exemption is not applied.",
+      );
+      continue;
+    }
+    if (Array.isArray(declared_historical) && historical_paths.length !== declared_historical.length) {
+      rejected.push(
+        `${label}: \`historical_paths\` holds an entry that is not a non-empty string. Every element names a ` +
+          "path the file used to stand at. The exemption is not applied.",
+      );
+      continue;
+    }
+    if (historical_paths.includes(path)) {
+      rejected.push(
+        `${label}: \`historical_paths\` repeats \`path\`, which is already where the sentence is read from. ` +
+          "Listing it again says the file moved to where it already is, and hides which name is the live one. " +
+          "The exemption is not applied.",
+      );
+      continue;
+    }
+    exemptions.push({ path, historical_paths, category, term, line, why, source, anchor, contexts: [] });
   }
   return { exemptions, rejected };
 }
@@ -2912,8 +2956,15 @@ function exemption_key(path: string, category: string, term: string): string {
 function partition_hits(hits: Hit[], exemptions: Exemption[]): { reported: Hit[]; exempt: Hit[] } {
   const allowed = new Map<string, Exemption[]>();
   for (const entry of exemptions) {
-    const key = exemption_key(entry.path, entry.category, entry.term);
-    allowed.set(key, [...(allowed.get(key) ?? []), entry]);
+    // An entry is indexed at the path it is read from and at every path its file used to stand at,
+    // because a hit carries the name the version it sits in was committed under. Indexing is all
+    // `historical_paths` does: what a candidate then suppresses is still decided by `covers`, on
+    // the sentence resolved from the tree, so an old name widens where the judged sentence is
+    // recognised and never what counts as it.
+    for (const name of [entry.path, ...entry.historical_paths]) {
+      const key = exemption_key(name, entry.category, entry.term);
+      allowed.set(key, [...(allowed.get(key) ?? []), entry]);
+    }
   }
   const reported: Hit[] = [];
   const exempt: Hit[] = [];
@@ -3848,6 +3899,14 @@ function plant_history(directory: string): string {
     join(repository, "policy.md"),
     "the private engagement's own brulq belongs to nobody else\nan ordinary line\nthe policy list names brulq as prohibited\n",
   );
+  // A file that later moves, carrying a policy line somebody judged and a disclosure that does not
+  // survive the move. Its content changes too, so the old blob is not the one the tracked scan
+  // reads at the new path and the clearance genuinely has to look at it under the old name.
+  mkdirSync(join(repository, "retired"), { recursive: true });
+  writeFileSync(
+    join(repository, "retired", "moved-policy.md"),
+    "an early heading\nthe retired guide names brulq as an example\na retired disclosure of brulq nobody cleared\n",
+  );
   // Over MAX_BLOB_BYTES, so the clearance has to name what it did not read.
   writeFileSync(
     join(repository, "oversized.txt"),
@@ -3861,6 +3920,14 @@ function plant_history(directory: string): string {
   writeFileSync(
     join(repository, "policy.md"),
     "a heading\n\nsome prose\nmore prose\nanother line\nand one more\nthe policy list names brulq as prohibited\n",
+  );
+  // The move: a new path, and a rewrite that keeps the judged sentence and drops the disclosure.
+  // Only the history now holds `retired/moved-policy.md`, which is the position an exemption
+  // written for the live path cannot reach on its own.
+  rmSync(join(repository, "retired", "moved-policy.md"));
+  writeFileSync(
+    join(repository, "moved-policy.md"),
+    "a heading\nsome prose\nthe retired guide names brulq as an example\n",
   );
   writeFileSync(join(repository, "clean.txt"), "nothing to see here\n");
   // Committed with a term in it, and edited on disk further down without being staged. A tracked
@@ -4732,6 +4799,7 @@ function self_test(categories: TermCategory[]): number {
     const in_the_name: Hit = { ...shared, line: 0 };
     const entry: Exemption = {
       path: "fixture.md",
+      historical_paths: [],
       category: "self_test_fixture",
       term: "brulq",
       line: 1,
@@ -4767,6 +4835,7 @@ function self_test(categories: TermCategory[]): number {
       why: "fixture",
       source: "self-test",
       anchor: "",
+      historical_paths: [],
       contexts: [],
     };
     const in_the_tree = resolve_exemption_contexts(directory, [anchored_entry], matchers, null);
@@ -4845,6 +4914,7 @@ function self_test(categories: TermCategory[]): number {
       why: "fixture",
       source: "self-test",
       anchor: "",
+      historical_paths: [],
       contexts: [],
     };
     const clause_hits = result.hits.filter((hit) => hit.source === two_clauses && hit.term === "brulq");
@@ -4921,6 +4991,7 @@ function self_test(categories: TermCategory[]): number {
       why: "fixture",
       source: "self-test",
       anchor: "",
+      historical_paths: [],
       contexts: [],
     };
     if (partition_hits([scoped], [other_path]).exempt.length !== 0) {
@@ -6355,6 +6426,7 @@ function self_test(categories: TermCategory[]): number {
           why: "fixture",
           source: "self-test",
           anchor: "",
+          historical_paths: [],
           contexts: [],
         },
       ],
@@ -6379,6 +6451,45 @@ function self_test(categories: TermCategory[]): number {
     }
     if (historic.reported.some((hit) => hit.text.includes("policy list names"))) {
       failures.push("the exempted sentence was reported in a historical copy that carries it verbatim");
+    }
+
+    // An exemption follows its file when the file moves, and every older version keeps the old
+    // name. `historical_paths` is the only thing that reaches those, and it reaches them with the
+    // judged sentence and nothing else.
+    const relocated = resolve_exemption_contexts(
+      repository,
+      [
+        {
+          path: "moved-policy.md",
+          historical_paths: ["retired/moved-policy.md"],
+          category: "self_test_fixture",
+          term: "brulq",
+          line: 3,
+          why: "fixture",
+          source: "self-test",
+          anchor: "",
+          contexts: [],
+        },
+      ],
+      matchers,
+      null,
+    );
+    const before_move = history.hits.filter((hit) => hit.path === "retired/moved-policy.md" && hit.line > 0);
+    const judged = relocated.exemptions[0];
+    if (before_move.length === 0 || judged === undefined) {
+      failures.push("the clearance never read the fixture's pre-move path, so the move check proves nothing");
+    } else {
+      const after = partition_hits(before_move, [judged]);
+      if (!after.exempt.some((hit) => hit.text.includes("retired guide names"))) {
+        failures.push("an exemption did not cover its own sentence at a path its file has since left");
+      }
+      if (!after.reported.some((hit) => hit.text.includes("retired disclosure"))) {
+        failures.push("a disclosure at a historical path was laundered by an exemption that named that path");
+      }
+      const unnamed = partition_hits(before_move, [{ ...judged, historical_paths: [] }]);
+      if (unnamed.exempt.length !== 0) {
+        failures.push("an exemption reached a path it never named, so historical_paths is not what covers one");
+      }
     }
 
     // A commit message is stripped the way git strips it before it is matched.
@@ -6464,7 +6575,9 @@ function self_test(categories: TermCategory[]): number {
         "line carries the clause twice — and covers neither a different sentence three lines away, nor the " +
         "second clause of its own line once it anchors the first, nor anything at all once its own line has " +
         "lost the term or has been rewritten out from under a recorded anchor, nor a hit whose historical path " +
-        "merely shares a prefix with its own up to an @; an entry whose file this run could not read is " +
+        "merely shares a prefix with its own up to an @; an exemption whose file has moved covers its judged " +
+        "sentence at a path it names in historical_paths, covers no other sentence standing at that path, and " +
+        "reaches nothing there at all once the name is dropped; an entry whose file this run could not read is " +
         "unresolved rather than rewritten; a blob too large to read is named; a file that could not be read " +
         "at all is named and changes the verdict; an empty or malformed overlay fails --require-overlay; one " +
         "overlay loaded twice contributes its exemptions once and says so, while two reasons for the same " +
