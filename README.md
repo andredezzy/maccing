@@ -23,9 +23,9 @@ One plugin, many skills, two bundled MCP servers. Two ways to install, depending
 
 Or enable auto-update: `/plugin` > Marketplaces > maccing > Enable auto-update.
 
-> The `notion` MCP server needs a Notion token — see the [notion bucket README](skills/notion/README.md) for setup.
+> The `notion` MCP server needs a Notion token — see the [notion bucket README](mcp/notion/README.md) for setup.
 >
-> The `workspace` MCP server needs a Google OAuth client — see the [google-workspace bucket README](skills/google-workspace/README.md) for setup.
+> The `workspace` MCP server needs a Google OAuth client — see the [google-workspace bucket README](mcp/google-workspace/README.md) for setup.
 
 ## Agent skills (skills.sh)
 

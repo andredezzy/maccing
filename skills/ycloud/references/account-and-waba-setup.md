@@ -142,7 +142,7 @@ Gotchas:
 
 ## Pricing & BSP Comparison
 
-> Meta base rates, BSP/platform comparison table, pricing model notes, and Why BSP vs Direct API are in `skills/meta/whatsapp/reference/pricing-and-billing.md`.
+> Meta base rates, BSP/platform comparison table, pricing model notes, and Why BSP vs Direct API are in `skills/whatsapp/references/pricing-and-billing.md`.
 
 ---
 

@@ -380,7 +380,7 @@ Each platform skill maintains its own platform-specific automation reference tha
 **These files defer to this global doctrine.** They do not repeat the universal rules — they extend them. When a platform rule conflicts with this document, this document governs unless the platform-specific file explicitly documents a justified exception.
 
 Platform reference locations:
-- `skills/growth/meta/meta/reference/browser-automation.md`
-- `skills/growth/google-ads/reference/automation.md`
-- `skills/growth/tiktok-ads/reference/automation.md`
-- `skills/growth/platforms/ycloud/ycloud/reference/api-automation.md`
+- `skills/meta/references/browser-automation.md`
+- `skills/google-ads/references/automation.md`
+- `skills/tiktok-ads/references/automation.md`
+- `skills/ycloud/references/api-automation.md`

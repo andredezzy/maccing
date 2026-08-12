@@ -1,4 +1,5 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "maccing",
   "version": "3.4.1",
   "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, writing-code for naming/modeling/organizing/UI/research), the reasoning operating manual, a database group (database-mapping binds a schema to generic roles, database-ops governs production data), growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
@@ -24,23 +25,5 @@
     "google-workspace",
     "mcp",
     "bun"
-  ],
-  "skills": [
-    "./skills/database-mapping/",
-    "./skills/database-ops/",
-    "./skills/dx/",
-    "./skills/google-ads/",
-    "./skills/google-workspace/",
-    "./skills/growth/",
-    "./skills/meta/",
-    "./skills/meta-ads/",
-    "./skills/notion/",
-    "./skills/reasoning/",
-    "./skills/tiktok-ads/",
-    "./skills/whatsapp/",
-    "./skills/writing-code/",
-    "./skills/ycloud/",
-    "./skills/ycloud-api/"
-  ],
-  "commands": ["./commands/"]
+  ]
 }

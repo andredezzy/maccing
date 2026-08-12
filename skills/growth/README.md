@@ -10,14 +10,14 @@ Growth toolkit for coding agents: paid acquisition (Google, Meta, TikTok Ads) an
 
 ## Skills
 
-Each skill is a thin SKILL.md (routing table) over on-demand `reference/` files (progressive disclosure). Skills are grouped on disk into platform/provider folders (registered via the `skills` array in `plugin.json`); skill names stay flat (`maccing:<skill>`).
+Each skill is a thin SKILL.md (routing table) over on-demand `references/` files (progressive disclosure). Every skill is its own folder directly under `skills/`, named exactly as the skill — the layout the Agent Plugins spec discovers. The Group column below is a load-order relationship, not a folder.
 
 ```
 skills/
-  meta/          meta · meta-ads · whatsapp        (shared substrate + Meta children)
-  platforms/
-    ycloud/      ycloud · ycloud-api               (a comms provider + its API)
-  google-ads/ · tiktok-ads/ · growth/              (top-level)
+  growth/        the orchestrator this README documents
+  google-ads/ · tiktok-ads/                        platform references
+  meta/ · meta-ads/ · whatsapp/                    shared Meta substrate + its two children
+  ycloud/ · ycloud-api/                            a comms provider + its API
 ```
 
 | Skill | Group | Purpose |

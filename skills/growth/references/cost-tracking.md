@@ -268,7 +268,7 @@ Each platform skill may maintain a `cost-tracking.md` in its own `reference/` di
 **These files defer to this global doctrine.** They do not repeat the universal rules — they extend them. When a platform rule conflicts with this document, this document governs unless the platform-specific file explicitly documents a justified exception.
 
 Platform reference locations (extend as new channels onboard):
-- `skills/growth/google-ads/reference/cost-tracking.md`
-- `skills/growth/meta/reference/cost-tracking.md`
-- `skills/growth/tiktok-ads/reference/cost-tracking.md`
-- `skills/growth/ycloud/reference/cost-tracking.md`
+- `skills/google-ads/references/cost-tracking.md`
+- `skills/meta/references/cost-tracking.md`
+- `skills/tiktok-ads/references/cost-tracking.md`
+- `skills/ycloud/references/cost-tracking.md`

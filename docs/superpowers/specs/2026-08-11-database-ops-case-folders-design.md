@@ -1,7 +1,7 @@
 # `database-ops`: case folders, kept scripts, and a credential that is never typed
 
 Date: 2026-08-11
-Skill: `skills/database/ops/SKILL.md`
+Skill: `skills/database-ops/SKILL.md`
 Status: implemented, RED→GREEN complete (21 subagent runs)
 
 ## What prompted this

@@ -23,7 +23,7 @@ Each independent BM operation requires complete isolation:
 | Admin profile | Unique per BM, never share admin across BMs |
 | Email/phone | Unique per BM, shared contacts create graph links |
 
-**Automating a BM's own profile:** see `meta/meta/reference/browser-automation.md`.
+**Automating a BM's own profile:** see `skills/meta/references/browser-automation.md`.
 
 **Architecture:**
 - **Vault BM:** stores pixels, pages, conversion data — NEVER runs campaigns
@@ -81,7 +81,7 @@ If BM falls → WABA and phone number are lost (non-transferable)
 
 ### BM Types (Market Reference)
 
-See `meta/meta/reference/disposable-bm-strategy.md` § BM Types (Market Reference).
+See `skills/meta/references/disposable-bm-strategy.md` § BM Types (Market Reference).
 
 ---
 

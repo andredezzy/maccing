@@ -233,7 +233,7 @@ Path param `id` accepts either YCloud's internal ID or the `wamid` from Meta. [f
 
 ### Computing Template Analytics (No Dedicated Endpoint)
 
-Moved to `../../ycloud/reference/api-automation.md` — see "Computing Template Analytics (No Dedicated Endpoint)" appended near the reconciliation-loop content.
+Moved to `../../ycloud/references/api-automation.md` — see "Computing Template Analytics (No Dedicated Endpoint)" appended near the reconciliation-loop content.
 
 ---
 

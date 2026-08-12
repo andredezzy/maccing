@@ -1,6 +1,6 @@
 # Meta Automation Reference
 
-Meta-specific automation. Global doctrine (decision tree, AdsPower tooling, undetectability, keep-open, Hybrid split, the MCP read recipe, fallback ladder): `../../../growth/reference/automation.md`.
+Meta-specific automation. Global doctrine (decision tree, AdsPower tooling, undetectability, keep-open, Hybrid split, the MCP read recipe, fallback ladder): `../../growth/references/automation.md`.
 
 ---
 

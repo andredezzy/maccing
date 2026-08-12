@@ -1,4 +1,4 @@
-> **Global doctrine first.** This file is the YCloud-specific extension of the platform-agnostic automation doctrine. Read `../../../../growth/reference/automation.md` in full before this file. The universal rules (Decision Tree, AdsPower/antidetect tooling, undetectability discipline, keep-open / no rapid cycling, Two-Axis Hybrid Split, the proven MCP read recipe, and the Fallback Ladder) all live there and are not repeated here.
+> **Global doctrine first.** This file is the YCloud-specific extension of the platform-agnostic automation doctrine. Read `../../growth/references/automation.md` in full before this file. The universal rules (Decision Tree, AdsPower/antidetect tooling, undetectability discipline, keep-open / no rapid cycling, Two-Axis Hybrid Split, the proven MCP read recipe, and the Fallback Ladder) all live there and are not repeated here.
 
 ---
 
