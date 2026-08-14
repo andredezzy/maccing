@@ -1,4 +1,45 @@
+import { CellDeclarationError } from "./errors/cell-declaration-error.ts";
+import { CellExclusionError } from "./errors/cell-exclusion-error.ts";
+import { ControlError } from "./errors/control-error.ts";
+import { EmptyCellError } from "./errors/empty-cell-error.ts";
+import { ExportBlankColumnError } from "./errors/export-blank-column-error.ts";
+import { ExportColumnError } from "./errors/export-column-error.ts";
+import { ExportFlagError } from "./errors/export-flag-error.ts";
+import { ExportJoinError } from "./errors/export-join-error.ts";
+import { ExportRepeatedPersonError } from "./errors/export-repeated-person-error.ts";
+import { ExportStatusError } from "./errors/export-status-error.ts";
+import { ExportValueError } from "./errors/export-value-error.ts";
+import { MarketDivergenceError } from "./errors/market-divergence-error.ts";
+import { MissingExportError } from "./errors/missing-export-error.ts";
+import { OverflowedTotalError } from "./errors/overflowed-total-error.ts";
+import { ProvisionalCutError } from "./errors/provisional-cut-error.ts";
+import { SourceError } from "./errors/source-error.ts";
+import { TimestampDriverError } from "./errors/timestamp-driver-error.ts";
+import { UnmatchedBaseError } from "./errors/unmatched-base-error.ts";
+import { UnparseablePhonesError } from "./errors/unparseable-phones-error.ts";
 import type { CountryCode } from "../../../internal/phone.ts";
+
+/** Every error this module raises, one class per file under `errors/`. They are re-exported
+ *  here because this module is the published entry point and a consumer catches them by name. */
+export { CellDeclarationError } from "./errors/cell-declaration-error.ts";
+export { CellExclusionError } from "./errors/cell-exclusion-error.ts";
+export { ControlError } from "./errors/control-error.ts";
+export { EmptyCellError } from "./errors/empty-cell-error.ts";
+export { ExportBlankColumnError } from "./errors/export-blank-column-error.ts";
+export { ExportColumnError } from "./errors/export-column-error.ts";
+export { ExportFlagError } from "./errors/export-flag-error.ts";
+export { ExportJoinError } from "./errors/export-join-error.ts";
+export { ExportRepeatedPersonError } from "./errors/export-repeated-person-error.ts";
+export { ExportStatusError } from "./errors/export-status-error.ts";
+export { ExportValueError } from "./errors/export-value-error.ts";
+export { MarketDivergenceError } from "./errors/market-divergence-error.ts";
+export { MissingExportError } from "./errors/missing-export-error.ts";
+export { OverflowedTotalError } from "./errors/overflowed-total-error.ts";
+export { ProvisionalCutError } from "./errors/provisional-cut-error.ts";
+export { SourceError } from "./errors/source-error.ts";
+export { TimestampDriverError } from "./errors/timestamp-driver-error.ts";
+export { UnmatchedBaseError } from "./errors/unmatched-base-error.ts";
+export { UnparseablePhonesError } from "./errors/unparseable-phones-error.ts";
 import { dominant_market, market_divergence, place } from "../../../internal/phone.ts";
 import { round_half_even, round_or_null } from "../../../internal/round.ts";
 import { median, two_proportion } from "../../../internal/stats.ts";
@@ -10,7 +51,6 @@ import {
   type TimestampReading,
 } from "../../../internal/timestamp.ts";
 import type { RoleName, Source } from "./source.ts";
-import { SourceError } from "./source.ts";
 
 /** Phone types: an ISO country code, and a placed number carrying its `country` and join `key`. */
 export type { CountryCode, Placed } from "../../../internal/phone.ts";
@@ -32,7 +72,7 @@ export type { RoleName, Source } from "./source.ts";
 /** The two shipped row sources and their errors. A `Date` reaching the boundary is
  *  `TimestampDriverError`, because a naive Postgres timestamp becomes a different instant on
  *  every machine that reads it; cast to text in the query instead. */
-export { files, postgres, SourceError, TimestampDriverError } from "./source.ts";
+export { files, postgres } from "./source.ts";
 
 /**
  * The measurement pass, and the shape of what goes into and comes out of it.
@@ -83,6 +123,14 @@ export type Control = {
 /** A count and a sum. `value` is null where the role carries no money. */
 export type EventTotals = { leads: number; value: number | null };
 
+/** One side of the referral split: the people, and what they did, counted from the cut. */
+export type ReferralGroup = {
+  accounts: number;
+  conversions: { count: number; value: number };
+  revenue?: EventTotals;
+  churn?: EventTotals;
+};
+
 /** `EventTotals` for the acquired group, with the two figures only arrival can carry. */
 export type AcquiredRevenue = EventTotals & {
   /** Share of the total held by the two largest contributors. Null where the question is
@@ -126,6 +174,16 @@ export type CellRecord = {
     churn?: EventTotals;
   };
   pre_existing: { accounts: number; revenue?: EventTotals; churn?: EventTotals };
+  /** Everyone below the cell in the referral tree who arrived after the cut, at any depth. Present
+   *  only where the `lead` role answers a `referrer` column; a product with no referral tree gets no block
+   *  rather than a row of zeros, the same way an unbound `revenue` is not a measured nothing.
+   *
+   *  Two sibling groups, split on which side of the cut the person **above** them sits, and never
+   *  pre-summed. `under_acquired` is a chain the campaign started: it brought somebody who brought
+   *  others. `under_pre_existing` is referring done by people who already held accounts, which they
+   *  do with or without a campaign. There is no combined total here on purpose — the sum is the
+   *  number that lies, and a caller that wants it has to write the addition down. */
+  referrals?: { under_acquired: ReferralGroup; under_pre_existing: ReferralGroup };
   /** `new_money` and `recycled` are present only where the source answers a `recycled` column. A
    *  product with no such concept gets no pair rather than two zeros. */
   conversions: { count: number; value: number; new_money?: number; recycled?: number };
@@ -170,419 +228,8 @@ export const MAX_P = 0.05;
 export function is_publishable(p: number | null, control_events: number, window_hours: number): boolean {
   return p !== null && p < MAX_P && control_events >= MIN_CONTROL_EVENTS && window_hours >= WINDOW_FLOOR_HOURS;
 }
-
-/**
- * More of a corpus's distinct identifiers are unreadable than the run permits.
- *
- * Raised against the person export and against a cell's own lists; `source` says which. The fault
- * has opposite signs on the two sides: unreadable people shrink the index, unreadable list entries
- * shrink the denominator every rate is divided by.
- */
-export class UnparseablePhonesError extends Error {
-  readonly source: string;
-
-  constructor(unreadable: number, total: number, rate: number, ceiling: number, source = "the person export") {
-    super(
-      `${unreadable} of ${total} distinct identifiers in ${source} could not be read ` +
-        `(${(rate * 100).toFixed(1)}%), ` +
-        `above the ${(ceiling * 100).toFixed(1)}% the map allows. A dialling plan that does not match this ` +
-        "market and a list of people who genuinely never registered produce the same zero, and only one of " +
-        "them is a result — so the run stops instead of reporting it. Either the map's phone format is wrong " +
-        "for this data, or the file is.",
-    );
-    this.name = "UnparseablePhonesError";
-    this.source = source;
-  }
-}
-
-/** A bound export, or a file a cell lists, is not where it was said to be. */
-export class MissingExportError extends Error {
-  readonly path: string;
-
-  constructor(path: string, wanted_by: string) {
-    super(
-      `${wanted_by} needs ${path}, and it is not there. Produce the export before measuring: a missing ` +
-        "file measured as absent is a campaign credited with nothing.",
-    );
-    this.name = "MissingExportError";
-    this.path = path;
-  }
-}
-
-/** A bound amount column that is empty on a row, or holding something that is not a number. The
- *  two have different fixes, so the message names which one happened. A column absent from the
- *  file is `ExportColumnError` instead, checked against the header before any row is read. */
-export class ExportValueError extends Error {
-  constructor(path: string, column: string, raw: string) {
-    const found =
-      raw.trim() === ""
-        ? "is empty on one row, and an amount nobody wrote is not an amount of zero — fill the row " +
-          "at the source, or narrow the export to the rows that carry a value"
-        : `holds ${JSON.stringify(raw)}, which is not a number — look for a currency symbol, a ` +
-          "thousands separator, or a decimal comma the export left in";
-    super(
-      `${path} column ${JSON.stringify(column)} ${found}. Treating it as zero would quietly shrink a ` +
-        "total that someone will publish.",
-    );
-    this.name = "ExportValueError";
-  }
-}
-
-/** A column the map binds for a role is not in that role's export. */
-export class ExportColumnError extends Error {
-  readonly path: string;
-  readonly role: string;
-  readonly column: string;
-
-  constructor(path: string, role: string, column: string, header: readonly string[]) {
-    super(
-      `the ${role} role binds column ${JSON.stringify(column)}, and ${path} does not carry it. Its ` +
-        `header is ${header.map((name) => JSON.stringify(name)).join(", ") || "(empty)"}. Either the map ` +
-        "names a column that has since been renamed, or this export came from the wrong query — the " +
-        "header above says which, and without it the reader goes looking in the wrong file. Correct the " +
-        "binding or re-export, then measure again.",
-    );
-    this.name = "ExportColumnError";
-    this.path = path;
-    this.role = role;
-    this.column = column;
-  }
-}
-
 /** What a blanked-out column was bound for, and the silence that follows when nothing reads. */
-const BLANK_COLUMN_CONSEQUENCE = {
-  timestamp: "every event then falls out of the accumulator silently: a full file of real events reports as none",
-  "phone number":
-    "every row then fails to reach the index silently: a full base of real accounts matches nobody, " +
-    "and every cell reports an audience that was never there",
-};
-
-/** What a bound column holds. Spelled out at every throw site rather than defaulted, so no call
- *  site can inherit a sentence describing the wrong kind of column. Must read as a singular noun
- *  phrase: the message interpolates it as "binds X for its <kind>" and "now holds the <kind>". */
-type BlankColumnKind = keyof typeof BLANK_COLUMN_CONSEQUENCE;
-
-/** A bound column that is in the header and empty, or unreadable, on every row. An export with no
- *  rows at all is a fact and passes; this is rows with nothing readable in them. */
-export class ExportBlankColumnError extends Error {
-  readonly path: string;
-  readonly role: string;
-  readonly columns: readonly string[];
-
-  constructor(path: string, role: string, columns: readonly string[], rows: number, what: BlankColumnKind) {
-    const named = columns.map((name) => JSON.stringify(name)).join(" or ");
-    super(
-      `the ${role} role binds ${named} for its ${what}, and not one of the ${rows} rows in ${path} ` +
-        `carries a readable one. The column is in the header, so the binding passes and ` +
-        `${BLANK_COLUMN_CONSEQUENCE[what]}. A ` +
-        "column renamed at the source often leaves the old one behind, present and blank on every row, " +
-        `which is exactly this. Re-export with the column populated, or bind the one that now holds the ` +
-        `${what}. A file with no rows at all is a fact and passes here — this is a file with rows and ` +
-        "nothing readable in them, which is a fault.",
-    );
-    this.name = "ExportBlankColumnError";
-    this.path = path;
-    this.role = role;
-    this.columns = columns;
-  }
-}
-
-/**
- * A column the contract reads as a boolean, holding something other than `true` or `false`.
- *
- * Kept apart from `ExportValueError`, which is about amounts. The usual cause is a query passing
- * its own vocabulary through where the contract asked for the answer to a question, and reading
- * an unrecognised value as `false` would drop every row it applies to in silence.
- */
-export class ExportFlagError extends Error {
-  readonly role: string;
-  readonly column: string;
-  readonly raw: string;
-
-  constructor(role: string, column: string, raw: string) {
-    super(
-      `the ${role} role's ${JSON.stringify(column)} column holds ${JSON.stringify(raw)}, and the ` +
-        "contract reads it as a boolean: the literal `true` or the literal `false`, nothing else. " +
-        (raw === ""
-          ? "It is empty on this row, and an unanswered question is not an answer of no."
-          : "This looks like a value from the source's own vocabulary being passed through where " +
-            "the query should have answered the question instead - `(status in (...)) as committed` " +
-            "rather than `status as committed`.") +
-        " Reading it as false would drop the row from every count without a word.",
-    );
-    this.name = "ExportFlagError";
-    this.role = role;
-    this.column = column;
-    this.raw = raw;
-  }
-}
-
-/**
- * A conversion role with rows, not one of which is marked committed.
- *
- * The committed predicate lives in the source's own query, so a value it compares against can be
- * renamed in a migration while the query stays valid and stops matching: every row is dropped and
- * the cell reads as a campaign nobody committed to. A role with no rows at all passes.
- *
- * It cannot name the values it saw. They are the product's vocabulary and this package is
- * published.
- */
-export class ExportStatusError extends Error {
-  readonly rows: number;
-
-  constructor(rows: number) {
-    super(
-      `the conversion role answered ${rows} rows and marked none of them committed. Every row is ` +
-        "then dropped and the cell reports no conversions at all, which is indistinguishable from a " +
-        "campaign nobody committed to. The usual cause is a value the `committed` predicate compares " +
-        "against having been renamed, leaving the query valid and matching nothing — read the " +
-        "predicate against the values the column actually holds. A role with no rows at all is a " +
-        "fact and passes here; this is rows with nothing countable in them, which is a fault.",
-    );
-    this.name = "ExportStatusError";
-    this.rows = rows;
-  }
-}
-
-/** A role's export that references nobody in the person export. Every row can be well-formed while
- *  the join is against the wrong kind of identifier, so the whole file falls out of every cell. */
-export class ExportJoinError extends Error {
-  readonly path: string;
-  readonly role: string;
-  readonly column: string;
-
-  constructor(path: string, role: string, column: string, sample: string, person_sample: string, identifiers: number) {
-    super(
-      `the ${role} role binds ${JSON.stringify(column)} to reference a person, and not one of the ` +
-        `${identifiers} distinct identifiers in ${path} appears in the person export. One of them reads ` +
-        `${JSON.stringify(sample)}; the person export's first id is ${JSON.stringify(person_sample)}. ` +
-        "Every row in it can be well-formed and still reference nobody, so every event here falls out " +
-        "of every cell and the run reports a matched audience that did nothing. A column holding the " +
-        "wrong kind of id — a wallet, an order, a row's own primary key where the person's was meant " +
-        "— is what this looks like, and it is silent in every other check. Bind the column that " +
-        "carries the person, or re-export through the join that resolves it.",
-    );
-    this.name = "ExportJoinError";
-    this.path = path;
-    this.role = role;
-    this.column = column;
-  }
-}
-
-/** A person export carrying the same identifier on more than one row, which the export being one
- *  row per person forbids. Each copy becomes its own account, so that person arrives, pays and
- *  commits once per copy and every published figure comes out multiplied. It is the one fault here
- *  that inflates, and nothing downstream tells it apart from a base whose people really do hold
- *  several accounts. Blank identifiers are counted on neither side. */
-export class ExportRepeatedPersonError extends Error {
-  readonly path: string;
-  readonly rows: number;
-  readonly identifiers: number;
-
-  constructor(path: string, rows: number, identifiers: number) {
-    super(
-      `${rows} rows of ${path} carry a person identifier and there are only ${identifiers} distinct ` +
-        "ones among them. This export is one row per person, and a repeated identifier is counted " +
-        "once per row: that person's arrival, their money and their commitments are added as many " +
-        "times as they appear, so every figure this run publishes comes out multiplied and the " +
-        "acquisition rate with it. Nothing downstream tells that apart from a base whose people " +
-        "really do hold several accounts. The export is missing a `distinct`, or it joins a table " +
-        "that fans out — a wallet table above all, since a person holds one per type and currency, " +
-        "which is the join the map warns at length about for the money roles. Re-export one row " +
-        "per person.",
-    );
-    this.name = "ExportRepeatedPersonError";
-    this.path = path;
-    this.rows = rows;
-    this.identifiers = identifiers;
-  }
-}
-
-/** A cell that cannot be measured as written: a cut that is unreadable, blank, sub-millisecond,
- *  later than the reading, or naming a day its month does not have; or a duplicated cell name. */
-export class CellDeclarationError extends Error {
-  readonly cell: string;
-
-  constructor(cell: string, reason: string) {
-    super(`cell ${JSON.stringify(cell)}: ${reason}`);
-    this.name = "CellDeclarationError";
-    this.cell = cell;
-  }
-}
-
-/** An exclusion entry that cannot be read as a number in the declared format.
- *
- *  The one refusal in the pass that guards against overstatement rather than a silent zero: an
- *  entry that yields no key subtracts nobody, so the probe it names stays in the cell and
- *  everything that account did is counted as the campaign's. A mistyped digit, an extension
- *  pushing the string past a national length, and an empty string all land here. A value that
- *  yields a well-formed key for somebody else does not, being indistinguishable from a real one. */
-export class CellExclusionError extends Error {
-  readonly cell: string;
-  readonly entries: readonly string[];
-
-  constructor(cell: string, entries: readonly string[]) {
-    const listed = entries.map((entry) => JSON.stringify(entry)).join(", ");
-    const count = entries.length === 1 ? "an exclusion" : `${entries.length} exclusions`;
-    super(
-      `cell ${JSON.stringify(cell)} lists ${count} that cannot be read as a number in the format ` +
-        `the map declares: ${listed}. An entry that yields no key subtracts nobody, so the account ` +
-        "it names stays in the cell and everything that account did is counted as this campaign's " +
-        "— the reading comes out too high rather than empty, which is the failure that survives " +
-        "review. Correct the spelling, or drop the entry if the number it meant to remove is not " +
-        "one this cell could reach.",
-    );
-    this.name = "CellExclusionError";
-    this.cell = cell;
-    this.entries = entries;
-  }
-}
-
-/** A cell's lists yielded nothing usable, either as read or after its exclusions were subtracted. */
-export class EmptyCellError extends Error {
-  readonly cell: string;
-  /** Which of the two emptinesses this is, so a caller need not match on the sentence to tell an
-   *  over-narrow filter from an over-broad `exclude`. */
-  readonly after_exclusions: boolean;
-
-  constructor(cell: string, lists: readonly string[], column: string | undefined, after_exclusions: boolean) {
-    const where = `${lists.join(", ")}${column === undefined ? "" : ` (column ${JSON.stringify(column)})`}`;
-    super(
-      after_exclusions
-        ? `cell ${JSON.stringify(cell)} has nothing left once its exclusions are subtracted: every ` +
-            `identifier read from ${where} is also listed in \`exclude\`. Narrow the exclusions, or point ` +
-            "the cell at the list it was meant to measure. A cell that is entirely probes has no members " +
-            "to attribute anything to, and emitting it would publish a row of zeros for an audience that " +
-            "was never there."
-        : `cell ${JSON.stringify(cell)} yielded no usable identifier from ${where}. Check that this is ` +
-            "the file that was sent, and that its numbers are written in the format the map declares. An " +
-            "empty cell reads as 'nothing converted' when the truth is that the file is the wrong one or " +
-            "every number in it was unreadable, so it stops the run rather than emitting a row of zeros.",
-    );
-    this.name = "EmptyCellError";
-    this.cell = cell;
-    this.after_exclusions = after_exclusions;
-  }
-}
-
-/** An `own_base` cell not one of whose listed identifiers answers for an account.
- *
- *  `own_base` is the claim that these people already hold accounts, so nothing matched contradicts
- *  the declaration and every count would publish as a base that was reached and did nothing. The
- *  same zeros on a `cold` cell are measured, because there they are the finding.
- *
- *  Raised only where the person export built an index at all. With no index no cell of any
- *  audience can match, and naming the cell would send the reader to the wrong file. */
-export class UnmatchedBaseError extends Error {
-  readonly cell: string;
-  readonly listed: number;
-
-  constructor(cell: string, listed: number) {
-    super(
-      `cell ${JSON.stringify(cell)} is declared own_base, and not one of its ${listed} listed ` +
-        "identifiers answers for an account in the lead role. own_base is the claim that these " +
-        "people already hold accounts, so nothing matched is not a reading: every count on the " +
-        "record comes back zero and publishes as a base that was reached and did nothing. The list " +
-        "names people this export does not cover, or the cell's `column` holds numbers that are not " +
-        "phones, or the export was cut to a window or a segment narrower than the list. Take one " +
-        "listed number and look for it in the export by hand before changing either of them. A cold " +
-        "cell matching nobody is measured, because there it is the finding; this one contradicts " +
-        "its own declaration.",
-    );
-    this.name = "UnmatchedBaseError";
-    this.cell = cell;
-    this.listed = listed;
-  }
-}
-
-/**
- * A cell whose list is drawn from a different set of markets than the base it is measured against,
- * beyond `max_market_divergence`.
- *
- * Measured as a distribution because no per-number check can see it: every number parses, the keys
- * are well-formed, and the join simply misses, which on a cold list reads as a campaign that did
- * not land.
- */
-export class MarketDivergenceError extends Error {
-  readonly cell: string;
-  readonly divergence: number;
-
-  constructor(cell: string, divergence: number, ceiling: number) {
-    super(
-      `cell ${JSON.stringify(cell)} draws from markets that share ` +
-        `${((1 - divergence) * 100).toFixed(1)}% of their distribution with the base being measured, ` +
-        `and the run refuses below ${((1 - ceiling) * 100).toFixed(1)}%. Every number in the list may ` +
-        "be valid; the point is that they are numbers from somewhere else, so the join misses for a " +
-        "reason no per-number check can see. On a cold list that reads as a campaign nobody answered. " +
-        "Either the wrong file is named here, or this campaign genuinely ran in another market and " +
-        "`max_market_divergence` should say so.",
-    );
-    this.name = "MarketDivergenceError";
-    this.cell = cell;
-    this.divergence = divergence;
-  }
-}
-
-/** A control pair that cannot be read: naming an undeclared cell, naming one cell on both sides,
- *  sharing so much as one identifier between its arms, reading an outcome neither the test nor the
- *  audience can take, reading a path the record does not carry, or a second control on one
- *  treated cell. */
-export class ControlError extends Error {
-  constructor(reason: string) {
-    super(reason);
-    this.name = "ControlError";
-  }
-}
-
-/** Outcomes counted against a cut the declaration itself calls a placeholder. */
-export class ProvisionalCutError extends Error {
-  readonly cells: readonly { cell: string; counted: readonly { outcome: string; count: number }[] }[];
-
-  constructor(cells: readonly { cell: string; counted: readonly { outcome: string; count: number }[] }[]) {
-    const named = cells
-      .map(
-        (entry) =>
-          `${JSON.stringify(entry.cell)} (${entry.counted.map((one) => `${one.outcome} ${one.count}`).join(", ")})`,
-      )
-      .join("; ");
-    super(
-      `outcomes counted against a cut that is declared provisional: ${named}. A provisional cut stands ` +
-        "in for a send whose real moment is not known yet, so every count above is dated against a guess " +
-        "and none of them can be attributed to anything. Put the confirmed send time in `cut` and drop " +
-        "`cut_provisional`, or leave the cell out of this reading.",
-    );
-    this.name = "ProvisionalCutError";
-    this.cells = cells;
-  }
-}
-
-/** A published money total that summed past the range a number here can hold.
- *
- *  Test for finiteness rather than for infinity: two overflows of opposite sign, a group of
- *  refunds against a group of payments, sum to `NaN`, and `NaN` serialises as the same JSON `null`
- *  an infinity does. That `null` is also what the record publishes for a role nobody bound, so an
- *  overflow left alone reads as a documented absence. `field` is the record's own dotted path. */
-export class OverflowedTotalError extends Error {
-  readonly cell: string;
-  readonly field: string;
-
-  constructor(cell: string, field: string) {
-    super(
-      `cell ${JSON.stringify(cell)} summed ${field} past the largest number this engine can hold, so ` +
-        "the field would publish as JSON null — the same null the record uses for a total it never " +
-        "measured, which reads as a role the map does not bind rather than as arithmetic that came " +
-        "apart. Every row behind it is a finite number and each one passed the per-row check, so the " +
-        "fault is in the magnitudes rather than in any single value: an amount column exported in a " +
-        "unit the map does not assume, or a planted row left in from a test. Sort that export by " +
-        "amount and read the top of it.",
-    );
-    this.name = "OverflowedTotalError";
-    this.cell = cell;
-    this.field = field;
-  }
-}
-
-type Account = { id: string; created: Date | null };
+type Account = { id: string; created: Date | null; referrer: string | null };
 type MoneyEvent = { at: Date | null; amount: number };
 /** `committed` and `recycled` are answers the source gives, not statuses the engine interprets.
  *  `recycled` is absent where the source does not answer it, which says the product has no such
@@ -699,7 +346,7 @@ async function read_role(
   source: Source,
   role: RoleName,
   bound: readonly string[],
-): Promise<Record<string, string>[] | null> {
+): Promise<{ header: readonly string[]; records: Record<string, string>[] } | null> {
   const { header, records } = await source.rows(role);
   // Neither a header nor a row is how a source says it does not carry this role at all, which is a
   // different fact from a role that carries nothing: a product with no withdrawals reports a churn
@@ -716,7 +363,11 @@ async function read_role(
     }
     assert_unshadowed(role, header, column, read_by);
   }
-  return records;
+  // The header travels back because a caller cannot rebuild it from the records: an optional column
+  // absent from every row and one absent from the role are indistinguishable once the rows are all
+  // you hold. Returning it is also what lets a caller read an optional column without asking the
+  // source for the same rows a second time.
+  return { header, records };
 }
 
 /**
@@ -788,10 +439,11 @@ async function money_index(
   role: "revenue" | "churn",
   lead_ids: ReadonlySet<string>,
 ): Promise<Map<string, MoneyEvent[]> | null> {
-  const rows = await read_role(source, role, ["lead", "at", "amount"]);
-  if (rows === null) {
+  const answered = await read_role(source, role, ["lead", "at", "amount"]);
+  if (answered === null) {
     return null;
   }
+  const rows = answered.records;
 
   const index = new Map<string, MoneyEvent[]>();
   let dated = 0;
@@ -826,12 +478,8 @@ async function conversion_index(
   // Two optional columns, discovered from what the source answered rather than declared: a
   // fallback timestamp for rows whose primary one is blank, and the recycled predicate. Absent
   // means the product has no such concept, which is not the same as measuring zero.
-  const { header } = await source.rows("conversion");
-  const present = new Set(header);
-  const at_fallback = present.has("at_fallback");
-  const has_recycled = present.has("recycled");
-  const rows = await read_role(source, "conversion", ["lead", "at", "amount", "committed"]);
-  if (rows === null) {
+  const answered = await read_role(source, "conversion", ["lead", "at", "amount", "committed"]);
+  if (answered === null) {
     throw new SourceError(
       "conversion",
       "the conversion role answered with nothing at all - no header and no rows. Revenue and " +
@@ -839,6 +487,11 @@ async function conversion_index(
         "campaign with no conversions to read is not a measurement with a zero in it.",
     );
   }
+
+  const present = new Set(answered.header);
+  const at_fallback = present.has("at_fallback");
+  const has_recycled = present.has("recycled");
+  const rows = answered.records;
 
   const index = new Map<string, ConversionEvent[]>();
   // The committed filter runs per cell against the cut, so a predicate that never fires is
@@ -1040,6 +693,17 @@ const ACCUMULATED_FROM_CUT: readonly string[] = [
   "conversions.count",
   "pre_existing.revenue.leads",
   "pre_existing.churn.leads",
+  // Both sides of the referral tree, for the same reason the two above are here rather than only the
+  // acquired ones: the walk keeps a descendant only when they arrived after the cut, so every
+  // count under it is dated by that instant and a placeholder dates all of them against a guess.
+  "referrals.under_acquired.accounts",
+  "referrals.under_acquired.conversions.count",
+  "referrals.under_acquired.revenue.leads",
+  "referrals.under_acquired.churn.leads",
+  "referrals.under_pre_existing.accounts",
+  "referrals.under_pre_existing.conversions.count",
+  "referrals.under_pre_existing.revenue.leads",
+  "referrals.under_pre_existing.churn.leads",
 ];
 
 /**
@@ -1082,14 +746,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
 
   // Columns are the contract's names, not the database's: a query aliases to them and a CSV
   // header spells them, so nothing here has to be looked up in a map.
-  const lead_rows = await read_role(opts.source, "lead", ["id", "phone", "created_at"]);
-  if (lead_rows === null) {
+  const lead_answer = await read_role(opts.source, "lead", ["id", "phone", "created_at"]);
+  if (lead_answer === null) {
     throw new SourceError(
       "lead",
       "the lead role answered with nothing at all - no header and no rows. It is the index every " +
         "other role joins against, so without it there is nobody for a cell to be about.",
     );
   }
+  const lead_rows = lead_answer.records;
+  // Optional, and discovered from what the source answered rather than declared. A product with no
+  // referral tree never names the column and gets no `referrals` block, which is not the same fact
+  // as a network that grew by nobody.
+  const has_referrer = new Set(lead_answer.header).has("referrer");
 
   // The market a bare national number belongs to is read off the base rather than declared: a
   // campaign may carry leads from any country, and only numbers already carrying a calling code
@@ -1121,6 +790,12 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
   // Every id in the file, whether or not its phone was readable and whether or not its key
   // survives the switchboard eviction below. It is what the other roles are asked to join against.
   const lead_ids = new Set<string>();
+  // Children by the id above them, over every row that carries an id — including rows whose phone
+  // was blank or unreadable. A cell is found by phone, but the people below it are found by the
+  // tree, and somebody who joined through a referral link may never have given a number. Indexing
+  // only the phone-readable rows would drop them and understate every count below a cell by however many of
+  // them there are.
+  const by_referrer = new Map<string, Account[]>();
   // Rows that carried an id, against the distinct spellings among them: one row per person is what
   // the id column being a primary key means.
   let identified = 0;
@@ -1140,6 +815,19 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     if (created !== null) {
       dated += 1;
     }
+    const referrer = has_referrer ? ((row.referrer ?? "").trim() || null) : null;
+    if (referrer !== null && id !== "") {
+      // Self-reference is dropped rather than refused. It is one row's data fault, it would make
+      // the walk below loop on itself, and a run that stops for it loses every other cell.
+      if (referrer !== id) {
+        const children = by_referrer.get(referrer);
+        if (children === undefined) {
+          by_referrer.set(referrer, [{ id, created, referrer }]);
+        } else {
+          children.push({ id, created, referrer });
+        }
+      }
+    }
     // An absent identifier, not one the dialling plan failed on: an account with no number
     // recorded arrives as an empty cell. Counting it as unreadable would charge the plan for a
     // person who never gave a number, at a rate that grows with the account base until a genuine
@@ -1155,7 +843,7 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     }
     const key = placed.key;
     base_markets.set(placed.country, (base_markets.get(placed.country) ?? 0) + 1);
-    const account: Account = { id, created };
+    const account: Account = { id, created, referrer };
     const bucket = by_key.get(key);
     if (bucket === undefined) {
       by_key.set(key, [account]);
@@ -1443,6 +1131,46 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
       }
     }
 
+    // Everyone under the cell in the referral tree who arrived after the cut, walked to the bottom
+    // rather than one level down. A referral program pays some number of levels and this package is
+    // told none of them, so the whole subtree is the only depth it can defend; a caller wanting a
+    // level cap can read it off the tree they already supplied.
+    //
+    // `seen` is not an optimisation. A tree assembled from parent pointers can carry a cycle, and a
+    // walk without it would not terminate; it also keeps a person counted once where two paths
+    // reach them. Members of the cell itself are seeded into it so a descendant who is also on the
+    // list stays a member and does not appear twice.
+    const descend = (roots: Account[]): Account[] => {
+      const seen = new Set<string>();
+      for (const account of matched_accounts) {
+        if (account.id !== "") {
+          seen.add(account.id);
+        }
+      }
+      const found: Account[] = [];
+      const queue = roots.filter((account) => account.id !== "").map((account) => account.id);
+      while (queue.length > 0) {
+        const parent = queue.pop() as string;
+        for (const child of by_referrer.get(parent) ?? []) {
+          if (child.id === "" || seen.has(child.id)) {
+            continue;
+          }
+          seen.add(child.id);
+          // The walk continues through a person who predates the cut, and only the counting stops
+          // at them: someone who joined last month and recruited three people last night sits
+          // between the cell and three arrivals the campaign may well have caused.
+          queue.push(child.id);
+          if (child.created !== null && child.created.getTime() >= cut_ms) {
+            found.push(child);
+          }
+        }
+      }
+      return found;
+    };
+
+    const below_acquired = has_referrer ? descend(acquired) : [];
+    const below_pre_existing = has_referrer ? descend(pre_existing) : [];
+
     const record: CellRecord = {
       cell: cell.name,
       cut_utc: cell.cut,
@@ -1470,6 +1198,42 @@ export async function measure(opts: MeasureOptions): Promise<CellRecord[]> {
     if (splits_value) {
       record.conversions.new_money = published_total(new_money, cell.name, "conversions.new_money");
       record.conversions.recycled = published_total(recycled, cell.name, "conversions.recycled");
+    }
+
+    if (has_referrer) {
+      const group = (people: Account[]): ReferralGroup => {
+        let count = 0;
+        let value = 0;
+        for (const account of people) {
+          if (account.id === "") {
+            continue;
+          }
+          for (const event of conversions.get(account.id) ?? []) {
+            if (event.at === null || event.at.getTime() < cut_ms || !event.committed) {
+              continue;
+            }
+            count++;
+            value += event.amount;
+          }
+        }
+        const out: ReferralGroup = {
+          accounts: people.length,
+          conversions: { count, value: published_total(value, cell.name, "referrals.conversions.value") },
+        };
+        if (revenue !== null) {
+          const earned = accumulate(people, revenue, cut_ms);
+          out.revenue = { leads: earned.leads, value: published_total(earned.value, cell.name, "referrals.revenue.value") };
+        }
+        if (churn !== null) {
+          const lost = accumulate(people, churn, cut_ms);
+          out.churn = { leads: lost.leads, value: published_total(lost.value, cell.name, "referrals.churn.value") };
+        }
+        return out;
+      };
+      record.referrals = {
+        under_acquired: group(below_acquired),
+        under_pre_existing: group(below_pre_existing),
+      };
     }
 
     if (revenue !== null) {

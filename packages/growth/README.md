@@ -64,7 +64,7 @@ spells them.
 
 | Role | Required columns | Optional |
 |---|---|---|
-| `lead` | `id`, `phone`, `created_at` | — |
+| `lead` | `id`, `phone`, `created_at` | `referrer` |
 | `revenue` | `lead`, `at`, `amount` | — |
 | `churn` | `lead`, `at`, `amount` | — |
 | `conversion` | `lead`, `at`, `amount`, `committed` | `at_fallback`, `recycled` |
@@ -77,6 +77,31 @@ the vocabulary, and its answer is a boolean.
 
 `at_fallback` is read only where `at` is blank. Omitting `recycled` declares that the product has no
 recycled-balance concept, and the record omits the breakdown rather than publishing two zeros.
+
+`referrer` is the id of the person directly above this one in a referral network — one scalar, not a
+chain, because the engine walks the tree itself and a chain does not cross a CSV cell cleanly. Any
+product where one account can bring another has this column somewhere; a product where none can
+omits it.
+Naming it turns on the record's `referrals` block: everyone below a cell who arrived after the cut,
+at any depth, with their money and contracts counted apart from the cell's own. Omitting it
+declares that the product has no network, and the block is absent rather than zero.
+
+The block is **two sibling groups and no total**, split on which side of the cut the person above
+sits. `under_acquired` is a chain the campaign started — it brought somebody who brought others.
+`under_pre_existing` is referring done by people who already held accounts, which they do with or
+without a campaign. Each group carries its own `accounts`, `conversions` and, where those roles are
+bound, `revenue` and `churn`.
+
+There is no combined figure, on purpose: the sum is the number that lies. A control cell that
+received nothing still shows a large `under_pre_existing`, because the people on it go on referring
+regardless, and a single total would publish that as campaign reach. Adding the two is a decision a
+caller makes in the open.
+
+Two things the walk does that a naive one would not. It **continues through** a person who predates
+the cut and only stops counting at them, because somebody who joined last month and recruited three
+people last night sits between the cell and three genuine arrivals. And it indexes **every row that
+carries an id**, including rows with no readable phone: a cell is found by phone, the people below
+it are found by the tree, and a referral signup may never have given a number.
 
 **Timestamps must arrive as text.** A driver turns a Postgres `timestamp without time zone` into a
 `Date` by reading the stored wall clock in the *client's* timezone, so the same row becomes a

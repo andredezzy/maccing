@@ -123,6 +123,11 @@ function leads(...rows: readonly Row[]): string {
   return csv(["id", "phone", "created_at"], rows);
 }
 
+/** The lead role with the optional `referrer` column, which is what turns the `referrals` block on. */
+function tree(...rows: readonly Row[]): string {
+  return csv(["id", "phone", "created_at", "referrer"], rows);
+}
+
 function revenue(...rows: readonly Row[]): string {
   return csv(["lead", "at", "amount"], rows);
 }
@@ -3707,4 +3712,216 @@ describe("the run refuses what it cannot measure", () => {
     expect(error).toBeInstanceOf(ControlError);
     expect(error.message).toMatch(/both sides/);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The referral tree
+// ---------------------------------------------------------------------------------------------
+
+describe("the referral tree counts who the cell brought in below it", () => {
+  test("a lead role with no referrer column gets no `referrals` block rather than a row of zeros", async () => {
+    const fixture = await build("down-unbound", {
+      lead: leads(["member", phone(1), from_cut(HOUR)]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-unbound", fixture.list("reached.txt")));
+
+    // Absent, not zero. A product with no referral network never names the column, and a block of
+    // zeros would read as a network that grew by nobody.
+    expect(record.referrals).toBeUndefined();
+  });
+
+  test("the two sides are never pre-summed, so a caller has to write the addition down", async () => {
+    const fixture = await build("down-nosum", {
+      lead: tree(
+        ["fresh", phone(1), from_cut(HOUR), ""],
+        ["older", phone(2), from_cut(-HOUR), ""],
+        ["byfresh", phone(3), from_cut(2 * HOUR), "fresh"],
+        ["byolder", phone(4), from_cut(2 * HOUR), "older"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, base("down-nosum", fixture.list("reached.txt")));
+
+    // No combined total exists on the block. An untreated cell shows a large `under_pre_existing`
+    // from ordinary referring, so summing the two is a decision a caller makes in the open rather
+    // than one the record quietly makes for them.
+    expect(record.referrals?.under_acquired.accounts).toBe(1);
+    expect(record.referrals?.under_pre_existing.accounts).toBe(1);
+    expect(record.referrals).not.toHaveProperty("accounts");
+  });
+
+  test("someone recruited by an acquired member counts, and lands under the acquired side", async () => {
+    const fixture = await build("down-acquired", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["recruit", phone(2), from_cut(2 * HOUR), "member"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-acquired", fixture.list("reached.txt")));
+
+    expect(record.acquired.accounts).toBe(1);
+    expect(record.referrals?.under_acquired.accounts).toBe(1);
+    expect(record.referrals?.under_pre_existing.accounts).toBe(0);
+  });
+
+  test("someone recruited by a member who predates the cut lands on the other side of the split", async () => {
+    const fixture = await build("down-pre-existing", {
+      lead: tree(
+        ["member", phone(1), from_cut(-HOUR), ""],
+        ["recruit", phone(2), from_cut(HOUR), "member"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, base("down-pre-existing", fixture.list("reached.txt")));
+
+    // The two are split because they are not the same claim: a member who was already there refers
+    // people with or without a campaign, and a cell has no control for that unless one was declared.
+    expect(record.referrals?.under_acquired.accounts).toBe(0);
+    expect(record.referrals?.under_pre_existing.accounts).toBe(1);
+  });
+
+  test("the walk goes to the bottom of the tree, not one level down", async () => {
+    const fixture = await build("down-depth", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["child", phone(2), from_cut(2 * HOUR), "member"],
+        ["grandchild", phone(3), from_cut(3 * HOUR), "child"],
+        ["great", phone(4), from_cut(4 * HOUR), "grandchild"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-depth", fixture.list("reached.txt")));
+
+    // The package is told nothing about how many levels a program pays, so the whole subtree is
+    // the only depth it can defend. A walk that stopped at the first level reports a third of this.
+    expect(record.referrals?.under_acquired.accounts).toBe(3);
+  });
+
+  test("a recruiter who predates the cut is walked through but not counted", async () => {
+    const fixture = await build("down-through", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["older", phone(2), from_cut(-HOUR), "member"],
+        ["arrival", phone(3), from_cut(2 * HOUR), "older"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-through", fixture.list("reached.txt")));
+
+    // `older` was already there, so they are not an arrival; the person they recruited after the
+    // cut still is. Stopping the walk at `older` would lose them.
+    expect(record.referrals?.under_acquired.accounts).toBe(1);
+  });
+
+  test("a descendant who is also on the list stays a member and is not counted twice", async () => {
+    const fixture = await build("down-overlap", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["both", phone(2), from_cut(2 * HOUR), "member"],
+      ),
+      lists: { "reached.txt": lines(phone(1), phone(2)) },
+    });
+
+    const record = await one(fixture, cold("down-overlap", fixture.list("reached.txt")));
+
+    expect(record.acquired.accounts).toBe(2);
+    expect(record.referrals?.under_acquired.accounts).toBe(0);
+  });
+
+  test("a descendant with no phone still counts, because the tree finds them and a list cannot", async () => {
+    const fixture = await build("down-phoneless", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["silent", "", from_cut(2 * HOUR), "member"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-phoneless", fixture.list("reached.txt")));
+
+    // Somebody who joined through a referral link may never have given a number. Indexing only the
+    // phone-readable rows would drop them and understate every count below a cell.
+    expect(record.referrals?.under_acquired.accounts).toBe(1);
+  });
+
+  test("a cycle in the tree terminates instead of hanging the run", async () => {
+    const fixture = await build("down-cycle", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["a", phone(2), from_cut(2 * HOUR), "member"],
+        ["b", phone(3), from_cut(3 * HOUR), "a"],
+        ["c", phone(4), from_cut(4 * HOUR), "b"],
+      ),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    // `c` points back at `a`, which a tree assembled from parent pointers permits and a walk
+    // without a visited set would follow forever.
+    await Bun.write(
+      join(fixture.dir, "lead.csv"),
+      tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["a", phone(2), from_cut(2 * HOUR), "member"],
+        ["b", phone(3), from_cut(3 * HOUR), "a"],
+        ["c", phone(4), from_cut(4 * HOUR), "b"],
+        ["a2", phone(5), from_cut(5 * HOUR), "c"],
+      ),
+    );
+
+    const record = await one(fixture, cold("down-cycle", fixture.list("reached.txt")));
+
+    expect(record.referrals?.under_acquired.accounts).toBe(4);
+  });
+
+  test("money and contracts below a cell are counted separately from the cell's own", async () => {
+    const fixture = await build("down-money", {
+      lead: tree(
+        ["member", phone(1), from_cut(HOUR), ""],
+        ["recruit", phone(2), from_cut(2 * HOUR), "member"],
+      ),
+      revenue: revenue(["recruit", from_cut(3 * HOUR), "50"]),
+      conversion: conversions_unsplit(["recruit", from_cut(3 * HOUR), "50", "true"]),
+      lists: { "reached.txt": lines(phone(1)) },
+    });
+
+    const record = await one(fixture, cold("down-money", fixture.list("reached.txt")));
+
+    // The person referred is nobody's member, so the cell's own figures stay empty and the referral
+    // carry it. Folding the two together would make a cell look like it converted people it never
+    // reached.
+    expect(record.conversions.count).toBe(0);
+    expect(record.referrals?.under_acquired.conversions).toEqual({ count: 1, value: 50 });
+    expect(record.referrals?.under_acquired.revenue).toEqual({ leads: 1, value: 50 });
+  });
+});
+
+test("a provisional cut refuses a referral count it made, the same as any other count it dates", async () => {
+  const fixture = await build("down-provisional", {
+    lead: tree(
+      ["member", phone(1), from_cut(-HOUR), ""],
+      ["recruit", phone(2), from_cut(HOUR), "member"],
+    ),
+    lists: { "reached.txt": lines(phone(1)) },
+  });
+
+  // The cell itself acquired nobody, so every count the older guard watches is zero and the run
+  // would have gone through. The referral count is not zero, and it is dated by the same cut.
+  const failure = await caught(
+    measure({
+      source: files(fixture.dir),
+      cells: [base("down-provisional", fixture.list("reached.txt"), { cut_provisional: true })],
+      now: NOW,
+    }),
+  );
+
+  expect(failure).toBeInstanceOf(ProvisionalCutError);
+  expect(failure.message).toContain("referrals.under_pre_existing.accounts");
 });
