@@ -13,7 +13,7 @@
  * out loud what the declaration was already carrying.
  */
 import { ResultError } from "./errors/result-error.ts";
-import type { Cell, CellRecord, Control } from "./metrics.ts";
+import type { Cell, CellRecord } from "./metrics.ts";
 import { round_half_even } from "../../../internal/round.ts";
 
 /** The two totals a campaign's return can honestly be read on.
@@ -37,10 +37,9 @@ export type Contribution = {
 export type ResultRecord = {
   /** Which total this was read on, so a reader never has to infer it from the size. */
   revenue: RevenuePath;
-  /** Every treated cell's contribution, in declaration order. Control cells are absent: they
-   *  received nothing, so their revenue was never the campaign's to claim. */
+  /** One per cell given, in declaration order. */
   contributions: readonly Contribution[];
-  /** Summed over every treated cell, attributable or not. This is the accounting figure. */
+  /** Summed over every cell given, attributable or not. This is the accounting figure. */
   measured: number;
   /** Summed over the attributable cells alone. This is the one a decision may rest on. */
   attributable: number;
@@ -50,15 +49,25 @@ export type ResultRecord = {
   profit: number;
   /** `attributable / cost`, or null where the cost is zero and the ratio has no meaning. */
   roas: number | null;
-  /** True where every treated cell's revenue is attributable. False means `measured` is larger
+  /** True where every cell's revenue is attributable. False means `measured` is larger
    *  than `attributable` and the gap belongs to people who buy with or without a campaign. */
   publishable: boolean;
 };
 
-/** What `result` is given. Cells and controls are the same declarations `measure` was given. */
+/** What `result` is given. */
 export type ResultOptions = {
+  /** The cells whose revenue **is** the campaign's, which is not always every cell `measure` was
+   *  given. Two cases where it is not, and the engine cannot tell them apart on its own:
+   *
+   *  - An untouched holdout received nothing, so its revenue was never the campaign's. Leave it out.
+   *  - Two cells drawn from one population — a list as handed over and the part of it confirmed
+   *    delivered — overlap, and summing both counts the same people twice. Pass the one that is
+   *    the campaign.
+   *
+   *  Both arms of an A/B **do** belong here. A cell named as some control's `control` is not
+   *  necessarily untouched: in a copy test it received a message too, and dropping it would report
+   *  half a campaign. That is why this is a declaration and not something derived from `controls`. */
   cells: readonly Cell[];
-  controls?: readonly Control[];
   /** The records `measure` returned, for those same cells. */
   records: readonly CellRecord[];
   /** What the campaign cost, **in the unit the source reports money in**. The engine never learns
@@ -87,39 +96,30 @@ function resolve(record: CellRecord, path: string): number | undefined {
  * Pure: it reads the records `measure` already produced and touches no database, so it also runs
  * against a stored `metrics.json` months later.
  *
- * A cell named as some control's `control` contributes nothing — it received no message, so
- * whatever it earned was never the campaign's. Every other cell contributes, and is attributable
- * when it is `cold` (those accounts did not exist before the cut) or when it is `own_base` and
- * carries a control (the counterfactual exists). An `own_base` cell with no control contributes to
- * `measured` and not to `attributable`, and its presence alone sets `publishable` to false.
+ * Every cell given contributes, and is attributable when it is `cold` (those accounts did not
+ * exist before the cut) or when its record carries a control (the counterfactual exists). An
+ * `own_base` cell with no control contributes to `measured` and not to `attributable`, and its
+ * presence alone sets `publishable` to false.
  *
- * @throws ResultError on a cost that is not finite and at or above zero, on a revenue path no
- *   record carries, or on a control naming a cell that was never declared.
+ * Which cells to give it is the caller's declaration — see `ResultOptions.cells`. Holdouts are
+ * left out there rather than detected here, because a cell on the `control` side of a copy test
+ * received a message and a cell on the `control` side of a holdout did not, and nothing in the
+ * declaration distinguishes them.
+ *
+ * @throws ResultError on a cost that is not finite and at or above zero, on a cell with no record,
+ *   or on a revenue path no record carries.
  */
 export function result(opts: ResultOptions): ResultRecord {
-  const { cells, controls = [], records, cost, revenue } = opts;
+  const { cells, records, cost, revenue } = opts;
 
   if (!Number.isFinite(cost) || cost < 0) {
     throw new ResultError(`cost must be a finite number at or above zero, got ${cost}`);
   }
 
-  const declared = new Set(cells.map((cell) => cell.name));
-  for (const control of controls) {
-    for (const side of [control.treated, control.control]) {
-      if (!declared.has(side)) {
-        throw new ResultError(`control names \`${side}\`, which is not a declared cell`);
-      }
-    }
-  }
-
-  const untreated = new Set(controls.map((control) => control.control));
   const by_name = new Map(records.map((record) => [record.cell, record]));
 
   const contributions: Contribution[] = [];
   for (const cell of cells) {
-    if (untreated.has(cell.name)) {
-      continue;
-    }
     const record = by_name.get(cell.name);
     if (record === undefined) {
       throw new ResultError(`no record for cell \`${cell.name}\``);

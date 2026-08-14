@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Cell, CellRecord, Control } from "../src/meta/whatsapp/campaigns/metrics.ts";
+import type { Cell, CellRecord } from "../src/meta/whatsapp/campaigns/metrics.ts";
 import { ResultError, result } from "../src/meta/whatsapp/campaigns/metrics.ts";
 
 function cell(name: string, audience: Cell["audience"]): Cell {
@@ -87,36 +87,44 @@ describe("result", () => {
   });
 
   test("a control gives an own_base cell its counterfactual back", () => {
-    const cells = [cell("treated", "own_base"), cell("held", "own_base")];
-    const controls: Control[] = [
-      { treated: "treated", control: "held", outcome: "conversions.count" },
-    ];
+    const cells = [cell("treated", "own_base")];
     const records = [
       record("treated", { conversions: 800, controlled: true }),
       record("held", { conversions: 700 }),
     ];
 
-    const got = result({ cells, controls, records, cost: 200, revenue: "conversions.value" });
+    const got = result({ cells, records, cost: 200, revenue: "conversions.value" });
 
     expect(got.measured).toBe(800);
     expect(got.attributable).toBe(800);
     expect(got.publishable).toBe(true);
   });
 
-  test("a control cell contributes nothing — it received no message", () => {
-    const cells = [cell("treated", "cold"), cell("held", "cold")];
-    const controls: Control[] = [
-      { treated: "treated", control: "held", outcome: "acquired.accounts" },
-    ];
+  test("a holdout is left out by the caller, and its revenue never lands", () => {
+    const treated = cell("treated", "cold");
     const records = [
       record("treated", { acquired: 300, controlled: true }),
       record("held", { acquired: 250 }),
     ];
 
-    const got = result({ cells, controls, records, cost: 100, revenue: "acquired.revenue.value" });
+    const got = result({ cells: [treated], records, cost: 100, revenue: "acquired.revenue.value" });
 
     expect(got.measured).toBe(300);
     expect(got.contributions.map((row) => row.cell)).toEqual(["treated"]);
+  });
+
+  test("both arms of an A/B count — the baseline arm received a message too", () => {
+    const cells = [cell("A", "cold"), cell("B", "cold")];
+    const records = [
+      record("A", { acquired: 1650.41 }),
+      record("B", { acquired: 887.83, controlled: true }),
+    ];
+
+    const got = result({ cells, records, cost: 497, revenue: "acquired.revenue.value" });
+
+    expect(got.measured).toBe(2538.24);
+    expect(got.attributable).toBe(2538.24);
+    expect(got.roas).toBe(5.11);
   });
 
   test("a zero cost gives a null roas rather than an infinity", () => {
@@ -142,23 +150,6 @@ describe("result", () => {
 
     expect(() =>
       result({ cells, records: [bare], cost: 100, revenue: "acquired.revenue.value" }),
-    ).toThrow(ResultError);
-  });
-
-  test("a control naming an undeclared cell is refused", () => {
-    const cells = [cell("A", "cold")];
-    const controls: Control[] = [
-      { treated: "A", control: "ghost", outcome: "acquired.accounts" },
-    ];
-
-    expect(() =>
-      result({
-        cells,
-        controls,
-        records: [record("A", { acquired: 10 })],
-        cost: 100,
-        revenue: "acquired.revenue.value",
-      }),
     ).toThrow(ResultError);
   });
 

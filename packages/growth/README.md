@@ -234,7 +234,7 @@ The two arms must also be disjoint. A pair that names one cell on both sides, or
 import { measure, result } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
 
 const records = await measure({ source, cells, controls });
-const money = result({ cells, controls, records, cost: 497, revenue: "acquired.revenue.value" });
+const money = result({ cells, records, cost: 497, revenue: "acquired.revenue.value" });
 ```
 
 ```json
@@ -259,7 +259,7 @@ The rule is not a new judgment — it reads two things the declaration already c
 | `own_base` **with** a control | yes | the counterfactual exists, so the lift is readable |
 | `own_base` **without** a control | **no** | nobody can say whether they bought because of the campaign |
 
-A cell named as some control's `control` contributes nothing at all: it received no message, so its revenue was never the campaign's to claim.
+**Which cells you hand it is a declaration, not the array `measure` got.** Leave out an untouched holdout, which earned nothing on the campaign's behalf, and leave out a cell that overlaps another — a list as handed over beside the part of it confirmed delivered counts the same people twice. Both arms of an A/B stay in: a cell on the `control` side of a copy test still received a message, and nothing in a declaration distinguishes that from a holdout, which is why the engine does not try to guess.
 
 `profit` and `roas` come off `attributable`, never off `measured`. A profit line that counts revenue the record cannot attribute is the whole error, so the field that would carry it does not exist.
 
