@@ -36,6 +36,7 @@ export { MarketDivergenceError } from "./errors/market-divergence-error.ts";
 export { MissingExportError } from "./errors/missing-export-error.ts";
 export { OverflowedTotalError } from "./errors/overflowed-total-error.ts";
 export { ProvisionalCutError } from "./errors/provisional-cut-error.ts";
+export { ResultError } from "./errors/result-error.ts";
 export { SourceError } from "./errors/source-error.ts";
 export { TimestampDriverError } from "./errors/timestamp-driver-error.ts";
 export { UnmatchedBaseError } from "./errors/unmatched-base-error.ts";
@@ -73,6 +74,11 @@ export type { RoleName, Source } from "./source.ts";
  *  `TimestampDriverError`, because a naive Postgres timestamp becomes a different instant on
  *  every machine that reads it; cast to text in the query instead. */
 export { files, postgres } from "./source.ts";
+
+/** What a campaign returned against what it cost, and whether that division stands. Additive to
+ *  `measure`, which still answers only what each cell did: the cost never reaches the engine. */
+export type { Contribution, ResultOptions, ResultRecord, RevenuePath } from "./result.ts";
+export { result } from "./result.ts";
 
 /**
  * The measurement pass, and the shape of what goes into and comes out of it.

@@ -226,6 +226,47 @@ A control outcome must be a path to something countable, and to something the au
 
 The two arms must also be disjoint. A pair that names one cell on both sides, or whose lists share identifiers, is refused: a two-proportion test reads two independent samples, and a person counted in both arms is counted as evidence twice, so the control drifts towards the treated cell and whatever difference survives is an artefact of how the two lists were drawn rather than of anything that was sent. One shared identifier is enough to refuse the pair — there is no tolerance to sit under, because a control that keeps one row somebody had already been sent to is the same fault as one that keeps a hundred, only harder to see.
 
+## What it cost, and whether you may divide by it
+
+`measure` answers what each cell did. It never learns what the campaign cost, so a return multiple used to be arithmetic somebody did by hand beside the record. `result` does that division and says whether it stands:
+
+```ts
+import { measure, result } from "@maccing/growth/meta/whatsapp/campaigns/metrics";
+
+const records = await measure({ source, cells, controls });
+const money = result({ cells, controls, records, cost: 497, revenue: "acquired.revenue.value" });
+```
+
+```json
+{
+  "revenue": "conversions.value",
+  "measured": 1876.59,
+  "attributable": 0,
+  "cost": 386,
+  "profit": -386,
+  "roas": 0,
+  "publishable": false
+}
+```
+
+**The error it exists to stop is dividing a cost into revenue produced by people who already held accounts.** They buy again without being asked, so a campaign that reaches them and then claims what they spent is publishing the base's ordinary behaviour as its own effect. It flatters every own-base cell that ships without a control, and the flattery is large: the record above is a real campaign whose sixteen contracts all came from cells like that. `measured` is what those cells earned. `attributable` is what the declaration can support. The gap between them is the finding.
+
+The rule is not a new judgment — it reads two things the declaration already carried:
+
+| Cell | Attributable | Why |
+|---|---|---|
+| `cold` | yes | those accounts did not exist before the cut |
+| `own_base` **with** a control | yes | the counterfactual exists, so the lift is readable |
+| `own_base` **without** a control | **no** | nobody can say whether they bought because of the campaign |
+
+A cell named as some control's `control` contributes nothing at all: it received no message, so its revenue was never the campaign's to claim.
+
+`profit` and `roas` come off `attributable`, never off `measured`. A profit line that counts revenue the record cannot attribute is the whole error, so the field that would carry it does not exist.
+
+`result` is pure — it reads the records `measure` already produced and touches no database, so it runs against a stored `metrics.json` months later. It **never learns a currency and never converts one**: `cost` is in whatever unit the source reports money in, and a cost paid in another currency is divided by the rate before it gets here, in the campaign file, where the rate is visible beside the reading it belongs to.
+
+⚠️ `publishable` here answers *may this revenue be attributed to the campaign*, which is not the question `ControlReading.publishable` answers. That one asks whether a lift cleared significance, a control-event floor and a seven-day window. A campaign can be publishable on this field and carry a control that is not, which is the honest state of most of them: the revenue is genuinely the campaign's and the effect is not yet measurable.
+
 ## The failure philosophy
 
 **Every ambiguity throws. Nothing degrades to zero.**
