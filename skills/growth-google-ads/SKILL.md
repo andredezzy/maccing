@@ -417,8 +417,6 @@ Frontend (GA4 tag) ──cross-domain linker──▶ App (GA4 tag)
 
 ## MCP Setup (Generic)
 
-**Server:** `grantweston/google-ads-mcp-complete` v2.0.0
-
 **Required credentials:**
 1. Developer token from MCC → Ferramentas → Central de API
 2. Google Cloud OAuth client ID + secret (Desktop Application type, Google Ads API enabled)
