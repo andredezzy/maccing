@@ -1,9 +1,4 @@
----
-name: naming
-description: 'Use when writing ANY code — every edit names something (a variable, function, type, file, enum member, config key), so this loads with the code touch itself, not as a separate naming task — and when choosing between a boolean, string union, and enum for a set of states. Triggers: about to type a fresh identifier, a status/state field, vague or abbreviated names, single-letter values, Base-prefixed classes, Contract-suffixed interfaces, casing questions, PascalCase filenames, a name that covers only part of what the function does, a name you are about to coin for a concept the framework, the domain, or the codebase may already have a word for (a *Limiter/*Pool/*Gate, a buildAfter beside dependsOn).'
----
-
-# Naming
+# Naming — say what the thing is; retrieve the word before coining
 
 ## Overview
 
@@ -11,7 +6,7 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 
 ## When to use
 
-- Every code touch — writing code IS naming: each variable, function, type, file, or config key an edit introduces is a naming act, so this skill loads with the edit itself, never as a separate later step
+- Every code touch — writing code IS naming: each variable, function, type, file, or config key an edit introduces is a naming act, so it happens with the edit itself, never as a separate later step
 - Introducing or renaming any identifier, file, type, or state field
 - When NOT: prose or user-facing copy (product voice rules apply there)
 
@@ -83,4 +78,4 @@ Retrieval can also be laundered: a generic role word — `types`, `api`, `client
 - A name that describes one branch of what the function does — the misleading name costs more than a longer one
 - A coined synonym defended as "more precise than" or "avoiding conflation with" the official term (both observed) — when the thing feeds a platform mechanism, the platform's word is the name
 
-Load `references/enums.md` for the full enum-vs-boolean-vs-union reasoning and the wire-boundary rule.
+Load `references/naming-enums.md` for the full enum-vs-boolean-vs-union reasoning and the wire-boundary rule.

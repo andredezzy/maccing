@@ -1,4 +1,4 @@
-# Exact type-set fidelity
+# Type-set fidelity — the model's types are exactly the domain's
 
 The model's types are precisely the domain's types — nothing invented, nothing omitted. A type the domain does not have is cruft to remove; a type it does have but you omitted is a gap that will surface as an unhandleable input.
 

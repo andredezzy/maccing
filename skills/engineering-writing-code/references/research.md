@@ -1,9 +1,4 @@
----
-name: researching-before-coding
-description: 'Use when about to write code against any external library, API, framework, or tool; when hitting an error, incompatibility, or unfamiliar technology; when introducing or naming a mechanism that solves a recognized problem (a limiter, pool, queue, retry/isolation primitive) even when its code is pure internal logic; before proposing a fix or presenting a design. Especially when confident from memory, under time pressure, when the API "is well known", or when a mechanism "is just internal logic".'
----
-
-# Researching Before Coding
+# Researching before coding — verify against current sources, never memory
 
 ## Overview
 
@@ -36,6 +31,6 @@ Before the first line against an external surface: (1) name the version actually
 - Patching to make an error disappear without stating the root cause
 - A design that fully specifies the interesting dimension and silently skips the boring mandatory one (see the dimension sweep)
 
-Load `references/dimension-sweep.md` for the enumerate-every-dimension method.
+Load `references/research-dimension-sweep.md` for the enumerate-every-dimension method.
 
-For hard bugs, escalate to a dedicated debugging discipline — mattpocock's diagnosing-bugs or superpowers systematic-debugging; this skill hands over at the point a reproducible feedback loop is needed.
+For hard bugs, escalate to a dedicated debugging discipline — mattpocock's diagnosing-bugs or superpowers systematic-debugging; hand over to it at the point a reproducible feedback loop is needed.

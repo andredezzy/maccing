@@ -1,14 +1,31 @@
 ---
 name: engineering-writing-code
-description: 'Use when writing, shaping, or placing any code — every edit names something, so this loads with the code touch. Triggers: naming an identifier, file, type, or enum member; choosing between a boolean, string union, and enum for a set of states; defining a domain type, database or validation schema, config shape, or wire payload; data that is flat, joined by ID references, or duplicated across fields; creating, splitting, or moving files; error classes, catch blocks, helpers, wrappers, utils, test files; barrel files, circular imports, a function that only forwards its arguments, an empty catch; any UI component, page, route, layout, form, or prop; a god component, dot-notation sub-components, a page marked "use client"; and before writing code against any external library, API, framework, or tool, or proposing a fix after an error.'
+description: 'Use when writing, shaping, or placing any code — every edit names something, so this loads with the code touch. Triggers: naming an identifier, file, type, or enum member; choosing between a boolean, string union, and enum for a set of states; defining a domain type, database or validation schema, config shape, or wire payload; data that is flat, joined by ID references, or duplicated across fields; creating, splitting, or moving files; error classes, catch blocks, helpers, wrappers, utils, test files; barrel files, circular imports, a function that only forwards its arguments, an empty catch; any UI component, page, route, layout, form, or prop; a god component, dot-notation sub-components, a page marked "use client"; a rendered surface that reads as unfinished — a spacing, shadow, hover, transition, or feedback question; reaching for a hack, suppression, or workaround to get green, or leaving orphaned code behind; and before writing code against any external library, API, framework, or tool, or proposing a fix after an error.'
 ---
 
 # Writing Code
 
 ## Overview
 
-How code is named, shaped, placed, composed, and verified. One skill for the whole
-code touch; `engineering-dx` owns the priority call about whether a structure should exist at all.
+How code is named, shaped, placed, composed, and verified — held to one standard: the lowest
+cognitive load for the next person who reads, debugs, tests, or extends it. One skill for the
+whole code touch; `engineering-dx` owns the priority call about whether a structure should exist at all.
+
+## The standard
+
+What "good" means here, and what every rule below is in service of:
+
+- **Detail, DX, the eye, performance, architecture — all first-class.** How the code reads and
+  how the screen feels are acceptance criteria, not polish deferred to later.
+- **The professional, official, researched way — not the clever one.** When a mature tool or trade
+  already solved the shape, retrieve its answer and follow it faithfully instead of reinventing a
+  weaker bespoke one (`researching-before-coding`). "How do professional architectures do this?" is the question to answer, from current sources, before coining or designing.
+- **Root cause, never the symptom.** No suppression, cast, silent fallback, or parallel path to get
+  green. A hack you can smell is a defect. If the honest fix exceeds scope, name it and its cost — never smuggle a workaround in.
+- **Leave nothing dead.** Code you stop using, you delete — its callers, config, and docs with it.
+  No legacy without a live consumer.
+- **Simplest shape that still extends cleanly.** Abstraction earns its place only against a need
+  that exists now, never a hypothetical one.
 
 ## Route to the reference you need
 
@@ -30,6 +47,7 @@ code touch; `engineering-dx` owns the priority call about whether a structure sh
 | Split a component that grew too large | `references/ui-god-components.md` and `references/ui-compound-components.md` |
 | Build a form | `references/ui-forms.md` |
 | Fetch data for a screen, or touch `use client` | `references/ui-server-pages.md` |
+| Make a rendered surface feel finished — spacing, feedback, motion, restraint | `references/ui-visual-craft.md` |
 | Use an external library, API, or tool | `references/research.md` |
 | Sweep a problem's dimensions before fixing | `references/research-dimension-sweep.md` |
 
@@ -45,12 +63,20 @@ code touch; `engineering-dx` owns the priority call about whether a structure sh
    across fields, the shape is wrong before the names are.
 5. **Research before writing against anything external** — especially when you are confident
    from memory. Diagnose the root cause before prescribing a fix.
+6. **No workaround to get green, and nothing left dead.** A hack, suppression, cast, or silent
+   fallback that only exists to pass is a defect — fix the cause instead. Code you stop using,
+   you delete, callers and config included.
+7. **A rendered surface is reviewed by eye before it's done.** Spacing that breathes, visible
+   feedback on every action, motion with intent, restraint on effects — working is not finished
+   (`references/ui-visual-craft.md`).
 
 ## Common mistakes
 
 - Naming a thing before deciding what it is — shape first, then name.
 - Extracting a helper to save characters rather than to hold a rule.
 - Reaching for a prohibition when the output is merely the wrong shape; state the shape instead.
+- Silencing a symptom — a cast, a broadened type, a swallowed error — instead of fixing the cause.
+- Shipping a screen that works but reads as unfinished — no breathing room, no feedback on click, a shadow doing too much.
 - Treating these as templates to satisfy instead of reasoning tools.
 
 For the priority call — whether a structure should exist, what it costs the next reader —

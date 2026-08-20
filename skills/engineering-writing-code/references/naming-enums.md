@@ -1,4 +1,4 @@
-# Enums for closed sets
+# Enums — a closed set is not a pile of booleans
 
 A boolean cannot express a trajectory of more than two states, and a string union gives neither guaranteed call-site autocomplete nor an exhaustiveness check as the set grows. An enum gives autocomplete at the definition, exhaustive checking at every switch, one place to add a case, and self-documenting call sites.
 

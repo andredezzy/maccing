@@ -1,4 +1,4 @@
-# File boundaries
+# File boundaries — one concern, named for what it is
 
 ## No barrels, no kind-based directories
 

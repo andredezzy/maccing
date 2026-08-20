@@ -1,4 +1,4 @@
-# Test file layout
+# Test files — one per unit, named after it
 
 ## One test file per file-under-test
 

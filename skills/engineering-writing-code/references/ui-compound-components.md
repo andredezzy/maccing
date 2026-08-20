@@ -1,4 +1,4 @@
-# Compound components
+# Compound components — structure from named parts
 
 ## The composition rule
 

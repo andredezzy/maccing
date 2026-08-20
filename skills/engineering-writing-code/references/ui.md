@@ -1,9 +1,4 @@
----
-name: composing-ui
-description: 'Use when creating any UI component, page, route, or layout, adding a prop to an existing one, wiring data fetching for a screen (prefetch, hydration, suspense, skeletons), or touching a component that has grown large — React or any component framework — plus forms, styling, and labels. Triggers: a prop toggling a section, a god component, dot-notation sub-components (Card.Header), raw inputs with hand-rolled validation, title-case labels, "just one more prop", a page marked "use client", a dataset passed as a prop to a client component, a route-level loading file, a page re-checking auth, a client-side re-parse of search params.'
----
-
-# Composing UI
+# Composing UI — structure from composition, never flags
 
 ## Overview
 
@@ -62,4 +57,4 @@ Composition is a HARD RULE, not a preference: structure comes from composing nam
 - A page re-checking auth or roles the layout already enforced
 - A second, hand-rolled search-params parse in the client
 
-References: compound-components.md (one-file compound, RSC rule, screen-level composition, worked example) · god-components.md (detection signals + the decompose-on-touch refactor, before/after) · forms.md (the schema stack, resolver, full library adoption) · server-pages.md (page recipe, the seam, cache-key parity, loading granularity, layout guards).
+References: references/ui-compound-components.md (one-file compound, RSC rule, screen-level composition, worked example) · references/ui-god-components.md (detection signals + the decompose-on-touch refactor, before/after) · references/ui-forms.md (the schema stack, resolver, full library adoption) · references/ui-server-pages.md (page recipe, the seam, cache-key parity, loading granularity, layout guards) · references/ui-visual-craft.md (spacing, feedback, motion, restraint — a rendered surface that feels finished).

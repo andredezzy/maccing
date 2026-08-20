@@ -1,9 +1,4 @@
----
-name: modeling-domains
-description: 'Use when defining domain types, database or validation schemas, config shapes, wire payloads, or translation/message trees; when adding a domain type, union member, registry, or dispatcher; when data is flat, joined by ID references, duplicated across fields, or its nesting does not match the real-world thing it describes. Distinct from glossary-style domain-modeling: this skill dictates STRUCTURE — isomorphism, containment, registries.'
----
-
-# Modeling Domains
+# Modeling domains — the shape mirrors reality
 
 ## Overview
 
@@ -40,6 +35,6 @@ Say the relationship as a real-world sentence. "An order **contains** items" →
 - Storing a computed value next to its inputs "for convenience" — it will drift
 - Trusting memory for a domain's type-set — real domains gain and lose types; verify against the live source
 
-References: isomorphic-structure.md (nesting = real boundaries; worked domain/config/wire/translation examples; redundant fields) · registries-and-engines.md (one registry per domain, the factory, the bridge, the mixed-union split signal) · domain-type-fidelity.md (exact type-set, live verification, containment in types AND schema) · self-initializing-architecture.md (middleware, zero-ceremony init).
+References: references/modeling-isomorphic-structure.md (nesting = real boundaries; worked domain/config/wire/translation examples; redundant fields) · references/modeling-registries-and-engines.md (one registry per domain, the factory, the bridge, the mixed-union split signal) · references/modeling-domain-type-fidelity.md (exact type-set, live verification, containment in types AND schema) · references/modeling-self-initializing-architecture.md (middleware, zero-ceremony init).
 
 For glossary work (CONTEXT.md, ADRs), use mattpocock's domain-modeling — his skill names the concepts, this one dictates the shapes.

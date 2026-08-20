@@ -1,9 +1,4 @@
----
-name: organizing-code
-description: 'Use when creating, splitting, or moving files; defining error classes or writing catch blocks; adding helpers, wrappers, or utils; structuring test files; or deciding where types, env vars, or server/client context live. Triggers: a file doing several things, circular imports, barrel files, a function that only forwards its arguments, a buildX(config) helper re-reading inputs a component already receives, an empty catch, a dense wall of code, inline multi-property object types, section-divider comments.'
----
-
-# Organizing Code
+# Organizing code — the file tree is the documentation
 
 ## Overview
 
@@ -53,4 +48,4 @@ When several consumers need a value computed from inputs an existing component a
 - Adding a `buildX(config)` helper for a value derivable inside the component that already receives that config — the owner returns it as an output (rule 7), even when the helper sits in the owner's file
 - try/catch that logs-and-continues — that is swallowing with extra steps (rule 16)
 
-References: errors.md (placement, instanceof, never-swallow) · extraction-and-wrappers.md (inline-over-extraction, derivation-follows-inputs + the pass-through existence test) · file-boundaries.md (barrels, responsibilities, entry points, OOP vs functions, imports, env vars, context) · test-files.md (test layout, e2e ownership) · visual-structure.md (blank-line grouping, named types, no dividers — beyond what formatters enforce).
+References: references/organizing-errors.md (placement, instanceof, never-swallow) · references/organizing-extraction-and-wrappers.md (inline-over-extraction, derivation-follows-inputs + the pass-through existence test) · references/organizing-file-boundaries.md (barrels, responsibilities, entry points, OOP vs functions, imports, env vars, context) · references/organizing-test-files.md (test layout, e2e ownership) · references/organizing-visual-structure.md (blank-line grouping, named types, no dividers — beyond what formatters enforce).

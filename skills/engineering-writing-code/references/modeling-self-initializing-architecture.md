@@ -1,4 +1,4 @@
-# Self-initializing architecture
+# Self-initializing architecture — no init calls, no scattered orchestration
 
 ## Middleware over manual orchestration
 

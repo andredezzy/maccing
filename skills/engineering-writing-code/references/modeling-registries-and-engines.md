@@ -1,4 +1,4 @@
-# One registry per domain
+# One registry per domain — split a fused union
 
 When the members of what looks like a single discriminated union obey different real-world composition rules — some nest freely, others may only appear inside a specific container — they are two domains, not one. Give each its own type union, its own registry, and its own engine.
 
