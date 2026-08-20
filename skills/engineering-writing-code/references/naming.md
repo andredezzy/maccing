@@ -17,7 +17,7 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 | 1 | Closed set of states → enum: 3+ states always, 2 when the names carry meaning; a plain boolean stays right for one unambiguous flag |
 | 2 | A value crossing a wire/serialization boundary keeps the external contract's exact casing as a string union instead of an enum |
 | 3 | Names are precise — never a vague gesture at the general area |
-| 4 | Name the whole behavior, not the salient sub-step; prefer the established domain term — and for a mechanism you introduce, retrieve that term first: ask whether the trade already names it, research when unsure (researching-before-coding); avoid sibling collisions |
+| 4 | Name the whole behavior, not the salient sub-step; prefer the established domain term — and for a mechanism you introduce, retrieve that term first: ask whether the trade already names it, research when unsure (see references/research.md); avoid sibling collisions |
 | 5 | NEVER fabricate an identifier — retrieve before coining, in order: the framework/platform's official word for the concept (verified in its docs, not from memory), the domain's established term, the codebase's existing lexicon (grep first); only when all three come up empty, coin — and say the name is coined and why. A fabricated name where an official one exists is a defect to fix on sight — and retrieval means the framework's word for THIS thing: a generic role word (types, api, client) that is merely established somewhere does not outrank it |
 | 6 | Spell out truncations that cost decoding; no bare single letters; genuinely universal short forms (id, URL, dx) are exempt |
 | 7 | No manufactured verbosity — drop suffixes that add no meaning; if removing a word loses nothing, remove it |

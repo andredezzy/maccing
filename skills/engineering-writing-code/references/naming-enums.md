@@ -1,6 +1,6 @@
 # Enums — a closed set is not a pile of booleans
 
-A boolean cannot express a trajectory of more than two states, and a string union gives neither guaranteed call-site autocomplete nor an exhaustiveness check as the set grows. An enum gives autocomplete at the definition, exhaustive checking at every switch, one place to add a case, and self-documenting call sites.
+A boolean cannot express a trajectory of more than two states. Between an enum and a same-shaped string union, autocomplete and exhaustiveness are a wash — both autocomplete in a typed position, and both catch a new state at a `never`-default switch (below). What an enum adds is a single named home for the values: call sites say `SubscriptionStatus.ACTIVE` — one canonical spelling that greps and renames cleanly, with one place to add a case — where a bare union scatters the raw literal `"active"` across every call site.
 
 ## When each shape is right
 
@@ -8,7 +8,7 @@ A boolean cannot express a trajectory of more than two states, and a string unio
 - **Enum** — any internal closed set of 3+ states, or exactly 2 where the names themselves carry meaning.
 - **String union in the wire's casing** — a value that crosses a serialization or API boundary where the literal must match the external contract exactly. The external casing wins; keep it a union and name the type after the contract it mirrors.
 
-## The exhaustiveness payoff
+## The `never`-default anchor
 
 ```ts
 enum SubscriptionStatus { PENDING = "PENDING", ACTIVE = "ACTIVE", SUSPENDED = "SUSPENDED", INACTIVE = "INACTIVE" }
@@ -27,7 +27,7 @@ function describeSubscription(status: SubscriptionStatus): string {
 }
 ```
 
-With the lowercase union, a fifth state compiles silently everywhere it should have been handled. With the enum plus a `never` default, the compiler walks you to every switch that must learn the new state.
+Add a fifth state and the `never` assignment stops compiling, walking you to every switch that must learn it. The anchor is the `never` default, not the enum — a union typed the same way behaves identically; what the enum buys on top is the named value at each call site instead of a bare string literal. Drop the `never` default and either shape compiles silently.
 
 ## Two mutually-exclusive booleans are a state machine in denial
 

@@ -19,7 +19,7 @@ What "good" means here, and what every rule below is in service of:
   how the screen feels are acceptance criteria, not polish deferred to later.
 - **The professional, official, researched way — not the clever one.** When a mature tool or trade
   already solved the shape, retrieve its answer and follow it faithfully instead of reinventing a
-  weaker bespoke one (`researching-before-coding`). "How do professional architectures do this?" is the question to answer, from current sources, before coining or designing.
+  weaker bespoke one (`references/research.md`). "How do professional architectures do this?" is the question to answer, from current sources, before coining or designing.
 - **Root cause, never the symptom.** No suppression, cast, silent fallback, or parallel path to get
   green. A hack you can smell is a defect. If the honest fix exceeds scope, name it and its cost — never smuggle a workaround in.
 - **Leave nothing dead.** Code you stop using, you delete — its callers, config, and docs with it.
@@ -43,6 +43,7 @@ What "good" means here, and what every rule below is in service of:
 | Add a helper, wrapper, or util | `references/organizing-extraction-and-wrappers.md` |
 | Structure a test file | `references/organizing-test-files.md` |
 | Break up a dense wall of code | `references/organizing-visual-structure.md` |
+| Ship a fix without a hack, or cut code cleanly | `references/integrity.md` |
 | Build a component, page, prop, or form | `references/ui.md` |
 | Split a component that grew too large | `references/ui-god-components.md` and `references/ui-compound-components.md` |
 | Build a form | `references/ui-forms.md` |
@@ -63,21 +64,21 @@ What "good" means here, and what every rule below is in service of:
    across fields, the shape is wrong before the names are.
 5. **Research before writing against anything external** — especially when you are confident
    from memory. Diagnose the root cause before prescribing a fix.
-6. **No workaround to get green, and nothing left dead.** A hack, suppression, cast, or silent
-   fallback that only exists to pass is a defect — fix the cause instead. Code you stop using,
-   you delete, callers and config included.
+6. **No workaround to get green; nothing outlives its use.** A hack, suppression, cast, or silent
+   fallback that only exists to pass is a defect — fix the cause instead. When a caller or feature
+   goes, the code, export, and config that served it go with it (`references/integrity.md`).
 7. **A rendered surface is reviewed by eye before it's done.** Spacing that breathes, visible
    feedback on every action, motion with intent, restraint on effects — working is not finished
    (`references/ui-visual-craft.md`).
 
 ## Common mistakes
 
-- Naming a thing before deciding what it is — shape first, then name.
-- Extracting a helper to save characters rather than to hold a rule.
-- Reaching for a prohibition when the output is merely the wrong shape; state the shape instead.
-- Silencing a symptom — a cast, a broadened type, a swallowed error — instead of fixing the cause.
-- Shipping a screen that works but reads as unfinished — no breathing room, no feedback on click, a shadow doing too much.
-- Treating these as templates to satisfy instead of reasoning tools.
+- Naming a thing before deciding what it is — shape first, then name
+- Extracting a helper to save characters rather than to hold a rule
+- Reaching for a prohibition when the output is merely the wrong shape; state the shape instead
+- Silencing a symptom — a cast, a broadened type, a swallowed error — instead of fixing the cause
+- Shipping a screen that works but reads as unfinished — no breathing room, no feedback on click, a shadow doing too much
+- Treating these as templates to satisfy instead of reasoning tools
 
 For the priority call — whether a structure should exist, what it costs the next reader —
 use the `engineering-dx` skill. For deep-module vocabulary, use mattpocock's codebase-design skill.
