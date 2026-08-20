@@ -19,6 +19,10 @@ return user.email.toLowerCase();
 
 Diagnosing the cause is `references/research.md` (read the error, find the root); a caught error that is neither re-thrown, logged, nor transformed is `references/organizing-errors.md` (never silently swallow). This rule is the ship decision on top of both: a workaround does not ship.
 
+## The green is earned, not reported
+
+A pass you did not watch is not a pass. A reported green — a subagent's "done", a cached result, a log that reads finished — is an input to verify, never a conclusion: re-run the check yourself, over the real repo, before believing it ("verify liveness, never relay agent claims"). And a review's findings are not advisory — "You should fix ALL the findings." Fix every one, then review again, and repeat until a full pass returns zero: "run a very exhaustive team for review everything, and fix all findings, and again review everything, until zero findings"; the work is done when "all quality checks greens", verified, not when a step along the way claimed to be.
+
 ## Nothing outlives its use
 
 When a feature is cut or a path stops being called, the code that served it does not get to stay "just in case" — "Delete = unpublishing. Since I dont want legacy of dead code without usages in my codebase." Deleting the surface means deleting all of it: the export, its callers, its config, its tests, its docs, and any dependency it alone pulled in. A dead export with no consumer is not a smaller version of the feature — it is a claim the codebase makes and cannot keep.

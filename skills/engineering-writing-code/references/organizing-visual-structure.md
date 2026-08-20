@@ -22,3 +22,7 @@ function summarize(): OrderSummary { /* … */ }
 ## No decorative dividers
 
 A comment is plain text — never dressed up with rules or box-drawing (`// ────────`). If a file needs visual section breaks to navigate, that is the signal it holds several responsibilities and should be split; within a file, plain comments and blank lines are enough.
+
+## Comments state the current fact
+
+A comment says what the thing is and the one fact that would bite — not its history, not why the last three approaches were rejected, not a changelog line. "too much polution"; "the codebase comments not not be complex, NEVER COMPLEXITY". Keep it readable by humans and agents alike; trade-offs, history, and rejected alternatives go in an ADR, linked. This is about content — distinct from the dividers rule above, which is only formatting.

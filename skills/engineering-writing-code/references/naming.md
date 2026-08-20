@@ -24,6 +24,7 @@ A name says exactly what the thing is — and a closed set of states gets an enu
 | 8 | Dot-suffixes in filenames only for framework kinds (service, controller, test…); every other file is the kebab-case of its main export — `user-not-found-error.ts`, never `UserNotFoundError.ts` |
 | 9 | No `Base` prefix — the interface owns the plain concept name; a skeleton is named for the capability it adds |
 | 10 | No `Contract` suffix — the interface IS the concept; on collision pick the next precise domain word |
+| 11 | Code is English — identifiers, file and folder names, and route/path segments, regardless of the product's or team's spoken language ("CODE IS ENGLISH") |
 
 ## The state-field judgment — the observed failure
 

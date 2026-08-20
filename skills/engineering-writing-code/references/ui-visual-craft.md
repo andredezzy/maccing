@@ -1,6 +1,6 @@
 # Visual craft — making a surface feel finished
 
-Composition (ui.md) gets the structure right; this is the polish an operator notices by eye. Working is not done. Every rule here traces to an observed failure.
+Composition (ui.md) gets the structure right; this is the polish an operator notices by eye — working is not done. The quoted failures below are his; the fixes around them are standard craft.
 
 ## Spacing breathes
 
@@ -12,11 +12,11 @@ An action with no visible response reads as broken. The observed failure is a co
 
 ## Motion with intent
 
-Reveal and reposition are transitions, not jumps. The observed failure is content that snaps into place — a button that should "re-center when appear, with transition". Animate entrance, position, and state change; keep it short; gate it behind `prefers-reduced-motion`. Motion serves orientation, never decoration — extra animation is how a design starts to feel generated.
+Reveal and reposition are transitions, not jumps. The observed failure is content that snaps into place — a button that should "re-center when appear with transition". Animate entrance, position, and state change, and keep it short; respect `prefers-reduced-motion`. Motion serves orientation, not decoration.
 
 ## Restraint on effects
 
-Less shadow, less chrome. The observed failure is a shadow doing too much — "decrease the shadow", "I dont want shadow over the inputs". Shadows, borders, and rings earn their weight; default to the lightest that still reads. Elegance is what you leave out.
+Less shadow, less chrome. The observed failure is a shadow doing too much — "decrease the shadow", "I dont want shadow over the inputs". Shadows, borders, and rings earn their weight; default to the lightest that still reads.
 
 ## Reviewed by eye
 

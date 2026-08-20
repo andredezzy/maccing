@@ -7,8 +7,8 @@ description: 'Use when writing, shaping, or placing any code — every edit name
 
 ## Overview
 
-How code is named, shaped, placed, composed, and verified — held to one standard: the lowest
-cognitive load for the next person who reads, debugs, tests, or extends it. One skill for the
+How code is named, shaped, placed, composed, and verified — held to one standard: clean code at the
+lowest cognitive load for the next person who reads, debugs, tests, or extends it. One skill for the
 whole code touch; `engineering-dx` owns the priority call about whether a structure should exist at all.
 
 ## The standard
