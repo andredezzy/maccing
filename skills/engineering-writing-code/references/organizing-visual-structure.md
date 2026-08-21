@@ -25,4 +25,6 @@ A comment is plain text — never dressed up with rules or box-drawing (`// ─�
 
 ## Comments state the current fact
 
-A comment says what the thing is and the one fact that would bite — not its history, not why the last three approaches were rejected, not a changelog line. "too much polution"; "the codebase comments not not be complex, NEVER COMPLEXITY". Keep it readable by humans and agents alike; trade-offs, history, and rejected alternatives go in an ADR, linked. This is about content — distinct from the dividers rule above, which is only formatting.
+A comment says what the thing is and the one fact that would bite — never its history, never a changelog line. Keep it readable by humans and agents alike; an agent has no budget to go and check, so it simply trusts what you wrote.
+
+What earns a comment, what a doc tag must add, how a citation has to resolve, and the three shapes that rot on their own: `references/organizing-comments.md`. That file is content; the dividers rule above is only formatting.

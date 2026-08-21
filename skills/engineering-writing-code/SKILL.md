@@ -1,6 +1,6 @@
 ---
 name: engineering-writing-code
-description: 'Use when writing, shaping, or placing any code — every edit names something, so this loads with the code touch. Triggers: naming an identifier, file, type, or enum member; choosing between a boolean, string union, and enum for a set of states; defining a domain type, database or validation schema, config shape, or wire payload; data that is flat, joined by ID references, or duplicated across fields; creating, splitting, or moving files; error classes, catch blocks, helpers, wrappers, utils, test files; barrel files, circular imports, a function that only forwards its arguments, an empty catch; any UI component, page, route, layout, form, or prop; a god component, dot-notation sub-components, a page marked "use client"; a rendered surface that reads as unfinished — a spacing, shadow, hover, transition, or feedback question; reaching for a hack, suppression, or workaround to get green, or leaving orphaned code behind; and before writing code against any external library, API, framework, or tool, or proposing a fix after an error.'
+description: 'Use when writing, shaping, or placing any code. Triggers: writing, shortening, or citing from a comment or docblock; naming an identifier, file, type, or enum member; choosing between a boolean, string union, and enum for a set of states; defining a domain type, database or validation schema, config shape, or wire payload; data that is flat, joined by ID references, or duplicated across fields; creating, splitting, or moving files; error classes, catch blocks, helpers, wrappers, utils, test files; barrel files, circular imports, a function that only forwards its arguments, an empty catch; any UI component, page, route, layout, form, or prop; a god component, dot-notation sub-components, a page marked "use client"; a rendered surface that reads as unfinished — a spacing, shadow, hover, transition, or feedback question; reaching for a hack, suppression, or workaround to get green, or leaving orphaned code behind; and before writing code against any external library, API, framework, or tool, or proposing a fix after an error.'
 ---
 
 # Writing Code
@@ -67,7 +67,11 @@ What "good" means here, and what every rule below is in service of:
 6. **No workaround to get green; nothing outlives its use.** A hack, suppression, cast, or silent
    fallback that only exists to pass is a defect — fix the cause instead. When a caller or feature
    goes, the code, export, and config that served it go with it (`references/integrity.md`).
-7. **A rendered surface is reviewed by eye before it's done.** Spacing that breathes, visible
+7. **A comment states a fact the code cannot, or it does not exist.** A doc tag appears only
+   when it adds one — nothing demands a complete tag set. A citation names something openable;
+   a bare "decision 11" resolves to nothing. A wrong comment is worse than none
+   (`references/organizing-comments.md`).
+8. **A rendered surface is reviewed by eye before it's done.** Spacing that breathes, visible
    feedback on every action, motion with intent, restraint on effects — working is not finished
    (`references/ui-visual-craft.md`).
 

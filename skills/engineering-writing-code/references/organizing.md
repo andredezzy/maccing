@@ -32,6 +32,7 @@ The file tree is the documentation: every file one concern, named for what lives
 | 17 | Blank lines group related statements — no dense walls |
 | 18 | No inline structural types — 2+ properties or 2+ non-primitive union members → named type |
 | 19 | No decorative section-divider comments — needing them signals a split |
+| 20 | A comment earns its place with a fact the code cannot show; a citation resolves or goes |
 
 ## The errors/ placement rule — the observed failure
 
