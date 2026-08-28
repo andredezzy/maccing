@@ -3,6 +3,12 @@
   "private": true,
   "type": "module",
   "description": "Bun MCP server for the Notion API (public + private app API), built on the official @modelcontextprotocol/sdk. Source in src/; runs via `bun src/server.ts`. The `imports` map aliases the SDK's public .js subpaths to `#sdk/*` so our import statements stay extension-free.",
+  "scripts": {
+    "start": "bun src/server.ts",
+    "start:http": "bun src/http-server.ts",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

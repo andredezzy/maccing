@@ -27,9 +27,6 @@ import { request } from "./tools/request";
 import { search } from "./tools/search";
 import { upsertProperty } from "./tools/upsert-property";
 
-// stdout is the JSON-RPC transport channel — route any stray console.log to stderr so it can't corrupt it.
-console.log = console.error;
-
 const SERVER_INFO = { name: "notion", version: "2.0.0" };
 
 // Open/closed registry: a new tool is a new file in tools/ plus one line here.
@@ -45,13 +42,12 @@ export const TOOLS: ToolModule[] = [
   readDatabase,
 ];
 
-async function main(): Promise<void> {
+export function assertNotionConfiguration(): void {
   // Fail-fast on startup: the public token is required; private-API vars are optional (graceful degrade).
   if (!process.env.NOTION_TOKEN) {
-    console.error(
-      "FATAL: NOTION_TOKEN is not set. Add it to ~/.config/maccing/notion.env (or mcp/.env.local). The notion MCP cannot start.",
+    throw new Error(
+      "NOTION_TOKEN is not set. Add it to ~/.config/maccing/notion.env (or mcp/.env.local). The notion MCP cannot start.",
     );
-    process.exit(1);
   }
   const privateMissing = ["NOTION_TOKEN_V2", "NOTION_SPACE_ID"].filter((name) => !process.env[name]);
   if (privateMissing.length > 0) {
@@ -59,13 +55,22 @@ async function main(): Promise<void> {
       `notion MCP: private app API disabled — set ${privateMissing.join(", ")} in ~/.config/maccing/notion.env (or mcp/.env.local) to enable the property-icon / private tools.`,
     );
   }
+}
 
+export function createMcpServer(): McpServer {
   const server = new McpServer(SERVER_INFO);
-
   for (const tool of TOOLS) {
     server.registerTool(tool.name, tool.config, withRedact(tool.handler));
   }
+  return server;
+}
 
+async function main(): Promise<void> {
+  // stdout is the stdio JSON-RPC channel. Keep all diagnostics on stderr.
+  console.log = console.error;
+  assertNotionConfiguration();
+
+  const server = createMcpServer();
   await server.connect(new StdioServerTransport());
   console.error(
     `notion MCP up on the official MCP SDK (Bun; Notion-Version ${VERSION}; tools: ${TOOLS.map((tool) => tool.name).join(", ")})`,
