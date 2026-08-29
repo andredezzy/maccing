@@ -13,7 +13,7 @@ The file tree is the documentation: every file one concern, named for what lives
 
 | # | Rule |
 |---|---|
-| 1 | No barrel files or kind-based dirs (types/, shared/) — code lives with its owner |
+| 1 | No re-export-only barrel files or kind-based dirs (types/, shared/) — an index.ts with real logic is fine; one that only re-exports is the defect |
 | 2 | Custom errors in top-level `errors/`, one class per file — never colocated in the thrower |
 | 3 | Catch by `instanceof`, never by matching message strings; error messages in English |
 | 4 | One responsibility per file; the file name is the documentation |

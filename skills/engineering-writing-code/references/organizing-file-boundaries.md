@@ -2,7 +2,7 @@
 
 ## No barrels, no kind-based directories
 
-No standalone files or folders that group code by KIND rather than by what it IS — no catch-all types/interfaces/state files, no shared/ or domain/ buckets, no index.ts re-export barrels. Types and code live with their owner; the directory structure names concrete responsibilities.
+No standalone files or folders that group code by KIND rather than by what it IS — no catch-all types/interfaces/state files, no shared/ or domain/ buckets, no index.ts files whose only job is re-exporting from siblings. An index.ts that owns real logic (an entry point, an orchestrator) is fine — the ban targets files that exist only to save an import path. Types and code live with their owner; the directory structure names concrete responsibilities.
 
 ## One responsibility per file — split by responsibility, not size
 
