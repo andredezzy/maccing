@@ -4,6 +4,7 @@
 // Replaces the ~8 sequential calls + hand-parsing the sweep used to take.
 
 import { z } from "zod";
+import { mapWithConcurrency } from "../notion/concurrency";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import type { NotionChildrenResponse } from "../readers/blocks";
@@ -13,6 +14,11 @@ import type { NotionParentRef } from "../readers/parent";
 import { err, errorMessage, ok, type ToolModule } from "../tool";
 
 const MAX_DEPTH = 20; // guard against circular/malformed parent chains
+// Ancestor lookups that may run at once. Notion's published guidance is ~3
+// requests/second per integration, and each lookup costs one or two: four in
+// flight keeps the pipe busy while staying inside the window that would
+// otherwise turn a fan-out into a queue of 429 retries.
+const ANCESTRY_LOOKUP_CONCURRENCY = 4;
 
 interface PageLike extends NotionPageBase {
   parent?: NotionParentRef;
@@ -174,13 +180,24 @@ export const readAgentsMd: ToolModule = {
         return err(`Could not read ${targetId} — check the id and that NOTION_TOKEN has access.`);
       }
 
-      const found: AgentsMdEntry[] = [];
-      for (const ancestor of ancestors) {
+      // Each ancestor's lookup is independent — "Investments" having an
+      // AGENTS.md tells us nothing about "Months" — so they run concurrently
+      // instead of one round-trip at a time. The climb above stays sequential
+      // because a page's parent is only known after reading the page.
+      //
+      // Bounded rather than a bare Promise.all: Notion rate-limits per
+      // integration, and a wide burst on a deep ancestry buys 429s that the
+      // client then has to retry, spending back the time the fan-out saved.
+      const lookups = await mapWithConcurrency(ancestors, ANCESTRY_LOOKUP_CONCURRENCY, async (ancestor) => {
         const agentsId = await findAgentsMdPageId(ancestor.pageId);
-        if (agentsId) {
-          found.push({ title: ancestor.title, agentsId, markdown: await readPageMarkdown(agentsId) });
+        if (!agentsId) {
+          return null;
         }
-      }
+        return { title: ancestor.title, agentsId, markdown: await readPageMarkdown(agentsId) };
+      });
+      // Root-to-closest order is load-bearing: the closest playbook wins on
+      // conflict, and mapWithConcurrency preserves input order for exactly this.
+      const found: AgentsMdEntry[] = lookups.filter((entry): entry is AgentsMdEntry => entry !== null);
 
       const target = ancestors[ancestors.length - 1];
       const ancestryBreadcrumb = ancestors.map((ancestor) => ancestor.title).join(" › ");
