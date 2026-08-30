@@ -25,10 +25,15 @@ const MAX_DEPTH = 20; // guard against circular/malformed parent chains
 // otherwise turn a fan-out into a queue of 429 retries.
 const ANCESTRY_LOOKUP_CONCURRENCY = 4;
 // How long a resolved sweep stays fresh. AGENTS.md playbooks are governance
-// documents — edited between tasks, effectively never mid-task — and an agent
-// following the skill re-sweeps the same ancestry on nearly every step. Sixty
-// seconds spans a task without pinning an edit for the life of the process.
-const SWEEP_TTL_MS = 60_000;
+// documents — edited between tasks, effectively never mid-task — while an agent
+// following the skill re-sweeps the same ancestry on nearly every step.
+//
+// Fifteen minutes spans a working session rather than a single task. Sixty
+// seconds only helped an agent looping on one job; a person logging a weight
+// once a day met a cold cache every time and paid the full sweep (~9s measured)
+// on a document that had not changed in weeks. An edit landing mid-window costs
+// at most one stale read, against a cost paid on every first call.
+const SWEEP_TTL_MS = 15 * 60_000;
 // One entry per target id. A handful of live branches is the realistic ceiling;
 // the bound exists so a long session cannot grow the map without limit.
 const SWEEP_CACHE_MAX_ENTRIES = 32;
