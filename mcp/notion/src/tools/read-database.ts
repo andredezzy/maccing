@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { normalizeUuid, UUID_PATTERN } from "../notion/ids";
+import { TtlCache } from "../notion/ttl-cache";
 import { hasPublicToken, publicRequest } from "../notion/public-client";
 import { type FlattenedProperty, flattenProperty, type NotionPropertyValue } from "../readers/page";
 import { resolveRelations } from "../readers/resolve-relations";
@@ -30,9 +31,45 @@ interface QueryResponse {
 // One cheap GET, optimistic fallback: a READ can treat an unrecognized id as a data_source_id directly —
 // a wrong id just yields a query error, no harm. (order-properties uses a STRICTER resolver — probes
 // /data_sources first, returns null on failure — because a WRITE must validate the target before mutating.)
+//
+// Both results are cached: the database→data_source mapping is fixed for the
+// life of the database, and a schema changes only when someone edits the
+// database's columns. Every read paid for both before its first row, and an
+// agent reads the same few databases over and over within a task. The TTL is
+// short enough that a column added mid-session shows up on the next task.
+const METADATA_TTL_MS = 60_000;
+const METADATA_CACHE_MAX_ENTRIES = 64;
+
+const dataSourceCache = new TtlCache<string>({
+  ttlMs: METADATA_TTL_MS,
+  maxEntries: METADATA_CACHE_MAX_ENTRIES,
+});
+const schemaCache = new TtlCache<PropertiesMap>({
+  ttlMs: METADATA_TTL_MS,
+  maxEntries: METADATA_CACHE_MAX_ENTRIES,
+});
+
 /** Resolve a database id to its data source id (falls back to treating the id as a data source). */
 async function resolveDataSourceId(databaseId: string): Promise<string> {
-  return (await databaseToDataSourceId(databaseId)) ?? databaseId;
+  return dataSourceCache.resolve(databaseId, async () => (await databaseToDataSourceId(databaseId)) ?? databaseId);
+}
+
+/** A schema fetch that failed for a reason the caller should surface verbatim. */
+class SchemaUnavailable extends Error {}
+
+/** Read a data source's property schema, cached for the metadata TTL. */
+async function readSchema(dataSourceId: string): Promise<PropertiesMap> {
+  return schemaCache.resolve(dataSourceId, async () => {
+    const response = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
+    if (!response.ok) {
+      // Thrown, not returned: TtlCache drops rejected computes, so a failed
+      // schema read stays retryable instead of being cached for the TTL.
+      throw new SchemaUnavailable(
+        `Could not read the data source ${dataSourceId} — check the id and that NOTION_TOKEN has access.`,
+      );
+    }
+    return (response.body as DataSourceSchema).properties ?? {};
+  });
 }
 
 /** Collect every relation target id across the flattened rows. */
@@ -107,11 +144,7 @@ export const readDatabase: ToolModule = {
     try {
       const dataSourceId = await resolveDataSourceId(databaseId);
 
-      const schemaResponse = await publicRequest("GET", `/v1/data_sources/${dataSourceId}`);
-      if (!schemaResponse.ok) {
-        return err(`Could not read the data source ${dataSourceId} — check the id and that NOTION_TOKEN has access.`);
-      }
-      const schema = (schemaResponse.body as DataSourceSchema).properties ?? {};
+      const schema = await readSchema(dataSourceId);
 
       const rowFormat = format as RowFormat;
       const fields = Array.isArray(args.fields) ? (args.fields as string[]) : null;
@@ -203,6 +236,9 @@ export const readDatabase: ToolModule = {
 
       return ok(rendered + rowsSummary + schemaSection + viewsSection);
     } catch (error) {
+      if (error instanceof SchemaUnavailable) {
+        return err(error.message);
+      }
       return err(errorMessage(error));
     }
   },
