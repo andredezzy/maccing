@@ -30,6 +30,8 @@ This runs on **every** Notion task, before you read or write anything. Not optio
 NO READ OR WRITE ON ANY NOTION TARGET UNTIL EVERY ANCESTRAL AGENTS.md HAS BEEN READ AND OBEYED
 ```
 
+**Ask for it in the same turn you load this skill.** The sweep is unconditional, so waiting to see the task before calling `read_agents_md` buys nothing and costs a full round trip — measured at 5–8s, on every Notion task. Issue both calls together; the answers arrive before you decide anything either way.
+
 If you have not walked root→target and read every `AGENTS.md` on the path **in this task**, you may not create, edit, move, delete, or draw conclusions from that target. No exceptions — not for "quick" one-field edits, not under time pressure, not when the user "just wants X changed."
 
 ### The Gate (run every time)
