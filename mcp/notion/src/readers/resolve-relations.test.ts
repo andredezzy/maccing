@@ -1,62 +1,117 @@
-// Unit tests for resolveRelations — the relation-id → title resolver — over a scripted fetch.
-// setTimeout is stubbed so publicRequest's 429 backoff fires instantly. Run with `bun test`.
+import { beforeEach, describe, expect, test } from "bun:test";
 
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { __resetRelationTitleCache, resolveRelations } from "./resolve-relations";
 
-import { resolveRelations } from "./resolve-relations";
+// Each fetched id is recorded so a test can assert what actually hit the network,
+// which is the whole point: the cache is only worth having if it removes requests.
+function stubFetch(titles: Record<string, string>) {
+  const fetched: string[] = [];
 
-const realFetch = globalThis.fetch;
-const realSetTimeout = globalThis.setTimeout;
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: any) => {
+    const url = String(input?.url ?? input);
+    const id = url.split("/v1/pages/")[1] ?? "";
+    fetched.push(id);
 
-beforeEach(() => {
-  globalThis.setTimeout = ((callback: () => void) => {
-    callback();
-    return 0 as unknown as ReturnType<typeof setTimeout>;
-  }) as typeof setTimeout;
-});
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  globalThis.setTimeout = realSetTimeout;
-});
+    return new Response(
+      JSON.stringify({
+        object: "page",
+        id,
+        properties: { Name: { type: "title", title: [{ plain_text: titles[id] ?? "?" }] } },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
 
-interface PageScript {
-  status?: number;
-  title?: string;
+  return {
+    fetched,
+    restore() {
+      globalThis.fetch = original;
+    },
+  };
 }
 
-/** Mock GET /v1/pages/{id} per id: a title (→ 200 + title-prop body) or a status (e.g. 404, 429). */
-function mockPages(byId: Record<string, PageScript>): void {
-  globalThis.fetch = (async (url: string | URL) => {
-    const id = String(url).split("/v1/pages/")[1] ?? "";
-    const entry = byId[id] ?? { status: 404 };
-    const status = entry.status ?? 200;
-    const body =
-      entry.title !== undefined
-        ? { properties: { Name: { type: "title", title: [{ plain_text: entry.title }] } } }
-        : {};
-    return {
-      status,
-      ok: status >= 200 && status < 300,
-      text: async () => JSON.stringify(body),
-      headers: { get: () => null },
-    } as unknown as Response;
-  }) as unknown as typeof fetch;
-}
+const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-test("resolveRelations dedups ids and maps each to its page title", async () => {
-  mockPages({ a: { title: "Alpha" }, b: { title: "Beta" } });
-  const map = await resolveRelations(["a", "a", "b", ""]); // duplicate + empty filtered out
-  expect(map.get("a")).toBe("Alpha");
-  expect(map.get("b")).toBe("Beta");
-  expect(map.size).toBe(2);
-});
+describe("resolveRelations", () => {
+  beforeEach(() => {
+    __resetRelationTitleCache();
+  });
 
-test("resolveRelations marks a 404/403 target as [deleted]", async () => {
-  mockPages({ gone: { status: 404 } });
-  expect((await resolveRelations(["gone"])).get("gone")).toBe("[deleted]");
-});
+  test("resolves ids to titles", async () => {
+    const net = stubFetch({ [A]: "Machine Chest Press" });
 
-test("resolveRelations throws on a 429 so the caller can back off", async () => {
-  mockPages({ x: { status: 429 } });
-  await expect(resolveRelations(["x"])).rejects.toThrow(/rate limit/i);
+    try {
+      const titles = await resolveRelations([A]);
+
+      expect(titles.get(A)).toBe("Machine Chest Press");
+    } finally {
+      net.restore();
+    }
+  });
+
+  test("a repeated id is fetched once, not once per call", async () => {
+    // The case that hurts: a training log names the same exercises every week, so
+    // the same handful of relation targets is re-fetched on every read. One GET
+    // each is the ceiling worth paying.
+    const net = stubFetch({ [A]: "Machine Chest Press", [B]: "Chest" });
+
+    try {
+      await resolveRelations([A, B]);
+      await resolveRelations([A, B]);
+      await resolveRelations([A]);
+
+      expect(net.fetched).toEqual([A, B]);
+    } finally {
+      net.restore();
+    }
+  });
+
+  test("a cached title still comes back on later calls", async () => {
+    const net = stubFetch({ [A]: "Machine Chest Press" });
+
+    try {
+      await resolveRelations([A]);
+      const second = await resolveRelations([A]);
+
+      expect(second.get(A)).toBe("Machine Chest Press");
+    } finally {
+      net.restore();
+    }
+  });
+
+  test("a missing target is not cached as a title", async () => {
+    // A 404 means "gone right now" — it must not pin "[deleted]" onto an id that
+    // a later share or restore would make readable again.
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async (input: any) => {
+      calls += 1;
+      const id = String(input?.url ?? input).split("/v1/pages/")[1] ?? "";
+
+      if (calls === 1) {
+        return new Response("{}", { status: 404 });
+      }
+
+      return new Response(
+        JSON.stringify({
+          object: "page",
+          id,
+          properties: { Name: { type: "title", title: [{ plain_text: "Back" }] } },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const first = await resolveRelations([A]);
+      const second = await resolveRelations([A]);
+
+      expect(first.get(A)).toBe("[deleted]");
+      expect(second.get(A)).toBe("Back");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
 });

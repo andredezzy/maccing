@@ -64,6 +64,12 @@ export class TtlCache<T> {
     return value;
   }
 
+  /** Drop every entry. Exists for tests that need a cold cache between cases;
+   *  production relies on the TTL, never on manual invalidation. */
+  clear(): void {
+    this.#entries.clear();
+  }
+
   /** Map preserves insertion order, so the first key is the oldest. */
   #evictOverflow(): void {
     while (this.#entries.size > this.#maxEntries) {
