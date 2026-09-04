@@ -39,7 +39,7 @@
     "./skills/growth-ycloud-api/",
     "./skills/growth-ycloud/",
     "./skills/growth/",
-    "./skills/notion/",
+    "./skills/maccing-notion/",
     "./skills/reasoning/"
   ],
   "commands": ["./commands/"]
