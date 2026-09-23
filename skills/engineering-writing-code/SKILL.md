@@ -59,7 +59,9 @@ What "good" means here, and what every rule below is in service of:
 2. **A closed set of 3+ states is an enum**, not a pile of booleans and not a bare lowercase
    union — unless the value crosses a wire boundary that dictates its casing.
 3. **Never write a function whose body only forwards its arguments.** Inline it. A helper earns
-   its name by holding something a reader would otherwise get wrong.
+   its name by holding something a reader would otherwise get wrong. A coordinator reads without
+   leaving: a function that runs steps in order keeps its plain steps inline, so a reader follows
+   it top to bottom without opening a callee.
 4. **Structure mirrors the domain.** If the data is flat, joined by ID references, or duplicated
    across fields, the shape is wrong before the names are.
 5. **Research before writing against anything external** — especially when you are confident
