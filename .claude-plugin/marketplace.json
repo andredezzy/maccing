@@ -1,6 +1,6 @@
 {
   "name": "maccing",
-  "description": "Maxxing skills for coding agents — engineering doctrine, reasoning, growth, Notion API + notion MCP, Google Workspace MCP.",
+  "description": "Maxxing skills for coding agents — engineering doctrine, reasoning, growth, Aside browser site skills, Notion API + notion MCP, Google Workspace MCP.",
   "owner": {
     "name": "Andre Dezzy",
     "email": "andredezzy@users.noreply.github.com",
@@ -10,14 +10,14 @@
     {
       "name": "maccing",
       "source": "./",
-      "description": "Maxxing skills for coding agents — engineering doctrine, reasoning, growth, Notion API + notion MCP, Google Workspace MCP.",
-      "version": "3.4.1",
+      "description": "Maxxing skills for coding agents — engineering doctrine, reasoning, growth, Aside browser site skills, Notion API + notion MCP, Google Workspace MCP.",
+      "version": "3.5.0",
       "author": {
         "name": "André \"Dezzy\" Victor",
         "url": "https://github.com/andredezzy"
       },
       "license": "MIT",
-      "keywords": ["skills", "dx", "engineering", "reasoning", "growth", "notion", "google-workspace", "mcp"]
+      "keywords": ["skills", "dx", "engineering", "reasoning", "growth", "aside", "notion", "google-workspace", "mcp"]
     }
   ]
 }

@@ -1,0 +1,99 @@
+# Image Generator
+
+What the Image Generator panel did when it was driven live. Labels are dated examples (2026-09-23): read the current ones from a snapshot.
+
+## Read the panel, not the page
+
+The panel is the page's `<aside>`. Snapshot it alone, so the Creations feed (other people's work) stays out of your output:
+
+```js
+const { tree: panel } = await snapshot(page, { interactive: true, selector: 'aside' });
+console.log(panel);
+```
+
+Seen top to bottom: the model picker button (under a "Model" label), references ("Style", "Character", "Add"), the prompt textbox, a count group (−, `status: "<n>"`, +), an aspect-ratio button ("16:9"), a quality button ("1.5K · Fast"), the Unlimited switch ("ON"/"OFF"), Generate, and a line of Unlimited text.
+
+**Before changing anything, write down the model, aspect ratio, quality, count and prompt.** Restore all of them at the end.
+
+## Model, aspect and quality
+
+Each button opens a dialog. A `[role=dialog]` selector finds nothing, so cut the dialog out of the whole tree. It sits at the end, after the feed:
+
+```js
+const { tree: p1 } = await snapshot(page, { interactive: true, selector: 'aside' });
+await page.locator(p1.match(/text: "Model"\n\s+- button "[^"]*" \[ref=(e\d+)\]/)[1]).click();
+const d1 = (await snapshot(page, { interactive: true })).tree.match(/- dialog:[\s\S]*/)?.[0];
+console.log(d1);
+```
+
+- **The model picker** has a search box, filters, a "Featured" list and an "All models" list grouped by provider. Each entry's name carries tags (for example "New", "Refs", the typical time, the resolutions) and, for paid entries, a credit range. Click an entry by its ref from the dialog snapshot. The panel's own model button has the same name, so never match against the whole page.
+- **The quality dialog** offers resolutions and, on some models, a "thinking level" (Fast/High). It may show a credit figure or an "Unlimited" hint.
+- **The aspect dialog** lists ratios with names ("1:1 Square", "16:9 Widescreen", …).
+- Dialogs don't mark the selected option. The panel button shows the current value. Escape closes a dialog, and a dialog left open stays open for the next REPL call.
+- The app remembers settings per model. Picking a model restores its last settings.
+
+## Count
+
+The − and + buttons sit either side of `status: "<n>"`. Set it to exactly the number the user asked for. The minus button is disabled at 1, and the plus button is disabled at the current maximum.
+
+The maximum depends on the model, its settings and Unlimited, so read it live: after choosing the settings, check whether + is disabled. Under Unlimited it can be 1. When it is below what the user asked for, plan one Generate per image, each after the previous batch finishes (`unlimited.md`, "One batch at a time"). Each of those cards repeats the prompt, so download each one as `creations.md`, "Repeated prompts", says.
+
+## Prompt
+
+The prompt is a rich-text editor:
+
+```js
+const promptBox = page.locator('.tiptap, [contenteditable=true], textarea').first();
+await promptBox.click();
+await page.keyboard.press('Meta+A');
+await page.keyboard.press('Backspace');
+await page.keyboard.insertText(promptText);
+```
+
+Check the panel snapshot afterwards: the textbox's name should carry your prompt. Typing "@" may open a reference picker. A cleared box can still hold a newline; the snapshot then shows an unnamed textbox and a disabled Generate, as it does when empty.
+
+## References
+
+Setting the page's `input[type=file]` directly did nothing. The file chooser worked. The file must sit inside the REPL session folder (`pwd`), or `setFiles` fails with "escapes the session directory". Copy it there with Bash first, or write it from the REPL. From a terminal each call has a new folder, so bring the file in within the call that uploads it (`../aside/references/terminal.md`).
+
+1. Click the reference "Add" slot in the panel. A modal opens with "History" and "Uploads" tabs. It has no dialog role: find its controls by name in the whole tree.
+2. Upload through the file chooser:
+
+```js
+const chooser = page.waitForEvent('filechooser', { timeout: 8000 });
+await page.getByRole('button', { name: 'Upload media' }).click();   // the modal's upload button
+await (await chooser).setFiles('./ref.jpg');
+await page.getByRole('button', { name: 'Add', exact: true }).last().click();   // the modal's confirm
+```
+
+3. The panel then shows a reference counter such as "References 1/14" and a chip such as `@img1`.
+
+The limit is the counter's second number. It differs per model, so read it from the counter before planning references.
+
+To remove a reference, click the chip's remove button from inside the page. The button (named like "Remove @img1") is hidden: it shows only in a `showHidden` snapshot, not on hover. A normal or forced locator click did nothing; `el.click()` inside `page.evaluate` worked:
+
+```js
+const { tree } = await snapshot(page, { interactive: true, selector: 'aside', showHidden: true });
+console.log(tree.match(/[^\n]*Remove @img\d+[^\n]*/g));   // the chips' remove buttons
+const removed = await page.evaluate((name) => {
+  const el = [...document.querySelectorAll('button')]
+    .find((b) => (b.getAttribute('aria-label') || b.title || b.textContent).trim() === name);
+  el?.click();
+  return Boolean(el);
+}, 'Remove @img1');
+```
+
+`removed: false` means the lookup missed: read the button's attributes and adjust it. Then check the counter went down.
+
+Files of about 100 KB worked. Larger files are untested.
+
+## Generate
+
+**Check the URL before each Generate.** The tab can leave the generator on its own. It has moved to a full-size result view (`/app/creation/<id>`) whose image covered the prompt box: typing did nothing and Escape did not close it. If `page.url()` is not the generator's URL (2026-09-23: `/app/ai-image-generator`), go back with `page.goto` to it. The model settings survive that, but the references are cleared: read the panel again and re-add them before generating.
+
+See SKILL.md, "Spending credits". For no-credit work, the only click is `magnificGenerate` from `unlimited.md`. The result arrives in the Creations feed; see `creations.md`.
+
+## Dated examples (2026-09-23)
+
+- The reference counter's limit read /14 on Nano Banana 2 and /8 on Auto. An earlier run the same day saw /10.
+- With Nano Banana 2 at 1K · Fast and Unlimited on, + was disabled at 1. On Auto, + was disabled at 4.
