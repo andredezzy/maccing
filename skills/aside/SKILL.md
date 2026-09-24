@@ -1,6 +1,6 @@
 ---
 name: aside
-description: Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "aside-browser", "aside skills", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "stale ref", "new Aside skill".
+description: Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "aside-browser", "aside skills", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "keep a tab open across calls", "file URL refused", "setViewportSize", "stale ref", "new Aside skill".
 ---
 
 # Aside
@@ -52,8 +52,8 @@ Multi-profile work, one-shot `aside repl` mechanics, and site skills Aside does 
 | Task | Read |
 |---|---|
 | The site is logged in on another profile (`u1`, …), or you must find which profile holds it | `references/profiles.md` |
-| Driving Aside from a terminal: one-shot `aside repl`, getting a file in, tabs that close, `aside exec` refusing with 402 | `references/terminal.md` |
-| Any REPL work: stale refs, unsupported APIs, reading snapshots without printing other people's content | `references/repl.md` |
+| Driving Aside from a terminal: one-shot `aside repl`, a session that keeps its tab across calls, getting a file in, `aside exec` refusing with 402 | `references/terminal.md` |
+| Any REPL work: stale refs, unsupported APIs, checking a local page at a set width, reading snapshots without printing other people's content | `references/repl.md` |
 | Adding a new Aside site skill | `references/new-site-skill.md` |
 
 ## Rules every Aside site skill shares

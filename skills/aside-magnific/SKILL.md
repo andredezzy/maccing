@@ -28,10 +28,11 @@ Open a reference when the task needs it:
 | Task | Read |
 |---|---|
 | No credits (Unlimited) | `references/unlimited.md`, as step 0 above |
-| Image Generator: model picker, settings dialogs, prompt, reference upload | `references/image-generator.md` |
-| Finding your own result in the Creations feed and downloading the full-size file | `references/creations.md` |
+| Image Generator: model picker, settings dialogs, prompt, reference upload and reuse | `references/image-generator.md` |
+| Writing the prompt: sizes, crops, what to leave out | `references/prompts.md` |
+| Finding your own new card in the Creations feed, and downloading the full-size file, never a preview | `references/creations.md` |
 | Any Generate from a terminal: paid runs, several images, the 120 s limit | `references/terminal-runs.md` |
-| Loading the REPL helpers (`magnificSettings`, `magnificGenerate`, `magnificDownload`, …) and their load order | `references/helpers.md` |
+| Loading the REPL helpers (`magnificSettings`, `magnificGenerate`, `magnificFeedTop`, `magnificDownload`, …) and their load order | `references/helpers.md` |
 | Before the first Generate: every question for the user in one message | `references/asking-the-user.md` |
 | The app's layout: tool picker, generation panel, dialogs | `references/image-generator.md`, "The app's layout" |
 | The Magnific MCP, and checking it is on the same account | `references/creations.md`, "The Magnific MCP" |
@@ -47,7 +48,7 @@ Models, credit costs, plans, what Unlimited covers and control labels all change
 
 - **List the tabs first**, every time you come back: `listBrowserTabs()`. A tab you opened can be gone. If yours is missing, open a new one and restore your settings.
 - **Open your own tab.** Other sessions may be working in an existing Magnific tab; never attach to one you didn't open. Use `openTab('https://www.magnific.com/app')` and pick the tool from the left navigation, or the tool's own URL if you know it (2026-09-23: the Image Generator was `/app/ai-image-generator`).
-- **From a terminal**, your tab closes when the call ends (`../aside/references/terminal.md`), so each call does a whole step in its own tab. `references/terminal-runs.md` plans the calls.
+- **From a terminal**, a one-shot call's tab closes when the call ends. For a long run, keep one background session with its own tab (`../aside/references/terminal.md`, "A session that outlives the call"). `references/terminal-runs.md` plans the calls.
 - **Restore what you change.** A new tab opens with each model's settings as last used in any tab. Record a baseline on opening and another after picking your model, and restore both before your task's last tab closes: your model's settings, the Unlimited switch included, then the model the panel opened on (`references/image-generator.md`, "Read the panel, not the page").
 - Close your tab with `closeTab(page)` when done.
 

@@ -9,8 +9,30 @@ What holds when a coding agent runs `aside repl "<code>"` from a shell, where ea
 - **Nothing carries over.** Bindings, `globalThis` helpers, `page` and every ref are gone in the next call. Where a site skill says to define a helper once in its own cell, prepend the helper's file to every call instead: `aside repl "$(cat helpers.js task.js)"`.
 - **Refs die with the call.** Re-attach the tab by its `targetId`, then snapshot and act on the new refs inside the same call. A ref copied from an earlier call's output points at whatever holds that number now; one opened a different page in a new tab.
 - **Each call gets a new session folder** (the `pwd` global). Files written there stay on disk after the call, so the shell can copy them out, but the next call cannot see them.
-- **A tab opened with `openTab()` closes when the call ends.** For work across calls, attach an existing tab. For a quick task in a tab of your own, open, act, verify and close inside one call, under the 120 s timeout.
-- **`aside "<url>"` may navigate an existing tab** of that site instead of opening a new one. List the tabs afterwards and check that the tab you use is yours.
+- **A tab opened with `openTab()` closes when the call ends.** So does a tab it opens in turn, such as a link with `target=_blank`. For a quick task in a tab of your own, open, act, verify and close inside one call, under the 120 s timeout. For work across many calls, keep one session alive instead (next section).
+- **`aside "<url>"` may navigate an existing tab** of that site instead of opening a new one. List the tabs afterwards and check that the tab you use is yours. It also needs Aside credits (see "When `aside exec` has no credits").
+
+## A session that outlives the call
+
+A long run, such as many generations with waits between them, needs a tab that stays open. Run one `aside repl` in the background, fed by a file, and send it one step at a time. Its tab, its `globalThis` helpers and its session folder then last until you stop it.
+
+1. **Start** it once, with a folder of your own:
+
+   ```bash
+   dir=<absolute scratch folder>; mkdir -p "$dir"; : > "$dir/cmds.txt"
+   tail -n +1 -f "$dir/cmds.txt" | aside repl --account <id> > "$dir/out.log" 2>&1 &
+   ```
+
+   `out.log` then starts with `account:` and `sessionDir:` lines. Check the account before anything else.
+2. **Send a step** with [`../scripts/repl-send.sh`](../scripts/repl-send.sh): `bash <skill dir>/scripts/repl-send.sh "$dir" step.js`. It copies the file into the session folder, runs it, waits for it to finish and prints only its output, with the `[ok | <ms>]` timing. Each step runs in its own function: keep what later steps need on `globalThis`, such as your tab (`globalThis.myTab = await openTab(url)`). Load the site skill's helpers once, as the first step.
+3. **Every step** starts by checking your tab is still there (`listBrowserTabs()`, by `targetId`), then sets `page = myTab`: helpers act on `page`. Another session, or the site itself, can close or move your tab. If it is gone, open a new one; never attach someone else's.
+4. **Stop** it at the end of the task: a step that closes your tab with `closeTab(myTab)` (this session opened it, so it closes), then:
+
+   ```bash
+   echo exit >> "$dir/cmds.txt"; pkill -f "tail -n +1 -f $dir/cmds.txt"
+   ```
+
+The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. Send one step at a time, and wait for it. A line that reaches the REPL while it is busy can be lost, so `repl-send.sh` puts each step on one line. A step likely keeps the 120 s limit of a call: plan it the same way. A session with no step running holds no one else's tab, so it is safe to keep across a question to the user.
 
 ## Getting a file into the REPL
 
@@ -48,3 +70,5 @@ Pass long text, such as a description, as base64 and decode it in the REPL: `Buf
 
 - A 4.8 MB MP4 came in through the local server. Images of about 100 KB came in as base64, one per call. `ARG_MAX` was 1048576.
 - `aside exec` answered 402 for lack of credits, and one-shot `aside repl` calls did the whole job.
+- 2026-09-24: a background session started as above kept its tab and its `globalThis` values across separate shell calls, and a step that threw still printed its end marker. A marker sent on its own line while a step ran was lost. `exit` stopped the REPL, but `tail` stayed until killed.
+- 2026-09-24: in a one-shot call, `closeTab()` on a tab attached with `attachBrowserTab()` only detached it; the tab stayed open. A tab opened by `openTab()` in an earlier session closed with `page.evaluate(() => window.close())`.

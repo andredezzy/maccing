@@ -15,8 +15,8 @@ skills/
 
 | Skill | Parent | Purpose |
 |-------|--------|---------|
-| **aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill first, letting an Aside built-in site skill lead where one exists, profiles and accounts, one-shot `aside repl` sessions, getting files in, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
-| aside-magnific | aside | Magnific (formerly Freepik): the account check, one message for every question, paid runs behind the user's yes, no-credit Unlimited generation behind a guard that checks the switch, model and settings, the Image Generator, one-shot call planning, the shared Creations feed and full-size downloads. The REPL helpers ship as one file each in [`scripts/`](../aside-magnific/scripts/) |
+| **aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill first, letting an Aside built-in site skill lead where one exists, profiles and accounts, one-shot `aside repl` sessions, a background session that keeps its tab across calls ([`scripts/repl-send.sh`](scripts/repl-send.sh)), getting files in, checking local pages, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
+| aside-magnific | aside | Magnific (formerly Freepik): the account check, one message for every question, paid runs behind the user's yes, no-credit Unlimited generation behind a guard that checks the switch, model and settings, the Image Generator, one-shot call planning, prompt pitfalls, reusing uploaded references, the shared Creations feed with an anchor for your new card, and full-size downloads that refuse a preview. The REPL helpers ship as one file each in [`scripts/`](../aside-magnific/scripts/) |
 | aside-shopee-seller | aside | Shopee Brasil Seller Centre: account check, guarded saves, listings, listing copy, shop profile, product diagnostics |
 
 ## Two readers

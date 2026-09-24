@@ -81,6 +81,8 @@ const typed = await promptBox.evaluate((el) => el.innerText ?? el.value);
 if (typed.trim() !== promptText.trim()) throw new Error('prompt read-back differs: ' + JSON.stringify(typed));
 ```
 
+What to write in the prompt, and what to leave out of it, is in `prompts.md`.
+
 Typing "@" may open a reference picker. A cleared box can still hold a newline; the snapshot then shows an unnamed textbox and a disabled Generate, as it does when empty.
 
 ## References
@@ -100,6 +102,15 @@ await page.getByRole('button', { name: 'Add', exact: true }).last().click();   /
 3. The panel then shows a reference counter such as "References 1/14" and a chip such as `@img1`.
 
 The limit is the counter's second number. It differs per model, so read it from the counter before planning references.
+
+**Reuse a file you already uploaded** instead of uploading it again: each upload adds a copy to the account's Uploads. In a session that outlives the call (`terminal-runs.md`), add the references once, and read the counter before each Generate: leaving the generator clears them ("Generate" below), and whether anything else does is unchecked. Across sessions, pick the file from the modal's "Uploads" tab. Untested as of 2026-09-24:
+
+1. On the first upload, give the file a name unique to the run, such as `<run tag>-ref-1.jpg`, so a rerun can find it.
+2. On a rerun, click "Add", then the "Uploads" tab. Cut the modal out of the whole tree by its tab names (it has no dialog role) and look for your file name; for a file someone uploaded earlier under a name you do not know, ask the user for it. The tab is the account's: other people's uploads are there too, so print only the line with your name.
+3. If your name shows, click that entry by its ref and confirm with the modal's "Add". If the tab shows only pictures, with no name you can match, upload the file again: a duplicate costs less than a wrong reference.
+4. Check the counter went up by one.
+
+For a coding agent, the Magnific MCP lists uploads read-only (`creations_search` with `from: "upload"`, and `query` for the name). It tells whether the file is there, not how to pick it in the modal.
 
 To remove a reference, click the chip's remove button from inside the page. The button (named like "Remove @img1") is hidden: it shows only in a `showHidden` snapshot, not on hover. A normal or forced locator click did nothing; `el.click()` inside `page.evaluate` worked:
 

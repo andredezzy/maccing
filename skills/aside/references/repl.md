@@ -16,6 +16,8 @@ What held on real sites, for the Aside agent's REPL tool and for one-shot `aside
 - `getByRole` takes a string `name`, not a regex.
 - `getByPlaceholder`, `locator.evaluateHandle` and `xpath=` selectors are unsupported. A CSS attribute selector such as `input[placeholder="…"]` works.
 - To pick a list entry, take its ref from a snapshot.
+- **Checking a local page.** `openTab('file://…')` is refused ("Cannot navigate to a file URL without local file access"). Serve the folder on `127.0.0.1` (`terminal.md`, "Getting a file into the REPL") and open that URL.
+- **A set viewport width.** `page.setViewportSize` and `page.emulateMedia` do not exist; the page takes the browser window's size. To see a page at a given width, copy its folder to a scratch folder, add a wrapper page holding it in an `<iframe>` of that width, serve that folder, and `page.screenshot({ path, clip: await page.locator('iframe').boundingBox() })`. Make the iframe as tall as the page for a full-page capture. `locator.screenshot({ path })` failed with "Invalid parameters".
 - Keep each call under the 120 s timeout. Wait with `await sleep(ms)` inside the REPL.
 - **Helpers.** In the Aside agent's REPL, define a helper on `globalThis` in its own cell, once per task, and call it from later cells. From a terminal, prepend it to every call (`terminal.md`).
 
@@ -26,3 +28,7 @@ A logged-in site often shows work that is not the user's: a shared feed, a team'
 - **Scope the snapshot** to the region you act on: `snapshot(page, { interactive: true, selector: '<region>' })`. The site skill names the region.
 - **Cut, don't search.** When a control only shows in the whole tree (a dialog appended at its end, say), cut that part out with one `match` and print only it. Searching the whole tree for a label also matches the same words in other people's content.
 - **Never open, download or describe** someone else's item, even when it sits beside yours. Find your own by something only you know, such as a phrase from your own input.
+
+## Dated examples (2026-09-24; not rules)
+
+- On `u0` the window was 1440×900 at a device pixel ratio of 2. A 390×844 iframe reported 390×844 inside, and its clipped screenshot measured 780×1688 px.

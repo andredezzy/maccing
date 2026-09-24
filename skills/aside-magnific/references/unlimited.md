@@ -52,6 +52,7 @@ Take every value from an earlier `magnificSettings()` read, on the model and set
 
 - **`signal`** is the text from a full snapshot of the panel (`snapshot(page, { selector: 'aside' })`) in that read. Whether it shows has depended on the model, not on the prompt (dated examples in `image-generator.md`). When that read showed the switch on and no such text, pass `signal: null`: the guard then relies on the switch, and its result says `text: null`. Name that in the report.
 - **`dryRun`** defaults to `true`: it runs every check and clicks nothing.
+- **The anchor.** In the same call, just before `magnificGenerate`, take `magnificFeedTop()` and print it: the download helper needs it (`creations.md`, "Telling your new card from an older one").
 
 `ok: true` returns `checked`, the values it verified. `ok: false` means stop and tell the user, with one exception: a full queue. Do not click Generate any other way for no-credit work.
 
@@ -93,6 +94,8 @@ Unlimited has a priority allowance that resets on a date. The app can show it in
 1. Read the percentage and the reset date, then close it before typing (`image-generator.md`, "Prompt").
 2. Tell the user both figures, in the run's report: the allowance may run out before the reset. Magnific's docs have a "Priority usage" page under "Unlimited generations" that says what happens then; read it before you describe it.
 
+**No way to read it on demand is known.** The popover belongs to the Unlimited switch, and the only way seen to open it was clicking the switch, which can toggle Unlimited ("The switch" above). Do not click the switch to read the allowance. When the popover has not opened by itself during the run, say in the report that priority usage was not read, and tell the user where it shows: the switch's popup in the app, which they can open themselves.
+
 ## Dated examples (2026-09-23 unless marked, Premium+ plan; not rules)
 
 - The switch showed the ∞ icon and the label "ON" or "OFF". The text under Generate read "Unlimited generations". The Generate button's name was "Generate", "Generate Unlimited" or "GenerateUnlimited".
@@ -104,3 +107,4 @@ Unlimited has a priority allowance that resets on a date. The app can show it in
 - A queue full of running generations left Generate disabled with a prompt typed in. The old guard read that as an empty prompt.
 - 2026-09-24: the app showed no credit figure on the feed cards or on a creation's page, even on hover.
 - 2026-09-24: the popover opened over the prompt box as a dialog holding the text "Unlimited" and an unnamed close button. It read 30% of priority usage spent, resetting on October 20.
+- 2026-09-24: a later run found no way to read priority usage without toggling the switch.
