@@ -6,7 +6,7 @@ The Aside agent's own REPL keeps its tab across cells. It can ask the user and c
 
 ## Every call
 
-1. List the tabs, open your own, and check the URL is the tool you want.
+1. Prepend [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js) to the call's code (`../aside/references/terminal.md`, "One call is one session"). List the tabs, open your own, and check the URL is the tool you want.
 2. In a call that reads a cost or clicks Generate, run the account check (`SKILL.md`). Stop if the email differs from the one the user confirmed.
 3. Do one step, verify it, and close the tab. The task's last call restores the settings you changed (`SKILL.md`, "Opening the app").
 
@@ -22,12 +22,12 @@ Never hold a tab open across the question with `aside "<url>"`: it may take over
 
 ## Several images
 
-Plan the calls before the first one, and tell the user the plan. The plan says how each new card will be told from the others (`creations.md`, "Telling your new card from an older one"); a run tag in the prompt needs the user's yes.
+Plan the calls before the first one, and put the plan in the one message `SKILL.md`, "Asking the user once", describes. The plan says how each new card will be told from the others (`creations.md`, "Telling your new card from an older one"); a run tag in the prompt needs the user's yes. An answer to that message covers a tag it stated as a default.
 
 - **The count covers it** (paid work, or Unlimited with + still enabled): one Generate with the count set to the number asked for.
 - **The count stops short** (Unlimited often caps it at 1): one Generate per call. Wait until that card has its images before the next Generate (`unlimited.md`, "One batch at a time"). Four images are at least four Generate calls, with waiting calls between them.
 
-A waiting call opens a tab, runs `magnificDownload`, and closes. On `pending`, the next call waits a little inside the REPL (`await sleep(ms)`) before calling it again.
+A waiting call opens a tab, runs `magnificDownload`, and closes. On `pending`, it may `await sleep(ms)` and call the helper again, with `ms` sized as "The 120 s limit" says; otherwise the next call tries again.
 
 ## The 120 s limit
 
@@ -42,4 +42,5 @@ A call that times out stops mid-action. You cannot tell whether its Generate wen
 
 - Opening the Image Generator on `u1` and reading the panel took 9 s. Opening it and reading the account menu dialog also took 9 s.
 - The account menu was a button named "Account menu". Its dialog held the name and email on one text line, then the credits spent and available, and "Plan & billing" with the plan name.
+- Opening the Image Generator with the helpers prepended, reading the panel, typing a prompt and running the guard six times as a dry run took 12 s.
 - One Seedream 5 Pro image at 1.5K took 30 to 60 s (2026-09-23). The download helper took 7 to 32 s (`creations.md`).

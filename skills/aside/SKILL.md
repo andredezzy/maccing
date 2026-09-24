@@ -34,7 +34,14 @@ The Aside agent skips this law: it is already inside Aside. Its shell may lack `
 WHEN ASIDE SHIPS A SKILL FOR THE SITE, USE IT BEFORE DRIVING THE PAGE BY HAND.
 ```
 
-Aside keeps its skills per profile under `~/.aside/u/<n>/skills/`: `builtin/` holds the ones Aside ships, `user/` the user's own. List the ones usable from `aside repl` with `aside skills list --account <id>`, and read one with `aside skills show <name> --account <id>`. The list changes with each release, so read it live.
+Aside keeps its skills per profile under `~/.aside/u/<n>/skills/`: `builtin/` holds the ones Aside ships, `user/` the user's own. `aside skills list` shows only part of `builtin/`, so check both:
+
+- `aside skills list --account <id>` prints the skills usable from `aside repl`. Read one with `aside skills show <name> --account <id>`.
+- The folder holds more, such as the site skills under `builtin/site-specific/`, which `aside skills show` refuses. Find one for your site by its host, and read its `SKILL.md` directly: `grep -rl '<host>' ~/.aside/u/*/skills/builtin --include=SKILL.md`.
+
+The list changes with each release, so read it live.
+
+When Aside ships a skill for a site this family also covers, Aside's skill leads. Follow it where the two overlap, and use the family's skill only for what Aside's leaves out. Tell the user, so the family's skill can be cut down to that.
 
 ### 2. This family adds only what those leave out
 
@@ -59,4 +66,4 @@ Multi-profile work, one-shot `aside repl` mechanics, and site skills Aside does 
 ## Dated examples (2026-09-24; not rules)
 
 - `aside guide` opened with "Aside CLI 1.26.916.1741 · Skill version 3", and the installed `aside-browser` said `version: 3`.
-- `aside skills list` printed youtube, google-search, google-gmail, notion and slack, among others. `builtin/` also held skills it did not print, such as x-twitter.
+- `aside skills list` printed youtube, google-search, google-gmail, notion and slack, among others. `builtin/` also held skills it did not print, such as x-twitter, and a `site-specific/` folder of site skills (amazon, github, linear, …). `aside skills show amazon` answered "Unknown skill". Each site skill named its hosts under `autoInject.url`. None named Magnific or Shopee.

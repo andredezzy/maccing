@@ -12,94 +12,22 @@ A card is a text line with the prompt, a relative time on its own line ("3 minut
 
 The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small preview; without the flag, the same signed URL serves the full-size file. It never hovers or clicks, so the feed does not re-render under it.
 
-Define it alone in its own cell:
+The helper is `magnificDownload`, in [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js). Call it with the number of images you generated, and a `name` unique to this run and scene:
 
 ```js
-// Finds your card by a phrase from your prompt and saves its full-size images
-// into the REPL session folder. Reads and fetches only: no hover, no clicks.
-globalThis.magnificDownload = async function ({ promptPart, count, name = 'magnific', maxScrolls = 40 }) {
-  // A relative time ("3 minutes ago") sits on its own text line under the prompt.
-  const isTime = (text) => / ago$/.test(text);
-  const findCard = async () => {
-    const lines = [...(await snapshot(page)).tree.matchAll(/[^\n]+/g)].map((m) => m[0]);
-    const start = lines.findIndex((l) => /^\s*- text: "/.test(l) && l.includes(promptPart));
-    if (start < 0) return null;
-    const indent = lines[start].match(/^\s*/)[0];
-    let end = start + 1;
-    for (; end < lines.length; end++) {
-      const text = lines[end].startsWith(indent + '- text: "') && lines[end].slice(indent.length + 9, -1);
-      if (text !== false && !isTime(text)) break;
-    }
-    const card = lines.slice(start, end).join('\n');
-    // Read every src now: the next snapshot renumbers the refs.
-    const sources = [];
-    for (const m of card.matchAll(/generic \[ref=(e\d+)\]:\n\s+- image/g)) {
-      sources.push(await page.locator(m[1]).evaluate((el) => el.querySelector('img')?.src ?? null).catch(() => null));
-    }
-    return { card, sources: sources.filter(Boolean) };
-  };
-  // Scrolls the feed by a share of its height; 0 goes back to the top.
-  const scrollFeed = async (share) => {
-    const any = (await snapshot(page)).tree.match(/generic \[ref=(e\d+)\]:\n\s+- image/)?.[1];
-    if (!any) return;
-    await page.locator(any).evaluate((el, share) => {
-      let box = el;
-      while (box && !(box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
-      if (box) box.scrollTop = share === 0 ? 0 : box.scrollTop + box.clientHeight * share;
-    }, share);
-    await sleep(600);
-  };
-
-  await scrollFeed(0);
-  let found = await findCard();
-  // The feed is virtualized: a card can be missing, or show only some images.
-  // Once the card shows, a few small scrolls bring the rest of it in.
-  for (let i = 0, near = 0; i < maxScrolls && near < 5 && !(found && found.sources.length >= count); i++) {
-    if (found) near++;
-    await scrollFeed(found ? 0.3 : 0.8);
-    found = (await findCard()) ?? found;
-  }
-  if (!found) return { ok: false, reason: 'no card with this prompt in the feed' };
-  if (found.sources.length === 0) return { ok: false, reason: 'pending' };
-  if (found.sources.length < count) return { ok: false, reason: `found ${found.sources.length} of ${count} images; call again` };
-
-  // The file's own first bytes name its format; the content type is the fallback.
-  const extensionOf = (bytes, type) => {
-    const head = bytes.subarray(0, 12);
-    if (head.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) return 'png';
-    if (head.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'jpg';
-    if (head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP') return 'webp';
-    return type?.match(/^image\/([a-z0-9]+)/)?.[1] ?? 'bin';
-  };
-  const saved = [];
-  for (let i = 0; i < found.sources.length; i++) {
-    // Without &preview=1 the same signed URL serves the full-size file.
-    const res = await fetch(found.sources[i].replace('&preview=1', ''));
-    if (!res.ok) return { ok: false, reason: `fetch ${res.status}`, saved };
-    const bytes = Buffer.from(await res.arrayBuffer());
-    const type = res.headers.get('content-type');
-    const file = `./${name}-${i + 1}.${extensionOf(bytes, type)}`;
-    await fs.writeFile(file, bytes);
-    saved.push({ file: path.join(pwd, file), type });
-  }
-  return { ok: true, saved };
-};
+console.log(JSON.stringify(await magnificDownload({ promptPart: '<phrase from your prompt>', count: 2, name: '<run tag>-<scene>' })));
 ```
 
-Call it with the number of images you generated:
-
-```js
-console.log(JSON.stringify(await magnificDownload({ promptPart: '<phrase from your prompt>', count: 2, name: '<file prefix>' })));
-```
+It saves `<name>-1.<ext>`, `<name>-2.<ext>` and so on. The same `name` twice gives the same file names: the second call overwrites the first in a shared session folder, and in the folder you copy them to. It refuses to run without a `name`.
 
 Pick a phrase no other card shares. If the prompt repeats one already in the feed, follow "Telling your new card from an older one" below.
 
 - `ok: true`: the files are in the REPL session folder, listed in `saved`, each named with the extension its bytes show (`.bin` when neither the bytes nor the content type name a format: check it with `file` before you rename it). Copy them with Bash to where the user wants them. Measure each file (`file`, or `sips -g pixelWidth -g pixelHeight`) and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
-- `reason: 'pending'`: wait (`await sleep(60000)`) and call again. If the card is still pending after a few minutes, tell the user. Never regenerate.
+- `reason: 'pending'`: wait and call again. Size each wait to what is left of the call's 120 s budget, as `terminal-runs.md`, "The 120 s limit", says; in the Aside agent's REPL the same budget holds per cell. If the card is still pending after a few minutes, tell the user. Never regenerate.
 - `found n of m images`: the feed showed only part of the card. Call again. If it repeats, check `count` against what you generated.
 - `no card`: the feed never showed your prompt. Check the phrase against what you typed.
 
-The helper ends a card at the next text line that is not a relative time, and knows a relative time by its trailing "ago". If it keeps saying pending while your card shows images, that line has changed: read the card's lines and adjust `isTime`.
+The helper ends a card at the next text line that is not a relative time, and knows a relative time by its trailing "ago". If it keeps saying pending while your card shows images, that line has changed: read the card's lines and adjust the script's `isTime`.
 
 ## Telling your new card from an older one
 

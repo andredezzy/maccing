@@ -2,11 +2,11 @@
 
 A site skill teaches Aside one website. It is a child of this skill: it holds what is true of that site, and points here for everything that is true of Aside.
 
-Write one only for a site Aside does not ship a skill for. Check `aside skills list` and each profile's `skills/builtin/` first (the parent's Iron Law 1).
+Write one only for a site Aside does not ship a skill for. Check both places the parent's Iron Law 1 names first.
 
 ## Where it lives
 
-A folder directly under `skills/`, named `aside-<site>`, holding `SKILL.md` and, when the detail outgrows it, `references/`. List it in this skill's "Child skills" line, in [`../README.md`](../README.md), in the repository's root `README.md` and in `.claude-plugin/plugin.json`.
+A folder directly under `skills/`, named `aside-<site>`, holding `SKILL.md` and, when the detail outgrows it, `references/`. List it in this skill's "Child skills" line, in [`../README.md`](../README.md), in the repository's root `README.md`, and in both `plugin.json` and `.claude-plugin/plugin.json`.
 
 ## Frontmatter
 

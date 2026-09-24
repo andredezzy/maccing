@@ -15,11 +15,11 @@ skills/
 
 | Skill | Parent | Purpose |
 |-------|--------|---------|
-| **aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill and its built-in site skills first, profiles and accounts, one-shot `aside repl` sessions, getting files in, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
-| aside-magnific | aside | Magnific (formerly Freepik): the account check, paid runs behind the user's yes, no-credit Unlimited generation behind a guard, the Image Generator, one-shot call planning, the shared Creations feed and full-size downloads |
+| **aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill first, letting an Aside built-in site skill lead where one exists, profiles and accounts, one-shot `aside repl` sessions, getting files in, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
+| aside-magnific | aside | Magnific (formerly Freepik): the account check, one message for every question, paid runs behind the user's yes, no-credit Unlimited generation behind a guard that checks the switch, model and settings, the Image Generator, one-shot call planning, the shared Creations feed and full-size downloads. The REPL helpers ship as [`scripts/magnific-helpers.js`](../aside-magnific/scripts/magnific-helpers.js) |
 | aside-shopee-seller | aside | Shopee Brasil Seller Centre: account check, guarded saves, listings, listing copy, shop profile, product diagnostics |
 
 ## Two readers
 
-- **A coding agent** (Claude Code, Codex, …) runs `aside repl` from a shell. Each call is a fresh session; `aside/references/terminal.md` covers what that changes.
-- **The Aside agent** reads the same files from `~/.aside/u/<n>/skills/user/`, linked there, with its own REPL tool. `aside/references/new-site-skill.md` says how to link them.
+- **A coding agent** (Claude Code, Codex, …) runs `aside repl` from a shell. Each call is a fresh session; [`references/terminal.md`](references/terminal.md) covers what that changes.
+- **The Aside agent** reads the same files from `~/.aside/u/<n>/skills/user/`, linked there, with its own REPL tool. [`references/new-site-skill.md`](references/new-site-skill.md) says how to link them.

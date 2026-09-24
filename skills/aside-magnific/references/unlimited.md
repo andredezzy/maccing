@@ -12,7 +12,13 @@ From https://www.magnific.com/ai/unlimited/changes:
 
 ## Account risk, per account
 
-Acceptance covers one Magnific account: the one whose owner accepted. Before the first automated Unlimited Generate, run the account check in `SKILL.md` and confirm with the user that this account's owner accepted these terms. Their word counts when it comes in this task or in their own instructions; this public skill records no one's acceptance. Without it, show the user both quotes and ask. Without a yes, stop.
+Acceptance covers one Magnific account: the one whose owner accepted. Before the first automated Unlimited Generate:
+
+1. Run the account check in `SKILL.md` and note the logged-in email.
+2. Find the user's acceptance of these terms, in this task or in their own instructions. This public skill records no one's.
+3. Match the email against the account that acceptance names. It counts only when it names this account, by email or so plainly that no other account fits.
+
+When there is no acceptance, it names another account, or it names none, show the user the email and both quotes, and ask. Without a yes for this account, stop.
 
 Keep the automated footprint small:
 
@@ -21,56 +27,46 @@ Keep the automated footprint small:
 
 ## The guard
 
-**Before every Generate click, confirm the Unlimited signal is present. If it is absent, stop and tell the user.** Each image made without it costs credits.
+**Before every Generate click, confirm the Unlimited signal and the settings you mean to run. If any differs, stop and tell the user.** Each image made without the signal costs credits.
 
 The signal sits in the Generate area and depends on the model and its settings:
 
-- the Unlimited switch: the panel button that holds the ∞ icon, with a label meaning on, and not disabled;
-- a line of text under Generate announcing unlimited generations;
+- the Unlimited switch: the panel button that holds the ∞ icon, with a label meaning on, enabled, and its popup closed;
+- a line of text under Generate announcing unlimited generations, on some models only;
 - sometimes the Generate button's own accessible name, which then mentions Unlimited.
 
-A disabled switch reading off means this model at these settings charges credits. An enabled switch reading off may be turned on: `SKILL.md`, "Spending credits", says when.
+A disabled switch reading off means this model at these settings charges credits. An enabled switch reading off may be turned on: "The switch" below says when and how.
 
-The guard reads the switch with `magnificUnlimitedSwitch` from `image-generator.md` ("Read the panel, not the page"), never by a button's name alone, which any panel button could match. Define that one first, then this helper, alone in its own cell:
-
-```js
-// Clicks Generate only while the Unlimited switch (the ∞ button) reads on and
-// is enabled, and the Unlimited text is shown. It reads the generation panel
-// only (the <aside>), so feed items cannot match. Pass the labels the switch
-// and the text show when Unlimited is on. dryRun checks without clicking.
-globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true }) {
-  const { tree } = await snapshot(page, { interactive: true, selector: 'aside' });
-  const generate = tree.match(/button "Generate[^"]*" \[ref=(e\d+)\]( \[disabled\])?/);
-  if (!generate) return { ok: false, reason: 'No Generate button in the panel' };
-  if (generate[2]) {
-    // An empty prompt shows as an unnamed textbox. A named one means the prompt is in.
-    const hasPrompt = /- textbox "[^"]+"/.test(tree);
-    return { ok: false, reason: hasPrompt ? 'Generate is disabled with a prompt in: the queue is probably full' : 'Generate is disabled: the prompt is empty' };
-  }
-  const unlimited = await magnificUnlimitedSwitch();
-  if (!unlimited) return { ok: false, reason: 'No Unlimited switch (no panel button holds the ∞ icon)' };
-  const switchIsOn = unlimited.label === switchOn && unlimited.enabled;
-  // Plain text can be missing from the interactive tree, so read the full panel too.
-  const { tree: full } = await snapshot(page, { selector: 'aside' });
-  const signalShown = [tree, full].some((t) => t.includes(`text: "${signal}"`));
-  if (!switchIsOn || !signalShown) {
-    return { ok: false, reason: `Unlimited signal absent (switch: ${JSON.stringify(unlimited)}, text shown: ${signalShown})` };
-  }
-  if (dryRun) return { ok: true, clicked: false };
-  await page.locator(generate[1]).click();
-  return { ok: true, clicked: true };
-};
-```
-
-Then call it with the labels the switch and the text carry when Unlimited is on. Take them from a read where the switch was on and enabled: the switch label from the `unlimited` field of `magnificSettings()`, the text from a full snapshot of the panel (`snapshot(page, { selector: 'aside' })`). Keep them for the whole run. From a terminal, pass them as constants recorded in an earlier call. A label read just now can be the off one, and the guard would then pass on it.
+The guard is `magnificGenerate`, in [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js). In one call it reads the panel, compares it with what you pass, and clicks Generate only when all of it matches:
 
 ```js
-console.log(await magnificGenerate({ signal: '<Unlimited text under Generate>', switchOn: '<switch label when on>', dryRun: false }));
+console.log(JSON.stringify(await magnificGenerate({
+  expect: { path: '<generator path>', model: '<model>', count: 1, aspect: '<aspect>', resolution: '<resolution>', level: '<level>' },
+  switchOn: '<switch label when on>',
+  signal: '<Unlimited text under Generate>',   // or null, see below
+  dryRun: false,
+})));
 ```
 
-`ok: false` means stop and tell the user, with one exception: a full queue. Do not click Generate any other way for no-credit work.
+Take every value from an earlier `magnificSettings()` read, on the model and settings the user approved, with the switch on and enabled. Pass `null` where that read showed `null`. From a terminal, record them as constants and keep them for the whole run. A label read just now can be the off one, and the guard would then pass on it.
+
+- **`signal`** is the text from a full snapshot of the panel (`snapshot(page, { selector: 'aside' })`) in that read. Whether it shows has depended on the model, not on the prompt (dated examples in `image-generator.md`). When that read showed the switch on and no such text, pass `signal: null`: the guard then relies on the switch, and its result says `text: null`. Name that in the report.
+- **`dryRun`** defaults to `true`: it runs every check and clicks nothing.
+
+`ok: true` returns `checked`, the values it verified. `ok: false` means stop and tell the user, with one exception: a full queue. Do not click Generate any other way for no-credit work.
 
 **One batch at a time.** The account has a queue, and a full queue disables Generate. Before each Generate, wait until your previous cards have their images (`magnificDownload` in `creations.md` stops saying pending). When the helper reports a full queue, nothing was generated: wait for the running cards, then call it once more. If the queue is still full, tell the user. From a terminal, `terminal-runs.md` splits this into calls.
+
+## The switch
+
+When the user asked for no-credit work and the switch reads off but is enabled, you may turn it on. Never turn it off to make a paid run happen: that needs the user's yes to the cost (`SKILL.md`, "Spending credits"). Turning it back to its baseline after your last Generate is fine.
+
+The switch declares a popup (`aria-haspopup="dialog"`), so a click may open a dialog instead of toggling. Unverified as of 2026-09-24: no one has watched what a click does. To change it:
+
+1. Click the switch once, then read `magnificUnlimitedSwitch()` and cut any `- dialog:` out of the whole interactive tree.
+2. If the label changed and `expanded` is false, it toggled. Go on.
+3. If a dialog opened, read it. Use its own control only when it plainly sets Unlimited to the state you want. Otherwise close it with Escape, and tell the user what it said.
+4. Read the switch again. Go on only when it reads the state you wanted, enabled, with `expanded` false.
 
 ## Which models and settings are Unlimited
 
@@ -86,7 +82,7 @@ A lower resolution or a faster "thinking" level often keeps Unlimited on where a
 
 ## Evidence that a run cost nothing
 
-- **Direct: the guard at each click.** `magnificGenerate` clicks only while the Unlimited signal is present, so its `ok: true, clicked: true` result shows the signal was there at that click. Keep the result of every Generate and report them.
+- **Direct: the guard at each click.** `magnificGenerate` clicks only while the Unlimited signal is present, so its `ok: true, clicked: true` result shows the signal was there at that click. Keep the result of every Generate, with its `checked` values, and report them.
 - **Indirect: the credit balance.** It is shared by the whole account, and other sessions and people spend from it. It counts only when you read it right before and right after your run, and know nothing else ran in the account between. Otherwise it says nothing about your run. The Magnific MCP's `account_balance` reports it, for an agent that has the MCP.
 - **If the app shows a credit figure on your cards**, read it on every card you made. The app may show none, on the feed card or on the creation's page, even on hover.
 

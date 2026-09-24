@@ -65,8 +65,18 @@ Before any Generate, paid or Unlimited, read which Magnific account is logged in
 
 A Generate click can spend credits. Before one:
 
-- **For no-credit work**, use `magnificGenerate` from `references/unlimited.md`. It clicks only while the Unlimited signal is present.
+- **For no-credit work**, use `magnificGenerate` from `references/unlimited.md`. It clicks only while the Unlimited signal and the settings you pass are all present.
 - **For paid work**, read the credit cost the panel shows for the current settings. Tell the user the account, the model, the settings, the count and that cost, and click Generate only after their yes. From a terminal the tab is gone by the time they answer: follow `references/terminal-runs.md`, "Paid work".
-- **The Unlimited switch.** When the user asked for no-credit work and the switch reads off but is enabled, you may turn it on, then read the signal again. Never turn it off to make a paid run happen: that needs the user's yes to the cost, as above.
+- **The Unlimited switch.** Turn it on only for no-credit work, and never off to make a paid run happen. Turn it the way `references/unlimited.md`, "The switch", says: a click may open a dialog.
 
 Generate only what the user asked for, with the count set to exactly that. If a generation fails, report it instead of retrying.
+
+## Asking the user once
+
+A request such as "four images, no credits, at 2K" can raise several questions. Do every read first, clicking nothing but the account menu and the settings: the account check, then the panel at the settings asked for (`magnificSettings()`, and the cost when the switch is off). Then send one message that holds:
+
+1. the logged-in email and plan, and whether the user's acceptance of the terms names that account (`references/unlimited.md`, "Account risk, per account");
+2. the settings trade-off, when there is one: the settings asked for and their cost, against the settings that keep Unlimited on;
+3. the plan: the count, the calls, and the run tag you propose for the prompts (`references/creations.md`, "Telling your new card from an older one").
+
+When the user's instructions allow one question per message, ask only the most blocking one, in this order: the wrong account, the terms, the cost trade-off, the run tag. State the others as defaults in the same message, so the answer covers them. A default can hold a run tag or a file name. It never holds a yes to the terms, to a cost, or to lower settings.
