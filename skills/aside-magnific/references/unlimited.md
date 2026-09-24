@@ -10,7 +10,7 @@ Magnific's terms, at https://www.magnific.com/ai/unlimited/changes:
 
 > "Magnific may pause or disable Unlimited Generations if it detects account sharing or automated tool usage. [...] Repeated suspicious activity may lead to permanent suspension of your account."
 
-André read these terms and accepted the risk for his account on 2026-09-23. That acceptance covers his account only. For anyone else's account, show the user both quotes and get their own acceptance before the first automated Unlimited Generate; without it, stop.
+André read these terms and accepted the risk for his account on 2026-09-23. That acceptance covers his account only. Read which account is logged in from the app's account menu; if you cannot tell it is his, ask. For anyone else's account, show the user both quotes and get their own acceptance before the first automated Unlimited Generate; without it, stop.
 
 Keep the automated footprint small:
 
@@ -80,6 +80,8 @@ This changes often. Check it live every time.
 5. **The credit balance**, before and after, is shared by the whole account. Other sessions and people spend from it too, so a drop across your run is not yours until your cards say so. The Magnific MCP's `account_balance` reports it, for an agent that has the MCP.
 
 A lower resolution or a faster "thinking" level often keeps Unlimited on where a higher one turns it off.
+
+**When the chosen model shows no signal** at any setting, stop and tell the user. Name the picker entries that carry no credit range as candidates, and switch to one only on their yes: the model is part of what they asked for.
 
 ## Dated examples (2026-09-23, Premium+ plan; not rules)
 

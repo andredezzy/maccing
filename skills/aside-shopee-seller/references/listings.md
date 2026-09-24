@@ -48,7 +48,7 @@ Read back every value after you set it, with `inputValue()` or a snapshot. A fie
   ```
 
   The first tile is the cover. In edit mode, hovering a tile (`.shopee-image-manager__itembox`) reveals a delete icon (`.shopee-image-manager__icon--delete`) that deletes **with no confirmation**.
-- **Video.** A separate input, `input[type=file][accept="video/mp4"]`, present only while the listing has no video. Bring the MP4 in through a local server from a terminal (`../aside/references/terminal.md`). After `setInputFiles`, an edit dialog opens with a trim bar and a confirm button: click confirm, then wait until the add-video tile is gone. The row then shows the video as processing. Shopee's own note says the listing may be saved while it processes. The video is lost if the tab closes before the save finishes: see [Save, guarded](#save-guarded).
+- **Video.** A separate input, `input[type=file][accept="video/mp4"]`, present only while the listing has no video. Bring the MP4 in through a local server from a terminal (`../aside/references/terminal.md`). After `setInputFiles`, an edit dialog opens with a trim bar and a confirm button: click confirm, then wait until the add-video tile is gone. The row then shows the video as processing. Shopee's own note says the listing may be saved while it processes. The video is lost if the tab closes before the save finishes: see [Save, guarded](#save-guarded). When the listing already has a video, the input is absent: nobody has replaced one yet, so ask the user before you touch the existing video.
 - **Plain text** (the name): click the textbox ref, then `page.keyboard.insertText(text)`.
 - **Rich text** (the description) is a `[contenteditable=true]`. Target it with `.filter({ hasText: '<text already in it>' })`, click, `Meta+A`, `Backspace`, then `page.keyboard.insertText(text)`. Each line becomes a paragraph.
 - **Formatted numbers** (price, stock, weight, box sizes). Clear and type on the exact locator, never through `page.keyboard` after a click:
@@ -158,6 +158,8 @@ await page.getByRole('button', { name: shpSave, exact: true }).click();
 for (let i = 0; i < 30 && await page.getByRole('button', { name: shpSave, exact: true }).count(); i++) await sleep(1000);
 console.log((await snapshot(page, { interactive: true })).diff);
 ```
+
+`shpRead()` reads text inputs only. When the save carries an image or a video, read the image counter and the video row from a snapshot before the click, and show them to the user with the values.
 
 Pick the button by what the user asked for: save without publishing, save and publish, or update an existing listing. If the diff shows the validation banner, follow its link to the first error, fix it, and save again.
 
