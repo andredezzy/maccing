@@ -25,6 +25,17 @@ The edit button turns the view into a form. Read every field before changing one
 
 To leave without saving, click the cancel button.
 
+## Change the logo
+
+The logo row lists the limits it enforces. Read them from the page before preparing a file: a file over the weight limit is refused on upload.
+
+1. Read the logo row's size, weight and format limits.
+2. Prepare the file first: resize to a few times the recommended size and save it as JPEG. An AI-generated 1536 px PNG weighed 4.1 MB. At 600 px, JPEG quality 90, it weighed 80 KB.
+3. Upload it through the logo's edit control and check the preview.
+4. On the user's ask, save, and check that view mode shows the new logo.
+
+Observed on 2026-09-24: an oversized file opened a dialog, "Tamanho incorreto de imagem", with "O tamanho max. do arquivo deve ser menor que 2.0 MB" and a "Confirmar" button. Nothing was saved.
+
 ## Writing the description
 
 The user approves the text before it goes in. `references/listing-copy.md` holds the rules shared with listings.
