@@ -36,8 +36,8 @@ Define the helper alone in its own cell:
 ```js
 // Clicks Generate only while the Unlimited switch reads on (and is enabled)
 // and the Unlimited text is shown. It reads the generation panel only
-// (the <aside>), so feed items cannot match. Pass both labels exactly as
-// the current snapshot shows them. dryRun checks without clicking.
+// (the <aside>), so feed items cannot match. Pass the labels the switch
+// and the text show when Unlimited is on. dryRun checks without clicking.
 globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true }) {
   const { tree } = await snapshot(page, { interactive: true, selector: 'aside' });
   const generate = tree.match(/button "Generate[^"]*" \[ref=(e\d+)\]( \[disabled\])?/);
@@ -61,7 +61,7 @@ globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true 
 };
 ```
 
-Then snapshot, read the two labels, and call it:
+Then call it with the labels the switch and the text carry when Unlimited is on. Take them from a snapshot where the switch was on and enabled, and keep them for the whole run. From a terminal, pass them as constants recorded in an earlier call. A label read just now can be the off one, and the guard would then pass on it.
 
 ```js
 console.log(await magnificGenerate({ signal: '<Unlimited text under Generate>', switchOn: '<switch name when on>', dryRun: false }));
@@ -78,14 +78,25 @@ This changes often. Check it live every time.
 1. **The app is the authority.** Select a model and settings, then read the signal. The docs have lagged behind the app.
 2. **The model picker** shows a credit range beside paid entries. An entry without one is only a candidate: the switch decides. The quality dialog may show a credit figure or an "Unlimited" hint, but it has disagreed with the switch.
 3. **Magnific's docs** give a map: https://www.magnific.com/ai/docs/unlimited-models (models per plan) and https://www.magnific.com/ai/unlimited/changes. Open them in a tab and read the snapshot.
-4. **The credit figure on each of your cards** is the direct evidence of what your generations cost. Read it on every card you made.
-5. **The credit balance**, before and after, is shared by the whole account. Other sessions and people spend from it too, so a drop across your run is not yours until your cards say so. The Magnific MCP's `account_balance` reports it, for an agent that has the MCP.
 
 A lower resolution or a faster "thinking" level often keeps Unlimited on where a higher one turns it off.
 
 **When the chosen model shows no signal** at any setting, stop and tell the user. Name the picker entries that carry no credit range as candidates, and switch to one only on their yes: the model is part of what they asked for.
 
-## Dated examples (2026-09-23, Premium+ plan; not rules)
+## Evidence that a run cost nothing
+
+- **Direct: the guard at each click.** `magnificGenerate` clicks only while the Unlimited signal is present, so its `ok: true, clicked: true` result shows the signal was there at that click. Keep the result of every Generate and report them.
+- **Indirect: the credit balance.** It is shared by the whole account, and other sessions and people spend from it. It counts only when you read it right before and right after your run, and know nothing else ran in the account between. Otherwise it says nothing about your run. The Magnific MCP's `account_balance` reports it, for an agent that has the MCP.
+- **If the app shows a credit figure on your cards**, read it on every card you made. The app may show none, on the feed card or on the creation's page, even on hover.
+
+## Priority usage
+
+Unlimited has a priority allowance that resets on a date. The app can show it in a popover over the prompt box, such as "Unlimited, priority usage N% spent, resets on <date>", with a close button. It can open mid-run. When it does:
+
+1. Read the percentage and the reset date, then close it before typing (`image-generator.md`, "Prompt").
+2. Tell the user both figures, in the run's report: the allowance may run out before the reset. Magnific's docs have a "Priority usage" page under "Unlimited generations" that says what happens then; read it before you describe it.
+
+## Dated examples (2026-09-23 unless marked, Premium+ plan; not rules)
 
 - The switch was drawn "∞" with the accessible name "ON" or "OFF". The text under Generate read "Unlimited generations". The Generate button's name was "Generate", "Generate Unlimited" or "GenerateUnlimited".
 - Seedream 5 Pro was Unlimited at 1.5K · Fast. At 2K · High the switch went OFF and disabled. The docs table did not list this model.
@@ -94,3 +105,5 @@ A lower resolution or a faster "thinking" level often keeps Unlimited on where a
 - One Seedream 5 Pro image at 1.5K took 30–60 s. The credit balance did not change across 13 web generations.
 - In another run the balance fell from 44,775 to 44,175 while other generations ran in the account. The agent's 40 cards all showed 0 credits.
 - A queue full of running generations left Generate disabled with a prompt typed in. The old guard read that as an empty prompt.
+- 2026-09-24: the app showed no credit figure on the feed cards or on a creation's page, even on hover.
+- 2026-09-24: the popover opened over the prompt box as a dialog holding the text "Unlimited" and an unnamed close button. It read 30% of priority usage spent, resetting on October 20.

@@ -26,11 +26,9 @@ globalThis.magnificDownload = async function ({ promptPart, count, name = 'magni
     if (start < 0) return null;
     const indent = lines[start].match(/^\s*/)[0];
     let end = start + 1;
-    let age = null;
     for (; end < lines.length; end++) {
       const text = lines[end].startsWith(indent + '- text: "') && lines[end].slice(indent.length + 9, -1);
       if (text !== false && !isTime(text)) break;
-      if (text !== false) age = text;
     }
     const card = lines.slice(start, end).join('\n');
     // Read every src now: the next snapshot renumbers the refs.
@@ -38,7 +36,7 @@ globalThis.magnificDownload = async function ({ promptPart, count, name = 'magni
     for (const m of card.matchAll(/generic \[ref=(e\d+)\]:\n\s+- image/g)) {
       sources.push(await page.locator(m[1]).evaluate((el) => el.querySelector('img')?.src ?? null).catch(() => null));
     }
-    return { card, age, sources: sources.filter(Boolean) };
+    return { card, sources: sources.filter(Boolean) };
   };
   // Scrolls the feed by a share of its height; 0 goes back to the top.
   const scrollFeed = async (share) => {
@@ -62,7 +60,7 @@ globalThis.magnificDownload = async function ({ promptPart, count, name = 'magni
     found = (await findCard()) ?? found;
   }
   if (!found) return { ok: false, reason: 'no card with this prompt in the feed' };
-  if (found.sources.length === 0) return { ok: false, reason: 'pending', age: found.age };
+  if (found.sources.length === 0) return { ok: false, reason: 'pending' };
   if (found.sources.length < count) return { ok: false, reason: `found ${found.sources.length} of ${count} images; call again` };
 
   const saved = [];
@@ -74,7 +72,7 @@ globalThis.magnificDownload = async function ({ promptPart, count, name = 'magni
     await fs.writeFile(file, Buffer.from(await res.arrayBuffer()));
     saved.push({ file: path.join(pwd, file), type: res.headers.get('content-type') });
   }
-  return { ok: true, age: found.age, saved };
+  return { ok: true, saved };
 };
 ```
 
@@ -84,7 +82,7 @@ Call it with the number of images you generated:
 console.log(JSON.stringify(await magnificDownload({ promptPart: '<phrase from your prompt>', count: 2, name: '<file prefix>' })));
 ```
 
-Pick a phrase no other card shares. If the prompt repeats one already in the feed, follow "Repeated prompts" below.
+Pick a phrase no other card shares. If the prompt repeats one already in the feed, follow "Telling your new card from an older one" below.
 
 - `ok: true`: the files are in the REPL session folder, listed in `saved`. Copy them with Bash to where the user wants them. Measure each file (`file`, or `sips -g pixelWidth -g pixelHeight`) and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
 - `reason: 'pending'`: wait (`await sleep(60000)`) and call again. If the card is still pending after a few minutes, tell the user. Never regenerate.
@@ -93,19 +91,23 @@ Pick a phrase no other card shares. If the prompt repeats one already in the fee
 
 The helper ends a card at the next text line that is not a relative time, and knows a relative time by its trailing "ago". If it keeps saying pending while your card shows images, that line has changed: read the card's lines and adjust `isTime`.
 
-## Repeated prompts
+## Telling your new card from an older one
 
-The helper takes the first card from the top that holds your phrase. When an older card carries the same prompt, that can be the older card, for example while yours has not rendered yet. Each result carries the card's relative time as `age`.
+The helper takes the first card from the top that holds your phrase. When an older card carries the same phrase, that can be the older card, for example while yours has not rendered yet. The card's relative time ("46 seconds ago") cannot tell them apart: it can stay frozen long after the card was made.
 
-1. Right after the Generate click, in the same call, snapshot the feed and find the card that appeared after the click: your prompt, no image yet, at the top. Note its time.
-2. Download only after that card was seen. Check that the returned `age` fits the time since your click. An older `age` means the helper matched an earlier card: discard those files and call again later.
+Use one of these, in this order of preference:
 
-A coding agent with the Magnific MCP can find the new creation there instead, read-only and without credits: `creations_search`, then `creations_get`. The Aside agent cannot reach the MCP.
+1. **A prompt no other card holds.** Before the run, agree with the user on a short run tag to put in each prompt, or check the prompts already differ from each other and from the feed. Then `promptPart` matches only your card. This is the method that has worked in a real run.
+2. **The feed's top card before Generate.** In the call that clicks Generate, just before the click, note the top card without printing its content: its first image's `src` without the query string. After the click, your card is the first new card above it. Untested so far: check it on a card you know before relying on it.
+3. **The Magnific MCP**, for a coding agent that has it: find the new creation read-only with `creations_search`, then `creations_get`. It spends no credits. The Aside agent cannot reach the MCP. Untested for this purpose so far.
+
+When none of these fits, tell the user you cannot tell the cards apart, and let them choose.
 
 The hover "Download" button also works and saves to `~/Downloads`, but hovering re-renders the feed and stales every ref, so the helper leaves it alone.
 
-## Dated examples (2026-09-23)
+## Dated examples (2026-09-23 unless marked; not rules)
 
 - A Seedream 5 Pro image at 1.5K downloaded as a 1536×1536 PNG, while its card's details reported 2048 px. Its preview was an 800×800 JPEG. The URL without `&preview=1` returned the same bytes as the Download button.
 - The helper found a card about forty cards down the feed in 23 s, and reported a missing prompt in 32 s. Asked for 3 images on a 2-image card, it returned "found 2 of 3" in 7 s. It has not been run on a card still running; those showed "Hang tight" in their text.
 - A re-run prompt already in the feed made the helper match the older card.
+- 2026-09-24: a card's relative time still read "46 seconds ago" long after the card was made. A unique prompt per image found each card in that run.

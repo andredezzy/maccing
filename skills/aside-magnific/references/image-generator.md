@@ -13,7 +13,31 @@ console.log(panel);
 
 Seen top to bottom: the model picker button (under a "Model" label), references ("Style", "Character", "Add"), the prompt textbox, a count group (−, `status: "<n>"`, +), an aspect-ratio button ("16:9"), a quality button ("1.5K · Fast"), the Unlimited switch ("ON"/"OFF"), Generate, and a line of Unlimited text.
 
-**Before changing anything, write down the model, aspect ratio, quality, count and prompt.** Restore all of them at the end.
+**Before changing anything, write down the model, aspect ratio, quality, count and prompt.** Restore all of them at the end. The helper below reads them. Define it alone in its own cell:
+
+```js
+// Reads the generation panel's current values. Reads only: no clicks.
+globalThis.magnificSettings = async function () {
+  const { tree } = await snapshot(page, { interactive: true, selector: 'aside' });
+  const buttons = [...tree.matchAll(/button "([^"]*)" \[ref=e\d+\]/g)].map((m) => m[1]);
+  // The quality label is a resolution, then maybe a level: "1.5K · Fast", "2K•High", "1K".
+  // The separator and the spaces around it vary, so only the resolution is anchored.
+  const quality = buttons.find((b) => /^\d+(?:[.,]\d+)?\s*K\b/i.test(b)) ?? null;
+  const [, resolution = null, level = null] = quality?.match(/^(\d+(?:[.,]\d+)?\s*K)\b[^\p{L}\p{N}]*(.*)$/iu) ?? [];
+  return {
+    url: new URL(page.url()).pathname,
+    model: tree.match(/text: "Model"\n\s+- button "([^"]*)"/)?.[1] ?? null,
+    count: tree.match(/status: "(\d+)"/)?.[1] ?? null,
+    aspect: buttons.find((b) => /^\d+(?:\.\d+)?\s*:\s*\d+/.test(b)) ?? null,
+    quality,
+    resolution: resolution?.replace(/\s+/g, '') ?? null,
+    level: level || null,
+    references: tree.match(/References\s*\d+\s*\/\s*\d+/)?.[0] ?? null,
+  };
+};
+```
+
+Compare `resolution` and `level`, not the whole `quality` label: the separator between them has changed. `quality: null` means the panel shows no quality button; some models have none. `count: null` means the panel showed no count status. Read the prompt separately (see "Prompt").
 
 ## Model, aspect and quality
 
@@ -36,21 +60,30 @@ console.log(d1);
 
 The − and + buttons sit either side of `status: "<n>"`. Set it to exactly the number the user asked for. The minus button is disabled at 1, and the plus button is disabled at the current maximum.
 
-The maximum depends on the model, its settings and Unlimited, so read it live: after choosing the settings, check whether + is disabled. Under Unlimited it can be 1. When it is below what the user asked for, plan one Generate per image, each after the previous batch finishes (`unlimited.md`, "One batch at a time"). Each of those cards repeats the prompt, so download each one as `creations.md`, "Repeated prompts", says.
+The maximum depends on the model, its settings and Unlimited, so read it live: after choosing the settings, check whether + is disabled. Under Unlimited it can be 1. When it is below what the user asked for, plan one Generate per image, each after the previous batch finishes (`unlimited.md`, "One batch at a time"). Those cards would share one prompt, so plan how to tell them apart before the first Generate (`creations.md`, "Telling your new card from an older one").
 
 ## Prompt
 
-The prompt is a rich-text editor:
+The prompt is a rich-text editor.
+
+**Close any popover first.** A popover can open over the prompt box mid-run, such as the Unlimited priority-usage one (`unlimited.md`, "Priority usage"). Keys typed then land in the popover or nowhere. Before typing, take the whole interactive tree and look for a `- dialog:`. If one is open, read what it says, close it with its close button or Escape, and snapshot again.
 
 ```js
-const promptBox = page.locator('.tiptap, [contenteditable=true], textarea').first();
+const promptBox = page.locator('aside .tiptap, aside [contenteditable=true], aside textarea').first();
 await promptBox.click();
 await page.keyboard.press('Meta+A');
 await page.keyboard.press('Backspace');
 await page.keyboard.insertText(promptText);
 ```
 
-Check the panel snapshot afterwards: the textbox's name should carry your prompt. Typing "@" may open a reference picker. A cleared box can still hold a newline; the snapshot then shows an unnamed textbox and a disabled Generate, as it does when empty.
+**Read the prompt back before every Generate**, from the editor itself, and compare it with what you meant to type. On any difference, stop: do not click Generate.
+
+```js
+const typed = await promptBox.evaluate((el) => el.innerText ?? el.value);
+if (typed.trim() !== promptText.trim()) throw new Error('prompt read-back differs: ' + JSON.stringify(typed));
+```
+
+Typing "@" may open a reference picker. A cleared box can still hold a newline; the snapshot then shows an unnamed textbox and a disabled Generate, as it does when empty.
 
 ## References
 
@@ -93,7 +126,9 @@ Files of about 100 KB worked. Larger files are untested.
 
 See SKILL.md, "Spending credits". For no-credit work, the only click is `magnificGenerate` from `unlimited.md`. The result arrives in the Creations feed; see `creations.md`.
 
-## Dated examples (2026-09-23)
+## Dated examples (2026-09-23 unless marked; not rules)
 
 - The reference counter's limit read /14 on Nano Banana 2 and /8 on Auto. An earlier run the same day saw /10.
 - With Nano Banana 2 at 1K · Fast and Unlimited on, + was disabled at 1. On Auto, + was disabled at 4.
+- 2026-09-24: labels such as "1.5K · Fast" broke a helper whose pattern expected a whole-number resolution (`\dK`). On Auto the panel showed no quality button at all, only the aspect ("16:9"), the switch and Generate.
+- 2026-09-24: the priority-usage popover opened over the prompt box during a run. Reading the prompt back caught it before a Generate.

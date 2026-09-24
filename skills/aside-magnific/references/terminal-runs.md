@@ -16,13 +16,13 @@ The user must say yes after they see the cost, and the tab is gone by then. So a
 
 1. **Read call.** Set the model, settings and count, type the prompt, add the references. Read the cost the panel shows. Print the account, model, settings, count, reference count and cost. Close the tab without clicking Generate.
 2. **Ask.** Show the user those values and the prompt, and wait for their yes. A yes covers exactly those values.
-3. **Generate call.** Open a new tab. Check the model and settings in the panel still match. Type the prompt again and add the references again. Read the cost again. If any value differs from what the user approved, close the tab and ask again. Otherwise click Generate, then find your new card in the feed (`creations.md`, "Repeated prompts") and close the tab.
+3. **Generate call.** Open a new tab. Check the model and settings in the panel still match. Type the prompt again, read it back (`image-generator.md`, "Prompt"), and add the references again. Read the cost again. If any value differs from what the user approved, close the tab and ask again. Otherwise click Generate, then find your new card in the feed (`creations.md`, "Telling your new card from an older one") and close the tab.
 
 Never hold a tab open across the question with `aside "<url>"`: it may take over a tab someone else uses.
 
 ## Several images
 
-Plan the calls before the first one, and tell the user the plan.
+Plan the calls before the first one, and tell the user the plan. The plan says how each new card will be told from the others (`creations.md`, "Telling your new card from an older one"); a run tag in the prompt needs the user's yes.
 
 - **The count covers it** (paid work, or Unlimited with + still enabled): one Generate with the count set to the number asked for.
 - **The count stops short** (Unlimited often caps it at 1): one Generate per call. Wait until that card has its images before the next Generate (`unlimited.md`, "One batch at a time"). Four images are at least four Generate calls, with waiting calls between them.
