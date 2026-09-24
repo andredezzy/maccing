@@ -5,7 +5,7 @@ What held on real sites, for the Aside agent's REPL tool and for one-shot `aside
 ## Refs and snapshots
 
 - **Every snapshot renumbers the refs.** Forms re-render after each input. Snapshot, act, snapshot again. Never reuse a ref across snapshots.
-- **Navigate, then read.** A snapshot right after `page.goto()` or a reload, in the same call, has failed with "Cannot find context with specified id". Snapshot in the next call, or after `await sleep(3000)`. If it fails anyway, snapshot again.
+- **Navigate, then read.** A snapshot right after `page.goto()` or a reload, in the same call, has failed with "Cannot find context with specified id", and so has `getByRole`. Snapshot in the next call, or after `await sleep(3000)`. If it fails anyway, snapshot again. A CSS locator, such as `page.locator('button', { hasText: '…' })`, worked where `getByRole` failed.
 - **`page.url()` can lag** after an in-app navigation. Read the current URL from `listBrowserTabs()`.
 - **Hidden controls are absent** from a normal snapshot. A control that shows only on hover, or behind a show-more button, needs `showHidden: true` or the button clicked before you conclude it does not exist.
 - **Parse a tree with `tree.match()` or `tree.matchAll()`.** `split()`, `slice()` and `substring()` on a tree print a "hiding context" warning.
@@ -31,4 +31,5 @@ A logged-in site often shows work that is not the user's: a shared feed, a team'
 
 ## Dated examples (2026-09-24; not rules)
 
+- On the Shopee Seller Centre, `getByRole` right after `page.goto()` failed with "Cannot find context with specified id"; `page.locator('button', { hasText: '…' })` in the same call worked.
 - On `u0` the window was 1440×900 at a device pixel ratio of 2. A 390×844 iframe reported 390×844 inside, and its clipped screenshot measured 780×1688 px.

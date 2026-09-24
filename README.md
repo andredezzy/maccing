@@ -64,7 +64,7 @@ npx skills add andredezzy/maccing -g
 | growth | ycloud-api | YCloud v2 REST API reference |
 | aside | aside | Parent for every site skill driven through the [Aside](https://aside.com) browser: loads Aside's official `aside-browser` skill first, and lets an Aside built-in site skill lead where one exists (listed or under `builtin/site-specific/`); then profiles, one-shot `aside repl`, a background session that keeps its tab across calls, getting files in, checking local pages, adding a site skill |
 | aside | magnific | The Magnific web app: account check, one message for every question, Image Generator, no-credit Unlimited generation behind a guard that checks the switch, model and settings, prompt pitfalls, reusing uploaded references, the Creations feed with an anchor that tells your new card from older ones, and full-size downloads that refuse a preview, with the REPL helpers shipped one file each in [`scripts/`](skills/aside-magnific/scripts/) |
-| aside | shopee-seller | Shopee Brasil Seller Centre: account check, guarded saves, listings, listing copy, shop profile, diagnostics |
+| aside | shopee-seller | Shopee Brasil Seller Centre: account check, guarded saves, listings (guided tours, pre-filled attributes, image replacement, a Quill description), listing copy, shop profile, diagnostics, with the REPL helpers shipped one file each in [`scripts/`](skills/aside-shopee-seller/scripts/) and a Bun check of live image order |
 | notion | notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
 | google-workspace | google-workspace | Google Workspace (Calendar/Gmail/Drive/…) via the bundled `workspace` MCP — setup, OAuth, account isolation, tool reference |
 

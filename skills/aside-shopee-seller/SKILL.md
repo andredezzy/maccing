@@ -31,6 +31,7 @@ For any other area, follow the left nav from a snapshot. Never guess a URL.
 | Listing copy: writing or reviewing a title, description or specifications | `references/listing-copy.md` |
 | Product diagnostics: a listing blocked or getting no traffic, the optimiser's quality tasks | `references/diagnostics.md` |
 | Shop profile: name, logo, description, phone, and its password gate | `references/shop-profile.md` |
+| The REPL helpers in `scripts/` (one per file) and the image-order check | `references/helpers.md` |
 | A store logged in on another Aside profile | `../aside/references/profiles.md` |
 | Driving from a terminal: one call per session, getting an image or video in | `../aside/references/terminal.md` |
 | Anything else (orders, finances, marketing, chat, other settings) | No reference yet. Snapshot the page, read it, and apply the rules below. |
@@ -77,9 +78,9 @@ Quote a fee, deadline or rule only from a page you read in this task.
 The parent's `../aside/references/repl.md` covers stale refs, reading after a navigation, a lagging `page.url()` and the unsupported APIs. On top of that:
 
 - **Attach the existing tab.** Prefer `listBrowserTabs()` → `attachBrowserTab(<targetId>)` on a `seller.shopee.com.br` tab. `page.goto(url)` works inside it. Open a tab only when none exists. A tab holding the user's open form is theirs: for a read, open, read and close a tab of your own.
-- **Long pages render sections empty.** A section can show as a bare `region`, and one scrolled away can go empty again, even though `aside guide repl` says no scroll is needed. The section tab bar can vanish too. To act on a section, call `scrollIntoViewIfNeeded()` on something inside it, or scroll with the mouse wheel (`await page.mouse.wheel(0, 800)`) until its field shows, then snapshot. To read a listing form's values, use `shpRead()` from `references/listings.md`: it reads the DOM, not the snapshot.
+- **Long pages render sections empty.** A section can show as a bare `region`, and one scrolled away can go empty again, even though `aside guide repl` says no scroll is needed. The section tab bar can vanish too. To act on a section, call `scrollIntoViewIfNeeded()` on something inside it, or scroll with the mouse wheel (`await page.mouse.wheel(0, 800)`) until its field shows, then snapshot. To read a listing form's values, use `shpRead()` (`references/helpers.md`): it reads the DOM, not the snapshot.
 - **Hidden fields.** Some sections hide fields behind a show-more button. Expand it before you conclude that a field does not exist.
-- **Overlays.** A promo panel and a password manager overlay can sit over the page. Neither always shows as a `dialog`. `Escape` clears both. If a click misses, check the snapshot for one.
-- **Formatted inputs.** Money, stock and measurement inputs reformat themselves. `fill()` throws on them, and keyboard typing after a click can land in another field. See `references/listings.md` for the method that works. Always read the value back.
+- **Overlays.** A password manager overlay can sit over the page; `Escape` clears it. Guided tours over the listing form do not close with `Escape`, swallow clicks and typing, and can make a click open the category picker unseen: dismiss them first (`references/listings.md`, "Open the form"). None always shows as a `dialog`. If a click or typing misses, check for one.
+- **Typing.** `page.keyboard.insertText` can fail silently here, and money, stock and measurement inputs reformat themselves: `fill()` throws on them. See `references/listings.md`, "Fill by input type", for what works. Always read the value back.
 - **Custom switches.** Shopee's `.eds-switch` is not an ARIA switch, so the snapshot does not list it. Read its state from the class: `--open` means on, `--close` means off.
 - **Uploads.** `setInputFiles` accepts only files inside the REPL session folder. From a terminal, bring each file in within the call that uploads it (`../aside/references/terminal.md`). Upload one file at a time, and wait for each to finish (`references/listings.md`).

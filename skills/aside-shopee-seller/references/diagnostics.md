@@ -19,7 +19,7 @@ const shpRows = await page.locator('a[href*="/portal/product/"]').evaluateAll((a
 console.log(JSON.stringify(shpRows, null, 1));
 ```
 
-An empty row text means Shopee renamed the row classes: take a screenshot and inspect the DOM before trusting the read. When the list has more than one page, read each one before saying no other listing is blocked. Someone may be fixing listings while you read: read the list again just before you report.
+A row's text can leave out the price: read a price from the listing's edit form, never from this list. An empty row text means Shopee renamed the row classes: take a screenshot and inspect the DOM before trusting the read. When the list has more than one page, read each one before saying no other listing is blocked. Someone may be fixing listings while you read: read the list again just before you report.
 
 ## Read one listing's tasks
 
@@ -46,12 +46,14 @@ The fix belongs to the user's listing record. Propose it and change the listing 
 Inference from two dated cases, not a Shopee rule: the sharpness check weighs the cover most, and a low-contrast cover reads as soft. Upscaled photos padded with a blurred copy of themselves failed it.
 
 1. Try a sharp, higher-contrast cover first. Move soft images to the end.
+   A cover Shopee flagged for one listing stays off that listing's cover everywhere: when the same listing goes to another store, pick a cover that cleared. Tell the user when the listing's record still names the flagged one first.
 2. Keep the original resolution, pad with a plain background, and judge sharpness at 100 % zoom.
 3. After the save, re-read the panel with the icon-class script above.
 
-## Dated examples (2026-09-23; not rules)
+## Dated examples (2026-09-23 and 2026-09-24; not rules)
 
 - A store in profile `u1`, product list at `/portal/product/list/live/all`. Column "Diagnóstico do Produto". Row endings read "0 Vendas (30 Dias) 0 Impressões (30 Dias) 0 Aumento De Tráfego Para Novo Item (90 Dias)", or "… Tráfego Bloqueado Para Novo Item (90 Dias) Ajustar". "Ajustar" opened the edit form in a popup with `?pageEntry=product_list`.
 - The panel read "Otimizador de Produtos", "Para itens criados há até 90 dias, conclua todas as tarefas qualificadas para obter tráfego básico: faltam 90 dias". Tiers "Qualificado" (Imagem n / 5, Título n / 4, Descrição n / 1) and "Excelente" (Enviar vídeo). The image criteria: "Envie pelo menos 2 imagens", "Tamanho ajustado mostrando o produto completo, sem bordas/margens brancas", "Envie imagens nítidas", "Garanta um fundo limpo", "Nenhuma marca d’água cobrindo o produto". A passing icon carried `icon-finished`.
 - At first read, two of ten listings were blocked, both on "Envie imagens nítidas" (Imagem 4 / 5). Their photos were the author's 1000 px originals, upscaled to 1500 px and padded with a blurred copy of the photo. Similar listings with sharper covers passed.
 - How those two cleared. One (a figurine of Jesus) cleared at once when a sharp generated scene became the cover and the enlarged, blur-padded author photos moved to the end. The other (a Cristo Redentor statue) did not clear with the same move, nor after two more author photos were dropped. It cleared only when the cover changed from a white statue on a white studio background to a higher-contrast scene in warm altar light.
+- 2026-09-24, from the runs that copied listings to two more stores: the covers flagged for "Envie imagens nítidas" were a white piece on a white studio backdrop, and author photos padded or upscaled. A sharp, high-contrast scene cover cleared the flag.
