@@ -25,18 +25,18 @@ Keep the automated footprint small:
 
 The signal sits in the Generate area and depends on the model and its settings:
 
-- the Unlimited switch (drawn "∞"), with an accessible name meaning on, and not disabled;
+- the Unlimited switch: the panel button that holds the ∞ icon, with a label meaning on, and not disabled;
 - a line of text under Generate announcing unlimited generations;
 - sometimes the Generate button's own accessible name, which then mentions Unlimited.
 
 A disabled switch reading off means this model at these settings charges credits. An enabled switch reading off may be turned on: `SKILL.md`, "Spending credits", says when.
 
-Define the helper alone in its own cell:
+The guard reads the switch with `magnificUnlimitedSwitch` from `image-generator.md` ("Read the panel, not the page"), never by a button's name alone, which any panel button could match. Define that one first, then this helper, alone in its own cell:
 
 ```js
-// Clicks Generate only while the Unlimited switch reads on (and is enabled)
-// and the Unlimited text is shown. It reads the generation panel only
-// (the <aside>), so feed items cannot match. Pass the labels the switch
+// Clicks Generate only while the Unlimited switch (the ∞ button) reads on and
+// is enabled, and the Unlimited text is shown. It reads the generation panel
+// only (the <aside>), so feed items cannot match. Pass the labels the switch
 // and the text show when Unlimited is on. dryRun checks without clicking.
 globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true }) {
   const { tree } = await snapshot(page, { interactive: true, selector: 'aside' });
@@ -47,13 +47,14 @@ globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true 
     const hasPrompt = /- textbox "[^"]+"/.test(tree);
     return { ok: false, reason: hasPrompt ? 'Generate is disabled with a prompt in: the queue is probably full' : 'Generate is disabled: the prompt is empty' };
   }
-  const switchIsOn = [...tree.matchAll(/button "([^"]*)" \[ref=e\d+\]( \[disabled\])?/g)]
-    .some((m) => m[1] === switchOn && !m[2]);
+  const unlimited = await magnificUnlimitedSwitch();
+  if (!unlimited) return { ok: false, reason: 'No Unlimited switch (no panel button holds the ∞ icon)' };
+  const switchIsOn = unlimited.label === switchOn && unlimited.enabled;
   // Plain text can be missing from the interactive tree, so read the full panel too.
   const { tree: full } = await snapshot(page, { selector: 'aside' });
   const signalShown = [tree, full].some((t) => t.includes(`text: "${signal}"`));
   if (!switchIsOn || !signalShown) {
-    return { ok: false, reason: `Unlimited signal absent (switch on: ${switchIsOn}, text shown: ${signalShown})` };
+    return { ok: false, reason: `Unlimited signal absent (switch: ${JSON.stringify(unlimited)}, text shown: ${signalShown})` };
   }
   if (dryRun) return { ok: true, clicked: false };
   await page.locator(generate[1]).click();
@@ -61,10 +62,10 @@ globalThis.magnificGenerate = async function ({ signal, switchOn, dryRun = true 
 };
 ```
 
-Then call it with the labels the switch and the text carry when Unlimited is on. Take them from a snapshot where the switch was on and enabled, and keep them for the whole run. From a terminal, pass them as constants recorded in an earlier call. A label read just now can be the off one, and the guard would then pass on it.
+Then call it with the labels the switch and the text carry when Unlimited is on. Take them from a read where the switch was on and enabled: the switch label from the `unlimited` field of `magnificSettings()`, the text from a full snapshot of the panel (`snapshot(page, { selector: 'aside' })`). Keep them for the whole run. From a terminal, pass them as constants recorded in an earlier call. A label read just now can be the off one, and the guard would then pass on it.
 
 ```js
-console.log(await magnificGenerate({ signal: '<Unlimited text under Generate>', switchOn: '<switch name when on>', dryRun: false }));
+console.log(await magnificGenerate({ signal: '<Unlimited text under Generate>', switchOn: '<switch label when on>', dryRun: false }));
 ```
 
 `ok: false` means stop and tell the user, with one exception: a full queue. Do not click Generate any other way for no-credit work.
@@ -79,7 +80,7 @@ This changes often. Check it live every time.
 2. **The model picker** shows a credit range beside paid entries. An entry without one is only a candidate: the switch decides. The quality dialog may show a credit figure or an "Unlimited" hint, but it has disagreed with the switch.
 3. **Magnific's docs** give a map: https://www.magnific.com/ai/docs/unlimited-models (models per plan) and https://www.magnific.com/ai/unlimited/changes. Open them in a tab and read the snapshot.
 
-A lower resolution or a faster "thinking" level often keeps Unlimited on where a higher one turns it off.
+A lower resolution or a faster "thinking" level often keeps Unlimited on where a higher one turns it off. Dropping one changes the output the user gets, so it is their call. Tell them the settings they asked for, the settings that keep the signal, and that keeping theirs costs credits. Change only on their yes. When they already asked for no-credit work at whatever quality it takes, go ahead, and name the settings you used in the report.
 
 **When the chosen model shows no signal** at any setting, stop and tell the user. Name the picker entries that carry no credit range as candidates, and switch to one only on their yes: the model is part of what they asked for.
 
@@ -98,7 +99,7 @@ Unlimited has a priority allowance that resets on a date. The app can show it in
 
 ## Dated examples (2026-09-23 unless marked, Premium+ plan; not rules)
 
-- The switch was drawn "∞" with the accessible name "ON" or "OFF". The text under Generate read "Unlimited generations". The Generate button's name was "Generate", "Generate Unlimited" or "GenerateUnlimited".
+- The switch showed the ∞ icon and the label "ON" or "OFF". The text under Generate read "Unlimited generations". The Generate button's name was "Generate", "Generate Unlimited" or "GenerateUnlimited".
 - Seedream 5 Pro was Unlimited at 1.5K · Fast. At 2K · High the switch went OFF and disabled. The docs table did not list this model.
 - Google Nano Banana 2 was OFF and disabled at 2K · Fast, and ON at 1K · Fast.
 - Picker entries such as "Cinematic … 75 - 150" and "GPT 2.5 … 15 - 1000" carried credit ranges. The Unlimited-eligible ones carried none.

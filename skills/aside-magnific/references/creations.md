@@ -10,7 +10,7 @@ A card is a text line with the prompt, a relative time on its own line ("3 minut
 
 ## Download your own results
 
-The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small JPEG; without the flag, the same signed URL serves the full-size PNG. It never hovers or clicks, so the feed does not re-render under it.
+The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small preview; without the flag, the same signed URL serves the full-size file. It never hovers or clicks, so the feed does not re-render under it.
 
 Define it alone in its own cell:
 
@@ -63,14 +63,24 @@ globalThis.magnificDownload = async function ({ promptPart, count, name = 'magni
   if (found.sources.length === 0) return { ok: false, reason: 'pending' };
   if (found.sources.length < count) return { ok: false, reason: `found ${found.sources.length} of ${count} images; call again` };
 
+  // The file's own first bytes name its format; the content type is the fallback.
+  const extensionOf = (bytes, type) => {
+    const head = bytes.subarray(0, 12);
+    if (head.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) return 'png';
+    if (head.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'jpg';
+    if (head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP') return 'webp';
+    return type?.match(/^image\/([a-z0-9]+)/)?.[1] ?? 'bin';
+  };
   const saved = [];
   for (let i = 0; i < found.sources.length; i++) {
     // Without &preview=1 the same signed URL serves the full-size file.
     const res = await fetch(found.sources[i].replace('&preview=1', ''));
     if (!res.ok) return { ok: false, reason: `fetch ${res.status}`, saved };
-    const file = `./${name}-${i + 1}.png`;
-    await fs.writeFile(file, Buffer.from(await res.arrayBuffer()));
-    saved.push({ file: path.join(pwd, file), type: res.headers.get('content-type') });
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const type = res.headers.get('content-type');
+    const file = `./${name}-${i + 1}.${extensionOf(bytes, type)}`;
+    await fs.writeFile(file, bytes);
+    saved.push({ file: path.join(pwd, file), type });
   }
   return { ok: true, saved };
 };
@@ -84,7 +94,7 @@ console.log(JSON.stringify(await magnificDownload({ promptPart: '<phrase from yo
 
 Pick a phrase no other card shares. If the prompt repeats one already in the feed, follow "Telling your new card from an older one" below.
 
-- `ok: true`: the files are in the REPL session folder, listed in `saved`. Copy them with Bash to where the user wants them. Measure each file (`file`, or `sips -g pixelWidth -g pixelHeight`) and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
+- `ok: true`: the files are in the REPL session folder, listed in `saved`, each named with the extension its bytes show (`.bin` when neither the bytes nor the content type name a format: check it with `file` before you rename it). Copy them with Bash to where the user wants them. Measure each file (`file`, or `sips -g pixelWidth -g pixelHeight`) and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
 - `reason: 'pending'`: wait (`await sleep(60000)`) and call again. If the card is still pending after a few minutes, tell the user. Never regenerate.
 - `found n of m images`: the feed showed only part of the card. Call again. If it repeats, check `count` against what you generated.
 - `no card`: the feed never showed your prompt. Check the phrase against what you typed.
@@ -99,7 +109,7 @@ Use one of these, in this order of preference:
 
 1. **A prompt no other card holds.** Before the run, agree with the user on a short run tag to put in each prompt, or check the prompts already differ from each other and from the feed. Then `promptPart` matches only your card. This is the method that has worked in a real run.
 2. **The feed's top card before Generate.** In the call that clicks Generate, just before the click, note the top card without printing its content: its first image's `src` without the query string. After the click, your card is the first new card above it. Untested so far: check it on a card you know before relying on it.
-3. **The Magnific MCP**, for a coding agent that has it: find the new creation read-only with `creations_search`, then `creations_get`. It spends no credits. The Aside agent cannot reach the MCP. Untested for this purpose so far.
+3. **The Magnific MCP**, for a coding agent that has it: find the new creation read-only with `creations_search`, then `creations_get`. It spends no credits. First check the MCP is signed in to the same account (`SKILL.md`, "The Magnific MCP"). The Aside agent cannot reach the MCP. Untested for this purpose so far.
 
 When none of these fits, tell the user you cannot tell the cards apart, and let them choose.
 

@@ -35,7 +35,7 @@ Open a reference when the task needs it:
 
 For any other tool (video, audio, 3D, upscaler, Spaces, editing), snapshot the page and read its controls. Nothing here describes those tools yet, so don't assume they match the Image Generator.
 
-**The Magnific MCP** exists for coding agents; the Aside agent cannot reach it. Its generation tools always spend credits, even on models the plan covers without limit. Its read tools, such as `creations_search` and `creations_get`, spend none.
+**The Magnific MCP** exists for coding agents; the Aside agent cannot reach it. Its generation tools always spend credits, even on models the plan covers without limit. Its read tools, such as `creations_search` and `creations_get`, spend none. It can be signed in to another account than the web app: before trusting any MCP result, compare the email `account_profile` returns with the one the account check read (below). If they differ, leave the MCP out and tell the user.
 
 ## Nothing volatile is fixed here
 
@@ -46,7 +46,7 @@ Models, credit costs, plans, what Unlimited covers and control labels all change
 - **List the tabs first**, every time you come back to the app: `listBrowserTabs()`. A tab you opened earlier can be gone, closed by the user or another session. If yours is missing, open a new one and restore your settings.
 - **Open your own tab.** Other sessions may be working in an existing Magnific tab; never attach to one you didn't open. Use `openTab('https://www.magnific.com/app')` and pick the tool from the left navigation, or the tool's own URL if you know it (2026-09-23: the Image Generator was `/app/ai-image-generator`).
 - **From a terminal**, your tab closes when the call ends (`../aside/references/terminal.md`). So each call opens its own tab and does a whole step in it. The app keeps model settings across tabs; a typed prompt, a reference or an open dialog is lost. `references/terminal-runs.md` plans the calls.
-- **Restore what you change.** A new tab opens with each model's settings as last used in any tab, so restore them, the Unlimited switch included, before your task's last tab closes.
+- **Restore what you change.** A new tab opens with each model's settings as last used in any tab. Record a baseline on opening and another after picking your model, and restore both before your task's last tab closes: your model's settings, the Unlimited switch included, then the model the panel opened on (`references/image-generator.md`, "Read the panel, not the page").
 - Close your tab with `closeTab(page)` when done.
 
 ## Layout shared across tools
