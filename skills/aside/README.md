@@ -1,6 +1,6 @@
 # aside
 
-Site skills that drive websites through the [Aside](https://aside.com) browser, in the user's logged-in sessions. Aside is required: every skill here stops when it is missing.
+Site skills that drive websites through the [Aside](https://aside.com) browser, in the user's logged-in sessions. Every skill here first loads Aside's official `aside-browser` skill, and stops when Aside is missing.
 
 ## Skills
 
@@ -15,7 +15,7 @@ skills/
 
 | Skill | Parent | Purpose |
 |-------|--------|---------|
-| **aside** | — | **What every Aside site skill shares**: install and update, profiles and accounts, one-shot `aside repl` sessions, getting files in, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
+| **aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill and its built-in site skills first, profiles and accounts, one-shot `aside repl` sessions, getting files in, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
 | aside-magnific | aside | Magnific (formerly Freepik): the Image Generator, no-credit Unlimited generation behind a guard, the shared Creations feed and full-size downloads |
 | aside-shopee-seller | aside | Shopee Brasil Seller Centre: account check, guarded saves, listings, listing copy, shop profile, product diagnostics |
 

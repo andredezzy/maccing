@@ -2,6 +2,8 @@
 
 A site skill teaches Aside one website. It is a child of this skill: it holds what is true of that site, and points here for everything that is true of Aside.
 
+Write one only for a site Aside does not ship a skill for. Check `aside skills list` and each profile's `skills/builtin/` first (the parent's Iron Law 1).
+
 ## Where it lives
 
 A folder directly under `skills/`, named `aside-<site>`, holding `SKILL.md` and, when the detail outgrows it, `references/`. List it in this skill's "Child skills" line, in [`../README.md`](../README.md), in the repository's root `README.md` and in `.claude-plugin/plugin.json`.
@@ -23,7 +25,7 @@ autoInject:
 
 ## The body
 
-1. A `> **Depends on:** the \`aside\` skill` line naming the parent references this site uses, as `../aside/references/<file>.md`.
+1. The `> **Depends on:**` line, copied from an existing child. It loads `aside` first and runs its Iron Laws, so Aside's official `aside-browser` skill comes before this one. Add the parent references this site uses, as `../aside/references/<file>.md`.
 2. The site's canonical URLs. For anything else, follow the site's navigation; never guess a URL.
 3. The account check: how to confirm which account is logged in before any action.
 4. The actions others can see, or that spend money, and the guard before each one (the parent's rule 4).
@@ -34,7 +36,7 @@ Keep `SKILL.md` lean and the detail in references. Every reference ends with a "
 
 ## Before it ships
 
-Give a fresh agent only the parent and the new child, and ask it how it would do the site's riskiest task. It must name the account check, the guard and the right parent reference without acting. Fix what it misses.
+Give a fresh agent only the parent, the new child and the installed `aside-browser` SKILL.md, and ask it how it would do the site's riskiest task. It must name loading and updating `aside-browser`, the built-in skill check, the account check, the guard and the right parent reference, without acting. Fix what it misses.
 
 ## The Aside app's copy
 

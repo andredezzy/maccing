@@ -62,7 +62,7 @@ npx skills add andredezzy/maccing -g
 | growth | whatsapp | WhatsApp Business Platform / Cloud API reference |
 | growth | ycloud | YCloud BSP operations |
 | growth | ycloud-api | YCloud v2 REST API reference |
-| aside | aside | Parent for every site skill driven through the [Aside](https://aside.com) browser (Aside required): install and update, profiles, one-shot `aside repl`, getting files in, adding a site skill |
+| aside | aside | Parent for every site skill driven through the [Aside](https://aside.com) browser: loads Aside's official `aside-browser` skill and built-in site skills first, then profiles, one-shot `aside repl`, getting files in, adding a site skill |
 | aside | magnific | The Magnific web app: Image Generator, no-credit Unlimited generation behind a guard, Creations feed and full-size downloads |
 | aside | shopee-seller | Shopee Brasil Seller Centre: account check, guarded saves, listings, listing copy, shop profile, diagnostics |
 | notion | notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |

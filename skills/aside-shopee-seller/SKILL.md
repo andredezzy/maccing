@@ -11,7 +11,7 @@ autoInject:
 
 Drive the Seller Centre in Aside, in the user's logged-in session. There is no API global for it: read with `snapshot()` and act on refs.
 
-> **Depends on:** the `aside` skill (Aside required, profiles, one-shot `aside repl`, REPL behaviour). ALWAYS load it first. Its files: `../aside/SKILL.md` and `../aside/references/`. Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
+> **Depends on:** the `aside` skill, and through it Aside's official `aside-browser` skill. ALWAYS load `aside` first and follow its Iron Laws (update and load `aside-browser`, prefer an Aside built-in skill for the site) before this skill's steps. Its files: `../aside/SKILL.md` and `../aside/references/` (profiles, one-shot `aside repl`, REPL behaviour). Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
 
 ## Canonical URLs
 

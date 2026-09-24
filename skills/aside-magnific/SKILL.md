@@ -19,7 +19,7 @@ autoInject:
 
 Umbrella skill for https://www.magnific.com/app, driven through Aside. It covers what works the same across the app's tools.
 
-> **Depends on:** the `aside` skill (Aside required, profiles, one-shot `aside repl`, REPL behaviour). ALWAYS load it first. Its files: `../aside/SKILL.md` and `../aside/references/`. Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
+> **Depends on:** the `aside` skill, and through it Aside's official `aside-browser` skill. ALWAYS load `aside` first and follow its Iron Laws (update and load `aside-browser`, prefer an Aside built-in skill for the site) before this skill's steps. Its files: `../aside/SKILL.md` and `../aside/references/` (profiles, one-shot `aside repl`, REPL behaviour). Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
 
 **Step 0, whenever Unlimited is in play** (the user wants no credits spent, or the Unlimited switch is on): read `references/unlimited.md` in full before the first Generate click. It holds Magnific's terms on automation, the risk accepted, and the guard helper.
 

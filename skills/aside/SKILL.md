@@ -1,28 +1,44 @@
 ---
 name: aside
-description: Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "stale ref", "new Aside skill".
+description: Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "aside-browser", "aside skills", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "stale ref", "new Aside skill".
 ---
 
 # Aside
 
-Parent skill for every site skill that drives a website through the Aside browser. Aside is the engine and a hard requirement: a child skill describes one site, this skill describes Aside. Both the Aside agent (inside the app, with its own REPL tool) and a coding agent (running `aside repl` from a shell) read it.
+Parent skill for every site skill that drives a website through the Aside browser. A child skill describes one site; this skill describes Aside. Both the Aside agent (inside the app, with its own REPL tool) and a coding agent (running `aside repl` from a shell) read it.
 
 **Child skills:** `aside-magnific` (the Magnific web app) and `aside-shopee-seller` (the Shopee Brasil Seller Centre). Each one loads this skill first.
 
-## Aside is required
+## Iron Laws
+
+### 0. MANDATORY: Load Aside's official skill first, and keep it current
 
 ```
-MANDATORY for a coding agent, before the first Aside command:
-1. `command -v aside`. If Aside is missing, STOP and tell the user. Install it only
-   after their yes, with the installer `aside --help` or aside.com names today
-   (2026-09-23: `curl -fsSL https://releases.aside.com/install.sh | bash`).
-2. `aside --update`, then read `aside guide` and `aside guide repl` in full.
-   They are the source of truth for the CLI. This skill adds only what they
-   leave out, or get wrong for one-shot calls.
-3. If the update or the guide fails, report the error. Never guess CLI usage.
+BEFORE ANY ASIDE WORK, LOAD `aside-browser`, UPDATED TODAY.
+Aside ships it for coding agents. It points to `aside guide` and
+`aside guide repl`, the source of truth for the CLI.
 ```
 
-The Aside agent skips this block: it is already inside Aside. Its shell may lack `aside` on the `PATH`; the binary sits under `~/.aside/cli/`.
+For a coding agent, before the first Aside command:
+
+1. `command -v aside`. If it prints nothing, STOP and tell the user. Install Aside only after their yes, by the method `aside-browser` or aside.com gives today.
+2. `aside --update`. It updates the CLI and the installed `aside-browser` skill.
+3. Compare the `version:` in the frontmatter of the installed `aside-browser` SKILL.md with the "Skill version" on the first line of `aside guide`. If they differ, or the skill is missing, run `aside skills install --target <your agent>` (`--help` lists the targets). When the skill was missing, ask the user first.
+4. Load `aside-browser` and follow it: read `aside guide` and `aside guide repl` in full. If an update, the install or the guide fails, report the error. Never guess CLI usage.
+
+The Aside agent skips this law: it is already inside Aside. Its shell may lack `aside` on the `PATH`; the binary sits under `~/.aside/cli/`.
+
+### 1. Prefer Aside's built-in site skills
+
+```
+WHEN ASIDE SHIPS A SKILL FOR THE SITE, USE IT BEFORE DRIVING THE PAGE BY HAND.
+```
+
+Aside keeps its skills per profile under `~/.aside/u/<n>/skills/`: `builtin/` holds the ones Aside ships, `user/` the user's own. List the ones usable from `aside repl` with `aside skills list --account <id>`, and read one with `aside skills show <name> --account <id>`. The list changes with each release, so read it live.
+
+### 2. This family adds only what those leave out
+
+Multi-profile work, one-shot `aside repl` mechanics, and site skills Aside does not ship. Where this family and `aside guide` disagree, the difference is one of mode: `references/terminal.md` says which holds for one-shot calls and which for the Aside agent's REPL.
 
 ## Where to read next
 
@@ -39,3 +55,8 @@ The Aside agent skips this block: it is already inside Aside. Its shell may lack
 2. **Other people's work stays out of your output.** Scope every snapshot to the region you act on, and never open, download or describe someone else's content (`references/repl.md`).
 3. **A tab someone else uses is theirs.** List the tabs first. Attach one only where the site skill says to; otherwise open your own, and close it when done.
 4. **An action others can see, or one that spends money, needs the user's explicit ask.** Each site skill lists its own such actions and the guard before them.
+
+## Dated examples (2026-09-24; not rules)
+
+- `aside guide` opened with "Aside CLI 1.26.916.1741 · Skill version 3", and the installed `aside-browser` said `version: 3`.
+- `aside skills list` printed youtube, google-search, google-gmail, notion and slack, among others. `builtin/` also held skills it did not print, such as x-twitter.
