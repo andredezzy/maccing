@@ -37,11 +37,15 @@ Use one of these, in this order of preference:
 
 1. **A prompt no other card holds.** Before the run, agree with the user on a short run tag to put in each prompt, or check the prompts already differ from each other and from the feed. Then `promptPart` matches only your card. This is the method that has worked in a real run.
 2. **The feed's top card before Generate.** In the call that clicks Generate, just before the click, note the top card without printing its content: its first image's `src` without the query string. After the click, your card is the first new card above it. Untested so far: check it on a card you know before relying on it.
-3. **The Magnific MCP**, for a coding agent that has it: find the new creation read-only with `creations_search`, then `creations_get`. It spends no credits. First check the MCP is signed in to the same account (`SKILL.md`, "The Magnific MCP"). The Aside agent cannot reach the MCP. Untested for this purpose so far.
+3. **The Magnific MCP**, for a coding agent that has it: find the new creation read-only with `creations_search`, then `creations_get`. It spends no credits. First check the MCP is signed in to the same account ("The Magnific MCP" below). The Aside agent cannot reach the MCP. Untested for this purpose so far.
 
 When none of these fits, tell the user you cannot tell the cards apart, and let them choose.
 
 The hover "Download" button also works and saves to `~/Downloads`, but hovering re-renders the feed and stales every ref, so the helper leaves it alone.
+
+## The Magnific MCP
+
+The Magnific MCP exists for coding agents; the Aside agent cannot reach it. Its generation tools always spend credits, even on models the plan covers without limit. Its read tools, such as `creations_search` and `creations_get`, spend none. It can be signed in to another account than the web app: before trusting any MCP result, compare the email `account_profile` returns with the one the account check read (`SKILL.md`, "The account check"). If they differ, leave the MCP out and tell the user.
 
 ## Dated examples (2026-09-23 unless marked; not rules)
 

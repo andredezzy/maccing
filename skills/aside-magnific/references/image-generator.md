@@ -2,6 +2,16 @@
 
 What the Image Generator panel did when it was driven live. Labels are dated examples (2026-09-23): read the current ones from a snapshot.
 
+## The app's layout
+
+What the app shares across its tools. Other tools may differ: snapshot them before you assume.
+
+- **The tool picker** is in the left navigation (the generators, Spaces, Design, 3D, "All tools"), plus a column of tool categories inside each generator.
+- **The generation panel** is the page's `<aside>`, on the left of each generator. Top to bottom it holds the model picker, references, the prompt, a count (−, number, +), format and quality buttons, the Unlimited switch, and Generate. Snapshot it alone (`selector: 'aside'`).
+- **Each button opens a dialog.** Dialogs appear at the end of the snapshot tree as `- dialog:`, but `snapshot(page, { selector: '[role=dialog]' })` returns nothing for them. Take the whole interactive tree and keep only the dialog: `tree.match(/- dialog:[\s\S]*/)?.[0]`. Press Escape to close one. A dialog stays open between REPL calls.
+- The panel buttons show the current values. Dialogs do not mark the selected option.
+- **The Creations feed** fills the right side. It is shared by the whole account and live, and it prints other people's prompts and results: never open, download or describe them. See `creations.md`.
+
 ## Read the panel, not the page
 
 The panel is the page's `<aside>`. Snapshot it alone, so the Creations feed (other people's work) stays out of your output:
@@ -21,7 +31,7 @@ Seen top to bottom: the model picker button (under a "Model" label), references 
 
 When you keep the model the panel opened on, the two baselines are the same. From a terminal, print each baseline and keep it: the next call starts a new tab (`terminal-runs.md`).
 
-`magnificSettings()` reads them ([`../scripts/settings.js`](../scripts/settings.js); load it as `SKILL.md`, "Helpers", says). It returns `path`, `model`, `count`, `aspect`, `quality`, `resolution`, `level`, `references` and `unlimited`, and clicks nothing.
+`magnificSettings()` reads them ([`../scripts/settings.js`](../scripts/settings.js); `helpers.md` says how to load it). It returns `path`, `model`, `count`, `aspect`, `quality`, `resolution`, `level`, `references` and `unlimited`, and clicks nothing.
 
 Compare `resolution` and `level`, not the whole `quality` label: the separator between them has changed. `quality: null` means the panel shows no quality button; some models have none. `count: null` means the panel showed no count status. Read the prompt separately (see "Prompt").
 

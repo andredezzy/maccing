@@ -6,7 +6,7 @@ The Aside agent's own REPL keeps its tab across cells. It can ask the user and c
 
 ## Every call
 
-1. Prepend the helpers the call uses to its code (`SKILL.md`, "Helpers"; `../aside/references/terminal.md`, "One call is one session"). List the tabs, open your own, and check the URL is the tool you want.
+1. Prepend the helpers the call uses to its code (`helpers.md`; `../aside/references/terminal.md`, "One call is one session"). List the tabs, open your own, and check the URL is the tool you want.
 2. In a call that reads a cost or clicks Generate, run the account check (`SKILL.md`). Stop if the email differs from the one the user confirmed.
 3. Do one step, verify it, and close the tab. The task's last call restores the settings you changed (`SKILL.md`, "Opening the app").
 
@@ -22,7 +22,7 @@ Never hold a tab open across the question with `aside "<url>"`: it may take over
 
 ## Several images
 
-Plan the calls before the first one, and put the plan in the one message `SKILL.md`, "Asking the user once", describes. The plan says how each new card will be told from the others (`creations.md`, "Telling your new card from an older one"); a run tag in the prompt needs the user's yes. An answer to that message covers a tag it stated as a default.
+Plan the calls before the first one, and put the plan in the one message `asking-the-user.md` describes. The plan says how each new card will be told from the others (`creations.md`, "Telling your new card from an older one"); a run tag in the prompt needs the user's yes. An answer to that message covers a tag it stated as a default.
 
 - **The count covers it** (paid work, or Unlimited with + still enabled): one Generate with the count set to the number asked for.
 - **The count stops short** (Unlimited often caps it at 1): one Generate per call. Wait until that card has its images before the next Generate (`unlimited.md`, "One batch at a time"). Four images are at least four Generate calls, with waiting calls between them.

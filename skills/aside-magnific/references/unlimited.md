@@ -37,7 +37,7 @@ The signal sits in the Generate area and depends on the model and its settings:
 
 A disabled switch reading off means this model at these settings charges credits. An enabled switch reading off may be turned on: "The switch" below says when and how.
 
-The guard is `magnificGenerate`, in [`../scripts/generate.js`](../scripts/generate.js), with the helpers it needs (`SKILL.md`, "Helpers"). In one call it reads the panel, compares it with what you pass, and clicks Generate only when all of it matches:
+The guard is `magnificGenerate`, in [`../scripts/generate.js`](../scripts/generate.js), with the helpers it needs (`helpers.md`). In one call it reads the panel, compares it with what you pass, and clicks Generate only when all of it matches:
 
 ```js
 console.log(JSON.stringify(await magnificGenerate({
