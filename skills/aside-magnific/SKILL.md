@@ -21,7 +21,7 @@ Umbrella skill for https://www.magnific.com/app, driven through Aside. It covers
 
 > **Depends on:** the `aside` skill, and through it Aside's official `aside-browser` skill. ALWAYS load `aside` first and follow its Iron Laws (update and load `aside-browser`, prefer an Aside built-in skill for the site) before this skill's steps. Its files: `../aside/SKILL.md` and `../aside/references/` (profiles, one-shot `aside repl`, REPL behaviour). Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
 
-**Step 0, whenever Unlimited is in play** (the user wants no credits spent, or the Unlimited switch is on): read `references/unlimited.md` in full before the first Generate click. It holds Magnific's terms on automation, the risk accepted, and the guard helper.
+**Step 0, whenever Unlimited is in play** (the user wants no credits spent, or the Unlimited switch is on): read `references/unlimited.md` in full before the first Generate click. It holds Magnific's terms on automation, whose acceptance they need, and the guard helper.
 
 Open a reference when the task needs it:
 
@@ -30,6 +30,7 @@ Open a reference when the task needs it:
 | No credits (Unlimited) | `references/unlimited.md`, as step 0 above |
 | Image Generator: model picker, settings dialogs, prompt, reference upload | `references/image-generator.md` |
 | Finding your own result in the Creations feed and downloading the full-size file | `references/creations.md` |
+| Any Generate from a terminal: asking the user before a paid one, several images, the 120 s limit | `references/terminal-runs.md` |
 | Getting a reference image into the REPL from a terminal | `../aside/references/terminal.md` |
 
 For any other tool (video, audio, 3D, upscaler, Spaces, editing), snapshot the page and read its controls. Nothing here describes those tools yet, so don't assume they match the Image Generator.
@@ -44,8 +45,8 @@ Models, credit costs, plans, what Unlimited covers and control labels all change
 
 - **List the tabs first**, every time you come back to the app: `listBrowserTabs()`. A tab you opened earlier can be gone, closed by the user or another session. If yours is missing, open a new one and restore your settings.
 - **Open your own tab.** Other sessions may be working in an existing Magnific tab; never attach to one you didn't open. Use `openTab('https://www.magnific.com/app')` and pick the tool from the left navigation, or the tool's own URL if you know it (2026-09-23: the Image Generator was `/app/ai-image-generator`).
-- **From a terminal**, your tab closes when the call ends (`../aside/references/terminal.md`). So each call opens its own tab and does a whole step in it: set the prompt and generate in one call, download in a later one. The app keeps model settings across tabs; a typed prompt or an open dialog is lost.
-- **Restore what you change.** A new tab opens with each model's settings as last used in any tab, so restore a model's settings before you close.
+- **From a terminal**, your tab closes when the call ends (`../aside/references/terminal.md`). So each call opens its own tab and does a whole step in it. The app keeps model settings across tabs; a typed prompt, a reference or an open dialog is lost. `references/terminal-runs.md` plans the calls.
+- **Restore what you change.** A new tab opens with each model's settings as last used in any tab, so restore them, the Unlimited switch included, before your task's last tab closes.
 - Close your tab with `closeTab(page)` when done.
 
 ## Layout shared across tools
@@ -56,11 +57,16 @@ Models, credit costs, plans, what Unlimited covers and control labels all change
 - The panel buttons show the current values. Dialogs do not mark the selected option.
 - **The Creations feed** fills the right side. It is shared by the whole account and live, and it prints other people's prompts and results: never open, download or describe them. See `references/creations.md`.
 
+## The account check
+
+Before any Generate, paid or Unlimited, read which Magnific account is logged in. Open the account menu (top right) and read the email in the dialog it opens; the dialog also shows the plan and the credits. Print only that line, then press Escape. Tell the user the email, and go on only once it is the account they mean. The profile (`--account u1`, …) tells you nothing about this (`../aside/references/profiles.md`).
+
 ## Spending credits
 
 A Generate click can spend credits. Before one:
 
 - **For no-credit work**, use `magnificGenerate` from `references/unlimited.md`. It clicks only while the Unlimited signal is present.
-- **For paid work**, read the credit cost the panel shows for the current settings. Tell the user, and click Generate only after their yes.
+- **For paid work**, read the credit cost the panel shows for the current settings. Tell the user the account, the model, the settings, the count and that cost, and click Generate only after their yes. From a terminal the tab is gone by the time they answer: follow `references/terminal-runs.md`, "Paid work".
+- **The Unlimited switch.** When the user asked for no-credit work and the switch reads off but is enabled, you may turn it on, then read the signal again. Never turn it off to make a paid run happen: that needs the user's yes to the cost, as above.
 
 Generate only what the user asked for, with the count set to exactly that. If a generation fails, report it instead of retrying.

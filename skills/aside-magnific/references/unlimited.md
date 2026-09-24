@@ -2,15 +2,17 @@
 
 Unlimited mode lets a plan generate on some models and settings without spending credits. It exists only in the web app.
 
-## Account risk, accepted
+## Magnific's terms
 
-Magnific's terms, at https://www.magnific.com/ai/unlimited/changes:
+From https://www.magnific.com/ai/unlimited/changes:
 
 > "Unlimited Generations are intended for individual, human use only. The following are not allowed, according to our Acceptable Use Policy: Automation or scraping tools; Account or credential sharing; Reselling access."
 
 > "Magnific may pause or disable Unlimited Generations if it detects account sharing or automated tool usage. [...] Repeated suspicious activity may lead to permanent suspension of your account."
 
-André read these terms and accepted the risk for his account on 2026-09-23. That acceptance covers his account only. Read which account is logged in from the app's account menu; if you cannot tell it is his, ask. For anyone else's account, show the user both quotes and get their own acceptance before the first automated Unlimited Generate; without it, stop.
+## Account risk, per account
+
+Acceptance covers one Magnific account: the one whose owner accepted. Before the first automated Unlimited Generate, run the account check in `SKILL.md` and confirm with the user that this account's owner accepted these terms. Their word counts when it comes in this task or in their own instructions; this public skill records no one's acceptance. Without it, show the user both quotes and ask. Without a yes, stop.
 
 Keep the automated footprint small:
 
@@ -27,7 +29,7 @@ The signal sits in the Generate area and depends on the model and its settings:
 - a line of text under Generate announcing unlimited generations;
 - sometimes the Generate button's own accessible name, which then mentions Unlimited.
 
-A disabled switch reading off means this model at these settings charges credits.
+A disabled switch reading off means this model at these settings charges credits. An enabled switch reading off may be turned on: `SKILL.md`, "Spending credits", says when.
 
 Define the helper alone in its own cell:
 
@@ -67,7 +69,7 @@ console.log(await magnificGenerate({ signal: '<Unlimited text under Generate>', 
 
 `ok: false` means stop and tell the user, with one exception: a full queue. Do not click Generate any other way for no-credit work.
 
-**One batch at a time.** The account has a queue, and a full queue disables Generate. Before each Generate, wait until your previous cards have their images (`magnificDownload` in `creations.md` stops saying pending). When the helper reports a full queue, nothing was generated: wait for the running cards, then call it once more. If the queue is still full, tell the user.
+**One batch at a time.** The account has a queue, and a full queue disables Generate. Before each Generate, wait until your previous cards have their images (`magnificDownload` in `creations.md` stops saying pending). When the helper reports a full queue, nothing was generated: wait for the running cards, then call it once more. If the queue is still full, tell the user. From a terminal, `terminal-runs.md` splits this into calls.
 
 ## Which models and settings are Unlimited
 
