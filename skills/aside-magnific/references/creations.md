@@ -12,7 +12,7 @@ A card is a text line with the prompt, a relative time on its own line ("3 minut
 
 The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small preview; without the flag, the same signed URL serves the full-size file. It never hovers or clicks, so the feed does not re-render under it.
 
-The helper is `magnificDownload`, in [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js). Call it with the number of images you generated, and a `name` unique to this run and scene:
+The helper is `magnificDownload`, in [`../scripts/download.js`](../scripts/download.js). It needs no other helper. Call it with the number of images you generated, and a `name` unique to this run and scene:
 
 ```js
 console.log(JSON.stringify(await magnificDownload({ promptPart: '<phrase from your prompt>', count: 2, name: '<run tag>-<scene>' })));

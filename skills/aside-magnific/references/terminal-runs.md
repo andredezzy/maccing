@@ -6,7 +6,7 @@ The Aside agent's own REPL keeps its tab across cells. It can ask the user and c
 
 ## Every call
 
-1. Prepend [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js) to the call's code (`../aside/references/terminal.md`, "One call is one session"). List the tabs, open your own, and check the URL is the tool you want.
+1. Prepend the helpers the call uses to its code (`SKILL.md`, "Helpers"; `../aside/references/terminal.md`, "One call is one session"). List the tabs, open your own, and check the URL is the tool you want.
 2. In a call that reads a cost or clicks Generate, run the account check (`SKILL.md`). Stop if the email differs from the one the user confirmed.
 3. Do one step, verify it, and close the tab. The task's last call restores the settings you changed (`SKILL.md`, "Opening the app").
 

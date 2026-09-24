@@ -37,6 +37,28 @@ For any other tool (video, audio, 3D, upscaler, Spaces, editing), snapshot the p
 
 **The Magnific MCP** exists for coding agents; the Aside agent cannot reach it. Its generation tools always spend credits, even on models the plan covers without limit. Its read tools, such as `creations_search` and `creations_get`, spend none. It can be signed in to another account than the web app: before trusting any MCP result, compare the email `account_profile` returns with the one the account check read (below). If they differ, leave the MCP out and tell the user.
 
+## Helpers
+
+Each REPL helper is one file in `scripts/`, defining one function on `globalThis`. Load a helper and the ones it needs:
+
+| File | Defines | Needs |
+|---|---|---|
+| [`tab-path.js`](scripts/tab-path.js) | `magnificTabPath()` | — |
+| [`unlimited-switch.js`](scripts/unlimited-switch.js) | `magnificUnlimitedSwitch()` | — |
+| [`settings.js`](scripts/settings.js) | `magnificSettings()` | `tab-path.js`, `unlimited-switch.js` |
+| [`generate.js`](scripts/generate.js) | `magnificGenerate()`, the Unlimited guard | `settings.js`, `tab-path.js`, `unlimited-switch.js` |
+| [`download.js`](scripts/download.js) | `magnificDownload()` | — |
+
+A helper looks the others up only when it runs, so any order works as long as all of them are loaded before the first call.
+
+- **From a terminal**, concatenate the files before your task's code in every call. For the guard:
+
+  ```bash
+  s=<skill dir>/scripts
+  aside repl --account <id> "$(cat "$s/tab-path.js" "$s/unlimited-switch.js" "$s/settings.js" "$s/generate.js" task.js)"
+  ```
+- **In the Aside agent's REPL**, run each file's contents once, in its own cell, before the cell that calls it.
+
 ## Nothing volatile is fixed here
 
 Models, credit costs, plans, what Unlimited covers and control labels all change often. Read them from the page on every run. Labels quoted in these files are dated examples of what the app showed.

@@ -21,11 +21,11 @@ Seen top to bottom: the model picker button (under a "Model" label), references 
 
 When you keep the model the panel opened on, the two baselines are the same. From a terminal, print each baseline and keep it: the next call starts a new tab (`terminal-runs.md`).
 
-`magnificSettings()` reads them, from [`../scripts/magnific-helpers.js`](../scripts/magnific-helpers.js). From a terminal, prepend that file to every call; in the Aside agent's REPL, run it once as its own cell. It returns `path`, `model`, `count`, `aspect`, `quality`, `resolution`, `level`, `references` and `unlimited`, and clicks nothing.
+`magnificSettings()` reads them ([`../scripts/settings.js`](../scripts/settings.js); load it as `SKILL.md`, "Helpers", says). It returns `path`, `model`, `count`, `aspect`, `quality`, `resolution`, `level`, `references` and `unlimited`, and clicks nothing.
 
 Compare `resolution` and `level`, not the whole `quality` label: the separator between them has changed. `quality: null` means the panel shows no quality button; some models have none. `count: null` means the panel showed no count status. Read the prompt separately (see "Prompt").
 
-`unlimited` comes from `magnificUnlimitedSwitch()`: `{ label, enabled, expanded }`, where `expanded` means the switch's popup is open. `null` means no panel button holds the ∞ icon. The icon may have been renamed: read the switch's DOM and adjust the script's `isInfinity` before you trust the switch. The snapshot does not show the icon, so a button named "ON" proves nothing on its own.
+`unlimited` comes from `magnificUnlimitedSwitch()` ([`../scripts/unlimited-switch.js`](../scripts/unlimited-switch.js)): `{ label, enabled, expanded }`, where `expanded` means the switch's popup is open. `null` means no panel button holds the ∞ icon. The icon may have been renamed: read the switch's DOM and adjust the script's `isInfinity` before you trust the switch. The snapshot does not show the icon, so a button named "ON" proves nothing on its own.
 
 ## Model, aspect and quality
 
