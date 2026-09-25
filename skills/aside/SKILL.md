@@ -1,6 +1,6 @@
 ---
 name: aside
-description: Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "aside-browser", "aside skills", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "keep a tab open across calls", "file URL refused", "fetch failed: other side closed", "setViewportSize", "stale ref", "new Aside skill".
+description: 'Use before the first `aside repl`, `aside exec` or `aside --account` command a site skill needs, and whenever an Aside site skill (`aside-magnific`, `aside-shopee-seller`) is loaded. Triggers on "aside repl", "aside profile", "--account u1", "another Aside profile", "aside-browser", "aside skills", "getting a file into the REPL", "setInputFiles escapes the session", "Path escapes", "aside exec 402", "no credits", "tab closed after the call", "keep a tab open across calls", "file URL refused", "fetch failed: other side closed", "setViewportSize", "stale ref", "new Aside skill".'
 ---
 
 # Aside
