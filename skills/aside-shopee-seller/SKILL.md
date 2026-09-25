@@ -1,6 +1,6 @@
 ---
 name: aside-shopee-seller
-description: "Use when you need the Shopee Brasil Seller Centre (seller.shopee.com.br, Central do Vendedor) through the Aside browser: product listings, listing copy, images and video, orders, shipping, store profile, blocked listings, finances, marketing or chat."
+description: "Use when you need the Shopee Brasil Seller Centre (seller.shopee.com.br, Central do Vendedor) through the Aside browser: product listings, listing copy, images and video, orders, shipping, store profile, blocked listings, finances, marketing, buyer chat or the support chat with Shopee."
 autoInject:
   keywords: ["shopee", "seller centre", "central do vendedor", "shopee seller", "vendedor shopee", "anúncio shopee"]
   url:
@@ -31,10 +31,11 @@ For any other area, follow the left nav from a snapshot. Never guess a URL.
 | Listing copy: writing or reviewing a title, description or specifications | `references/listing-copy.md` |
 | Product diagnostics: a listing blocked or getting no traffic, the optimiser's quality tasks | `references/diagnostics.md` |
 | Shop profile: name, logo, description, phone, and its password gate | `references/shop-profile.md` |
+| Support chat with Shopee ("Contate a Shopee", the bot, a human agent): open it, reach an agent, keep it open, send text or an image, read it | `references/support-chat.md` |
 | The REPL helpers in `scripts/` (one per file) and the image-order check | `references/helpers.md` |
 | A store logged in on another Aside profile | `../aside/references/profiles.md` |
 | Driving from a terminal: one call per session, getting an image or video in | `../aside/references/terminal.md` |
-| Anything else (orders, finances, marketing, chat, other settings) | No reference yet. Snapshot the page, read it, and apply the rules below. |
+| Anything else (orders, finances, marketing, buyer chat, other settings) | No reference yet. Snapshot the page, read it, and apply the rules below. |
 
 ## Rules for every area
 

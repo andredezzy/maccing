@@ -32,7 +32,13 @@ A long run, such as many generations with waits between them, needs a tab that s
    echo exit >> "$dir/cmds.txt"; pkill -f "tail -n +1 -f $dir/cmds.txt"
    ```
 
-The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. Send one step at a time, and wait for it. A line that reaches the REPL while it is busy can be lost, so `repl-send.sh` puts each step on one line. A step likely keeps the 120 s limit of a call: plan it the same way. A session with no step running holds no one else's tab, so it is safe to keep across a question to the user.
+The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. A session with no step running holds no one else's tab, so it is safe to keep across a question to the user.
+
+**One step at a time, each well under 120 s.**
+
+- Send one step and wait for it. A line that reaches the REPL while it is busy can be lost, so `repl-send.sh` puts each step on one line.
+- A shell loop that sends steps back to back in the background is a sender too. Stop it before you send any other step.
+- A step that runs past the call limit kills the whole session: it ends with "fetch failed: other side closed" or "Aside isn't running on this machine", and its tab closes. Aside itself keeps running, so the next one-shot call works. To wait on something slow, poll inside a step for at most 60 to 90 s, return, and loop from the shell.
 
 ## Getting a file into the REPL
 
@@ -72,3 +78,4 @@ Pass long text, such as a description, as base64 and decode it in the REPL: `Buf
 - `aside exec` answered 402 for lack of credits, and one-shot `aside repl` calls did the whole job.
 - 2026-09-24: a background session started as above kept its tab and its `globalThis` values across separate shell calls, and a step that threw still printed its end marker. A marker sent on its own line while a step ran was lost. `exit` stopped the REPL, but `tail` stayed until killed.
 - 2026-09-24: in a one-shot call, `closeTab()` on a tab attached with `attachBrowserTab()` only detached it; the tab stayed open. A tab opened by `openTab()` in an earlier session closed with `page.evaluate(() => window.close())`.
+- 2026-09-25: twice, a background session step that polled with `sleep` for about 100 to 125 s ended with "fetch failed: other side closed / Aside isn't running on this machine". The session died and its tab closed. Steps of about 90 s survived, Aside stayed up, and the next one-shot call worked.
