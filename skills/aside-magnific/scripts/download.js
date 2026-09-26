@@ -5,8 +5,9 @@
  *
  * - name: unique per run and scene. The same name overwrites earlier files.
  * - after: the key magnificFeedTop() returned just before your Generate click.
- *   Only a card above that image counts, so an older card with the same phrase
- *   is skipped. Pass null only to take the first card holding the phrase.
+ *   Only a card above that image counts. The card holding that image, and every
+ *   card below it, is older and skipped, even with the same phrase. Pass null
+ *   only to take the first card holding the phrase.
  * - minLongSide: the smallest long side, in pixels, a full-size file may have.
  *   A smaller file is a preview: it is not saved, and the result says so.
  *
@@ -50,16 +51,21 @@ globalThis.magnificDownload = async ({ promptPart, count, name, after, minLongSi
     const card = lines.slice(start, end).join("\n");
 
     let old = false;
-    const firstRef = card.match(/\[ref=(e\d+)\]/)?.[1];
-    if (after !== null && firstRef) {
+    // The card's last element decides. The anchor's own card ends at or below the
+    // anchor, even when its first element sits above it.
+    const lastRef = [...card.matchAll(/\[ref=(e\d+)\]/g)].at(-1)?.[1];
+    if (after !== null && lastRef) {
       const place = await page
-        .locator(firstRef)
+        .locator(lastRef)
         .evaluate((el, key) => {
           const anchor = [...document.images].find((i) => i.src.split("?")[0] === key);
           if (!anchor) {
             return "unseen";
           }
-          return anchor.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING ? "above" : "below";
+          // An element that holds the anchor also counts as preceding it.
+          const pos = anchor.compareDocumentPosition(el);
+          const above = pos & Node.DOCUMENT_POSITION_PRECEDING && !(pos & Node.DOCUMENT_POSITION_CONTAINS);
+          return above ? "above" : "below";
         }, after)
         .catch(() => "unseen");
       // Scanning runs top down, so an anchor seen earlier and gone now is above the card.

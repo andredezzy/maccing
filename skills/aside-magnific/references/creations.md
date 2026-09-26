@@ -46,7 +46,8 @@ The same phrase can sit on older cards, for example when the same prompt ran ear
 
 - The anchor can be anyone's image. Its key names a file, not its content; print nothing else about it.
 - `null` from `magnificFeedTop()` means the feed showed no image. Snapshot the feed region before you click, and fix the helper or stop.
-- Untested as of 2026-09-24: no run has used the anchor yet. On its first use, also give the prompt a phrase no feed card holds, and check the anchor's card is the one that phrase finds with `after: null`.
+- The card that holds the anchor image is older than yours, and so is every card below it. The helper judges a card by its last element, since a card's first element can sit above its own images.
+- No run has confirmed the anchor end to end yet (2026-09-26). Until one does, also give the prompt a phrase no feed card holds, and check the anchor's card is the one that phrase finds with `after: null`.
 
 **Keep a phrase no other card holds** as well, when you can: a short run tag in each prompt (agreed with the user, `asking-the-user.md`), or prompts that already differ. Another session's card can also land above the anchor, and the phrase is what tells it from yours.
 
@@ -70,4 +71,5 @@ When the web URL keeps serving a preview, `creations_get` returns the creation's
 - 2026-09-24: a card's relative time still read "46 seconds ago" long after the card was made. A unique prompt per image found each card in that run.
 - 2026-09-24: an older card from the same prompt on another model matched before the new one.
 - 2026-09-24: the URL without `&preview=1` sometimes served an 800 px preview instead of the full file. Changing the query further gave 403. The MCP's `creations_get` `url` gave the full-size file. Why the web URL served a preview was not found.
+- 2026-09-26: the anchor's first live run. The card just before the Generate held the same phrase and returned instead of the new one: the helper judged cards by their first element, and an element that holds the anchor counts as preceding it.
 - 2026-09-24, seen once: `creations_search` with a `dateEnd` holding a time of day seemed to ignore the time and keep the whole day.
