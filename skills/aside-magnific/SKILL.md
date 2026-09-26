@@ -29,7 +29,7 @@ Open a reference when the task needs it:
 |---|---|
 | No credits (Unlimited) | `references/unlimited.md`, as step 0 above |
 | Image Generator: model picker, settings dialogs, prompt, reference upload and reuse | `references/image-generator.md` |
-| Writing the prompt: sizes, crops, what to leave out | `references/prompts.md` |
+| Writing the prompt: sizes, colours, crops, what to leave out | `references/prompts.md` |
 | Finding your own new card in the Creations feed, and downloading the full-size file, never a preview | `references/creations.md` |
 | Any Generate from a terminal: paid runs, several images, the 120 s limit | `references/terminal-runs.md` |
 | Loading the REPL helpers (`magnificSettings`, `magnificGenerate`, `magnificFeedTop`, `magnificDownload`, …) and their load order | `references/helpers.md` |
