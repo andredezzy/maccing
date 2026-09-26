@@ -67,12 +67,20 @@ globalThis.magnificDownload = async ({ promptPart, count, name, after, minLongSi
     }
 
     // Read every src now: the next snapshot renumbers the refs.
+    // A placeholder <img> has an empty src attribute, and its .src reads as the
+    // page URL. Only an http(s) or blob src other than the page is an image.
     const sources = [];
     for (const m of card.matchAll(/generic \[ref=(e\d+)\]:\n\s+- image/g)) {
       sources.push(
         await page
           .locator(m[1])
-          .evaluate((el) => el.querySelector("img")?.src ?? null)
+          .evaluate((el) => {
+            const img = el.querySelector("img");
+            if (!img?.getAttribute("src") || img.src === location.href) {
+              return null;
+            }
+            return /^(https?|blob):/.test(img.src) ? img.src : null;
+          })
           .catch(() => null),
       );
     }
