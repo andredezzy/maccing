@@ -79,6 +79,7 @@ Quote a fee, deadline or rule only from a page you read in this task.
 
 The parent's `../aside/references/repl.md` covers stale refs, reading after a navigation, a lagging `page.url()` and the unsupported APIs. On top of that:
 
+- **Drive forms with `aside repl` and this skill's helpers.** cua-driver's browser tools refuse the Aside app ("pid … is not a recognized browser process"), so in Aside it can only click by pixel. Keep it for a task of a few clicks per form. It changed 10 prices one form at a time, typing only with foreground delivery. On the heavy attributes page it lagged, missed clicks and crashed the tab (2026-09-27).
 - **Attach the existing tab.** Prefer `listBrowserTabs()` → `attachBrowserTab(<targetId>)` on a `seller.shopee.com.br` tab. `page.goto(url)` works inside it. Open a tab only when none exists. A tab holding the user's open form is theirs: for a read, open, read and close a tab of your own.
 - **Long pages render sections empty.** A section can show as a bare `region`, and one scrolled away can go empty again, even though `aside guide repl` says no scroll is needed. The section tab bar can vanish too. To act on a section, call `scrollIntoViewIfNeeded()` on something inside it, or scroll with the mouse wheel (`await page.mouse.wheel(0, 800)`) until its field shows, then snapshot. To read a listing form's values, use `shpRead()` (`references/helpers.md`): it reads the DOM, not the snapshot.
 - **Hidden fields.** Some sections hide fields behind a show-more button. Expand it before you conclude that a field does not exist.
