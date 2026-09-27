@@ -18,9 +18,9 @@ The bulk-edit templates on the same menu carry no attributes. Attributes change 
 
 The save-all button opens a confirm dialog. Show the user the values first, as `SKILL.md` rule 2 says.
 
-**Expect a captcha.** An automated save has led to a puzzle captcha every time so far. Only the owner solves it. Before the click, tell the user a captcha may come, so they are at the screen. Whether or not it is solved, reload the page and read back every value you set: a captcha that timed out still let the save through.
+**Expect a captcha.** A save through `aside repl` has led to a puzzle captcha every time so far. Only the owner solves it. Before the click, tell the user a captcha may come, so they are at the screen. Whether or not it is solved, reload the page and read back every value you set: a captcha that timed out still let the save through.
 
-**Keep each batch small.** The page is heavy. Save after a few edits instead of piling up changes: a tab has crashed with many unsaved edits on it, and they were lost.
+**Keep each batch small.** The page is heavy. Save after a few edits instead of piling up changes: a tab has crashed with many unsaved edits on it, and they were lost. With cua-driver, first filter the page to one item with its search (`SKILL.md`, "How the Seller Centre behaves in Aside").
 
 ## Dated examples (2026-09-27; not rules)
 
