@@ -1,7 +1,9 @@
 /**
  * magnificDownload() finds your card in the Creations feed by a phrase from your
  * prompt, and saves its full-size images into the REPL session folder as
- * <name>-<n>.<ext>. Reads, scrolls and fetches only: no hover, no clicks.
+ * <name>-<n>.<ext>. It reads, scrolls and fetches. It hovers and clicks only
+ * when a URL serves a preview: it then takes that image through the card's
+ * Download button.
  *
  * - name: unique per run and scene. The same name overwrites earlier files.
  * - after: the key magnificFeedTop() returned just before your Generate click.
@@ -9,9 +11,10 @@
  *   card below it, is older and skipped, even with the same phrase. Pass null
  *   only to take the first card holding the phrase.
  * - minLongSide: the smallest long side, in pixels, a full-size file may have.
- *   A smaller file is a preview: it is not saved, and the result says so.
+ *   A smaller file is a preview. If the Download button's file is short too,
+ *   nothing more is saved, and the result says so.
  *
- * Needs: scroll-feed.js (load it too).
+ * Needs: scroll-feed.js, card-download.js (load them too).
  */
 
 globalThis.magnificDownload = async ({ promptPart, count, name, after, minLongSide, maxScrolls = 40 }) => {
@@ -171,29 +174,49 @@ globalThis.magnificDownload = async ({ promptPart, count, name, after, minLongSi
 
   const saved = [];
   for (let i = 0; i < found.sources.length; i++) {
+    const key = found.sources[i].split("?")[0];
     // Drop only the preview flag: the rest of the query is the URL's signature.
     const res = await fetch(found.sources[i].replace("&preview=1", ""));
     if (!res.ok) {
       return { ok: false, reason: `fetch ${res.status}`, saved };
     }
-    const bytes = Buffer.from(await res.arrayBuffer());
-    const type = res.headers.get("content-type");
-    const { ext, width, height } = readImage(bytes, type);
-    const key = found.sources[i].split("?")[0];
+    let bytes = Buffer.from(await res.arrayBuffer());
+    let type = res.headers.get("content-type");
+    let via = "url";
+    let image = readImage(bytes, type);
+    // The URL can serve a preview even without the flag. The card's own
+    // Download button then gives the full-size file.
+    if (image.width !== null && Math.max(image.width, image.height) < minLongSide) {
+      const preview = `${image.width}x${image.height}`;
+      const card = await magnificCardDownload(key);
+      if (!card.ok) {
+        return {
+          ok: false,
+          reason: `image ${i + 1}: the URL served ${preview}, a preview, and the Download button failed: ${card.reason}; not saved`,
+          key,
+          saved,
+        };
+      }
+      bytes = card.bytes;
+      type = null;
+      via = "download button";
+      image = readImage(bytes, type);
+    }
+    const { ext, width, height } = image;
     if (width === null) {
-      return { ok: false, reason: `image ${i + 1}: size unreadable (${type}); not saved`, key, saved };
+      return { ok: false, reason: `image ${i + 1}: size unreadable (${type ?? via}); not saved`, key, saved };
     }
     if (Math.max(width, height) < minLongSide) {
       return {
         ok: false,
-        reason: `image ${i + 1}: ${width}x${height} is below ${minLongSide} px, a preview; not saved`,
+        reason: `image ${i + 1}: ${width}x${height} is below ${minLongSide} px, a preview, from the URL and the Download button; not saved`,
         key,
         saved,
       };
     }
     const file = `./${name}-${i + 1}.${ext}`;
     await fs.writeFile(file, bytes);
-    saved.push({ file: path.join(pwd, file), width, height, type, key });
+    saved.push({ file: path.join(pwd, file), width, height, type, key, via });
   }
   return { ok: true, saved };
 };

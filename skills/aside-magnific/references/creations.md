@@ -10,9 +10,9 @@ A card is a text line with the prompt, a relative time on its own line ("3 minut
 
 ## Download your own results
 
-The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small preview. Without the flag, the same signed URL usually serves the full-size file. Drop only the flag: the rest of the query is the signature. The helper never hovers or clicks, so the feed does not re-render under it.
+The helper finds your card by a phrase from your prompt, reads each image's `src` from the same snapshot as the card (the next snapshot renumbers the refs), and fetches the full-size file. An image's `src` ends in `&preview=1`, which serves a small preview. Without the flag, the same signed URL usually serves the full-size file. Drop only the flag: the rest of the query is the signature. The helper measures each file, and when the URL still serves a preview, it saves that image through the card's own Download button instead ("The Download button fallback" below).
 
-The helper is `magnificDownload`, in [`../scripts/download.js`](../scripts/download.js), with `scroll-feed.js` (`helpers.md`). Call it with the number of images you generated, a `name` unique to this run and scene, the anchor from your Generate call, and the smallest size a full file may have:
+The helper is `magnificDownload`, in [`../scripts/download.js`](../scripts/download.js), with `scroll-feed.js` and `card-download.js` (`helpers.md`). Call it with the number of images you generated, a `name` unique to this run and scene, the anchor from your Generate call, and the smallest size a full file may have:
 
 ```js
 console.log(JSON.stringify(await magnificDownload({
@@ -28,15 +28,22 @@ It saves `<name>-1.<ext>`, `<name>-2.<ext>` and so on. The same `name` twice giv
 
 What it returns:
 
-- `ok: true`: the files are in the REPL session folder, listed in `saved` with their pixel size and `key`. Copy them with Bash to where the user wants them, and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
+- `ok: true`: the files are in the REPL session folder, listed in `saved` with their pixel size, `key`, and `via`: `url`, or `download button` when the fallback gave the file. Copy them with Bash to where the user wants them, and report that size: a card's quality label and its details panel can both disagree with the file. From a terminal the folder outlives the call, so the copy can run after it.
 - `reason: 'pending'`: your card has no image yet. Wait and call again. Size each wait to what is left of the call's 120 s budget, as `terminal-runs.md`, "The 120 s limit", says; in the Aside agent's REPL the same budget holds per cell. If it is still pending after a few minutes, tell the user. Never regenerate.
 - `found n of m images`: the feed showed only part of the card. Call again. If it repeats, check `count` against what you generated.
 - `no card … above the anchor`: nothing newer than your Generate holds the phrase. Right after the click, the card may not show yet: call again once. If it repeats, the Generate may not have gone through: tell the user.
 - `no card with this prompt in the feed` (no anchor): check the phrase against what you typed.
-- `… is below … px, a preview; not saved`: the full-size URL served a preview. Call again after a minute. If it repeats, get the file through the MCP ("The full-size file through the MCP" below); without the MCP, tell the user. Never keep the preview as the result.
-- `size unreadable`: the bytes are not PNG, JPEG or WebP. Tell the user the content type it names.
+- `… is below … px, a preview, from the URL and the Download button; not saved`: both gave a preview. Call again after a minute. If it repeats, get the file through the MCP ("The full-size file through the MCP" below); without the MCP, tell the user. Never keep the preview as the result.
+- `the URL served … a preview, and the Download button failed: …`: the fallback found no image, no single Download button, or no download. The reason names which. Call again once; if it repeats, use the MCP as above.
+- `size unreadable`: the bytes are not PNG, JPEG or WebP. Tell the user the content type it names, or that the Download button's file was the one unreadable.
 
 The helper ends a card at the next text line that is not a relative time, and knows a relative time by its trailing "ago". If it keeps saying pending while your card shows images, that line has changed: read the card's lines and adjust the script's `isTime`.
+
+## The Download button fallback
+
+A card shows a "Download" button on hover. `magnificCardDownload(key)`, in [`../scripts/card-download.js`](../scripts/card-download.js), hovers the image whose `src` starts with `key`, clicks the one Download button on its card, and returns the downloaded bytes. `magnificDownload` calls it only for an image whose URL served a file below `minLongSide`, and holds the button's file to the same floor.
+
+Hovering re-renders the feed and stales every ref, so the fallback runs after the helper has read every `src`. It finds the image by `src`, never by ref. It can add about 30 s per image to the call when no download starts, so leave room for it in a terminal call's budget (`terminal-runs.md`, "The 120 s limit").
 
 ## Telling your new card from an older one
 
@@ -52,8 +59,6 @@ The same phrase can sit on older cards, for example when the same prompt ran ear
 **Keep a phrase no other card holds** as well, when you can: a short run tag in each prompt (agreed with the user, `asking-the-user.md`), or prompts that already differ. Another session's card can also land above the anchor, and the phrase is what tells it from yours.
 
 When neither fits, tell the user you cannot tell the cards apart, and let them choose.
-
-The hover "Download" button also works and saves to `~/Downloads`, but hovering re-renders the feed and stales every ref, so the helper leaves it alone.
 
 ## The Magnific MCP
 
@@ -72,4 +77,5 @@ When the web URL keeps serving a preview, `creations_get` returns the creation's
 - 2026-09-24: an older card from the same prompt on another model matched before the new one.
 - 2026-09-24: the URL without `&preview=1` sometimes served an 800 px preview instead of the full file. Changing the query further gave 403. The MCP's `creations_get` `url` gave the full-size file. Why the web URL served a preview was not found.
 - 2026-09-26: the anchor's first live run. The card just before the Generate held the same phrase and returned instead of the new one: the helper judged cards by their first element, and an element that holds the anchor counts as preceding it.
+- 2026-09-26: on two Nano Banana 2 cards at 1K, the URL without `&preview=1` served an 800×800 JPEG. The card's Download button gave each a 1024×1024 JPEG. Both keys ended in `render.jpg`; the cards whose URL served the full file that day ended in `render.png`. Whether the extension predicts a preview is unchecked.
 - 2026-09-24, seen once: `creations_search` with a `dateEnd` holding a time of day seemed to ignore the time and keep the whole day.

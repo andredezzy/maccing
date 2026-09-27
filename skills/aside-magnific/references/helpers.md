@@ -10,7 +10,8 @@ Each REPL helper is one file in `scripts/`, defining one function on `globalThis
 | [`generate.js`](../scripts/generate.js) | `magnificGenerate()`, the Unlimited guard | `settings.js`, `tab-path.js`, `unlimited-switch.js` |
 | [`scroll-feed.js`](../scripts/scroll-feed.js) | `magnificScrollFeed()` | — |
 | [`feed-top.js`](../scripts/feed-top.js) | `magnificFeedTop()`, the anchor for your next card | `scroll-feed.js` |
-| [`download.js`](../scripts/download.js) | `magnificDownload()` | `scroll-feed.js` |
+| [`card-download.js`](../scripts/card-download.js) | `magnificCardDownload()`, one image through its card's Download button | — |
+| [`download.js`](../scripts/download.js) | `magnificDownload()` | `scroll-feed.js`, `card-download.js` |
 
 A helper looks the others up only when it runs, so any order works as long as all of them are loaded before the first call.
 
