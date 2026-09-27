@@ -28,6 +28,7 @@ For any other area, follow the left nav from a snapshot. Never guess a URL.
 | Area | Read |
 |---|---|
 | Product listings: create, edit, replicate, images, video, price, stock, shipping, save | `references/listings.md` |
+| Attributes on many listings at once: the attributes tool, its apply-to-category prompt, the captcha after a save | `references/bulk-attributes.md` |
 | Listing copy: writing or reviewing a title, description or specifications | `references/listing-copy.md` |
 | Product diagnostics: a listing blocked or getting no traffic, the optimiser's quality tasks | `references/diagnostics.md` |
 | Shop profile: name, logo, description, phone, and its password gate | `references/shop-profile.md` |
