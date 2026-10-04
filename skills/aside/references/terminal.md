@@ -22,7 +22,7 @@ Keep one background session per task. Each one holds a REPL open in Aside, and a
 
    ```bash
    dir=<absolute scratch folder>; mkdir -p "$dir"
-   pgrep -fl "tail -n +1 -f $dir/cmds.txt" && { echo exit >> "$dir/cmds.txt"; pkill -f "tail -n +1 -f $dir/cmds.txt"; }
+   pgrep -fl "tail -n [+]1 -f $dir/cmds.txt" && { echo exit >> "$dir/cmds.txt"; pkill -f "tail -n [+]1 -f $dir/cmds.txt"; }
    : > "$dir/cmds.txt"
    tail -n +1 -f "$dir/cmds.txt" | aside repl --account <id> > "$dir/out.log" 2>&1 &
    ```
@@ -33,7 +33,7 @@ Keep one background session per task. Each one holds a REPL open in Aside, and a
 4. **Stop** it at the end of the task, whether the task worked or not: a step that closes your tab with `closeTab(myTab)` (this session opened it, so it closes), then:
 
    ```bash
-   echo exit >> "$dir/cmds.txt"; pkill -f "tail -n +1 -f $dir/cmds.txt"
+   echo exit >> "$dir/cmds.txt"; pkill -f "tail -n [+]1 -f $dir/cmds.txt"
    ```
 
 The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. A session with no step running holds no one else's tab, so it is safe to keep across a question to the user.
