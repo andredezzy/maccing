@@ -21,7 +21,7 @@ Umbrella skill for https://www.magnific.com/app, driven through Aside.
 
 > **Depends on:** the `aside` skill (`../aside/SKILL.md`). ALWAYS load it first and follow its Iron Laws: update and load Aside's official `aside-browser` skill, and let an Aside built-in Magnific skill lead if one exists. Inside the Aside app, a builtin skill is also named `aside`; that one covers the app's settings, not this.
 
-**Step 0, whenever Unlimited is in play** (the user wants no credits spent, or the switch is on): read `references/unlimited.md` in full before the first Generate click. It holds Magnific's terms on automation and the guard.
+**Step 0, whenever Unlimited is in play** (the user wants no credits spent, or the switch is on): read `references/unlimited.md` in full before the first Generate click or Image Editor tool. It holds Magnific's terms on automation and the guard.
 
 Open a reference when the task needs it:
 

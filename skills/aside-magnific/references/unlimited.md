@@ -58,6 +58,14 @@ Take every value from an earlier `magnificSettings()` read, on the model and set
 
 **One batch at a time.** The account has a queue, and a full queue disables Generate. Before each Generate, wait until your previous cards have their images (`magnificDownload` in `creations.md` stops saying pending). When the helper reports a full queue, nothing was generated: wait for the running cards, then call it once more. If the queue is still full, tell the user. From a terminal, `terminal-runs.md` splits this into calls.
 
+**Several agents on one account** can generate at once, each in its own tab. They share the queue, so a full queue may be another agent's cards. Each agent keeps its own background session and session folder (`../aside/references/terminal.md`), and never sends steps to another's.
+
+## Tools outside the guard
+
+The guard covers the Image Generator's Generate click only. The Image Editor's tools, such as Erase, Precision (inpaint) and the background remover, have spent credits with Unlimited on (dated examples). For no-credit work, leave them out. Use one only after telling the user it may cost credits and hearing yes.
+
+Before and after any tool you have not seen stay free, read the credits spent in the account menu (`terminal-runs.md`). A rise there, with nothing else running in the account, means the tool charged. While another agent runs in the account, the counter cannot tell whose work charged: say so in the report.
+
 ## The switch
 
 When the user asked for no-credit work and the switch reads off but is enabled, you may turn it on. Never turn it off to make a paid run happen: that needs the user's yes to the cost (`SKILL.md`, "Spending credits"). Turning it back to its baseline after your last Generate is fine.
@@ -108,3 +116,5 @@ Unlimited has a priority allowance that resets on a date. The app can show it in
 - 2026-09-24: the app showed no credit figure on the feed cards or on a creation's page, even on hover.
 - 2026-09-24: the popover opened over the prompt box as a dialog holding the text "Unlimited" and an unnamed close button. It read 30% of priority usage spent, resetting on October 20.
 - 2026-09-24: a later run found no way to read priority usage without toggling the switch.
+- 2026-10-04: with Unlimited on, more than 48 Image Generator images left the credits spent unchanged, read after each one. The same day, a run that used the Image Editor's Erase, Precision and background remover saw credits spent rise by about 315. Other agents ran in the account in parallel, so the editor is the likely cause, not a proven one.
+- 2026-10-04: agents generated in parallel on one account, each in its own tab. One agent took over another's session folder.
