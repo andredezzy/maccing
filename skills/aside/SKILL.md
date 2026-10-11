@@ -52,7 +52,7 @@ Multi-profile work, one-shot `aside repl` mechanics, and site skills Aside does 
 | Task | Read |
 |---|---|
 | The site is logged in on another profile (`u1`, …), or you must find which profile holds it | `references/profiles.md` |
-| Driving Aside from a terminal: one-shot `aside repl`, a session that keeps its tab across calls or died mid-step, calls that all hang, getting a file in, `aside exec` refusing with 402 | `references/terminal.md` |
+| Driving Aside from a terminal: one-shot `aside repl`, a background session that keeps its tab across calls, died mid-step or was closed by its watchdog, calls that all hang, getting a file in, `aside exec` refusing with 402 | `references/terminal.md` |
 | Any REPL work: stale refs, unsupported APIs, checking a local page at a set width, reading snapshots without printing other people's content | `references/repl.md` |
 | Adding a new Aside site skill | `references/new-site-skill.md` |
 

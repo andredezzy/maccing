@@ -16,27 +16,16 @@ What holds when a coding agent runs `aside repl "<code>"` from a shell, where ea
 
 A long run, such as many generations with waits between them, needs a tab that stays open. Run one `aside repl` in the background, fed by a file, and send it one step at a time. Its tab, its `globalThis` helpers and its session folder then last until you stop it.
 
-Keep one background session per task. Each one holds a REPL open in Aside, and a session outlives an agent that stalls or dies.
+Keep one background session per task, in a folder of your own. Each one holds a REPL open in Aside, so the scripts below start, feed and stop it, and a watchdog closes it when you forget.
 
-1. **Start** it once, with a folder of your own. First stop any session of yours still running from that folder:
-
-   ```bash
-   dir=<absolute scratch folder>; mkdir -p "$dir"
-   pgrep -fl "tail -n [+]1 -f $dir/cmds.txt" && { echo exit >> "$dir/cmds.txt"; pkill -f "tail -n [+]1 -f $dir/cmds.txt"; }
-   : > "$dir/cmds.txt"
-   tail -n +1 -f "$dir/cmds.txt" | aside repl --account <id> > "$dir/out.log" 2>&1 &
-   ```
-
-   `out.log` then starts with `account:` and `sessionDir:` lines. Check the account before anything else.
-2. **Send a step** with [`../scripts/repl-send.sh`](../scripts/repl-send.sh): `bash <skill dir>/scripts/repl-send.sh "$dir" step.js`. It copies the file into the session folder, runs it, waits for it to finish and prints only its output, with the `[ok | <ms>]` timing. Each step runs in its own function: keep what later steps need on `globalThis`, such as your tab (`globalThis.myTab = await openTab(url)`). Load the site skill's helpers once, as the first step.
+1. **Start** it with [`../scripts/repl-start.sh`](../scripts/repl-start.sh): `bash <skill dir>/scripts/repl-start.sh <absolute scratch folder> <account id> [idle minutes]`. It stops any session still running from that folder, starts `tail -n +1 -f <folder>/cmds.txt | aside repl` in the background, and prints the `account:` and `sessionDir:` lines. Check the account before anything else.
+2. **Send a step** with [`../scripts/repl-send.sh`](../scripts/repl-send.sh): `bash <skill dir>/scripts/repl-send.sh <folder> step.js`. It copies the file into the session folder, runs it, waits for it to finish and prints only its output, with the `[ok | <ms>]` timing. Each step runs in its own function: keep what later steps need on `globalThis`, such as your tab (`globalThis.myTab = await openTab(url)`). Load the site skill's helpers once, as the first step.
 3. **Every step** starts by checking your tab is still there (`listBrowserTabs()`, by `targetId`), then sets `page = myTab`: helpers act on `page`. Another session, or the site itself, can close or move your tab. If it is gone, open a new one; never attach someone else's.
-4. **Stop** it at the end of the task, whether the task worked or not: a step that closes your tab with `closeTab(myTab)` (this session opened it, so it closes), then:
+4. **Stop** it at the end of the task, whether the task worked or not: a step that closes your tab with `closeTab(myTab)` (this session opened it, so it closes), then [`../scripts/repl-stop.sh`](../scripts/repl-stop.sh) `<folder>`. It is safe to run twice.
 
-   ```bash
-   echo exit >> "$dir/cmds.txt"; pkill -f "tail -n [+]1 -f $dir/cmds.txt"
-   ```
+**The watchdog.** `repl-start.sh` also launches [`../scripts/repl-watchdog.sh`](../scripts/repl-watchdog.sh), which runs `repl-stop.sh` itself once the session has been idle for the idle minutes (default 10), or once its `aside repl` has ended. Idle means no step sent and no output for the whole window; a step that has not printed its end marker yet counts as running. It writes a `[session closed …]` line with the reason to `out.log`. After that, `repl-send.sh` exits with code 2 and says so: start the session again and resend the helpers, since the tab and `globalThis` values are gone. To keep a session across a long pause, such as a question to the user, pass a longer idle time at the start.
 
-The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. A session with no step running holds no one else's tab, so it is safe to keep across a question to the user.
+The session folder (`sessionDir`) stays put, so the shell can copy a file into it for a later step, such as an upload. A session with no step running holds no one else's tab.
 
 **One step at a time, each well under 120 s.**
 
@@ -46,8 +35,8 @@ The session folder (`sessionDir`) stays put, so the shell can copy a file into i
 
 **When every call hangs.** If `aside repl` calls, one-shot or background, start running past 120 s or end with "fetch failed: other side closed" or "Aside isn't running on this machine", check the machine before you blame the site:
 
-1. `ps -Ao pid,pcpu,command | grep -E 'Aside|aside repl|tail -n \+1 -f' | grep -v grep`. Look for Aside near 100% CPU and for background sessions no task owns.
-2. Stop your own leftovers as in step 4. Ask before you kill a session another agent may still use.
+1. `ps -Ao pid,etime,pcpu,command | grep -E 'Aside|aside repl|tail -n \+1 -f|repl-watchdog' | grep -v grep`. Look for Aside near 100% CPU and for background sessions no task owns. A `tail` with no `repl-watchdog.sh` on the same folder was started by hand or by an older version of this skill, so nothing will close it.
+2. Stop your own leftovers with `repl-stop.sh <folder>`; the folder is the path in the `tail` line, before `/cmds.txt`. Ask before you stop a session another agent may still use.
 3. If calls still hang, restart Aside: `osascript -e 'tell application "Aside" to quit'`, then `open -a Aside`. It reopens the user's tabs. A restart ends every agent's background session, not just yours, so name it in your report; each session then needs a new start.
 
 Do the same after the Mac wakes from sleep, when calls hang.
@@ -92,3 +81,4 @@ Pass long text, such as a description, as base64 and decode it in the REPL: `Buf
 - 2026-09-24: in a one-shot call, `closeTab()` on a tab attached with `attachBrowserTab()` only detached it; the tab stayed open. A tab opened by `openTab()` in an earlier session closed with `page.evaluate(() => window.close())`.
 - 2026-09-25: twice, a background session step that polled with `sleep` for about 100 to 125 s ended with "fetch failed: other side closed / Aside isn't running on this machine". The session died and its tab closed. Steps of about 90 s survived, Aside stayed up, and the next one-shot call worked.
 - 2026-10-04: about 15 background sessions left by stalled agents were running while Aside sat at 100% CPU, and every new `aside repl` call hung past 120 s with "fetch failed: other side closed / Aside isn't running". The Mac had also just woken from sleep, so the cause was not separated: leftovers, sleep and wake, or both. Killing the leftover `tail` and `aside repl` processes and restarting Aside fixed it: the next call answered in 0.2 s, and the user's tabs came back.
+- 2026-10-11: 9 leftover `tail -n +1 -f <folder>/cmds.txt` feeders from finished agents were running, the oldest for 1 h 28 min; their agents had never run the stop step. With the watchdog at 1 idle minute, a session closed about 60 s after its last step, a step printing every 5 s for 85 s and a silent 80 s step both finished, `repl-send.sh` then exited 2 with the reason, and sessions in other folders on the same profile kept running.

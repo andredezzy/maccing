@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Runs one JavaScript file in a long-lived `aside repl` session, waits for it,
-# and prints only its output. Start the session first: references/terminal.md,
-# "A session that outlives the call".
+# and prints only its output. Start the session with repl-start.sh first:
+# references/terminal.md, "A session that outlives the call".
 #
 # Usage: bash repl-send.sh <session dir> <file.js> [timeout seconds, default 130]
 #
 # The file runs inside an async function, so its const and let names stay
 # local to the step. Keep anything the next step needs on globalThis.
 #
-# Needs: bash, tail, grep, sed, cp, date. No other helper.
+# Exits 2 when the session is closed, by repl-stop.sh, its watchdog or a
+# crash. Its tab and globalThis values are then gone: run repl-start.sh again.
+#
+# Needs: bash, tail, grep, sed, cp, date, ps. No other helper.
 
 set -euo pipefail
 
@@ -16,8 +19,17 @@ dir=$1
 file=$2
 timeout=${3:-130}
 log="$dir/out.log"
+repl=$(cat "$dir/repl.pid" 2>/dev/null || true)
 
 strip() { sed 's/\x1b\[[0-9;]*m//g'; }
+alive() { [ -n "$repl" ] && ps -p "$repl" -o command= 2>/dev/null | grep -q 'aside repl'; }
+closed() {
+  grep -h '^\[session closed ' "$log" 2>/dev/null | tail -n 1 >&2 || true
+  echo "The session in $dir is closed; its tab and globalThis values are gone. Run repl-start.sh again, then resend the helpers and this step." >&2
+  exit 2
+}
+
+alive || closed
 
 session=$(grep -m1 '^sessionDir: ' <(strip <"$log") | sed 's/^sessionDir: //')
 if [ -z "$session" ]; then
@@ -35,11 +47,13 @@ for _ in $(seq 1 $((timeout * 2))); do
   if tail -c +$((start + 1)) "$log" | grep -q "__END_${id}__"; then
     break
   fi
+  alive || break
   sleep 0.5
 done
 
 tail -c +$((start + 1)) "$log" | strip | grep -v "__END_${id}__" || true
 if ! tail -c +$((start + 1)) "$log" | grep -q "__END_${id}__"; then
+  alive || closed
   echo "No end marker after ${timeout} s: the step may still be running." >&2
   exit 1
 fi
