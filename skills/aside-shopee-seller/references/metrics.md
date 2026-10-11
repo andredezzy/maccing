@@ -15,11 +15,31 @@ Reading a store's numbers: Informações Gerenciais (the shop's traffic, sales a
 
 Each page's "Exportar dados" button calls one of the endpoints below. Snapshot the page for today's labels and period picker.
 
-## Save exports by fetch, not by download
+## Pull a snapshot
 
-A click on "Exportar dados" or "Baixar" saves into `~/Downloads`, outside the session folder, and some buttons fire no `download` event at all. Fetch the export inside the page instead: the page's login goes with the request, and the file lands in the session folder. Then copy it out with the shell (`../aside/references/terminal.md`, "Getting a file out") and check its SHA-256 against the one the helper returns.
+A snapshot of a store's metrics is one call, repeated until it says it is done. It saves every export for the periods you name into one folder of the session folder, beside a `manifest.json`, and nothing lands in `~/Downloads`. Take this route whenever more than one file is wanted.
 
-Load these helpers (`references/helpers.md`) and call them with `page` on a Seller Centre tab:
+1. Start a background session on the store's profile (`../aside/references/terminal.md`, "A session that outlives the call"), open your own Seller Centre tab, and confirm the store (`SKILL.md`, rule 1). A one-shot call gets a new session folder each time, so it cannot resume a pull.
+2. Load `save-export.js`, `report-export.js`, `ads-export.js` and `pull-metrics.js` (`references/helpers.md`) as the first step.
+3. Send `shpPullMetrics({ days: ["2026-10-10"], windows: ["past7days"], dir: "metrics/<store>-<last day pulled>" })` as a step, with `page` set to your tab, and send the same step again until it returns `done: true`. Each step stops starting exports after about 30 s, and the next one skips what `manifest.json` already holds. A step that throws keeps what it saved: fix the cause, or wait out a throttle, and resend the same step.
+4. Copy `dir` out with the shell, and check each file's SHA-256 against `manifest.json`.
+
+| Option | Takes |
+|---|---|
+| `days` | closed days, `"YYYY-MM-DD"` in GMT-03. Today is refused. |
+| `windows` | `"past7days"`, `"past30days"`, each ending yesterday |
+| `dir` | the folder inside the session folder; one per snapshot. Default `metrics`. |
+| `allowDraft` | pull a period that ends yesterday while Shopee still processes it |
+
+For each day and each window it saves shop stats, product overview, sales overview, Performance do Produto and the Shopee Ads CSV, and with two or more days, one more ads file for the span from the first to the last. Each manifest entry is `{ file, bytes, sha256, export, period: { name, start, end }, draft }`, with `file` relative to the session folder. `export` is `shop-stats`, `product-overview`, `sales-overview`, `product-performance` or `ads`. `draft` is `false` for a final figure, `true` for one pulled under `allowDraft` while still processing, and `null` for ads, which show no processing state.
+
+A period that ends yesterday throws while Shopee still processes yesterday for any of the four pages, unless `allowDraft` is passed (below, "When the figures are final"). Tell the user and pull later; pass `allowDraft` only when the user wants the figures now. A later pull never replaces a saved file, so pull the final figures into a new `dir`.
+
+The pull only saves files. In maker-lab, `bun apps/vitre/scripts/metrics.ts <store> <dir>` imports the copied folder; that importer is being built. It is the consumer, so keep the manifest's shape when you change this helper.
+
+## One export by fetch
+
+A click on "Exportar dados" or "Baixar" saves into `~/Downloads`, outside the session folder, and some buttons fire no `download` event at all. The helpers fetch the export inside the page instead: the page's login goes with the request, and the file lands in the session folder (`exports/` unless `{ dir }` says otherwise). For a single file, load the helper and call it with `page` on a Seller Centre tab, then copy it out with the shell (`../aside/references/terminal.md`, "Getting a file out") and check its SHA-256 against the one returned:
 
 | Export | Call |
 |---|---|
@@ -48,6 +68,8 @@ Informações Gerenciais offers no custom period. For a span such as 08/10 to 10
 
 The period picker labels a period still being processed "Atualizando", and today's view names the hour it has processed up to ("Até 17:00"). Read the label: a figure read under "Atualizando" is a draft, and a record of it says so.
 
+The page asks `/api/mydata/notice/data-ready-state/?page_type=<page>` whether yesterday is final, with `<page>` one of `dashboard`, `product_overview`, `new_product_performance` and `sales_overview`; `{"code":0,"result":true}` means final. `shpPullMetrics()` reads it. That `false` shows as "Atualizando" is read from the page's code, not yet seen live with the label up.
+
 Dated observation (2026-10-02 and 2026-10-03, not a rule): yesterday's figures read "Atualizando" until about 09:00 GMT-03, and the 7-day views until about 10:00.
 
 ## Notices
@@ -59,3 +81,4 @@ Opening the bell marks every notice read, and the owner loses the unread signal 
 - A store on profile `u1`: one call of each helper for 10/10 saved `<username>.shopee-shop-stats.20261010-20261010.xlsx`, `productoverview20261010-20261010.xlsx`, `sales_overview_20261010-20261010.xlsx` and `parentskudetail.20261010_20261010.xlsx`. Two ads exports saved `Dados+Gerais+de+Anúncios+Shopee-10_10_2026-10_10_2026.csv` and `…-08_10_2026-10_10_2026.csv`. Every SHA-256 on disk matched the helper's.
 - Ads export jobs started back to back answered `{"code":200,"msg":"too many export requests"}`. Waiting 3 to 4 s between tries got each through.
 - Performance do Produto's report went from status 1 (queued) to 2 (built) within about 4 s.
+- `shpPullMetrics({ days: ["2026-10-10"], windows: ["past7days"] })` on the same store took two steps (34 s, then 23 s) and saved 10 files. Every SHA-256 on disk matched `manifest.json`, and the readiness check answered `true` for all four pages.

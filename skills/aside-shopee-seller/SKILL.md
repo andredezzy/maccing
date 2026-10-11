@@ -33,7 +33,7 @@ For any other area, follow the left nav from a snapshot. Never guess a URL.
 | Product diagnostics: a listing blocked or getting no traffic, the optimiser's quality tasks | `references/diagnostics.md` |
 | Shop profile: name, logo, description, phone | `references/shop-profile.md` |
 | A page that asks for the login password: Finanças (Minha Renda), the shop profile | `references/password-gate.md` |
-| Store numbers: Informações Gerenciais, Shopee Ads figures, export files, the notices count | `references/metrics.md` |
+| Store numbers: Informações Gerenciais, Shopee Ads figures, export files, a whole metrics snapshot in one call, the notices count | `references/metrics.md` |
 | Support chat with Shopee ("Contate a Shopee", the bot, a human agent): open it, reach an agent, keep it open, send text or an image, read it | `references/support-chat.md` |
 | The REPL helpers in `scripts/` (one per file) and the image-order check | `references/helpers.md` |
 | A store logged in on another Aside profile | `../aside/references/profiles.md` |

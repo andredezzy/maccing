@@ -3,14 +3,14 @@
  * in the background, such as Performance do Produto (parentskudetail): it asks
  * for the report, waits until it is built, then saves it.
  *
- * Takes the export URL (`references/metrics.md`). Returns what shpSaveExport()
- * returns. Throws when Shopee gives no report id, or the report is not built
+ * Takes the export URL (`references/metrics.md`) and, optionally, { dir } as
+ * shpSaveExport() takes it. Returns what shpSaveExport() returns. Throws when Shopee gives no report id, or the report is not built
  * after about 40 s.
  *
  * Needs: save-export.js.
  */
 
-globalThis.shpReportExport = async (url) => {
+globalThis.shpReportExport = async (url, { dir } = {}) => {
   const getJson = (u) => page.evaluate(async (u) => (await fetch(u, { credentials: "include" })).json(), u);
   const asked = await getJson(url);
   const id = asked?.data?.report_id;
@@ -23,7 +23,7 @@ globalThis.shpReportExport = async (url) => {
     report = (await getJson(`/api/v3/settings/get_report/?report_id=${id}`))?.data;
     // Status 1 is queued, 2 is built.
     if (report?.status === 2) {
-      return shpSaveExport(`/api/v3/settings/download_report/?report_id=${id}`, { name: report.report_file_name });
+      return shpSaveExport(`/api/v3/settings/download_report/?report_id=${id}`, { name: report.report_file_name, dir });
     }
   }
   throw new Error(`Report ${id} not built: status ${report?.status}`);

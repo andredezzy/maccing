@@ -27,6 +27,7 @@ Each REPL helper is one file in `scripts/`, defining one function on `globalThis
 | [`save-export.js`](../scripts/save-export.js) | `shpSaveExport()`: one export file into the session folder (`metrics.md`) | — |
 | [`report-export.js`](../scripts/report-export.js) | `shpReportExport()`: an export Shopee builds in the background | `save-export.js` |
 | [`ads-export.js`](../scripts/ads-export.js) | `shpAdsExport()`: the Shopee Ads CSV for one period | `save-export.js` |
+| [`pull-metrics.js`](../scripts/pull-metrics.js) | `shpPullMetrics()`: every metrics export for the days and windows given, into one folder with a `manifest.json`; call again until `done` (`metrics.md`, "Pull a snapshot") | `save-export.js`, `report-export.js`, `ads-export.js` |
 
 A helper looks the others up only when it runs, so any order works as long as all of them are loaded before the first call. Each file's header says what it takes and returns.
 

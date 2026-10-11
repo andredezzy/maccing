@@ -1,12 +1,13 @@
 /**
  * shpSaveExport() fetches one export inside the page, with the page's login,
- * and writes it to `exports/` in the session folder. Nothing lands in
- * ~/Downloads.
+ * and writes it to a folder inside the session folder, `exports/` unless
+ * told otherwise. Nothing lands in ~/Downloads.
  *
- * Takes the export's URL and, optionally, { method, body, name }. method and
- * body make a POST with a JSON body. name is used only when the reply names no
- * file. Returns { file, bytes, sha256 }, where file is relative to the session
- * folder. Throws when the reply is not a file.
+ * Takes the export's URL and, optionally, { method, body, name, dir }. method
+ * and body make a POST with a JSON body. name is used only when the reply names
+ * no file. dir is the folder, relative to the session folder. Returns
+ * { file, bytes, sha256 }, where file is relative to the session folder.
+ * Throws when the reply is not a file.
  *
  * Shopee's ads file names hold slashes ("…Shopee-08/10/2026-08/10/2026.csv").
  * Each "/" becomes "_", as in the browser's own download.
@@ -14,7 +15,7 @@
  * Needs: no other helper.
  */
 
-globalThis.shpSaveExport = async (url, { method, body, name } = {}) => {
+globalThis.shpSaveExport = async (url, { method, body, name, dir = "exports" } = {}) => {
   const reply = await page.evaluate(
     async ([url, method, body]) => {
       const init = { credentials: "include" };
@@ -45,9 +46,9 @@ globalThis.shpSaveExport = async (url, { method, body, name } = {}) => {
     const text = Buffer.from(reply.base64, "base64").toString("utf8").slice(0, 200);
     throw new Error(`No file from ${url}: ${reply.status} ${reply.type} ${text}`);
   }
-  const file = `exports/${fileName.split("/").join("_")}`;
+  const file = `${dir}/${fileName.split("/").join("_")}`;
   const bytes = Buffer.from(reply.base64, "base64");
-  await fs.mkdir("./exports", { recursive: true });
+  await fs.mkdir(`./${dir}`, { recursive: true });
   await fs.writeFile(`./${file}`, bytes);
   return { file, bytes: bytes.length, sha256: reply.sha256 };
 };
