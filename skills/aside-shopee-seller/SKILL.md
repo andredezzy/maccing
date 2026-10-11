@@ -1,6 +1,6 @@
 ---
 name: aside-shopee-seller
-description: "Use when you need the Shopee Brasil Seller Centre (seller.shopee.com.br, Central do Vendedor) through the Aside browser: product listings, listing copy, images and video, orders, shipping, store profile, blocked listings, finances, marketing, buyer chat or the support chat with Shopee."
+description: "Use when you need the Shopee Brasil Seller Centre (seller.shopee.com.br, Central do Vendedor) through the Aside browser: product listings, listing copy, images and video, orders, shipping, store profile, blocked listings, finances and their password gate, store metrics and export files, marketing and ads, buyer chat or the support chat with Shopee."
 autoInject:
   keywords: ["shopee", "seller centre", "central do vendedor", "shopee seller", "vendedor shopee", "anúncio shopee"]
   url:
@@ -19,7 +19,7 @@ Drive the Seller Centre in Aside, in the user's logged-in session. There is no A
 - Product list: `https://seller.shopee.com.br/portal/product/list/all`
 - A listing's edit form: `https://seller.shopee.com.br/portal/product/<itemid>`
 - Seller education centre (rules, fees, how-tos): `https://seller.shopee.com.br/edu`
-- A public product page: `https://shopee.com.br/product/<shopid>/<itemid>/`
+- A public product page: `https://shopee.com.br/product/<shopid>/<itemid>/`. The public site sent these profiles to a robot check (`shopee.com.br/verify/traffic/…`) on a first search and on a shop page (2026-10-02, 2026-10-05). Research on the public site, such as categories and competitors, is the owner's: on a robot check, close the tab and tell the user, never solve it.
 
 For any other area, follow the left nav from a snapshot. Never guess a URL.
 
@@ -31,12 +31,14 @@ For any other area, follow the left nav from a snapshot. Never guess a URL.
 | Attributes on many listings at once: the attributes tool, its apply-to-category prompt, the captcha after a save | `references/bulk-attributes.md` |
 | Listing copy: writing or reviewing a title, description or specifications | `references/listing-copy.md` |
 | Product diagnostics: a listing blocked or getting no traffic, the optimiser's quality tasks | `references/diagnostics.md` |
-| Shop profile: name, logo, description, phone, and its password gate | `references/shop-profile.md` |
+| Shop profile: name, logo, description, phone | `references/shop-profile.md` |
+| A page that asks for the login password: Finanças (Minha Renda), the shop profile | `references/password-gate.md` |
+| Store numbers: Informações Gerenciais, Shopee Ads figures, export files, the notices count | `references/metrics.md` |
 | Support chat with Shopee ("Contate a Shopee", the bot, a human agent): open it, reach an agent, keep it open, send text or an image, read it | `references/support-chat.md` |
 | The REPL helpers in `scripts/` (one per file) and the image-order check | `references/helpers.md` |
 | A store logged in on another Aside profile | `../aside/references/profiles.md` |
 | Driving from a terminal: one call per session, getting an image or video in | `../aside/references/terminal.md` |
-| Anything else (orders, finances, marketing, buyer chat, other settings) | No reference yet. Snapshot the page, read it, and apply the rules below. |
+| Anything else (orders, marketing, buyer chat, other settings) | No reference yet. Snapshot the page, read it, and apply the rules below. |
 
 ## Rules for every area
 
@@ -48,7 +50,7 @@ A user may run more than one store, each logged in on its own Aside profile. Bef
 - **Header username.** A `generic` near the top of an interactive snapshot, before the left nav. Shopee may have generated it, so it need not name the store: compare it with the username the user or the store's record gives.
 - **Shop name.** In a listing form, the live preview panel prints the shop name right after the title. This is the check to make before any save.
 
-The shop profile page asks for the login password: only the user types it (`references/shop-profile.md`). A login email shown by Gmail or a password manager is a weak hint, never the check.
+Finanças and the shop profile ask for the login password: `references/password-gate.md` says how to fill it without seeing it. A login email shown by Gmail or a password manager is a weak hint, never the check.
 
 ### 2. Outward-facing actions need the user's explicit ask
 
@@ -81,6 +83,8 @@ The parent's `../aside/references/repl.md` covers stale refs, reading after a na
 
 - **Use the driver the owner names, and never mix them.** When the owner asks for cua-driver, the whole task runs through cua-driver alone: reading the page, finding the tab and confirming the account (rule 1) too, from cua-driver's own snapshots. No `aside` or `aside repl` command runs in that task. cua-driver's browser tools refuse the Aside app ("pid … is not a recognized browser process"), so it clicks by pixel. Keep the page light: filter a bulk page to one item with its search. With foreground typing it changed 10 prices, one form at a time, and never brought a captcha. On the heavy attributes page it lagged, missed clicks and a tab crashed (2026-09-27). When the owner has not asked for cua-driver, drive with `aside repl` and this skill's helpers; its saves on the attributes tool brought a captcha (`references/bulk-attributes.md`).
 - **Attach the existing tab.** Prefer `listBrowserTabs()` → `attachBrowserTab(<targetId>)` on a `seller.shopee.com.br` tab. `page.goto(url)` works inside it. Open a tab only when none exists. A tab holding the user's open form is theirs: for a read, open, read and close a tab of your own.
+- **Know your tab by its `targetId`.** Record `myTab.targetId` right after `openTab()`; the URL cannot tell your tab from the user's. Some links open another tab, such as "Verifique os detalhes" on an order card in the buyer chat. After such a click, list the tabs, act on the new one by its `targetId`, and close only the tabs your clicks opened.
+- **Clicks that miss on eds widgets.** `page.locator('text=…')` throws "Node is not an Element" on Shopee's eds tabs and filters, and a class locator on a dropdown can wait until "Timeout waiting for element to be ready". Click the ref from an interactive snapshot, or use `shpClickText()` and `shpPageSize()` (`references/helpers.md`).
 - **Long pages render sections empty.** A section can show as a bare `region`, and one scrolled away can go empty again, even though `aside guide repl` says no scroll is needed. The section tab bar can vanish too. To act on a section, call `scrollIntoViewIfNeeded()` on something inside it, or scroll with the mouse wheel (`await page.mouse.wheel(0, 800)`) until its field shows, then snapshot. To read a listing form's values, use `shpRead()` (`references/helpers.md`): it reads the DOM, not the snapshot.
 - **Hidden fields.** Some sections hide fields behind a show-more button. Expand it before you conclude that a field does not exist.
 - **Overlays.** A password manager overlay can sit over the page; `Escape` clears it. Guided tours over the listing form do not close with `Escape`, swallow clicks and typing, and can make a click open the category picker unseen: dismiss them first (`references/listings.md`, "Open the form"). None always shows as a `dialog`. If a click or typing misses, check for one.

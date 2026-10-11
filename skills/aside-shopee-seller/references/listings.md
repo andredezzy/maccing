@@ -90,11 +90,17 @@ Before this cell, clear the tours and any stray category picker (`shpDismissTour
 
 Pick the button by what the user asked for: save without publishing, save and publish, or update an existing listing. If the diff shows the validation banner, follow its link to the first error, fix it, and save again.
 
+On a draft (Não publicado → Rascunho), "Salvar e Não Publicar" does not keep it a draft: it moves the listing to Inativo and gives it an item id (2026-10-05). Look for it there, and record the new status and id.
+
 **The button leaving is not proof the save landed.** After an update, the page may stay on the edit URL, and the button can vanish within about 2 s. Keep the tab open a few more seconds, then [verify](#verify) by opening the listing again. With a video, keep the tab open until the page leaves the edit URL or the product list reloads: a tab closed a few seconds after the click lost an uploaded video with no warning.
 
 ## Leave without saving
 
 Navigating away from a form with nothing changed showed no prompt. With unsaved edits, assume it discards them silently: nobody has checked for a prompt there. The cancel button opens a confirm-discard modal even with nothing changed; its discard button leaves.
+
+## Delist from the product list
+
+Only on the user's ask (`SKILL.md` rule 2). To take listings off sale without deleting them, select their rows on the product list and use the bulk bar's "Desativar" (class `delist-button`), never "Excluir" (`delete-button`). Its confirm dialog says "excluir" all the same: "Tem certeza de que deseja excluir N produtos selecionados?", then "Os produtos inativos não podem ser vistos…" (2026-10-02). That dialog only delists: the listings moved to Não publicado → Inativo, and Ativo dropped by the same count. Read the button you clicked, not the dialog's verb, and check the Inativo count after.
 
 ## Verify
 

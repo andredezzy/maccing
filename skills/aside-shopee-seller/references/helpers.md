@@ -22,6 +22,11 @@ Each REPL helper is one file in `scripts/`, defining one function on `globalThis
 | [`image-sources.js`](../scripts/image-sources.js) | `shpImageSources()`: image URLs in page order | — |
 | [`upload-image.js`](../scripts/upload-image.js) | `shpUploadImage()` | — |
 | [`delete-image.js`](../scripts/delete-image.js) | `shpDeleteImage()` | — |
+| [`click-text.js`](../scripts/click-text.js) | `shpClickText()`: the one visible element with that exact text, where `text=` throws "Node is not an Element" | — |
+| [`page-size.js`](../scripts/page-size.js) | `shpPageSize()`: rows per page on a list | — |
+| [`save-export.js`](../scripts/save-export.js) | `shpSaveExport()`: one export file into the session folder (`metrics.md`) | — |
+| [`report-export.js`](../scripts/report-export.js) | `shpReportExport()`: an export Shopee builds in the background | `save-export.js` |
+| [`ads-export.js`](../scripts/ads-export.js) | `shpAdsExport()`: the Shopee Ads CSV for one period | `save-export.js` |
 
 A helper looks the others up only when it runs, so any order works as long as all of them are loaded before the first call. Each file's header says what it takes and returns.
 
@@ -37,3 +42,5 @@ A helper looks the others up only when it runs, so any order works as long as al
 ## Outside the REPL
 
 [`image-order.ts`](../scripts/image-order.ts) runs in the shell, with Bun: `bun <skill dir>/scripts/image-order.ts <declared file>... -- <live image URL>...`. It checks that the live images are the declared files, in order (`listings.md`, "Verify").
+
+[`serve-once.ts`](../scripts/serve-once.ts) runs in the shell, with Bun, under `2password run`. It hands one password to one local fetch, so a REPL call can fill a password gate (`password-gate.md`).

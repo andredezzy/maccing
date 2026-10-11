@@ -4,11 +4,7 @@ The shop's public name, logo, description and phone. The rules in `SKILL.md` app
 
 ## The password gate
 
-The profile page (the left nav's store section, then its profile link) first asks for the shop's **login password**. The user types it, never the agent, not even when they paste it into the chat.
-
-1. Ask the user to open the profile page in that profile's browser and unlock it.
-2. Find the unlocked tab with `listBrowserTabs()` (`../aside/references/profiles.md` for another profile) and attach it by its `targetId`.
-3. Work in that tab. A second tab on the same URL asked for the password again, so never open one. Assume a reload or `page.goto()` does too.
+The profile page (the left nav's store section, then its profile link) first asks for the shop's **login password**. Unlock it as `references/password-gate.md` says, then work in that same tab: a second tab on the same URL asked for the password again, and so may a reload or `page.goto()`.
 
 A locked tab shows the password prompt in place of the profile. An unlocked one shows the profile in view mode, with an edit button: read the body text to tell them apart before you act.
 
