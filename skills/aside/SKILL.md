@@ -14,7 +14,7 @@ Parent skill for every site skill that drives a website through the Aside browse
 ### 0. MANDATORY: Load Aside's official skill first, and keep it current
 
 ```
-BEFORE ANY ASIDE WORK, LOAD `aside-browser`, UPDATED TODAY.
+BEFORE ANY ASIDE WORK, LOAD `aside-browser`, KEPT CURRENT.
 Aside ships it for coding agents. It points to `aside guide` and
 `aside guide repl`, the source of truth for the CLI.
 ```
@@ -22,7 +22,7 @@ Aside ships it for coding agents. It points to `aside guide` and
 For a coding agent, before the first Aside command:
 
 1. `command -v aside`. If it prints nothing, STOP and tell the user. Install Aside only after their yes, by the method `aside-browser` or aside.com gives today.
-2. `aside --update`. It updates the CLI and the installed `aside-browser` skill.
+2. `aside --update` updates the CLI and the installed `aside-browser` skill. Run it only when no other agent drives Aside: `pgrep -fl 'aside repl'` prints nothing, or only your own sessions. An update dropped other agents' running sessions (2026-10-08). When another session runs, skip the update, use the installed version, and say so in your report.
 3. Compare the `version:` in the frontmatter of the installed `aside-browser` SKILL.md with the "Skill version" on the first line of `aside guide`. If they differ, or the skill is missing, run `aside skills install --target <your agent>` (`--help` lists the targets). When the skill was missing, ask the user first.
 4. Load `aside-browser` and follow it: read `aside guide` and `aside guide repl` in full. If an update, the install or the guide fails, report the error. Never guess CLI usage.
 
