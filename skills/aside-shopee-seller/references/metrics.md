@@ -35,7 +35,7 @@ For each day and each window it saves shop stats, product overview, sales overvi
 
 A period that ends yesterday throws while Shopee still processes yesterday for any of the four pages, unless `allowDraft` is passed (below, "When the figures are final"). Tell the user and pull later; pass `allowDraft` only when the user wants the figures now. A later pull never replaces a saved file, so pull the final figures into a new `dir`.
 
-The pull only saves files. In maker-lab, `bun apps/vitre/scripts/metrics.ts <store> <dir>` imports the copied folder; that importer is being built. It is the consumer, so keep the manifest's shape when you change this helper.
+The pull only saves files. In maker-lab, `bun apps/vitre/scripts/metrics.ts <store> <dir>` imports the copied folder: it checks every file against the manifest, refuses a draft unless `--allow-draft`, and prints the summary a snapshot pastes. It is the consumer, so keep the manifest's shape when you change this helper.
 
 ## One export by fetch
 
