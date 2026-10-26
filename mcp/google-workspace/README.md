@@ -119,7 +119,7 @@ If the tool call times out before you complete the browser flow, just retry the 
 
 ## Companion skill
 
-The plugin ships a companion skill named **`google-workspace`** (at `skills/google-workspace/`). It is the canonical reference for:
+The plugin ships a companion skill named **`maccing-google-workspace`** (at `skills/maccing-google-workspace/`). It is the canonical reference for:
 
 - Account-isolation rule — always use `mcp__plugin_maccing_workspace__*`; never the `mcp__claude_ai_*` Google connectors (they are wired to a different account).
 - First-run OAuth flow, credential storage, and reset procedure (`references/auth-and-credentials.md`).

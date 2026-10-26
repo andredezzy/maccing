@@ -39,7 +39,7 @@ npx skills add andredezzy/maccing
 npx skills add andredezzy/maccing --list
 
 # a single skill
-npx skills add andredezzy/maccing -s reasoning
+npx skills add andredezzy/maccing -s maccing-reasoning
 
 # install globally (user-level) instead of the current project
 npx skills add andredezzy/maccing -g
@@ -51,22 +51,22 @@ npx skills add andredezzy/maccing -g
 
 | Bucket | Skill | Purpose |
 |--------|-------|---------|
-| — | reasoning | Operating manual for hard problems: read the real ask, verify by re-deriving, label known vs guessed, attack your own conclusion, answer → reasoning → risk |
-| engineering | dx | DX is the top design priority — every structure judged by the cognitive load on the next person who reads, debugs, tests, or extends it |
-| engineering | writing-code | The whole code touch in one skill — a name that says exactly what the thing is, data shaped like the reality it mirrors, one concern per file with errors as a cross-cutting contract, composition as a hard rule for UI, and external surfaces verified against a named source instead of memory |
-| growth | growth | Cross-channel paid-acquisition + messaging orchestrator |
-| growth | google-ads | Google Ads production reference + scripts |
-| growth | tiktok-ads | TikTok Ads production reference |
-| growth | meta | Shared Meta platform substrate (BM, verification, enforcement) |
-| growth | meta-ads | Meta (Facebook/Instagram) Ads reference |
-| growth | whatsapp | WhatsApp Business Platform / Cloud API reference |
-| growth | ycloud | YCloud BSP operations |
-| growth | ycloud-api | YCloud v2 REST API reference |
-| aside | aside | Parent for every site skill driven through the [Aside](https://aside.com) browser: loads Aside's official `aside-browser` skill first, and lets an Aside built-in site skill lead where one exists (listed or under `builtin/site-specific/`); then profiles, one-shot `aside repl`, a background session that keeps its tab across calls in steps well under 120 s and closes itself when idle, getting files in, checking local pages, adding a site skill |
-| aside | magnific | The Magnific web app: account check, one message for every question, Image Generator, no-credit Unlimited generation behind a guard that checks the switch, model and settings, prompt pitfalls, reusing uploaded references, the Creations feed with an anchor that tells your new card from older ones, and full-size downloads that refuse a preview and fall back to the card's Download button, with the REPL helpers shipped one file each in [`scripts/`](skills/aside-magnific/scripts/) |
-| aside | shopee-seller | Shopee Brasil Seller Centre: account check, guarded saves, listings (guided tours, pre-filled attributes, image replacement, a Quill description), listing copy, attributes in bulk, delisting, shop profile, diagnostics, the support chat with Shopee (reaching a human agent, keeping it open, sending an image), metrics and export files saved by fetch, with a whole snapshot pulled by one repeated call into a folder and a manifest, a password gate filled from 1Password without showing the secret, with the REPL helpers shipped one file each in [`scripts/`](skills/aside-shopee-seller/scripts/) a Bun check of live image order and a one-time local password hand-off |
-| notion | notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
-| google-workspace | google-workspace | Google Workspace (Calendar/Gmail/Drive/…) via the bundled `workspace` MCP — setup, OAuth, account isolation, tool reference |
+| — | maccing-reasoning | Operating manual for hard problems: read the real ask, verify by re-deriving, label known vs guessed, attack your own conclusion, answer → reasoning → risk |
+| engineering | maccing-engineering-dx | DX is the top design priority — every structure judged by the cognitive load on the next person who reads, debugs, tests, or extends it |
+| engineering | maccing-engineering-writing-code | The whole code touch in one skill — a name that says exactly what the thing is, data shaped like the reality it mirrors, one concern per file with errors as a cross-cutting contract, composition as a hard rule for UI, and external surfaces verified against a named source instead of memory |
+| growth | maccing-growth | Cross-channel paid-acquisition + messaging orchestrator |
+| growth | maccing-growth-google-ads | Google Ads production reference + scripts |
+| growth | maccing-growth-tiktok-ads | TikTok Ads production reference |
+| growth | maccing-growth-meta | Shared Meta platform substrate (BM, verification, enforcement) |
+| growth | maccing-growth-meta-ads | Meta (Facebook/Instagram) Ads reference |
+| growth | maccing-growth-meta-whatsapp | WhatsApp Business Platform / Cloud API reference |
+| growth | maccing-growth-ycloud | YCloud BSP operations |
+| growth | maccing-growth-ycloud-api | YCloud v2 REST API reference |
+| aside | maccing-aside | Parent for every site skill driven through the [Aside](https://aside.com) browser: loads Aside's official `aside-browser` skill first, and lets an Aside built-in site skill lead where one exists (listed or under `builtin/site-specific/`); then profiles, one-shot `aside repl`, a background session that keeps its tab across calls in steps well under 120 s and closes itself when idle, getting files in, checking local pages, adding a site skill |
+| aside | maccing-aside-magnific | The Magnific web app: account check, one message for every question, Image Generator, no-credit Unlimited generation behind a guard that checks the switch, model and settings, prompt pitfalls, reusing uploaded references, the Creations feed with an anchor that tells your new card from older ones, and full-size downloads that refuse a preview and fall back to the card's Download button, with the REPL helpers shipped one file each in [`scripts/`](skills/maccing-aside-magnific/scripts/) |
+| aside | maccing-aside-shopee-seller | Shopee Brasil Seller Centre: account check, guarded saves, listings (guided tours, pre-filled attributes, image replacement, a Quill description), listing copy, attributes in bulk, delisting, shop profile, diagnostics, the support chat with Shopee (reaching a human agent, keeping it open, sending an image), metrics and export files saved by fetch, with a whole snapshot pulled by one repeated call into a folder and a manifest, a password gate filled from 1Password without showing the secret, with the REPL helpers shipped one file each in [`scripts/`](skills/maccing-aside-shopee-seller/scripts/) a Bun check of live image order and a one-time local password hand-off |
+| notion | maccing-notion | Notion API engineering — databases, formulas, rollups, relations, views/charts, blocks |
+| google-workspace | maccing-google-workspace | Google Workspace (Calendar/Gmail/Drive/…) via the bundled `workspace` MCP — setup, OAuth, account isolation, tool reference |
 
 Every engineering skill ships only after passing baseline testing against fresh agents (RED→GREEN, per `superpowers:writing-skills`).
 

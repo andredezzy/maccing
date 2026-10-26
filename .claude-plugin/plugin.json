@@ -1,7 +1,7 @@
 {
   "name": "maccing",
-  "version": "3.5.0",
-  "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, writing-code for naming/modeling/organizing/UI/research), the reasoning operating manual, a database group (database-mapping binds a schema to generic roles, database-ops governs production data), growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), aside (site skills driven through the Aside browser: Magnific, Shopee Seller Centre), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
+  "version": "4.0.0",
+  "description": "Maxxing skills for coding agents: an engineering doctrine (dx for design priorities, writing-code for naming/modeling/organizing/UI/research), the reasoning operating manual, a database group (maccing-database-mapping binds a schema to generic roles, maccing-database-ops governs production data), growth (Google/Meta/TikTok Ads + WhatsApp via YCloud), aside (site skills driven through the Aside browser: Magnific, Shopee Seller Centre), a Notion API engineering reference with a bundled self-hosted notion MCP server, and a self-hosted Google Workspace MCP server (Calendar, Gmail, Drive, Docs, Sheets, Slides, Forms, Tasks, Chat, Contacts).",
   "author": {
     "name": "André \"Dezzy\" Victor",
     "email": "contact@andredezzy.com",
@@ -28,24 +28,24 @@
     "bun"
   ],
   "skills": [
-    "./skills/aside-magnific/",
-    "./skills/aside-shopee-seller/",
-    "./skills/aside/",
-    "./skills/database-mapping/",
-    "./skills/database-ops/",
-    "./skills/engineering-dx/",
-    "./skills/engineering-writing-code/",
-    "./skills/google-workspace/",
-    "./skills/growth-google-ads/",
-    "./skills/growth-meta-ads/",
-    "./skills/growth-meta/",
-    "./skills/growth-tiktok-ads/",
-    "./skills/growth-meta-whatsapp/",
-    "./skills/growth-ycloud-api/",
-    "./skills/growth-ycloud/",
-    "./skills/growth/",
+    "./skills/maccing-aside-magnific/",
+    "./skills/maccing-aside-shopee-seller/",
+    "./skills/maccing-aside/",
+    "./skills/maccing-database-mapping/",
+    "./skills/maccing-database-ops/",
+    "./skills/maccing-engineering-dx/",
+    "./skills/maccing-engineering-writing-code/",
+    "./skills/maccing-google-workspace/",
+    "./skills/maccing-growth-google-ads/",
+    "./skills/maccing-growth-meta-ads/",
+    "./skills/maccing-growth-meta/",
+    "./skills/maccing-growth-tiktok-ads/",
+    "./skills/maccing-growth-meta-whatsapp/",
+    "./skills/maccing-growth-ycloud-api/",
+    "./skills/maccing-growth-ycloud/",
+    "./skills/maccing-growth/",
     "./skills/maccing-notion/",
-    "./skills/reasoning/"
+    "./skills/maccing-reasoning/"
   ],
   "commands": ["./commands/"]
 }

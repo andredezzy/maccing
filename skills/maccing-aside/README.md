@@ -1,0 +1,25 @@
+# maccing-aside
+
+Site skills that drive websites through the [Aside](https://aside.com) browser, in the user's logged-in sessions. Every skill here first loads Aside's official `aside-browser` skill, and stops when Aside is missing.
+
+## Skills
+
+Each skill is its own folder directly under `skills/`, named exactly as the skill. The children load the parent first.
+
+```
+skills/
+  maccing-aside/                  the parent: Aside itself, profiles, one-shot `aside repl`, adding a site skill
+  maccing-aside-magnific/         the Magnific web app
+  maccing-aside-shopee-seller/    the Shopee Brasil Seller Centre
+```
+
+| Skill | Parent | Purpose |
+|-------|--------|---------|
+| **maccing-aside** | — | **What every Aside site skill shares**: loading Aside's official `aside-browser` skill first, letting an Aside built-in site skill lead where one exists, profiles and accounts, one-shot `aside repl` sessions, a background session that keeps its tab across calls and closes itself when idle ([`scripts/`](scripts/): `repl-start.sh`, `repl-send.sh`, `repl-stop.sh`, `repl-watchdog.sh`), getting files in, checking local pages, `aside exec` without credits, REPL behaviour, reading without printing other people's content, how to add a site skill |
+| maccing-aside-magnific | maccing-aside | Magnific (formerly Freepik): the account check, one message for every question, paid runs behind the user's yes, no-credit Unlimited generation behind a guard that checks the switch, model and settings, the Image Generator, one-shot call planning, prompt pitfalls, reusing uploaded references, the shared Creations feed with an anchor for your new card, and full-size downloads that refuse a preview and fall back to the card's Download button. The REPL helpers ship as one file each in [`scripts/`](../maccing-aside-magnific/scripts/) |
+| maccing-aside-shopee-seller | maccing-aside | Shopee Brasil Seller Centre: account check, guarded saves, listings (guided tours, pre-filled attributes, image replacement, a Quill description), attributes in bulk, delisting, listing copy, shop profile, product diagnostics, the support chat with Shopee, metrics and export files saved by fetch, and a password gate filled from 1Password without showing the secret. The REPL helpers ship as one file each in [`scripts/`](../maccing-aside-shopee-seller/scripts/), with a Bun check of live image order and a one-time local password hand-off |
+
+## Two readers
+
+- **A coding agent** (Claude Code, Codex, …) runs `aside repl` from a shell. Each call is a fresh session; [`references/terminal.md`](references/terminal.md) covers what that changes.
+- **The Aside agent** reads the same files from `~/.aside/u/<n>/skills/user/`, linked there, with its own REPL tool. [`references/new-site-skill.md`](references/new-site-skill.md) says how to link them.
