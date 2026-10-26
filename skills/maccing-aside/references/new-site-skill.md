@@ -40,4 +40,4 @@ Give a fresh agent only the parent, the new child and the installed `aside-brows
 
 ## The Aside app's copy
 
-The Aside agent reads user skills from `~/.aside/u/<n>/skills/user/`, and its loader follows symbolic links. Link each child there rather than copying it. Never link this parent as a skill: the Aside app ships a builtin skill also named `aside`, and a user skill of the same name replaces it. To give the Aside agent the parent's files, make `skills/user/maccing-aside/` a plain folder holding a link named `references` to this skill's `references/`; a folder without a `SKILL.md` registers no skill, and the children's `../maccing-aside/references/` paths resolve through it.
+The Aside agent reads user skills from `~/.aside/u/<n>/skills/user/`, and its loader follows symbolic links. Link this parent and each child there rather than copying them. The parent's name, `maccing-aside`, is not the name of the Aside app's builtin `aside` skill, so linking it adds a skill instead of replacing that one. The children's `../maccing-aside/references/` paths resolve through the parent's link.
